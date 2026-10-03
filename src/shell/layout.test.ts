@@ -2,33 +2,33 @@ import { describe, expect, it } from 'vitest';
 import { resolveShellRegions } from './layout';
 
 describe('resolveShellRegions', () => {
-  it('keeps the default shell focused on navigation and main content', () => {
-    expect(resolveShellRegions()).toEqual([
+  it('starts with only the durable frame and main task', () => {
+    expect(resolveShellRegions()).toEqual(['header', 'main']);
+  });
+
+  it('composes optional regions independently', () => {
+    expect(
+      resolveShellRegions({
+        hasRail: true,
+        hasSidebar: true,
+        hasTabs: true,
+        hasContextPanel: true,
+        hasBottomBar: true,
+      }),
+    ).toEqual([
       'header',
       'rail',
       'sidebar',
       'tabs',
       'main',
+      'contextPanel',
       'bottomBar',
     ]);
   });
 
-  it('adds a context panel only when the product has contextual content for it', () => {
-    expect(resolveShellRegions({ hasContextPanel: true })).toContain('contextPanel');
-  });
-
-  it('removes optional regions without changing the main workspace', () => {
-    expect(
-      resolveShellRegions({
-        hasSidebar: false,
-        hasTabs: false,
-        hasContextPanel: false,
-        hasBottomBar: false,
-      }),
-    ).toEqual(['header', 'rail', 'main']);
-  });
-
   it('treats a collapsed sidebar as visually absent', () => {
-    expect(resolveShellRegions({ sidebarCollapsed: true })).not.toContain('sidebar');
+    expect(resolveShellRegions({ hasSidebar: true, sidebarCollapsed: true })).not.toContain(
+      'sidebar',
+    );
   });
 });
