@@ -172,18 +172,18 @@ a {
 }
 
 :where(
-    .yk-toolbar-button,
-    .yk-date-button,
-    .yk-avatar,
-    .yk-rail-button,
-    .yk-rail-user,
-    .yk-sidebar-link,
-    .yk-favorite,
-    .yk-tab,
-    .yk-mobile-nav-toggle,
-    .yk-mobile-sidebar-close,
-    .yk-context-close
-  ) {
+  .yk-toolbar-button,
+  .yk-date-button,
+  .yk-avatar,
+  .yk-rail-button,
+  .yk-rail-user,
+  .yk-sidebar-link,
+  .yk-favorite,
+  .yk-tab,
+  .yk-mobile-nav-toggle,
+  .yk-mobile-sidebar-close,
+  .yk-context-close
+) {
   transition:
     background-color var(--yk-motion-fast) var(--yk-ease-standard),
     border-color var(--yk-motion-fast) var(--yk-ease-standard),
@@ -192,18 +192,18 @@ a {
 }
 
 :where(
-    .yk-toolbar-button,
-    .yk-date-button,
-    .yk-avatar,
-    .yk-rail-button,
-    .yk-rail-user,
-    .yk-sidebar-link,
-    .yk-favorite,
-    .yk-tab,
-    .yk-mobile-nav-toggle,
-    .yk-mobile-sidebar-close,
-    .yk-context-close
-  ):active {
+  .yk-toolbar-button,
+  .yk-date-button,
+  .yk-avatar,
+  .yk-rail-button,
+  .yk-rail-user,
+  .yk-sidebar-link,
+  .yk-favorite,
+  .yk-tab,
+  .yk-mobile-nav-toggle,
+  .yk-mobile-sidebar-close,
+  .yk-context-close
+):active {
   transform: translateY(1px);
 }
 
@@ -1125,18 +1125,18 @@ a {
   }
 
   :where(
-      .yk-toolbar-button,
-      .yk-date-button,
-      .yk-avatar,
-      .yk-rail-button,
-      .yk-rail-user,
-      .yk-sidebar-link,
-      .yk-favorite,
-      .yk-tab,
-      .yk-mobile-nav-toggle,
-      .yk-mobile-sidebar-close,
-      .yk-context-close
-    ):active {
+    .yk-toolbar-button,
+    .yk-date-button,
+    .yk-avatar,
+    .yk-rail-button,
+    .yk-rail-user,
+    .yk-sidebar-link,
+    .yk-favorite,
+    .yk-tab,
+    .yk-mobile-nav-toggle,
+    .yk-mobile-sidebar-close,
+    .yk-context-close
+  ):active {
     transform: none;
   }
 }
