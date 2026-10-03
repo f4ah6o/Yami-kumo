@@ -8,6 +8,7 @@ export type ShellRegion =
   | 'bottomBar';
 
 export interface ShellLayoutOptions {
+  hasRail?: boolean;
   hasSidebar?: boolean;
   hasTabs?: boolean;
   hasContextPanel?: boolean;
@@ -16,13 +17,18 @@ export interface ShellLayoutOptions {
 }
 
 export function resolveShellRegions({
-  hasSidebar = true,
-  hasTabs = true,
+  hasRail = false,
+  hasSidebar = false,
+  hasTabs = false,
   hasContextPanel = false,
-  hasBottomBar = true,
+  hasBottomBar = false,
   sidebarCollapsed = false,
 }: ShellLayoutOptions = {}): ShellRegion[] {
-  const regions: ShellRegion[] = ['header', 'rail'];
+  const regions: ShellRegion[] = ['header'];
+
+  if (hasRail) {
+    regions.push('rail');
+  }
 
   if (hasSidebar && !sidebarCollapsed) {
     regions.push('sidebar');
