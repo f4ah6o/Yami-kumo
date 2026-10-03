@@ -2,9 +2,11 @@ import type { ReactNode } from 'react';
 
 export interface AppShellProps {
   brand: ReactNode;
+  navigationTrigger?: ReactNode;
   globalSearch?: ReactNode;
   headerActions?: ReactNode;
-  rail: ReactNode;
+  accountMenu?: ReactNode;
+  rail?: ReactNode;
   sidebar?: ReactNode;
   tabs?: ReactNode;
   contextPanel?: ReactNode;
@@ -20,8 +22,10 @@ export interface AppShellProps {
 
 export function AppShell({
   brand,
+  navigationTrigger,
   globalSearch,
   headerActions,
+  accountMenu,
   rail,
   sidebar,
   tabs,
@@ -38,21 +42,35 @@ export function AppShell({
   return (
     <div
       className="yk-shell"
+      data-has-rail={Boolean(rail)}
+      data-has-sidebar={Boolean(sidebar)}
       data-sidebar-collapsed={sidebarCollapsed}
       data-mobile-sidebar-open={mobileSidebarOpen}
-      data-has-sidebar={Boolean(sidebar)}
       data-has-context-panel={Boolean(contextPanel)}
       data-context-panel-open={contextPanelOpen}
+      data-has-bottom-bar={Boolean(bottomBar)}
     >
       <header className="yk-topbar">
-        <div className="yk-brand">{brand}</div>
+        <div className="yk-brand-group">
+          {navigationTrigger ? (
+            <div className="yk-navigation-trigger">{navigationTrigger}</div>
+          ) : null}
+          <div className="yk-brand">{brand}</div>
+        </div>
+
         <div className="yk-global-search">{globalSearch}</div>
-        <div className="yk-header-actions">{headerActions}</div>
+
+        <div className="yk-header-end">
+          {headerActions ? <div className="yk-header-actions">{headerActions}</div> : null}
+          {accountMenu ? <div className="yk-account-menu">{accountMenu}</div> : null}
+        </div>
       </header>
 
-      <nav className="yk-rail" aria-label="Primary">
-        {rail}
-      </nav>
+      {rail ? (
+        <nav className="yk-rail" aria-label="Primary">
+          {rail}
+        </nav>
+      ) : null}
 
       {sidebar ? (
         <>
@@ -68,7 +86,7 @@ export function AppShell({
         </>
       ) : null}
 
-      <section className="yk-workspace">
+      <section className="yk-workspace" data-has-tabs={Boolean(tabs)}>
         {tabs ? (
           <nav className="yk-tabs" aria-label="Workspace tabs">
             {tabs}
