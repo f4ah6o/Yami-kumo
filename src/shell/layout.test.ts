@@ -26,8 +26,6 @@ describe('resolveShellRegions', () => {
   });
 
   it('treats a collapsed sidebar as visually absent', () => {
-    expect(resolveShellRegions({ sidebarCollapsed: true })).not.toContain(
-      'sidebar',
-    );
+    expect(resolveShellRegions({ sidebarCollapsed: true })).not.toContain('sidebar');
   });
 });
