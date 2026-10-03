@@ -93,9 +93,9 @@ function App() {
               ?
             </span>
           </Button>
-          <span className="yk-avatar" aria-label="Demo user">
-            JD
-          </span>
+          <button type="button" className="yk-avatar" aria-label="Account menu">
+            <span aria-hidden="true">👤</span>
+          </button>
         </>
       }
       rail={
@@ -112,8 +112,8 @@ function App() {
               </button>
             ))}
           </div>
-          <button type="button" className="yk-rail-user" aria-label="Profile">
-            JD
+          <button type="button" className="yk-rail-user" aria-label="Account">
+            <span aria-hidden="true">👤</span>
           </button>
         </div>
       }
