@@ -30,8 +30,10 @@ jobs:
           node-version: 'lts'
           run-install: true
 
-      - name: Check
-        run: vp check
+      - name: Check and show formatter diff
+        run: |
+          vp check --fix
+          git diff --no-ext-diff --color=never
 
       - name: Test
         run: vp test
