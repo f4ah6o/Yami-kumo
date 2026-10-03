@@ -173,9 +173,11 @@ a {
 .yk-avatar {
   width: 34px;
   height: 34px;
+  padding: 0;
   border-radius: 50%;
-  font-size: 11px;
-  font-weight: 700;
+  cursor: pointer;
+  font-size: 17px;
+  line-height: 1;
 }
 
 .yk-rail {
@@ -222,7 +224,8 @@ a {
 .yk-rail-user {
   border: 1px solid var(--yk-line-strong);
   border-radius: 50%;
-  font-size: 11px;
+  font-size: 16px;
+  line-height: 1;
 }
 
 .yk-sidebar {
