@@ -7,14 +7,15 @@ export interface AppShellProps {
   rail: ReactNode;
   sidebar?: ReactNode;
   tabs?: ReactNode;
-  rightSidebar?: ReactNode;
+  contextPanel?: ReactNode;
+  contextPanelLabel?: string;
   bottomBar?: ReactNode;
   children: ReactNode;
   sidebarCollapsed?: boolean;
   mobileSidebarOpen?: boolean;
   onMobileSidebarDismiss?: () => void;
-  rightSidebarOpen?: boolean;
-  onRightSidebarDismiss?: () => void;
+  contextPanelOpen?: boolean;
+  onContextPanelDismiss?: () => void;
 }
 
 export function AppShell({
@@ -24,14 +25,15 @@ export function AppShell({
   rail,
   sidebar,
   tabs,
-  rightSidebar,
+  contextPanel,
+  contextPanelLabel = 'Context panel',
   bottomBar,
   children,
   sidebarCollapsed = false,
   mobileSidebarOpen = false,
   onMobileSidebarDismiss,
-  rightSidebarOpen = true,
-  onRightSidebarDismiss,
+  contextPanelOpen = false,
+  onContextPanelDismiss,
 }: AppShellProps) {
   return (
     <div
@@ -39,8 +41,8 @@ export function AppShell({
       data-sidebar-collapsed={sidebarCollapsed}
       data-mobile-sidebar-open={mobileSidebarOpen}
       data-has-sidebar={Boolean(sidebar)}
-      data-has-right-sidebar={Boolean(rightSidebar)}
-      data-right-sidebar-open={rightSidebarOpen}
+      data-has-context-panel={Boolean(contextPanel)}
+      data-context-panel-open={contextPanelOpen}
     >
       <header className="yk-topbar">
         <div className="yk-brand">{brand}</div>
@@ -75,16 +77,20 @@ export function AppShell({
         <main className="yk-main">{children}</main>
       </section>
 
-      {rightSidebar ? (
+      {contextPanel ? (
         <>
           <button
             type="button"
-            className="yk-drawer-scrim yk-inspector-scrim"
-            aria-label="Close inspector"
-            onClick={onRightSidebarDismiss}
+            className="yk-drawer-scrim yk-context-panel-scrim"
+            aria-label={`Close ${contextPanelLabel}`}
+            onClick={onContextPanelDismiss}
           />
-          <aside id="yk-inspector" className="yk-right-sidebar" aria-label="Inspector">
-            {rightSidebar}
+          <aside
+            id="yk-context-panel"
+            className="yk-context-panel"
+            aria-label={contextPanelLabel}
+          >
+            {contextPanel}
           </aside>
         </>
       ) : null}
