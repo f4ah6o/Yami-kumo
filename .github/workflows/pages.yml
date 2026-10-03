@@ -1,8 +1,8 @@
-name: Pages
+name: Demo Pages
 
 on:
   push:
-    branches: [main]
+    branches: [demo]
   workflow_dispatch:
 
 permissions:
