@@ -27,7 +27,9 @@ function App() {
   const [activeTab, setActiveTab] = useState('Overview');
   const [activeNav, setActiveNav] = useState('Home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(() =>
+    typeof window === 'undefined' ? true : window.matchMedia('(min-width: 621px)').matches,
+  );
 
   const activity = useMemo(
     () => [
@@ -56,16 +58,20 @@ function App() {
       headerActions={
         <>
           <Button
-            className="yk-toolbar-button"
+            className="yk-toolbar-button yk-sidebar-toggle"
             onClick={() => setSidebarCollapsed((value) => !value)}
           >
             {sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
           </Button>
           <Button
-            className="yk-toolbar-button"
+            className="yk-toolbar-button yk-inspector-toggle"
+            aria-expanded={rightSidebarOpen}
             onClick={() => setRightSidebarOpen((value) => !value)}
           >
-            {rightSidebarOpen ? 'Hide inspector' : 'Show inspector'}
+            <span className="yk-inspector-toggle-wide">
+              {rightSidebarOpen ? 'Hide inspector' : 'Show inspector'}
+            </span>
+            <span className="yk-inspector-toggle-compact">Inspector</span>
           </Button>
           <span className="yk-avatar" aria-label="Demo user">
             JD
@@ -154,7 +160,17 @@ function App() {
               <span className="yk-eyebrow">Inspector</span>
               <h2>Get started</h2>
             </div>
-            <span>3 / 5</span>
+            <div className="yk-inspector-heading-actions">
+              <span>3 / 5</span>
+              <button
+                type="button"
+                className="yk-inspector-close"
+                aria-label="Close inspector"
+                onClick={() => setRightSidebarOpen(false)}
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           <div className="yk-progress" aria-label="3 of 5 complete">
