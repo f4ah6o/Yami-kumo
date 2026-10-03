@@ -381,6 +381,10 @@ a {
   background: var(--yk-accent-soft);
 }
 
+.yk-sidebar-link[data-active='true']:active {
+  background: var(--yk-pressed-surface);
+}
+
 .yk-count {
   min-width: 20px;
   height: 20px;
