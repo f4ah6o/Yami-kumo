@@ -22,7 +22,7 @@ The semantic roles matter more than the physical positions:
 - **Rail / sidebar** — durable navigation: “where am I?” and “where can I go?”
 - **Tabs** — sibling views inside the current workspace.
 - **Main content** — the primary task. Required actions should live here.
-- **Context panel** — secondary information or actions that are useful *right now*, but are not the task itself.
+- **Context panel** — secondary information or actions that are useful _right now_, but are not the task itself.
 - **Bottom bar** — lightweight global status, progress, or environment information.
 
 The context panel is deliberately **not** called an inspector. An inspector is one valid use, but the slot can also host filters, properties, activity, contextual help, or an AI assistant. If there is no useful secondary context, omit the panel entirely.
