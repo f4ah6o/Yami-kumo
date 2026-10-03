@@ -3,6 +3,8 @@ name: Demo Pages
 on:
   push:
     branches: [demo]
+    paths-ignore:
+      - '.github/workflows/live-pages-diagnostic.yml'
   workflow_dispatch:
 
 permissions:
