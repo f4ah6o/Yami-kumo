@@ -15,15 +15,7 @@ describe('resolveShellRegions', () => {
         hasContextPanel: true,
         hasBottomBar: true,
       }),
-    ).toEqual([
-      'header',
-      'rail',
-      'sidebar',
-      'tabs',
-      'main',
-      'contextPanel',
-      'bottomBar',
-    ]);
+    ).toEqual(['header', 'rail', 'sidebar', 'tabs', 'main', 'contextPanel', 'bottomBar']);
   });
 
   it('treats a collapsed sidebar as visually absent', () => {
