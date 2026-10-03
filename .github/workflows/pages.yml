@@ -5,6 +5,8 @@ on:
     branches: [demo]
     paths-ignore:
       - '.github/workflows/live-pages-diagnostic.yml'
+  pull_request:
+    branches: [demo]
   workflow_dispatch:
 
 permissions:
@@ -13,7 +15,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'deploy' }}
   cancel-in-progress: true
 
 jobs:
@@ -42,20 +44,24 @@ jobs:
         run: vp build
 
       - name: Configure Pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v4
         with:
           path: ./dist
 
       - name: Deploy Pages
+        if: github.event_name != 'pull_request'
         id: deployment
         uses: actions/deploy-pages@v4
 
       - name: Smoke deployed page
+        if: github.event_name != 'pull_request'
         env:
           PAGE_URL: https://f4ah6o.github.io/Yami-kumo/
         run: |
