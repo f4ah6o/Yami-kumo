@@ -79,7 +79,7 @@ function App() {
           </Button>
           <Button
             className="yk-toolbar-button yk-context-toggle"
-            aria-controls="yk-context-panel-inner"
+            aria-controls="yk-context-panel"
             aria-expanded={contextPanelOpen}
             onClick={() => {
               setMobileSidebarOpen(false);
@@ -276,7 +276,7 @@ function App() {
       mobileSidebarOpen={mobileSidebarOpen}
       onMobileSidebarDismiss={() => setMobileSidebarOpen(false)}
       contextPanelOpen={contextPanelOpen}
-      onRightSidebarDismiss={() => setContextPanelOpen(false)}
+      onContextPanelDismiss={() => setContextPanelOpen(false)}
     >
       <div className="yk-page">
         <div className="yk-page-header">
