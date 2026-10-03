@@ -32,7 +32,10 @@ jobs:
           run-install: true
 
       - name: Check
-        run: vp check
+        run: |
+          vp check --fix
+          git diff -- src/styles.css
+          git diff --exit-code
 
       - name: Typecheck
         run: vp exec tsc --noEmit
