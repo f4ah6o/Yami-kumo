@@ -2,16 +2,19 @@ import { describe, expect, it } from 'vitest';
 import { resolveShellRegions } from './layout';
 
 describe('resolveShellRegions', () => {
-  it('returns the canonical desktop shell regions', () => {
+  it('keeps the default shell focused on navigation and main content', () => {
     expect(resolveShellRegions()).toEqual([
       'header',
       'rail',
       'sidebar',
       'tabs',
       'main',
-      'rightSidebar',
       'bottomBar',
     ]);
+  });
+
+  it('adds a context panel only when the product has contextual content for it', () => {
+    expect(resolveShellRegions({ hasContextPanel: true })).toContain('contextPanel');
   });
 
   it('removes optional regions without changing the main workspace', () => {
@@ -19,7 +22,7 @@ describe('resolveShellRegions', () => {
       resolveShellRegions({
         hasSidebar: false,
         hasTabs: false,
-        hasRightSidebar: false,
+        hasContextPanel: false,
         hasBottomBar: false,
       }),
     ).toEqual(['header', 'rail', 'main']);
