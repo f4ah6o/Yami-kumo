@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.16.1
+        with:
+          node-version: 'lts'
+          run-install: true
+
+      - name: Check
+        run: vp check
+
+      - name: Typecheck
+        run: vp exec tsc --noEmit
+
+      - name: Test
+        run: vp test
+
+      - name: Build
+        run: vp build
