@@ -11,7 +11,10 @@ export interface AppShellProps {
   bottomBar?: ReactNode;
   children: ReactNode;
   sidebarCollapsed?: boolean;
+  mobileSidebarOpen?: boolean;
+  onMobileSidebarDismiss?: () => void;
   rightSidebarOpen?: boolean;
+  onRightSidebarDismiss?: () => void;
 }
 
 export function AppShell({
@@ -25,12 +28,16 @@ export function AppShell({
   bottomBar,
   children,
   sidebarCollapsed = false,
+  mobileSidebarOpen = false,
+  onMobileSidebarDismiss,
   rightSidebarOpen = true,
+  onRightSidebarDismiss,
 }: AppShellProps) {
   return (
     <div
       className="yk-shell"
       data-sidebar-collapsed={sidebarCollapsed}
+      data-mobile-sidebar-open={mobileSidebarOpen}
       data-has-sidebar={Boolean(sidebar)}
       data-has-right-sidebar={Boolean(rightSidebar)}
       data-right-sidebar-open={rightSidebarOpen}
@@ -46,9 +53,17 @@ export function AppShell({
       </nav>
 
       {sidebar ? (
-        <aside className="yk-sidebar" aria-label="Workspace navigation">
-          {sidebar}
-        </aside>
+        <>
+          <button
+            type="button"
+            className="yk-drawer-scrim yk-sidebar-scrim"
+            aria-label="Close workspace navigation"
+            onClick={onMobileSidebarDismiss}
+          />
+          <aside id="yk-mobile-navigation" className="yk-sidebar" aria-label="Workspace navigation">
+            {sidebar}
+          </aside>
+        </>
       ) : null}
 
       <section className="yk-workspace">
@@ -61,9 +76,17 @@ export function AppShell({
       </section>
 
       {rightSidebar ? (
-        <aside className="yk-right-sidebar" aria-label="Inspector">
-          {rightSidebar}
-        </aside>
+        <>
+          <button
+            type="button"
+            className="yk-drawer-scrim yk-inspector-scrim"
+            aria-label="Close inspector"
+            onClick={onRightSidebarDismiss}
+          />
+          <aside id="yk-inspector" className="yk-right-sidebar" aria-label="Inspector">
+            {rightSidebar}
+          </aside>
+        </>
       ) : null}
 
       {bottomBar ? <footer className="yk-bottom-bar">{bottomBar}</footer> : null}
