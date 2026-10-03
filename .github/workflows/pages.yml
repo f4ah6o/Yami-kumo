@@ -27,13 +27,11 @@ jobs:
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1.16.1
         with:
-          node-version: "lts"
+          node-version: 'lts'
           run-install: true
 
-      - name: Check and show formatter diff
-        run: |
-          vp check --fix
-          git diff --no-ext-diff --color=never
+      - name: Check
+        run: vp check
 
       - name: Test
         run: vp test
