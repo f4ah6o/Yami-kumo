@@ -27,8 +27,9 @@ function App() {
   const [activeTab, setActiveTab] = useState('Overview');
   const [activeNav, setActiveNav] = useState('Home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(() =>
-    typeof window === 'undefined' ? true : window.matchMedia('(min-width: 621px)').matches,
+    typeof window === 'undefined' ? true : window.matchMedia('(min-width: 1181px)').matches,
   );
 
   const activity = useMemo(
@@ -43,10 +44,25 @@ function App() {
   return (
     <AppShell
       brand={
-        <a className="yk-logo" href="./" aria-label="Yami-kumo home">
-          <span className="yk-logo-mark">YK</span>
-          <span className="yk-logo-name">Yami-kumo</span>
-        </a>
+        <div className="yk-brand-group">
+          <button
+            type="button"
+            className="yk-mobile-nav-toggle"
+            aria-label={mobileSidebarOpen ? 'Close navigation' : 'Open navigation'}
+            aria-controls="yk-mobile-navigation"
+            aria-expanded={mobileSidebarOpen}
+            onClick={() => {
+              setRightSidebarOpen(false);
+              setMobileSidebarOpen((value) => !value);
+            }}
+          >
+            ☰
+          </button>
+          <a className="yk-logo" href="./" aria-label="Yami-kumo home">
+            <span className="yk-logo-mark">YK</span>
+            <span className="yk-logo-name">Yami-kumo</span>
+          </a>
+        </div>
       }
       globalSearch={
         <Input
@@ -65,13 +81,19 @@ function App() {
           </Button>
           <Button
             className="yk-toolbar-button yk-inspector-toggle"
+            aria-controls="yk-inspector"
             aria-expanded={rightSidebarOpen}
-            onClick={() => setRightSidebarOpen((value) => !value)}
+            onClick={() => {
+              setMobileSidebarOpen(false);
+              setRightSidebarOpen((value) => !value);
+            }}
           >
             <span className="yk-inspector-toggle-wide">
               {rightSidebarOpen ? 'Hide inspector' : 'Show inspector'}
             </span>
-            <span className="yk-inspector-toggle-compact">Inspector</span>
+            <span className="yk-inspector-toggle-compact" aria-hidden="true">
+              ◧
+            </span>
           </Button>
           <span className="yk-avatar" aria-label="Demo user">
             JD
@@ -104,7 +126,17 @@ function App() {
               <span className="yk-eyebrow">Workspace</span>
               <strong>Product studio</strong>
             </div>
-            <span aria-hidden="true">⌄</span>
+            <div className="yk-sidebar-heading-actions">
+              <span aria-hidden="true">⌄</span>
+              <button
+                type="button"
+                className="yk-mobile-sidebar-close"
+                aria-label="Close navigation"
+                onClick={() => setMobileSidebarOpen(false)}
+              >
+                ×
+              </button>
+            </div>
           </div>
 
           <div className="yk-sidebar-nav">
@@ -114,7 +146,10 @@ function App() {
                 key={label}
                 className="yk-sidebar-link"
                 data-active={activeNav === label}
-                onClick={() => setActiveNav(label)}
+                onClick={() => {
+                  setActiveNav(label);
+                  setMobileSidebarOpen(false);
+                }}
               >
                 <span aria-hidden="true">{icon}</span>
                 <span>{label}</span>
@@ -236,7 +271,10 @@ function App() {
         </>
       }
       sidebarCollapsed={sidebarCollapsed}
+      mobileSidebarOpen={mobileSidebarOpen}
+      onMobileSidebarDismiss={() => setMobileSidebarOpen(false)}
       rightSidebarOpen={rightSidebarOpen}
+      onRightSidebarDismiss={() => setRightSidebarOpen(false)}
     >
       <div className="yk-page">
         <div className="yk-page-header">
