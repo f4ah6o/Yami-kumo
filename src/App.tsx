@@ -218,11 +218,15 @@ function App() {
             </div>
             <div>
               <strong>Keep in main content</strong>
-              <span>Primary tasks, required actions, long workflows, or information everyone needs.</span>
+              <span>
+                Primary tasks, required actions, long workflows, or information everyone needs.
+              </span>
             </div>
             <div>
               <strong>Responsive behavior</strong>
-              <span>Persistent only when space and task justify it; otherwise use a dismissible drawer.</span>
+              <span>
+                Persistent only when space and task justify it; otherwise use a dismissible drawer.
+              </span>
             </div>
           </div>
 
