@@ -101,6 +101,19 @@ a {
   min-width: 0;
 }
 
+.yk-brand-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.yk-mobile-nav-toggle,
+.yk-mobile-sidebar-close,
+.yk-drawer-scrim {
+  display: none;
+}
+
 .yk-logo {
   display: inline-flex;
   align-items: center;
@@ -246,6 +259,12 @@ a {
   display: block;
   margin-top: 2px;
   font-size: 14px;
+}
+
+.yk-sidebar-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .yk-eyebrow,
@@ -754,12 +773,26 @@ a {
     grid-template-columns: 58px 0 minmax(0, 1fr);
   }
 
+  .yk-drawer-scrim {
+    position: fixed;
+    z-index: 19;
+    inset: 76px 16px 48px;
+    border: 0;
+    border-radius: 12px;
+    background: rgb(17 24 39 / 0.16);
+    backdrop-filter: blur(2px);
+  }
+
+  .yk-shell[data-right-sidebar-open='true'] .yk-inspector-scrim {
+    display: block;
+  }
+
   .yk-right-sidebar {
     position: fixed;
     z-index: 20;
-    top: 88px;
-    right: 28px;
-    bottom: 60px;
+    top: 76px;
+    right: 16px;
+    bottom: 48px;
     width: 278px;
     border: 1px solid var(--yk-line);
     border-radius: 12px;
@@ -793,7 +826,60 @@ a {
   }
 
   .yk-sidebar {
-    display: none;
+    position: fixed;
+    z-index: 20;
+    top: 76px;
+    left: 16px;
+    bottom: 48px;
+    width: min(280px, calc(100vw - 52px));
+    display: block;
+    overflow: hidden;
+    border: 1px solid var(--yk-line);
+    border-radius: 12px;
+    box-shadow: var(--yk-shadow);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(calc(-100% - 24px));
+    transition:
+      transform 180ms ease,
+      opacity 160ms ease;
+  }
+
+  .yk-shell[data-mobile-sidebar-open='true'] .yk-sidebar {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(0);
+  }
+
+  .yk-shell[data-mobile-sidebar-open='true'] .yk-sidebar-scrim {
+    display: block;
+  }
+
+  .yk-sidebar-inner {
+    width: 100%;
+  }
+
+  .yk-mobile-nav-toggle,
+  .yk-mobile-sidebar-close {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid var(--yk-line);
+    border-radius: 9px;
+    background: white;
+    color: #363c43;
+    cursor: pointer;
+  }
+
+  .yk-mobile-nav-toggle {
+    font-size: 18px;
+  }
+
+  .yk-mobile-sidebar-close {
+    font-size: 20px;
+    line-height: 1;
   }
 
   .yk-topbar {
@@ -884,9 +970,6 @@ a {
   }
 
   .yk-right-sidebar {
-    top: 76px;
-    right: 16px;
-    bottom: 48px;
     width: min(278px, calc(100vw - 32px));
   }
 
