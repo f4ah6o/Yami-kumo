@@ -49,3 +49,25 @@ jobs:
             curl -fsSIL "https://f4ah6o.github.io${script_path}"
             curl -fsSIL "https://f4ah6o.github.io${style_path}"
           done
+
+      - name: Verify browser rendering
+        env:
+          PAGE_URL: https://f4ah6o.github.io/Yami-kumo/
+        run: |
+          set -euo pipefail
+          browser="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
+          test -n "$browser"
+
+          "$browser" \
+            --headless=new \
+            --no-sandbox \
+            --disable-gpu \
+            --disable-dev-shm-usage \
+            --virtual-time-budget=5000 \
+            --dump-dom \
+            "${PAGE_URL}?browser=${GITHUB_SHA}" \
+            > rendered.html 2> browser.log
+
+          cat browser.log
+          sed -n '1,120p' rendered.html
+          grep -q 'A stable frame for product work' rendered.html
