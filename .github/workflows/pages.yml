@@ -30,6 +30,9 @@ jobs:
       - name: Check
         run: vp check
 
+      - name: Typecheck
+        run: vp exec tsc --noEmit
+
       - name: Test
         run: vp test
 
@@ -49,3 +52,33 @@ jobs:
       - name: Deploy Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Smoke deployed page
+        env:
+          PAGE_URL: https://f4ah6o.github.io/Yami-kumo/
+        run: |
+          set -euo pipefail
+          html=""
+          for attempt in {1..12}; do
+            html="$(curl -fsSL -H 'Cache-Control: no-cache' "${PAGE_URL}?v=${GITHUB_SHA}" || true)"
+            if [[ "$html" == *"/Yami-kumo/assets/"* ]]; then
+              break
+            fi
+            sleep 5
+          done
+
+          test -n "$html"
+          printf '%s\n' "$html" | sed -n '1,40p'
+
+          script_path="$(printf '%s' "$html" | grep -oE 'src="[^"]+\.js"' | head -1 | cut -d'"' -f2)"
+          style_path="$(printf '%s' "$html" | grep -oE 'href="[^"]+\.css"' | head -1 | cut -d'"' -f2)"
+
+          test -n "$script_path"
+          test -n "$style_path"
+
+          curl -fsSI "https://f4ah6o.github.io${script_path}"
+          curl -fsSI "https://f4ah6o.github.io${style_path}"
+
+          plain_html="$(curl -fsSL "$PAGE_URL")"
+          printf 'plain index script: '
+          printf '%s' "$plain_html" | grep -oE 'src="[^"]+\.js"' | head -1
