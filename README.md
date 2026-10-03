@@ -1,20 +1,41 @@
 # Yami-kumo
 
-A reusable application-shell template built with [Cloudflare Kumo](https://github.com/cloudflare/kumo) and [Vite+](https://viteplus.dev/).
+A copy-ready application-shell starter built with [Cloudflare Kumo](https://github.com/cloudflare/kumo) and [Vite+](https://viteplus.dev/).
 
-Yami-kumo is intentionally a shell, not a dashboard template. It gives products a predictable frame while leaving product-specific content and optional regions to the application.
+The default `main` branch is intentionally small enough to use as a new application's starting point. The richer showcase lives on the [`demo` branch](https://github.com/f4ah6o/Yami-kumo/tree/demo) and is published at https://f4ah6o.github.io/Yami-kumo/.
+
+## Use as a starter
+
+Use GitHub's **Use this template** action to create a new independent repository from `main`. A template copy starts with the starter rather than the showcase branch.
+
+After copying:
+
+```bash
+vp install
+vp dev
+```
+
+Then replace `src/App.tsx` with your product's navigation and primary task.
 
 ## Shell anatomy
 
+Every region except the top bar/brand and main content is optional.
+
 ```text
 Top bar
-├─ Left rail
-├─ Navigation sidebar (optional/collapsible)
-├─ Workspace
-│  ├─ Tabs (optional)
-│  └─ Main content
-├─ Context panel (optional)
-└─ Bottom status bar (optional)
+├─ navigation trigger (optional)
+├─ brand
+├─ global search (optional)
+├─ header actions (optional)
+└─ account menu (optional)
+
+Workspace
+├─ left rail (optional)
+├─ navigation sidebar (optional/collapsible)
+├─ tabs (optional)
+├─ main content
+├─ context panel (optional)
+└─ bottom status bar (optional)
 ```
 
 The semantic roles matter more than the physical positions:
@@ -23,31 +44,30 @@ The semantic roles matter more than the physical positions:
 - **Tabs** — sibling views inside the current workspace.
 - **Main content** — the primary task. Required actions should live here.
 - **Context panel** — secondary information or actions that are useful _right now_, but are not the task itself.
+- **Account menu** — identity/account affordance; the starter uses a person silhouette instead of fake initials.
 - **Bottom bar** — lightweight global status, progress, or environment information.
 
 The context panel is deliberately **not** called an inspector. An inspector is one valid use, but the slot can also host filters, properties, activity, contextual help, or an AI assistant. If there is no useful secondary context, omit the panel entirely.
 
-## UX guidance
-
-A good Yami-kumo screen keeps the frame stable and makes optional UI earn its space.
-
-Use the context panel for things such as selected-item details, page-specific filters, properties, related activity, or contextual AI help. Avoid putting primary navigation, required form fields, blocking actions, or long workflows there.
-
-On wide screens the panel may remain visible when the task benefits from it. On narrow screens it becomes a dismissible drawer. The demo starts it closed to reinforce that the region is optional rather than permanent chrome.
-
-See [docs/UX.md](./docs/UX.md) for the full guidance.
-
-## Demo
-
-GitHub Pages: https://f4ah6o.github.io/Yami-kumo/
-
-The demo is both a visual example and a description of the shell. Open **UX guide** to see one example of a context panel; the shell API itself does not prescribe that content.
-
 ## AppShell API
+
+A minimal shell only needs a brand and main content:
+
+```tsx
+<AppShell brand={<Brand />}>
+  <Page />
+</AppShell>
+```
+
+Add regions only when the product benefits from them:
 
 ```tsx
 <AppShell
+  navigationTrigger={<MobileNavigationButton />}
   brand={<Brand />}
+  globalSearch={<GlobalSearch />}
+  headerActions={<PageActions />}
+  accountMenu={<AccountMenu />}
   rail={<PrimaryRail />}
   sidebar={<WorkspaceNavigation />}
   tabs={<WorkspaceTabs />}
@@ -61,16 +81,29 @@ The demo is both a visual example and a description of the shell. Open **UX guid
 </AppShell>
 ```
 
-Every region except the brand, rail, and main content is optional. Product code owns when optional regions exist and when they open.
+Product code owns whether optional regions exist, their content, and when they open. The shell owns their spatial/responsive relationship.
+
+## Responsive convention
+
+On phones, durable navigation becomes a left drawer. Contextual support becomes a right drawer. They should start closed unless the current task explicitly requires one, and opening one should normally dismiss the other.
+
+See [docs/UX.md](./docs/UX.md) for the full composition guidance.
+
+## Branches
+
+- **`main`** — copy-ready starter; no GitHub Pages deployment.
+- **`demo`** — showcase/description source; GitHub Pages deploys from this branch through Actions.
+
+This keeps template copies free of showcase content and Pages-specific configuration.
 
 ## Development
 
-This repository uses Vite+ (`vp`) as the frontend toolchain.
+The starter uses Vite+ (`vp`) for install, checks, tests, and builds.
 
 ```bash
 vp install
-vp dev
 vp check
+vp exec tsc --noEmit
 vp test
 vp build
 ```
@@ -78,11 +111,11 @@ vp build
 ## Structure
 
 - `src/shell/AppShell.tsx` — reusable semantic slot contract
-- `src/shell/layout.ts` — layout-region model used by the shell and tests
-- `src/App.tsx` — interactive shell demo and usage description
-- `src/styles.css` — responsive shell/layout styling
+- `src/shell/layout.ts` — layout-region model and tests
+- `src/App.tsx` — small starter application
+- `src/styles.css` — responsive shell plus starter styles
 - `docs/UX.md` — guidance for choosing and composing shell regions
-- `ACKNOWLEDGEMENTS.md` — design references and upstream acknowledgements
+- `ACKNOWLEDGEMENTS.md` — upstream and layout-reference acknowledgements
 
 ## Acknowledgements
 
