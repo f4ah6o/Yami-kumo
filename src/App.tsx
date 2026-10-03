@@ -181,8 +181,8 @@ function App() {
             <span className="yk-eyebrow">Kumo block</span>
             <h3>Slot-first shell</h3>
             <p>
-              Swap navigation, tabs, main content, inspector, and status regions
-              without changing the shell contract.
+              Swap navigation, tabs, main content, inspector, and status regions without changing
+              the shell contract.
             </p>
           </LayerCard>
 
@@ -283,7 +283,15 @@ function App() {
                   [520, 49],
                   [575, 28],
                 ].map(([cx, cy]) => (
-                  <circle key={cx} cx={cx} cy={cy} r="4" fill="white" stroke="currentColor" strokeWidth="2" />
+                  <circle
+                    key={cx}
+                    cx={cx}
+                    cy={cy}
+                    r="4"
+                    fill="white"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  />
                 ))}
               </svg>
             </div>
