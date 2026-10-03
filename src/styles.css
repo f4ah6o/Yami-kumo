@@ -458,8 +458,7 @@ a {
     backdrop-filter: blur(2px);
   }
 
-  .yk-shell[data-has-context-panel='true'][data-context-panel-open='true']
-    .yk-context-panel-scrim {
+  .yk-shell[data-has-context-panel='true'][data-context-panel-open='true'] .yk-context-panel-scrim {
     display: block;
   }
 
