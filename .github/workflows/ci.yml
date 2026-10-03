@@ -23,10 +23,8 @@ jobs:
           node-version: 'lts'
           run-install: true
 
-      - name: Check and show formatter diff
-        run: |
-          vp check --fix
-          git diff --no-ext-diff --color=never
+      - name: Check
+        run: vp check
 
       - name: Typecheck
         run: vp exec tsc --noEmit
