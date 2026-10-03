@@ -1,418 +1,162 @@
 import { Button, Input, LayerCard } from '@cloudflare/kumo';
-import { useMemo, useState } from 'react';
+import {
+  Folder,
+  Gear,
+  House,
+  List,
+  SquaresFour,
+  UserCircle,
+  X,
+} from '@phosphor-icons/react';
+import { useState } from 'react';
 import { AppShell } from './shell/AppShell';
 
-const tabs = ['Overview', 'Activity', 'Reports', 'Team', 'Settings'];
-const navItems = [
-  ['⌂', 'Home'],
-  ['✉', 'Inbox'],
-  ['▣', 'Projects'],
-  ['◎', 'Customers'],
-  ['↗', 'Analytics'],
-  ['⌘', 'Automations'],
-  ['◇', 'Integrations'],
-  ['⚙', 'Settings'],
-] as const;
-
-const railItems = ['⌂', '⌕', '▦', '♙', '⚙'];
-
-const stats = [
-  ['Total users', '12,482', '+12%'],
-  ['Active projects', '342', '+8%'],
-  ['Revenue', '$128.4K', '+23%'],
-  ['Uptime', '99.9%', '+0.1%'],
-] as const;
+const tabs = ['Overview', 'Activity'];
 
 function App() {
   const [activeTab, setActiveTab] = useState('Overview');
   const [activeNav, setActiveNav] = useState('Home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [contextPanelOpen, setContextPanelOpen] = useState(false);
-
-  const activity = useMemo(
-    () => [
-      ['Jane Smith created a new project', '2 minutes ago'],
-      ['You updated workspace settings', '12 minutes ago'],
-      ['Acme Corp. invited 3 teammates', '1 hour ago'],
-    ],
-    [],
-  );
 
   return (
     <AppShell
+      navigationTrigger={
+        <button
+          type="button"
+          className="starter-icon-button starter-mobile-nav-trigger"
+          aria-label={mobileSidebarOpen ? 'Close navigation' : 'Open navigation'}
+          aria-controls="yk-mobile-navigation"
+          aria-expanded={mobileSidebarOpen}
+          onClick={() => setMobileSidebarOpen((value) => !value)}
+        >
+          <List size={20} weight="bold" />
+        </button>
+      }
       brand={
-        <div className="yk-brand-group">
-          <button
-            type="button"
-            className="yk-mobile-nav-toggle"
-            aria-label={mobileSidebarOpen ? 'Close navigation' : 'Open navigation'}
-            aria-controls="yk-mobile-navigation"
-            aria-expanded={mobileSidebarOpen}
-            onClick={() => {
-              setContextPanelOpen(false);
-              setMobileSidebarOpen((value) => !value);
-            }}
-          >
-            ☰
-          </button>
-          <a className="yk-logo" href="./" aria-label="Yami-kumo home">
-            <span className="yk-logo-mark">YK</span>
-            <span className="yk-logo-name">Yami-kumo</span>
-          </a>
-        </div>
+        <a className="starter-brand" href="./" aria-label="Application home">
+          <span className="starter-brand-mark">A</span>
+          <strong>Application</strong>
+        </a>
       }
-      globalSearch={
-        <Input
-          aria-label="Global search"
-          placeholder="Search everything…"
-          className="yk-search-input"
-        />
-      }
+      globalSearch={<Input aria-label="Global search" placeholder="Search…" />}
       headerActions={
-        <>
-          <Button
-            className="yk-toolbar-button yk-sidebar-toggle"
-            onClick={() => setSidebarCollapsed((value) => !value)}
-          >
-            {sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-          </Button>
-          <Button
-            className="yk-toolbar-button yk-context-toggle"
-            aria-controls="yk-context-panel-inner"
-            aria-expanded={contextPanelOpen}
-            onClick={() => {
-              setMobileSidebarOpen(false);
-              setContextPanelOpen((value) => !value);
-            }}
-          >
-            <span className="yk-context-toggle-wide">
-              {contextPanelOpen ? 'Hide guide' : 'Show guide'}
-            </span>
-            <span className="yk-context-toggle-compact" aria-hidden="true">
-              ?
-            </span>
-          </Button>
-          <span className="yk-avatar" aria-label="Demo user">
-            JD
-          </span>
-        </>
+        <Button
+          className="starter-sidebar-toggle"
+          onClick={() => setSidebarCollapsed((value) => !value)}
+        >
+          {sidebarCollapsed ? 'Show navigation' : 'Hide navigation'}
+        </Button>
+      }
+      accountMenu={
+        <button type="button" className="starter-account" aria-label="Account menu">
+          <UserCircle size={26} weight="regular" aria-hidden="true" />
+        </button>
       }
       rail={
-        <div className="yk-rail-inner">
-          <div className="yk-rail-stack">
-            {railItems.map((item, index) => (
-              <button
-                type="button"
-                key={item}
-                className="yk-rail-button"
-                aria-label={['Home', 'Search', 'Apps', 'People', 'Settings'][index]}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-          <button type="button" className="yk-rail-user" aria-label="Profile">
-            JD
+        <div className="starter-rail">
+          <button type="button" className="starter-rail-button" aria-label="Home">
+            <House size={20} weight="regular" />
+          </button>
+          <button type="button" className="starter-rail-button" aria-label="Apps">
+            <SquaresFour size={20} weight="regular" />
+          </button>
+          <button type="button" className="starter-rail-button" aria-label="Settings">
+            <Gear size={20} weight="regular" />
           </button>
         </div>
       }
       sidebar={
-        <div className="yk-sidebar-inner">
-          <div className="yk-sidebar-heading">
+        <div className="starter-sidebar">
+          <div className="starter-sidebar-heading">
             <div>
-              <span className="yk-eyebrow">Workspace</span>
-              <strong>Product studio</strong>
+              <span className="starter-eyebrow">Workspace</span>
+              <strong>My workspace</strong>
             </div>
-            <div className="yk-sidebar-heading-actions">
-              <span aria-hidden="true">⌄</span>
-              <button
-                type="button"
-                className="yk-mobile-sidebar-close"
-                aria-label="Close navigation"
-                onClick={() => setMobileSidebarOpen(false)}
-              >
-                ×
-              </button>
-            </div>
+            <button
+              type="button"
+              className="starter-icon-button starter-mobile-nav-close"
+              aria-label="Close navigation"
+              onClick={() => setMobileSidebarOpen(false)}
+            >
+              <X size={18} />
+            </button>
           </div>
 
-          <div className="yk-sidebar-nav">
-            {navItems.map(([icon, label]) => (
-              <button
-                type="button"
-                key={label}
-                className="yk-sidebar-link"
-                data-active={activeNav === label}
-                onClick={() => {
-                  setActiveNav(label);
-                  setMobileSidebarOpen(false);
-                }}
-              >
-                <span aria-hidden="true">{icon}</span>
-                <span>{label}</span>
-                {label === 'Inbox' ? <span className="yk-count">7</span> : null}
-              </button>
-            ))}
-          </div>
-
-          <div className="yk-sidebar-divider" />
-          <span className="yk-section-label">Favorites</span>
-          <div className="yk-favorites">
-            {['Q1 Plan', 'Reporting', 'Launch room', 'Untitled 3'].map((item) => (
-              <button type="button" key={item} className="yk-favorite">
-                ☆ {item}
-              </button>
-            ))}
-          </div>
+          {[
+            { label: 'Home', icon: House },
+            { label: 'Projects', icon: Folder },
+            { label: 'Settings', icon: Gear },
+          ].map(({ label, icon: Icon }) => (
+            <button
+              type="button"
+              key={label}
+              className="starter-nav-item"
+              data-active={activeNav === label}
+              onClick={() => {
+                setActiveNav(label);
+                setMobileSidebarOpen(false);
+              }}
+            >
+              <Icon size={18} />
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
       }
       tabs={
-        <div className="yk-tab-list">
+        <div className="starter-tabs">
           {tabs.map((tab) => (
             <button
               type="button"
               key={tab}
-              className="yk-tab"
-              aria-selected={activeTab === tab}
+              className="starter-tab"
               data-active={activeTab === tab}
+              aria-selected={activeTab === tab}
               onClick={() => setActiveTab(tab)}
             >
               {tab}
             </button>
           ))}
-          <button type="button" className="yk-tab yk-new-tab">
-            + New tab
-          </button>
-        </div>
-      }
-      contextPanel={
-        <div className="yk-context-panel-inner">
-          <div className="yk-context-heading">
-            <div>
-              <span className="yk-eyebrow">Context panel example</span>
-              <h2>UX guide</h2>
-            </div>
-            <div className="yk-context-heading-actions">
-              <span>Optional</span>
-              <button
-                type="button"
-                className="yk-context-close"
-                aria-label="Close guide"
-                onClick={() => setContextPanelOpen(false)}
-              >
-                ×
-              </button>
-            </div>
-          </div>
-
-          <p className="yk-context-lead">
-            This area is not part of the permanent chrome. Add it only when the current task gains
-            useful secondary context without navigating away.
-          </p>
-
-          <div className="yk-context-use-cases">
-            <div>
-              <strong>Good fits</strong>
-              <span>Selected-item details, filters, properties, activity, contextual AI help.</span>
-            </div>
-            <div>
-              <strong>Keep in main content</strong>
-              <span>
-                Primary tasks, required actions, long workflows, or information everyone needs.
-              </span>
-            </div>
-            <div>
-              <strong>Responsive behavior</strong>
-              <span>
-                Persistent only when space and task justify it; otherwise use a dismissible drawer.
-              </span>
-            </div>
-          </div>
-
-          <LayerCard className="yk-assistant-card">
-            <span className="yk-eyebrow">Shell principle</span>
-            <h3>Stable frame, optional regions</h3>
-            <p>
-              Keep navigation and main work predictable. Add tabs, a context panel, or a status bar
-              only when they improve the task at hand.
-            </p>
-          </LayerCard>
-
-          <LayerCard className="yk-ack-card">
-            <span className="yk-eyebrow">Acknowledgements</span>
-            <p>Layout inspiration:</p>
-            <a
-              href="https://x.com/thenanyu/status/2105704619704029435?s=46"
-              target="_blank"
-              rel="noreferrer"
-            >
-              @thenanyu reference ↗
-            </a>
-            <a
-              href="https://x.com/lawrluk/status/2105711205172273621?s=46"
-              target="_blank"
-              rel="noreferrer"
-            >
-              @lawrluk reference ↗
-            </a>
-          </LayerCard>
         </div>
       }
       bottomBar={
-        <>
-          <span className="yk-status">
-            <i /> All systems operational
-          </span>
-          <span>3 background jobs running</span>
-          <span className="yk-bottom-links">
-            <a href="https://github.com/f4ah6o/Yami-kumo">GitHub</a>
-            <a href="https://github.com/cloudflare/kumo">Kumo</a>
-            <span>v0.1.0</span>
-          </span>
-        </>
+        <div className="starter-status">
+          <span className="starter-status-dot" />
+          Ready
+        </div>
       }
       sidebarCollapsed={sidebarCollapsed}
       mobileSidebarOpen={mobileSidebarOpen}
       onMobileSidebarDismiss={() => setMobileSidebarOpen(false)}
-      contextPanelOpen={contextPanelOpen}
-      onRightSidebarDismiss={() => setContextPanelOpen(false)}
     >
-      <div className="yk-page">
-        <div className="yk-page-header">
-          <div>
-            <span className="yk-eyebrow">AppShell / {activeTab}</span>
-            <h1>A stable frame for product work</h1>
+      <section className="starter-page">
+        <span className="starter-eyebrow">
+          {activeNav} / {activeTab}
+        </span>
+        <h1>Start building here</h1>
+        <p className="starter-lead">
+          Keep the shell stable and replace this area with the primary task for your product.
+        </p>
+
+        <div className="starter-grid">
+          <LayerCard className="starter-card">
+            <h2>Main content owns the task</h2>
             <p>
-              Use the shell for durable navigation and workspace structure. Keep optional UI
-              contextual, dismissible, and subordinate to the main task.
+              Required actions, forms, errors, and results belong in the center workspace rather
+              than optional chrome.
             </p>
-          </div>
-          <Button className="yk-date-button">Last 30 days ⌄</Button>
+          </LayerCard>
+
+          <LayerCard className="starter-card">
+            <h2>Add optional regions only when useful</h2>
+            <p>
+              Tabs, a context panel, account controls, and the bottom bar are slots. Omit any of
+              them when they do not improve the workflow.
+            </p>
+          </LayerCard>
         </div>
-
-        <LayerCard className="yk-description-card">
-          <div>
-            <span className="yk-eyebrow">Recommended usage</span>
-            <h2>Predictable chrome, flexible content</h2>
-          </div>
-          <p>
-            Left-side navigation answers “where am I?”. Tabs answer “which view?”. Main content is
-            where the task happens. The context panel answers “what else do I need right now?” and
-            should disappear when that answer is “nothing”.
-          </p>
-          <Button onClick={() => setContextPanelOpen(true)}>Open UX guide</Button>
-        </LayerCard>
-
-        <section className="yk-stat-grid" aria-label="Workspace summary">
-          {stats.map(([label, value, delta]) => (
-            <LayerCard className="yk-stat-card" key={label}>
-              <div className="yk-stat-label">{label}</div>
-              <strong>{value}</strong>
-              <span className="yk-positive">{delta}</span>
-              <div className="yk-sparkline" aria-hidden="true">
-                <i />
-                <i />
-                <i />
-                <i />
-                <i />
-                <i />
-              </div>
-            </LayerCard>
-          ))}
-        </section>
-
-        <section className="yk-two-column">
-          <LayerCard className="yk-chart-card">
-            <div className="yk-card-heading">
-              <div>
-                <span className="yk-eyebrow">Growth over time</span>
-                <h2>Users</h2>
-              </div>
-              <span className="yk-pill">12 months</span>
-            </div>
-            <div className="yk-chart" aria-label="Decorative growth chart">
-              <div className="yk-chart-grid" />
-              <svg viewBox="0 0 600 190" role="img" aria-label="User growth trend">
-                <polyline
-                  points="20,165 70,148 120,128 170,139 220,112 270,105 320,96 370,70 420,68 470,58 520,49 575,28"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  vectorEffect="non-scaling-stroke"
-                />
-                {[
-                  [20, 165],
-                  [70, 148],
-                  [120, 128],
-                  [170, 139],
-                  [220, 112],
-                  [270, 105],
-                  [320, 96],
-                  [370, 70],
-                  [420, 68],
-                  [470, 58],
-                  [520, 49],
-                  [575, 28],
-                ].map(([cx, cy]) => (
-                  <circle
-                    key={cx}
-                    cx={cx}
-                    cy={cy}
-                    r="4"
-                    fill="white"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  />
-                ))}
-              </svg>
-            </div>
-          </LayerCard>
-
-          <LayerCard className="yk-feature-card">
-            <div className="yk-card-heading">
-              <div>
-                <span className="yk-eyebrow">Top features</span>
-                <h2>Adoption</h2>
-              </div>
-            </div>
-            {[
-              ['Analytics', 86],
-              ['Automations', 72],
-              ['Integrations', 61],
-              ['Reporting', 52],
-              ['AI Magic', 39],
-            ].map(([label, width]) => (
-              <div className="yk-feature-row" key={label}>
-                <span>{label}</span>
-                <i>
-                  <b style={{ width: `${width}%` }} />
-                </i>
-              </div>
-            ))}
-          </LayerCard>
-        </section>
-
-        <LayerCard className="yk-activity-card">
-          <div className="yk-card-heading">
-            <div>
-              <span className="yk-eyebrow">Recent activity</span>
-              <h2>Workspace events</h2>
-            </div>
-          </div>
-          <div className="yk-activity-list">
-            {activity.map(([label, time]) => (
-              <div className="yk-activity-row" key={label}>
-                <span className="yk-activity-avatar" aria-hidden="true">
-                  •
-                </span>
-                <span>{label}</span>
-                <time>{time}</time>
-              </div>
-            ))}
-          </div>
-        </LayerCard>
-      </div>
+      </section>
     </AppShell>
   );
 }
