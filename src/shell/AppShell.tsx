@@ -85,11 +85,7 @@ export function AppShell({
             aria-label={`Close ${contextPanelLabel}`}
             onClick={onContextPanelDismiss}
           />
-          <aside
-            id="yk-context-panel"
-            className="yk-context-panel"
-            aria-label={contextPanelLabel}
-          >
+          <aside id="yk-context-panel" className="yk-context-panel" aria-label={contextPanelLabel}>
             {contextPanel}
           </aside>
         </>
