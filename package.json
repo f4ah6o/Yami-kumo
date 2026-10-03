@@ -3,10 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=22.18.0"
-  },
-  "packageManager": "npm@11.6.2",
   "dependencies": {
     "@cloudflare/kumo": "latest",
     "@phosphor-icons/react": "^2.1.10",
@@ -18,8 +14,12 @@
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^6.0.1",
     "typescript": "^5.9.3",
-    "vite": "npm:@voidzero-dev/vite-plus-core@latest",
-    "vite-plus": "latest",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.0.0",
+    "vite-plus": "1.0.0",
     "vitest": "5.0.1"
-  }
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "packageManager": "npm@11.6.2"
 }
