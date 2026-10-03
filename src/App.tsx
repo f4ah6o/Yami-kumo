@@ -28,9 +28,7 @@ function App() {
   const [activeNav, setActiveNav] = useState('Home');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [rightSidebarOpen, setRightSidebarOpen] = useState(() =>
-    typeof window === 'undefined' ? true : window.matchMedia('(min-width: 1181px)').matches,
-  );
+  const [contextPanelOpen, setContextPanelOpen] = useState(false);
 
   const activity = useMemo(
     () => [
@@ -52,7 +50,7 @@ function App() {
             aria-controls="yk-mobile-navigation"
             aria-expanded={mobileSidebarOpen}
             onClick={() => {
-              setRightSidebarOpen(false);
+              setContextPanelOpen(false);
               setMobileSidebarOpen((value) => !value);
             }}
           >
@@ -80,19 +78,19 @@ function App() {
             {sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
           </Button>
           <Button
-            className="yk-toolbar-button yk-inspector-toggle"
-            aria-controls="yk-inspector"
-            aria-expanded={rightSidebarOpen}
+            className="yk-toolbar-button yk-context-toggle"
+            aria-controls="yk-context-panel-inner"
+            aria-expanded={contextPanelOpen}
             onClick={() => {
               setMobileSidebarOpen(false);
-              setRightSidebarOpen((value) => !value);
+              setContextPanelOpen((value) => !value);
             }}
           >
-            <span className="yk-inspector-toggle-wide">
-              {rightSidebarOpen ? 'Hide inspector' : 'Show inspector'}
+            <span className="yk-context-toggle-wide">
+              {contextPanelOpen ? 'Hide guide' : 'Show guide'}
             </span>
-            <span className="yk-inspector-toggle-compact" aria-hidden="true">
-              ◧
+            <span className="yk-context-toggle-compact" aria-hidden="true">
+              ?
             </span>
           </Button>
           <span className="yk-avatar" aria-label="Demo user">
@@ -188,52 +186,52 @@ function App() {
           </button>
         </div>
       }
-      rightSidebar={
-        <div className="yk-inspector">
-          <div className="yk-inspector-heading">
+      contextPanel={
+        <div className="yk-context-panel-inner">
+          <div className="yk-context-heading">
             <div>
-              <span className="yk-eyebrow">Inspector</span>
-              <h2>Get started</h2>
+              <span className="yk-eyebrow">Context panel example</span>
+              <h2>UX guide</h2>
             </div>
-            <div className="yk-inspector-heading-actions">
-              <span>3 / 5</span>
+            <div className="yk-context-heading-actions">
+              <span>Optional</span>
               <button
                 type="button"
-                className="yk-inspector-close"
-                aria-label="Close inspector"
-                onClick={() => setRightSidebarOpen(false)}
+                className="yk-context-close"
+                aria-label="Close guide"
+                onClick={() => setContextPanelOpen(false)}
               >
                 ×
               </button>
             </div>
           </div>
 
-          <div className="yk-progress" aria-label="3 of 5 complete">
-            <span />
+          <p className="yk-context-lead">
+            This area is not part of the permanent chrome. Add it only when the current task gains
+            useful secondary context without navigating away.
+          </p>
+
+          <div className="yk-context-use-cases">
+            <div>
+              <strong>Good fits</strong>
+              <span>Selected-item details, filters, properties, activity, contextual AI help.</span>
+            </div>
+            <div>
+              <strong>Keep in main content</strong>
+              <span>Primary tasks, required actions, long workflows, or information everyone needs.</span>
+            </div>
+            <div>
+              <strong>Responsive behavior</strong>
+              <span>Persistent only when space and task justify it; otherwise use a dismissible drawer.</span>
+            </div>
           </div>
 
-          <label className="yk-check">
-            <input type="checkbox" defaultChecked /> Create your profile
-          </label>
-          <label className="yk-check">
-            <input type="checkbox" defaultChecked /> Invite a teammate
-          </label>
-          <label className="yk-check">
-            <input type="checkbox" /> Connect an integration
-          </label>
-          <label className="yk-check">
-            <input type="checkbox" /> Customize your workspace
-          </label>
-          <label className="yk-check">
-            <input type="checkbox" /> Build something great
-          </label>
-
           <LayerCard className="yk-assistant-card">
-            <span className="yk-eyebrow">Kumo block</span>
-            <h3>Slot-first shell</h3>
+            <span className="yk-eyebrow">Shell principle</span>
+            <h3>Stable frame, optional regions</h3>
             <p>
-              Swap navigation, tabs, main content, inspector, and status regions without changing
-              the shell contract.
+              Keep navigation and main work predictable. Add tabs, a context panel, or a status bar
+              only when they improve the task at hand.
             </p>
           </LayerCard>
 
@@ -273,18 +271,34 @@ function App() {
       sidebarCollapsed={sidebarCollapsed}
       mobileSidebarOpen={mobileSidebarOpen}
       onMobileSidebarDismiss={() => setMobileSidebarOpen(false)}
-      rightSidebarOpen={rightSidebarOpen}
-      onRightSidebarDismiss={() => setRightSidebarOpen(false)}
+      contextPanelOpen={contextPanelOpen}
+      onRightSidebarDismiss={() => setContextPanelOpen(false)}
     >
       <div className="yk-page">
         <div className="yk-page-header">
           <div>
-            <span className="yk-eyebrow">Template / {activeTab}</span>
-            <h1>Welcome back, John!</h1>
-            <p>One shell, many products. Keep the frame stable and replace the slots.</p>
+            <span className="yk-eyebrow">AppShell / {activeTab}</span>
+            <h1>A stable frame for product work</h1>
+            <p>
+              Use the shell for durable navigation and workspace structure. Keep optional UI
+              contextual, dismissible, and subordinate to the main task.
+            </p>
           </div>
           <Button className="yk-date-button">Last 30 days ⌄</Button>
         </div>
+
+        <LayerCard className="yk-description-card">
+          <div>
+            <span className="yk-eyebrow">Recommended usage</span>
+            <h2>Predictable chrome, flexible content</h2>
+          </div>
+          <p>
+            Left-side navigation answers “where am I?”. Tabs answer “which view?”. Main content is
+            where the task happens. The context panel answers “what else do I need right now?” and
+            should disappear when that answer is “nothing”.
+          </p>
+          <Button onClick={() => setContextPanelOpen(true)}>Open UX guide</Button>
+        </LayerCard>
 
         <section className="yk-stat-grid" aria-label="Workspace summary">
           {stats.map(([label, value, delta]) => (
