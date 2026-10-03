@@ -1,13 +1,5 @@
 import { Button, Input, LayerCard } from '@cloudflare/kumo';
-import {
-  Folder,
-  Gear,
-  House,
-  List,
-  SquaresFour,
-  UserCircle,
-  X,
-} from '@phosphor-icons/react';
+import { Folder, Gear, House, List, SquaresFour, UserCircle, X } from '@phosphor-icons/react';
 import { useState } from 'react';
 import { AppShell } from './shell/AppShell';
 
