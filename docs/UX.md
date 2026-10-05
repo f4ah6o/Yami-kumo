@@ -94,3 +94,14 @@ The shell should own responsive layout behavior and semantic slots. Product code
 - product-specific state
 
 This keeps Yami-kumo reusable without making products feel identical.
+
+## 8. Planned shared UX across renderers
+
+The planned gpui.mbt path carries the same shell roles and learned interaction
+rules into native applications. Qualification compares task outcomes, state,
+focus, dismissal and accessibility, with explicit adaptations for viewport,
+input device and OS conventions.
+
+The [shared UX implementation plan](../issues/open/20261005-kumo-gpui-shared-ux.md)
+defines Kumo synchronization, native adapter ownership and cross-target
+acceptance. It is a design plan; native shared UX is not implemented yet.
