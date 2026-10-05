@@ -34,10 +34,10 @@ consistent. Screenshot similarity alone cannot establish shared UX.
 These are source observations, not new dependency pins or completed acceptance
 results. Recheck them when implementation starts.
 
-| Repository | Inspected revision | Relevant observation |
-| --- | --- | --- |
-| Yami-kumo | `de8e3a3e167df2d721273f6a8f12c5df961d636d` | React `AppShell`; Kumo `Button`, `Input`, `LayerCard`; shell navigation/tabs and styles are locally authored |
-| cloudflare/kumo | `3d9331280781bf9ea67bb6c38321a7c6b98b0cee` | Source package version `2.14.0`; theme config, component registry generation and exported variant/default definitions |
+| Repository        | Inspected revision                         | Relevant observation                                                                                                  |
+| ----------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Yami-kumo         | `de8e3a3e167df2d721273f6a8f12c5df961d636d` | React `AppShell`; Kumo `Button`, `Input`, `LayerCard`; shell navigation/tabs and styles are locally authored          |
+| cloudflare/kumo   | `3d9331280781bf9ea67bb6c38321a7c6b98b0cee` | Source package version `2.14.0`; theme config, component registry generation and exported variant/default definitions |
 | gpui-mbt/gpui.mbt | `bf965aebbeb1dfdfed26373d4a7a58bb51a5ad01` | Headless elements, flex, focus/events and quad scenes; text/IME/accessibility and broader rendering remain incomplete |
 
 Yami-kumo currently declares `@cloudflare/kumo: "latest"` and has no committed
@@ -59,12 +59,12 @@ Sources:
 
 ## 3. Ownership and repository boundaries
 
-| Owner | Responsibility |
-| --- | --- |
-| Cloudflare Kumo | Upstream web components, variants, design tokens and web behavior |
-| Yami-kumo | Shared UX contract, shell policy, upstream extraction, generated definitions, native component adapters, fixtures and update reports |
-| gpui.mbt | Reusable layout/rendering/input/text/IME/accessibility/platform primitives |
-| Application | Domain state/actions, content, labels, chosen optional shell regions and product branding |
+| Owner           | Responsibility                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Cloudflare Kumo | Upstream web components, variants, design tokens and web behavior                                                                    |
+| Yami-kumo       | Shared UX contract, shell policy, upstream extraction, generated definitions, native component adapters, fixtures and update reports |
+| gpui.mbt        | Reusable layout/rendering/input/text/IME/accessibility/platform primitives                                                           |
+| Application     | Domain state/actions, content, labels, chosen optional shell regions and product branding                                            |
 
 Keep Kumo-specific knowledge in Yami-kumo. Its native adapter consumes gpui.mbt's
 public API; gpui.mbt's core does not acquire a React, Kumo or Yami-kumo dependency.
@@ -106,18 +106,18 @@ when an equivalent region changes between docked and overlay presentations.
 
 ### Required scenarios
 
-| Scenario | Shared observable outcome |
-| --- | --- |
-| Open navigation in compact layout | Navigation becomes visible and operable; focus enters an appropriate item; an open context drawer is dismissed |
-| Choose a navigation destination | The active destination and main content agree; the compact drawer closes; focus moves to an appropriate destination target |
-| Open/close contextual support | Main task state is preserved; overlay close/Escape restores focus to its trigger or a documented fallback if the trigger disappeared |
-| Open/dismiss a modal overlay | While open, Tab/Shift+Tab stay within the modal and background controls cannot activate; an allowed outside interaction dismisses without click-through; visible close control and Escape have consistent semantics; hidden content cannot retain keyboard interaction; docked panels use nonmodal rules |
-| Switch tabs | Focus and selection are distinguishable; arrow navigation and activation follow a documented policy on both targets; unrelated main-task state is preserved |
-| Activate a control | A pointer or keyboard sequence emits the intended action once; disabled controls emit none; cancellation does not activate it |
-| Submit asynchronous work | Pending state is visible; duplicate submission follows the declared policy; errors and retry stay with the task; success is perceivable without relying only on color |
-| Edit text with IME | Composition, selection and committed input remain distinct; IME confirmation does not also submit a form; cancelling composition does not also dismiss its containing overlay |
-| Resize or change display scale | Main content remains usable; selection is preserved; focus transfers safely if its presentation changes; hidden/removed controls cannot keep stale focus |
-| Reduce motion or change theme | State remains understandable; nonessential animation respects preferences; focus/selection/error remain distinguishable |
+| Scenario                          | Shared observable outcome                                                                                                                                                                                                                                                                                |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Open navigation in compact layout | Navigation becomes visible and operable; focus enters an appropriate item; an open context drawer is dismissed                                                                                                                                                                                           |
+| Choose a navigation destination   | The active destination and main content agree; the compact drawer closes; focus moves to an appropriate destination target                                                                                                                                                                               |
+| Open/close contextual support     | Main task state is preserved; overlay close/Escape restores focus to its trigger or a documented fallback if the trigger disappeared                                                                                                                                                                     |
+| Open/dismiss a modal overlay      | While open, Tab/Shift+Tab stay within the modal and background controls cannot activate; an allowed outside interaction dismisses without click-through; visible close control and Escape have consistent semantics; hidden content cannot retain keyboard interaction; docked panels use nonmodal rules |
+| Switch tabs                       | Focus and selection are distinguishable; arrow navigation and activation follow a documented policy on both targets; unrelated main-task state is preserved                                                                                                                                              |
+| Activate a control                | A pointer or keyboard sequence emits the intended action once; disabled controls emit none; cancellation does not activate it                                                                                                                                                                            |
+| Submit asynchronous work          | Pending state is visible; duplicate submission follows the declared policy; errors and retry stay with the task; success is perceivable without relying only on color                                                                                                                                    |
+| Edit text with IME                | Composition, selection and committed input remain distinct; IME confirmation does not also submit a form; cancelling composition does not also dismiss its containing overlay                                                                                                                            |
+| Resize or change display scale    | Main content remains usable; selection is preserved; focus transfers safely if its presentation changes; hidden/removed controls cannot keep stale focus                                                                                                                                                 |
+| Reduce motion or change theme     | State remains understandable; nonessential animation respects preferences; focus/selection/error remain distinguishable                                                                                                                                                                                  |
 
 Choose tab activation policy per declared pattern and latency requirements;
 do not assume every tab set has the same automatic/manual activation behavior.
@@ -181,13 +181,13 @@ redistributed dependency or asset's notices as part of adding that output.
 
 ## 6. Implementation slices and dependencies
 
-| Slice | Deliverable | Completion evidence |
-| --- | --- | --- |
-| 1. Contract and web reference | Input pinning, inventory of actual Yami-kumo usage, shared scenario definitions, qualification of existing web shell behavior | Deterministic dependency install; rendered web interactions satisfy documented expectations; existing checks/build pass |
-| 2. Extraction and generation foundation | Upstream manifest, explicit mapping/diagnostics, generated MoonBit tokens/variants and headless layout/event fixtures | Deterministic regeneration, drift detection, MoonBit compilation and headless conformance; reported as foundation only |
-| 3. Usable native shell | Visible text and core controls; common shell roles; navigation, tabs, contextual support, focus and state feedback on one qualified native target | A real user can complete the same starter task on web and native; physical input and native semantics are verified |
-| 4. Text and compound interactions | Input/IME, editable forms, dialogs, menus, selection controls and async feedback as real applications need them | Scenario-by-scenario web/native evidence including composition, cancellation, accessibility and recovery |
-| 5. Continuous qualification | Automated upstream candidate PRs, capability/coverage reports, regression preservation, additional native platforms | One real upstream update is reproduced and qualified end to end; each advertised target has its own passing evidence |
+| Slice                                   | Deliverable                                                                                                                                       | Completion evidence                                                                                                     |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| 1. Contract and web reference           | Input pinning, inventory of actual Yami-kumo usage, shared scenario definitions, qualification of existing web shell behavior                     | Deterministic dependency install; rendered web interactions satisfy documented expectations; existing checks/build pass |
+| 2. Extraction and generation foundation | Upstream manifest, explicit mapping/diagnostics, generated MoonBit tokens/variants and headless layout/event fixtures                             | Deterministic regeneration, drift detection, MoonBit compilation and headless conformance; reported as foundation only  |
+| 3. Usable native shell                  | Visible text and core controls; common shell roles; navigation, tabs, contextual support, focus and state feedback on one qualified native target | A real user can complete the same starter task on web and native; physical input and native semantics are verified      |
+| 4. Text and compound interactions       | Input/IME, editable forms, dialogs, menus, selection controls and async feedback as real applications need them                                   | Scenario-by-scenario web/native evidence including composition, cancellation, accessibility and recovery                |
+| 5. Continuous qualification             | Automated upstream candidate PRs, capability/coverage reports, regression preservation, additional native platforms                               | One real upstream update is reproduced and qualified end to end; each advertised target has its own passing evidence    |
 
 Start component coverage with actual starter needs (`Button`, `Input`,
 `LayerCard`, plus Yami-kumo's own shell controls). Add shared patterns when two
