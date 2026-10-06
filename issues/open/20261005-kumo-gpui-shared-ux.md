@@ -4,6 +4,26 @@ Status: open — design and implementation plan; generation and native UX confor
 Updated: 2026-10-05
 Related: [Familiarity-first design workflow](20261003-familiarity-first-design-workflow.md), [UX guide](../../docs/UX.md)
 
+## OS child packets — 2026-10-07 (JST)
+
+Native host integration and qualification are tracked separately:
+
+- [Linux native UX conformance](20261007-linux-native-ux-conformance.md)
+- [Apple Silicon macOS native UX conformance](20261007-apple-silicon-macos-native-ux-conformance.md)
+- [Windows native UX conformance](20261007-windows-native-ux-conformance.md)
+
+Keep the shared scenario contract, web-reference qualification, input pinning,
+extraction/generation, adapter ownership and update policy in this parent.
+Children own OS mappings, framework prerequisites and actual native evidence;
+one passing OS cannot complete another. macOS execution is Apple Silicon/arm64
+only; Intel qualification is excluded.
+
+This parent is still proposed in [PR #3](https://github.com/f4ah6o/Yami-kumo/pull/3).
+The split is a documentation-only stacked change against that PR's branch, not
+adoption of its unmerged plan into main. The inspected baselines and open
+implementation checkboxes below are preserved. Web CI success is not rendered
+shared-scenario or native conformance evidence.
+
 ## 1. Outcome
 
 Make the UX learned in a Yami-kumo web application transferable to an application
