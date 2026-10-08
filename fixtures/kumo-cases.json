@@ -940,6 +940,33 @@
             "attribute": "data-invalid",
             "value": ""
           }
+        },
+        {
+          "type": "fill",
+          "target": "input-enter-invalid-after-edit",
+          "value": "Recovered",
+          "expect": {
+            "attribute": "data-valid",
+            "value": ""
+          }
+        },
+        {
+          "type": "fill",
+          "target": "input-enter-invalid-after-edit",
+          "value": "",
+          "expect": {
+            "attribute": "data-valid",
+            "value": ""
+          }
+        },
+        {
+          "type": "press",
+          "target": "input-enter-invalid-after-edit",
+          "value": "Enter",
+          "expect": {
+            "attribute": "aria-invalid",
+            "value": "true"
+          }
         }
       ]
     },

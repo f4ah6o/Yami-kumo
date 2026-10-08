@@ -145,10 +145,14 @@ pub fn enhance() -> Unit {
       update_from_event(event, false)
     })
     document_add_event_listener("input", fn(event) {
-      update_value_from_event(event, marked_dirty_inputs)
+      update_value_from_event(
+        event, marked_dirty_inputs, managed_aria_invalid_inputs,
+      )
     })
     document_add_event_listener("change", fn(event) {
-      update_value_from_event(event, marked_dirty_inputs)
+      update_value_from_event(
+        event, marked_dirty_inputs, managed_aria_invalid_inputs,
+      )
     })
     document_add_event_listener("keydown", fn(event) {
       update_touched_from_key_event(
@@ -183,6 +187,7 @@ fn update_from_event(event : BrowserEvent, focused : Bool) -> Unit {
 fn update_value_from_event(
   event : BrowserEvent,
   marked_dirty_inputs : BrowserWeakSet,
+  managed_aria_invalid_inputs : BrowserWeakSet,
 ) -> Unit {
   let target = event_target(event)
   if is_present(target) && is_input_element(target) {
@@ -196,6 +201,14 @@ fn update_value_from_event(
       }
       set_field_attribute_state(field, "data-dirty", dirty)
       set_field_attribute_state(field, "data-filled", value != "")
+      // Base UI revalidates on edits after an invalid submission. Once the
+      // field has recovered, later edits keep the valid state until the next
+      // Enter attempt evaluates validity again.
+      if has_attribute(field, "data-invalid") {
+        update_field_validity(
+          field, target, marked_dirty_inputs, managed_aria_invalid_inputs,
+        )
+      }
     }
   }
 }
