@@ -24,7 +24,7 @@ $msysEnvConversionExclusions = @()
 if (-not [string]::IsNullOrWhiteSpace($env:MSYS2_ENV_CONV_EXCL)) {
   $msysEnvConversionExclusions = @($env:MSYS2_ENV_CONV_EXCL -split ';' | Where-Object { $_ })
 }
-if (-not ($msysEnvConversionExclusions | Where-Object { $_ -ieq 'CL=' })) {
+if (-not ($msysEnvConversionExclusions | Where-Object { $_ -ceq 'CL=' })) {
   $msysEnvConversionExclusions += 'CL='
 }
 $env:MSYS2_ENV_CONV_EXCL = $msysEnvConversionExclusions -join ';'
