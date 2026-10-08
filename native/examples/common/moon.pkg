@@ -9,3 +9,7 @@ import {
 }
 
 supported_targets = "native"
+
+options(
+  "native-stub": [ "native_stdout.c" ],
+)

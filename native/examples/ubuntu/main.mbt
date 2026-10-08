@@ -27,7 +27,10 @@ fn ubuntu_error(message : String) -> @diagnostics.FrameworkError {
 fn main {
   let host = match @ubuntu_host.Host::start() {
     Err(error) =>
-      abort("Ubuntu native Host startup failed: " + error.code().label())
+      abort(
+        "Ubuntu native Host startup failed: " +
+        @common.format_framework_error(error),
+      )
     Ok(value) => value
   }
   let capture : @common.NativeFrameCapture = fn(window) {
@@ -45,11 +48,11 @@ fn main {
   )
   let stopped = host.stop()
   match result {
-    Err(error) => abort(error.operation() + ": " + error.code().label())
+    Err(error) => abort(@common.format_framework_error(error))
     Ok(_) => ()
   }
   match stopped {
-    Err(error) => abort(error.operation() + ": " + error.code().label())
+    Err(error) => abort(@common.format_framework_error(error))
     Ok(_) => ()
   }
 }

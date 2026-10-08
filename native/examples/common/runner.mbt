@@ -30,6 +30,25 @@ priv struct FrameEvidence {
 }
 
 ///|
+extern "C" fn flush_native_stdout() -> Unit = "yami_native_ui_flush_stdout"
+
+///|
+/// Flush protocol markers so a driver can react while the native app is live.
+fn emit_native_marker(line : String) -> Unit {
+  println(line)
+  flush_native_stdout()
+}
+
+///|
+pub fn format_framework_error(error : @diagnostics.FrameworkError) -> String {
+  let prefix = error.operation() + ": " + error.code().label()
+  match error.message() {
+    Some(message) => prefix + ": " + message
+    None => prefix
+  }
+}
+
+///|
 /// Keep pointer/key routing synchronized with the layout currently in flight.
 priv struct PresentationGate {
   mut rendered : Bool
@@ -210,7 +229,7 @@ fn run_native_loop(
                       Err(error) => return Err(error)
                       Ok(value) => value
                     }
-                    println(
+                    emit_native_marker(
                       "YAMI_NATIVE_UI_CLICK {\"count\":\{final_count},\"value\":\{final_count},\"buttonId\":40}",
                     )
                     dirty = true
@@ -323,7 +342,7 @@ fn run_native_loop(
         ),
       )
     }
-    println(
+    emit_native_marker(
       "YAMI_NATIVE_UI_COMPLETE {\"count\":\{final_count},\"value\":\{final_count},\"destroyed\":true,\"windowId\":\{window.value()}}",
     )
   } else if smoke {
@@ -334,7 +353,7 @@ fn run_native_loop(
         ),
       )
     }
-    println(
+    emit_native_marker(
       "YAMI_NATIVE_UI_SMOKE {\"frames\":\{presented_frames},\"destroyed\":true}",
     )
   }
@@ -463,12 +482,12 @@ fn publish_frame(
   let escaped_path = json_escape(path)
   let frame_json = "{\"path\":\"\{escaped_path}\",\"width\":\{captured.width()},\"height\":\{captured.height()},\"scale\":\{captured.scale()}}"
   let viewport_json = "{\"width\":\{root_size.width()},\"height\":\{root_size.height()},\"scale\":\{captured.scale()}}"
-  println(
+  emit_native_marker(
     "YAMI_NATIVE_UI_PRESENTED {\"count\":\{count},\"value\":\{count},\"scene\":\{frame.canonical_scene()},\"frame\":\{frame_json},\"viewport\":\{viewport_json},\"textPixels\":\{text_pixels},\"buttonPixels\":\{button_pixels},\"buttonLabelPixels\":\{button_label_pixels},\"changedPixels\":\{changed_pixels},\"button\":\{rect_json(frame.button_bounds())},\"buttonLabel\":\{rect_json(frame.button_label_bounds())},\"counter\":\{rect_json(frame.counter_bounds())}}",
   )
   if count == 0 {
     let title = json_escape(window_title())
-    println(
+    emit_native_marker(
       "YAMI_NATIVE_UI_READY {\"windowId\":\{window.value()},\"title\":\"\{title}\",\"buttonId\":40,\"scale\":\{captured.scale()},\"button\":\{rect_json(frame.button_bounds())},\"buttonLabel\":\{rect_json(frame.button_label_bounds())},\"counter\":\{rect_json(frame.counter_bounds())}}",
     )
     if platform is Macos {

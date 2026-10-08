@@ -27,7 +27,10 @@ fn macos_error(message : String) -> @diagnostics.FrameworkError {
 fn main {
   let host = match @mac_host.Host::start() {
     Err(error) =>
-      abort("macOS native Host startup failed: " + error.code().label())
+      abort(
+        "macOS native Host startup failed: " +
+        @common.format_framework_error(error),
+      )
     Ok(value) => value
   }
   let capture : @common.NativeFrameCapture = fn(window) {
@@ -49,11 +52,11 @@ fn main {
   )
   let stopped = host.stop()
   match result {
-    Err(error) => abort(error.operation() + ": " + error.code().label())
+    Err(error) => abort(@common.format_framework_error(error))
     Ok(_) => ()
   }
   match stopped {
-    Err(error) => abort(error.operation() + ": " + error.code().label())
+    Err(error) => abort(@common.format_framework_error(error))
     Ok(_) => ()
   }
 }
