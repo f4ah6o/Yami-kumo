@@ -6,4 +6,6 @@ description = "Pure MoonBit HTML components matching a pinned subset of Cloudfla
 
 repository = "https://github.com/f4ah6o/Yami-kumo"
 
+readme = "README.mbt.md"
+
 license = "MIT"
