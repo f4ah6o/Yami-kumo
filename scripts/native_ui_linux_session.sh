@@ -39,7 +39,7 @@ mkdir -p "$XDG_CACHE_HOME"
 
 weston \
   --backend=x11-backend.so \
-  --use-gl \
+  --renderer=gl \
   --shell=kiosk-shell.so \
   --width=800 \
   --height=600 \
