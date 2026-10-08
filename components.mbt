@@ -122,6 +122,10 @@ pub fn input(
     None => id
   }
   let has_field = label is Some(_) || description is Some(_) || error is Some(_)
+  let initial_value = match find_attribute(attrs, "value") {
+    Some(value) => value
+    None => ""
+  }
   let input_attributes : Array[Attribute] = [text_attribute("id", input_id)]
   match label {
     Some(_) =>
@@ -132,7 +136,11 @@ pub fn input(
   }
   input_attributes.push(text_attribute("class", classes))
   if disabled {
+    input_attributes.push(text_attribute("data-disabled", ""))
     input_attributes.push(boolean_attribute("disabled"))
+  }
+  if has_field && initial_value != "" {
+    input_attributes.push(text_attribute("data-filled", ""))
   }
   match required {
     Some(true) => input_attributes.push(boolean_attribute("required"))
@@ -184,13 +192,16 @@ pub fn input(
       field_children.push(
         raw_element(
           "label",
-          [
-            text_attribute("id", "\{input_id}-label"),
-            text_attribute("for", input_id),
-            text_attribute(
-              "class", "m-0 text-base font-medium text-kumo-default select-none",
-            ),
-          ],
+          initial_state_attributes(
+            [
+              text_attribute("id", "\{input_id}-label"),
+              text_attribute("for", input_id),
+              text_attribute(
+                "class", "m-0 text-base font-medium text-kumo-default select-none",
+              ),
+            ],
+            initial_value,
+          ),
           [label_span],
         ),
       )
@@ -203,12 +214,15 @@ pub fn input(
       field_children.push(
         raw_element(
           "div",
-          [
-            text_attribute("id", "\{input_id}-error"),
-            text_attribute(
-              "class", "text-sm leading-snug text-kumo-danger col-span-full",
-            ),
-          ],
+          initial_state_attributes(
+            [
+              text_attribute("id", "\{input_id}-error"),
+              text_attribute(
+                "class", "text-sm leading-snug text-kumo-danger col-span-full",
+              ),
+            ],
+            initial_value,
+          ),
           [error_node],
         ),
       )
@@ -216,12 +230,15 @@ pub fn input(
       field_children.push(
         raw_element(
           "p",
-          [
-            text_attribute("id", "\{input_id}-description"),
-            text_attribute(
-              "class", "text-sm leading-snug text-kumo-subtle col-span-full",
-            ),
-          ],
+          initial_state_attributes(
+            [
+              text_attribute("id", "\{input_id}-description"),
+              text_attribute(
+                "class", "text-sm leading-snug text-kumo-subtle col-span-full",
+              ),
+            ],
+            initial_value,
+          ),
           [description_node],
         ),
       )
@@ -229,13 +246,27 @@ pub fn input(
   }
   raw_element(
     "div",
-    [
-      text_attribute(
-        "class", "yk-kumo-input-field grid gap-2 has-[input[type=checkbox]]:grid-cols-[auto_1fr] has-[input[type=checkbox]]:items-center has-[[role=switch]]:grid-cols-[auto_1fr] has-[[role=switch]]:items-center",
-      ),
-    ],
+    initial_state_attributes(
+      [
+        text_attribute(
+          "class", "yk-kumo-input-field grid gap-2 has-[input[type=checkbox]]:grid-cols-[auto_1fr] has-[input[type=checkbox]]:items-center has-[[role=switch]]:grid-cols-[auto_1fr] has-[[role=switch]]:items-center",
+        ),
+      ],
+      initial_value,
+    ),
     field_children,
   )
+}
+
+///|
+fn initial_state_attributes(
+  attributes : Array[Attribute],
+  initial_value : String,
+) -> Array[Attribute] {
+  if initial_value != "" {
+    attributes.push(text_attribute("data-filled", ""))
+  }
+  attributes
 }
 
 ///|

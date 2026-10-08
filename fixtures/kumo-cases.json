@@ -825,6 +825,125 @@
       ]
     },
     {
+      "id": "input-prefilled-reset-state",
+      "component": "input",
+      "props": {
+        "id": "yk-input-prefilled-reset-state",
+        "label": "Workspace name",
+        "description": "Visible to teammates",
+        "value": "Northstar",
+        "variant": "default",
+        "size": "base",
+        "target": "input-prefilled-reset-state"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "input-prefilled-reset-state",
+          "expect": {
+            "attribute": "data-focused",
+            "value": ""
+          }
+        },
+        {
+          "type": "fill",
+          "target": "input-prefilled-reset-state",
+          "value": "Aurora",
+          "expect": {
+            "attribute": "data-dirty",
+            "value": ""
+          }
+        },
+        {
+          "type": "fill",
+          "target": "input-prefilled-reset-state",
+          "value": ""
+        },
+        {
+          "type": "fill",
+          "target": "input-prefilled-reset-state",
+          "value": "Northstar",
+          "expect": {
+            "attribute": "data-filled",
+            "value": ""
+          }
+        },
+        {
+          "type": "blur",
+          "target": "input-prefilled-reset-state",
+          "expect": {
+            "attribute": "data-touched",
+            "value": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "input-enter-touched",
+      "component": "input",
+      "props": {
+        "id": "yk-input-enter-touched",
+        "label": "Search workspace",
+        "ariaLabel": "Search workspace",
+        "variant": "default",
+        "size": "base",
+        "required": true,
+        "target": "input-enter-touched"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "input-enter-touched"
+        },
+        {
+          "type": "press",
+          "target": "input-enter-touched",
+          "value": "Enter",
+          "expect": {
+            "attribute": "data-valid",
+            "value": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "input-enter-invalid-after-edit",
+      "component": "input",
+      "props": {
+        "id": "yk-input-enter-invalid-after-edit",
+        "label": "Required workspace name",
+        "variant": "default",
+        "size": "base",
+        "required": true,
+        "target": "input-enter-invalid-after-edit"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "input-enter-invalid-after-edit"
+        },
+        {
+          "type": "fill",
+          "target": "input-enter-invalid-after-edit",
+          "value": "Northstar"
+        },
+        {
+          "type": "fill",
+          "target": "input-enter-invalid-after-edit",
+          "value": ""
+        },
+        {
+          "type": "press",
+          "target": "input-enter-invalid-after-edit",
+          "value": "Enter",
+          "expect": {
+            "attribute": "data-invalid",
+            "value": ""
+          }
+        }
+      ]
+    },
+    {
       "id": "input-default-lg",
       "component": "input",
       "props": {

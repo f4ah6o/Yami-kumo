@@ -113,6 +113,35 @@ test "Kumo input labels and errors link to the control" {
 }
 
 ///|
+test "disabled Kumo input preserves the upstream disabled data state" {
+  let output = expect_render(
+    @yami_kumo.input(
+      id="managed-account",
+      label=@yami_kumo.text("Managed account"),
+      disabled=true,
+    ),
+  )
+  assert_true(output.contains("data-disabled=\"\""))
+  assert_true(output.contains("disabled=\"\""))
+}
+
+///|
+test "pre-filled Kumo fields start filled and can compare against initial value" {
+  let output = expect_render(
+    @yami_kumo.input(
+      id="workspace-name",
+      label=@yami_kumo.text("Workspace name"),
+      description=@yami_kumo.text("Visible to teammates"),
+      attrs=[expect_attr("value", "Northstar")],
+    ),
+  )
+  assert_true(output.contains("value=\"Northstar\""))
+  assert_true(output.contains("data-filled=\"\""))
+  assert_true(!output.contains("data-dirty"))
+  assert_true(!output.contains("data-touched"))
+}
+
+///|
 test "multiple labeled inputs keep unique ids and valid references" {
   let first = @yami_kumo.input(
     id="email",
@@ -139,11 +168,9 @@ test "multiple labeled inputs keep unique ids and valid references" {
 ///|
 test "unlabeled Kumo input keeps its caller supplied id" {
   let output = expect_render(
-    @yami_kumo.input(
-      id="workspace-search",
-      placeholder="Search",
-      attrs=[expect_attr("aria-label", "Search workspace")],
-    ),
+    @yami_kumo.input(id="workspace-search", placeholder="Search", attrs=[
+      expect_attr("aria-label", "Search workspace"),
+    ]),
   )
   assert_true(output.contains("<input id=\"workspace-search\""))
   assert_true(output.contains("placeholder=\"Search\""))

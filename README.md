@@ -138,6 +138,12 @@ that renders its output; these checked-in assets come from the exact pinned
 Kumo version. The generated emphasis classes keep primary/destructive buttons
 compatible with strict `style-src 'self'` Content Security Policy.
 
+Browser consumers that need Kumo Field state markers should import
+`f4ah6o/yami_kumo/dom` and call `@dom.enhance()` after inserting the markup.
+It tracks focus, dirty, filled, touched, and Enter-triggered validity attributes
+from native input events; disabled controls receive `data-disabled` in their
+rendered markup. The state policy remains in MoonBit.
+
 The `/parity` gallery mounts one implementation at a time and is driven by
 [`fixtures/kumo-cases.json`](./fixtures/kumo-cases.json). It compares actual
 React Kumo components with the production-compiled MoonBit renderer across the

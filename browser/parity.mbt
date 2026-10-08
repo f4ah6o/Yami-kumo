@@ -69,6 +69,8 @@ fn render_input(props : Json?) -> @yami_kumo.Html {
   }
   let id = string_field(props, "id", "field")
   let size = control_size(string_field(props, "size", "base"))
+  let required = optional_bool_field(props, "required")
+  let placeholder = optional_string_field(props, "placeholder")
   let label = optional_text_node_field(props, "label")
   let description = optional_text_node_field(props, "description")
   let error = optional_text_node_field(props, "error")
@@ -78,9 +80,9 @@ fn render_input(props : Json?) -> @yami_kumo.Html {
       size~,
       label?,
       description?,
-      placeholder=string_field(props, "placeholder", ""),
+      placeholder?,
       disabled=bool_field(props, "disabled", false),
-      required=bool_field(props, "required", false),
+      required?,
       class_name=string_field(props, "className", ""),
       attrs=attributes,
     )
@@ -92,9 +94,9 @@ fn render_input(props : Json?) -> @yami_kumo.Html {
       label?,
       description?,
       error?,
-      placeholder=string_field(props, "placeholder", ""),
+      placeholder?,
       disabled=bool_field(props, "disabled", false),
-      required=bool_field(props, "required", false),
+      required?,
       class_name=string_field(props, "className", ""),
       attrs=attributes,
     )
@@ -272,6 +274,23 @@ fn bool_field(value : Json?, name : String, fallback : Bool) -> Bool {
     Some(Json::True) => true
     Some(Json::False) => false
     _ => fallback
+  }
+}
+
+///|
+fn optional_bool_field(value : Json?, name : String) -> Bool? {
+  match field(value, name) {
+    Some(Json::True) => Some(true)
+    Some(Json::False) => Some(false)
+    _ => None
+  }
+}
+
+///|
+fn optional_string_field(value : Json?, name : String) -> String? {
+  match field(value, name) {
+    Some(Json::String(result)) => Some(result)
+    _ => None
   }
 }
 

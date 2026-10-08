@@ -6,7 +6,8 @@
 
 - Added a pure MoonBit module for safe HTML rendering, the semantic AppShell, and a pinned subset of Kumo Button, Input, Text, and LayerCard components.
 - Added a canonical parity gallery that mounts real React Kumo and the compiled MoonBit renderer independently across component matrices and interaction states.
-- Added MoonBit-owned Input focus state behavior over narrow browser DOM primitives.
+- Added Kumo Input disabled, focus, dirty, filled, touched, and Enter-triggered validity states, with dynamic state decisions kept in MoonBit over narrow browser DOM primitives.
+- Included the upstream Kumo license alongside the redistributed standalone stylesheet.
 
 ### Changed
 
