@@ -1,0 +1,147 @@
+name: Native UI proof
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu-wayland:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Yami-kumo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: Yami-kumo
+
+      - name: Read pinned GPUI revision
+        id: gpui
+        shell: bash
+        run: |
+          revision="$(tr -d '[:space:]' < Yami-kumo/tests/native-ui/gpui-revision.txt)"
+          if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "tests/native-ui/gpui-revision.txt must contain one lowercase 40-character commit SHA" >&2
+            exit 2
+          fi
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pinned GPUI source
+        uses: actions/checkout@v6
+        with:
+          repository: gpui-mbt/gpui.mbt
+          ref: ${{ steps.gpui.outputs.revision }}
+          path: gpui.mbt
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.14+7d59c7ec9
+          core-version: 0.10.14+7d59c7ec9
+
+      - name: Install Wayland, Mesa, fonts, Xvfb, and host input tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential pkg-config \
+            libwayland-dev wayland-protocols libwayland-cursor0 \
+            libegl1-mesa-dev libgles2-mesa-dev libxkbcommon-dev libgl1-mesa-dri \
+            libpango1.0-dev libfontconfig1-dev fontconfig \
+            fonts-dejavu-core fonts-noto-cjk fonts-noto-color-emoji \
+            wayland-utils weston xvfb xauth xdotool
+          dpkg-query -W \
+            libwayland-dev wayland-protocols libegl1-mesa-dev libgles2-mesa-dev \
+            libxkbcommon-dev libpango1.0-dev libfontconfig1-dev weston xvfb xauth xdotool
+          moon version --all
+
+      - name: Run shared component and controller tests, then real Wayland UI proof
+        shell: bash
+        env:
+          GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
+          YAMI_NATIVE_UI_EVIDENCE_DIR: ${{ github.workspace }}/Yami-kumo/_build/native-ui/ubuntu
+        run: sh Yami-kumo/scripts/native_ui_linux.sh
+
+      - name: Upload native Linux frames and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: yami-native-ui-ubuntu
+          path: Yami-kumo/_build/native-ui/ubuntu/
+          if-no-files-found: warn
+
+  windows-d3d11:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      MOONBIT_NEW_NATIVE: '0'
+      CL: /EHsc
+    steps:
+      - name: Checkout Yami-kumo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: Yami-kumo
+
+      - name: Read pinned GPUI revision
+        id: gpui
+        shell: bash
+        run: |
+          revision="$(tr -d '[:space:]' < Yami-kumo/tests/native-ui/gpui-revision.txt)"
+          if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "tests/native-ui/gpui-revision.txt must contain one lowercase 40-character commit SHA" >&2
+            exit 2
+          fi
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pinned GPUI source
+        uses: actions/checkout@v6
+        with:
+          repository: gpui-mbt/gpui.mbt
+          ref: ${{ steps.gpui.outputs.revision }}
+          path: gpui.mbt
+
+      - name: Enable the MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.14+7d59c7ec9
+          core-version: 0.10.14+7d59c7ec9
+
+      - name: Verify MSVC and MoonBit environment
+        shell: pwsh
+        run: |
+          where.exe cl
+          moon version --all
+
+      - name: Run scoped component/controller tests and SendInput-driven native UI proof
+        shell: pwsh
+        env:
+          GPUI_SOURCE: ${{ github.workspace }}\gpui.mbt
+          YAMI_NATIVE_UI_EVIDENCE_DIR: ${{ github.workspace }}\Yami-kumo\_build\native-ui\windows
+        run: ./Yami-kumo/scripts/native_ui_windows.ps1
+
+      - name: Upload native Windows frames and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: yami-native-ui-windows
+          path: Yami-kumo/_build/native-ui/windows/
+          if-no-files-found: warn

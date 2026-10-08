@@ -1,0 +1,15 @@
+import {
+  "f4ah6o/gpui/diagnostics",
+  "f4ah6o/gpui/platform",
+  "f4ah6o/gpui/platform/testing",
+  "f4ah6o/gpui/primitives",
+  "f4ah6o/yami_kumo_native/components",
+  "f4ah6o/yami_kumo_native/sample",
+  "moonbitlang/core/env",
+}
+
+supported_targets = "native"
+
+options(
+  "native-stub": [ "native_stdout.c" ],
+)

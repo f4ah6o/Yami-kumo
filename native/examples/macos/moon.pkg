@@ -1,0 +1,21 @@
+import {
+  "f4ah6o/gpui/diagnostics",
+  "f4ah6o/gpui/platform/macos" @mac_host,
+  "f4ah6o/gpui/platform/macos_text",
+  "f4ah6o/gpui/platform/testing",
+  "f4ah6o/gpui/text",
+  "f4ah6o/gpui/text_layout",
+  "f4ah6o/yami_kumo_native/examples/common",
+}
+
+supported_targets = "native"
+
+pkgtype(kind: "executable")
+
+options(
+  link: {
+    "native": {
+      "cc-link-flags": "-framework AppKit -framework QuartzCore -framework Metal -framework CoreText -framework CoreGraphics -framework CoreFoundation",
+    },
+  },
+)
