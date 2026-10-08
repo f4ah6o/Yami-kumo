@@ -13,11 +13,11 @@ all three host entrypoints in `examples/`.
 
 ## Platform status
 
-| Host | Text measurement and display | Input proof |
-| --- | --- | --- |
-| macOS | CoreText measurement and Metal scene presentation | Local E2E sends a test-only NSEvent through the owned NSWindow's normal `sendEvent:` route. This is synthetic native input, not physical hardware. |
-| Linux | Pango system-sans measurement and the GPUI Wayland host | Configured CI proof sends input through XTest, Xvfb and Weston's X11 backend. |
-| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Configured CI proof sends input to the uniquely titled visible HWND with Win32 `SendInput`. |
+| Host    | Text measurement and display                                 | Input proof                                                                                                                                        |
+| ------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS   | CoreText measurement and Metal scene presentation            | Local E2E sends a test-only NSEvent through the owned NSWindow's normal `sendEvent:` route. This is synthetic native input, not physical hardware. |
+| Linux   | Pango system-sans measurement and the GPUI Wayland host      | Configured CI proof sends input through XTest, Xvfb and Weston's X11 backend.                                                                      |
+| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Configured CI proof sends input to the uniquely titled visible HWND with Win32 `SendInput`.                                                        |
 
 The local macOS end-to-end proof passed for this change. The hosted Linux and
 Windows proof jobs are configured, but their runs for this change are still
@@ -35,18 +35,18 @@ Kumo `2.14.0`. OKLCH tokens are converted through OKLab to linear sRGB, gamma
 encoded, clamped, and rounded to the nearest 8-bit channel. Alpha is rounded
 separately; the light control-line token's 10% opacity becomes alpha 26.
 
-| Role / source token | Light RGBA | Dark RGBA |
-| --- | --- | --- |
-| Base canvas: white / `kumo-neutral-925` at 17% | `(255,255,255,255)` | `(15,15,15,255)` |
-| Elevated surface: `kumo-neutral-75` at 98% / `kumo-neutral-975` at 12% | `(248,248,248,255)` | `(6,6,6,255)` |
-| Default text: `neutral-900` at 20.5% / `neutral-100` at 97% | `(23,23,23,255)` | `(245,245,245,255)` |
-| Subtle text: `neutral-500` / `neutral-400` | `(115,115,115,255)` | `(161,161,161,255)` |
-| Link and generated `TextVariant::Success` mapping: `blue-800` / `blue-400` | `(25,60,184,255)` | `(81,162,255,255)` |
-| Error and `SecondaryDestructive` text: `red-700` / `red-400` | `(193,0,7,255)` | `(255,100,103,255)` |
-| Destructive control fill: `red-500` / `red-600` | `(251,44,54,255)` | `(231,0,11,255)` |
-| Brand fill: `kumo-brand` | `(5,109,255,255)` | `(0,90,235,255)` |
-| Hairline: `kumo-neutral-150` / `neutral-800` | `(233,233,233,255)` | `(38,38,38,255)` |
-| Control line: black at 10% / `kumo-neutral-750` | `(10,10,10,26)` | `(51,51,51,255)` |
+| Role / source token                                                        | Light RGBA          | Dark RGBA           |
+| -------------------------------------------------------------------------- | ------------------- | ------------------- |
+| Base canvas: white / `kumo-neutral-925` at 17%                             | `(255,255,255,255)` | `(15,15,15,255)`    |
+| Elevated surface: `kumo-neutral-75` at 98% / `kumo-neutral-975` at 12%     | `(248,248,248,255)` | `(6,6,6,255)`       |
+| Default text: `neutral-900` at 20.5% / `neutral-100` at 97%                | `(23,23,23,255)`    | `(245,245,245,255)` |
+| Subtle text: `neutral-500` / `neutral-400`                                 | `(115,115,115,255)` | `(161,161,161,255)` |
+| Link and generated `TextVariant::Success` mapping: `blue-800` / `blue-400` | `(25,60,184,255)`   | `(81,162,255,255)`  |
+| Error and `SecondaryDestructive` text: `red-700` / `red-400`               | `(193,0,7,255)`     | `(255,100,103,255)` |
+| Destructive control fill: `red-500` / `red-600`                            | `(251,44,54,255)`   | `(231,0,11,255)`    |
+| Brand fill: `kumo-brand`                                                   | `(5,109,255,255)`   | `(0,90,235,255)`    |
+| Hairline: `kumo-neutral-150` / `neutral-800`                               | `(233,233,233,255)` | `(38,38,38,255)`    |
+| Control line: black at 10% / `kumo-neutral-750`                            | `(10,10,10,26)`     | `(51,51,51,255)`    |
 
 The native renderer uses plain system sans text and solid quads. It intentionally
 does not claim Kumo gradients, rounded corners, shadows, font-weight variants,
