@@ -17,6 +17,17 @@ $EvidenceDirectory = (Resolve-Path $EvidenceDirectory).Path
 
 $env:MOONBIT_NEW_NATIVE = "0"
 $env:CL = ("/EHsc $env:CL").Trim()
+# Git Bash's MSYS runtime rewrites path-like environment values before it
+# launches native Windows tools. Keep MSVC's slash-prefixed compiler option
+# intact while retaining the inherited exclusions and normal path conversion.
+$msysEnvConversionExclusions = @()
+if (-not [string]::IsNullOrWhiteSpace($env:MSYS2_ENV_CONV_EXCL)) {
+  $msysEnvConversionExclusions = @($env:MSYS2_ENV_CONV_EXCL -split ';' | Where-Object { $_ })
+}
+if (-not ($msysEnvConversionExclusions | Where-Object { $_ -ieq 'CL=' })) {
+  $msysEnvConversionExclusions += 'CL='
+}
+$env:MSYS2_ENV_CONV_EXCL = $msysEnvConversionExclusions -join ';'
 
 function Convert-ToBashPath([string]$Path) {
   $converted = & bash -c 'cygpath -u "$1"' _ $Path
