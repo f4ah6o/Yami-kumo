@@ -23,6 +23,16 @@ jobs:
           node-version: 'lts'
           run-install: true
 
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.14+7d59c7ec9
+          setup-core: true
+          core-version: 0.10.14+7d59c7ec9
+
+      - name: Build MoonBit parity module
+        run: pnpm run moon:build
+
       - name: Check
         run: vp check
 
@@ -34,3 +44,6 @@ jobs:
 
       - name: Build
         run: vp build
+
+      - name: Verify MoonBit library, generated Kumo contract, and parity gallery
+        run: pnpm run build:parity

@@ -1,0 +1,75 @@
+.parity-page {
+  min-height: 100dvh;
+  padding: 16px;
+  color: #17191c;
+}
+
+.parity-toolbar {
+  width: min(1500px, calc(100vw - 32px));
+  min-height: 64px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.parity-toolbar > div {
+  flex: 1;
+}
+
+.parity-toolbar h1,
+.parity-toolbar p {
+  margin: 0;
+}
+
+.parity-toolbar h1 {
+  font-size: 1rem;
+}
+
+.parity-toolbar p,
+.parity-footer {
+  color: #626b75;
+  font-size: 0.8125rem;
+}
+
+.parity-toolbar label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
+.parity-toolbar select {
+  min-width: 170px;
+}
+
+.parity-testbed {
+  width: min(1500px, calc(100vw - 32px));
+  min-height: 480px;
+  margin: 0 auto;
+}
+
+.parity-mounted-root {
+  width: 100%;
+  background: #fff;
+}
+
+.parity-footer {
+  width: min(1500px, calc(100vw - 32px));
+  margin: 16px auto 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+@media (max-width: 700px) {
+  .parity-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .parity-toolbar > div {
+    flex-basis: 100%;
+  }
+
+  .parity-toolbar select {
+    min-width: 0;
+  }
+}

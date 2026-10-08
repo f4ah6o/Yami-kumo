@@ -1,0 +1,13 @@
+import {
+  "f4ah6o/yami_kumo",
+  "f4ah6o/yami_kumo/dom",
+  "moonbitlang/core/json",
+}
+
+supported_targets = "js"
+
+pkgtype(kind: "foreign_library")
+
+options(
+  link: { "js": { "format": "esm" } },
+)

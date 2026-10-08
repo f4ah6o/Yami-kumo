@@ -3,8 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "generate:kumo-contract": "node scripts/generate-kumo-contract.mjs",
+    "check:kumo-contract": "node scripts/generate-kumo-contract.mjs --check",
+    "moon:check": "moon check --target all",
+    "moon:build": "moon build browser --target js --release",
+    "moon:test": "moon test --target all",
+    "check:moon-build": "node scripts/check-moonbit-build.mjs",
+    "dev:parity": "pnpm run moon:build && vp dev --host 127.0.0.1",
+    "build:parity": "pnpm run check:kumo-contract && pnpm run moon:check && pnpm run moon:test && pnpm run moon:build && pnpm run check:moon-build && vp build",
+    "test": "pnpm run check:kumo-contract && pnpm run moon:check && pnpm run moon:test && pnpm run check:moon-build"
+  },
   "dependencies": {
-    "@cloudflare/kumo": "latest",
+    "@cloudflare/kumo": "2.14.0",
     "@phosphor-icons/react": "^2.1.10",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
