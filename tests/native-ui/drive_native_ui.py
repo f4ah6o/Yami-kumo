@@ -14,6 +14,7 @@ import queue
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from typing import Any, Callable
@@ -212,6 +213,20 @@ def _marker_state(marker: dict[str, Any], expected_count: int) -> None:
         raise E2EError("frame metadata must include width, height, and scale") from error
     if width <= 0 or height <= 0 or not math.isfinite(scale) or scale <= 0:
         raise E2EError("invalid native frame dimensions or scale")
+    viewport = marker.get("viewport")
+    try:
+        logical_width = float(viewport["width"])
+        logical_height = float(viewport["height"])
+        logical_scale = float(viewport["scale"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise E2EError("PRESENTED viewport must include logical width, height, and scale") from error
+    if (
+        not all(math.isfinite(value) and value > 0 for value in (logical_width, logical_height, logical_scale))
+        or abs(logical_scale - scale) > 1e-6
+        or abs(logical_width * scale - width) > 1
+        or abs(logical_height * scale - height) > 1
+    ):
+        raise E2EError("logical host metrics and native capture dimensions disagree")
 
 
 def _marker_rect(marker: dict[str, Any], key: str) -> tuple[float, float, float, float]:
@@ -528,10 +543,19 @@ def _assert_frames(
         raise E2EError("native frame scale changed between count 0 and count 1")
     counter = _rect(ready.get("counter"), "counter")
     button = _rect(ready.get("button"), "button")
+    button_label = _rect(ready.get("buttonLabel"), "buttonLabel")
+    if _marker_rect(before_marker, "buttonLabel") != button_label or \
+       _marker_rect(after_marker, "buttonLabel") != button_label:
+        raise E2EError("native Button label bounds changed between READY and PRESENTED")
     page_background_before = _frame_background(before)
     page_background_after = _frame_background(after)
     text_pixels_before = _foreground_count(before, counter, scale_before)
     text_pixels_after = _foreground_count(after, counter, scale_after)
+    # Within the declared label container, the dominant color is the Button
+    # fill. Count pixels that differ from it so a bare colored quad cannot
+    # masquerade as a readable labeled Button.
+    button_label_pixels_before = _foreground_count(before, button_label, scale_before)
+    button_label_pixels_after = _foreground_count(after, button_label, scale_after)
     button_pixels_before = _foreground_count(before, button, scale_before, page_background_before)
     button_pixels_after = _foreground_count(after, button, scale_after, page_background_after)
     changed = _changed_pixels(before, after)
@@ -540,6 +564,8 @@ def _assert_frames(
         raise E2EError("native Text component has no foreground pixels in the counter bounds")
     if min(button_pixels_before, button_pixels_after) <= 0:
         raise E2EError("native Button component has no visible foreground pixels")
+    if min(button_label_pixels_before, button_label_pixels_after) <= 0:
+        raise E2EError("native Button label has no pixels distinct from its fill")
     if changed <= 0 or counter_changed <= 0:
         raise E2EError(
             "count 0 and count 1 native captures did not change pixels in the counter text"
@@ -555,10 +581,96 @@ def _assert_frames(
         "height": before.height,
         "scale": scale_before,
         "textForegroundPixels": [text_pixels_before, text_pixels_after],
+        "buttonLabelForegroundPixels": [button_label_pixels_before, button_label_pixels_after],
         "buttonForegroundPixels": [button_pixels_before, button_pixels_after],
         "changedFramePixels": changed,
         "changedCounterPixels": counter_changed,
     }
+
+
+def _native_run_plan(
+    command: list[str],
+    platform: str,
+    module_root: Path,
+    target_dir: Path,
+) -> tuple[list[str], Path] | None:
+    """Plan an explicit `moon build` and binary launch for a native example.
+
+    `moon test` and `moon build` resolve absolute package paths through the
+    temporary `moon.work`, but `moon run` currently resolves nested module
+    dependencies from the registry. Building first preserves the local graph;
+    launching the artifact avoids a second dependency-resolution pass.
+    """
+    if len(command) < 5 or command[:2] != ["moon", "run"]:
+        return None
+    package_name = {"macos": "macos", "linux": "ubuntu", "windows": "windows"}.get(platform)
+    if package_name is None:
+        raise E2EError(f"unsupported native sample platform: {platform}")
+    package = Path(command[2]).resolve()
+    expected = (module_root / "examples" / package_name).resolve()
+    if package != expected:
+        raise E2EError(f"native {platform} E2E must launch {expected}, got {package}")
+    if command[3:5] != ["--target", "native"] or len(command) != 5:
+        raise E2EError("native sample command must be `moon run <package> --target native`")
+
+    package_rel = Path("f4ah6o") / "yami_kumo_native" / "examples" / package_name
+    executable = target_dir / "native" / "debug" / "build" / package_rel / f"{package_name}.exe"
+    build_command = [
+        command[0],
+        "build",
+        str(package),
+        "--target",
+        "native",
+        "--deny-warn",
+        "--target-dir",
+        str(target_dir),
+    ]
+    return build_command, executable
+
+
+def _build_native_sample(
+    command: list[str],
+    platform: str,
+    workspace_root: Path,
+    module_root: Path,
+    evidence_dir: Path,
+    env: dict[str, str],
+) -> tuple[list[str], tempfile.TemporaryDirectory[str] | None]:
+    """Build in an owned target directory and return the runnable artifact."""
+    target = tempfile.TemporaryDirectory(prefix="yami-native-ui-build-", dir=workspace_root)
+    target_dir = Path(target.name)
+    plan = _native_run_plan(command, platform, module_root, target_dir)
+    if plan is None:
+        target.cleanup()
+        return command, None
+    build_command, executable = plan
+    build_log = evidence_dir / "native-build.log"
+    result = subprocess.run(
+        build_command,
+        cwd=workspace_root,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    build_log.write_text(result.stdout, encoding="utf-8")
+    if result.returncode != 0:
+        print(result.stdout, file=sys.stderr, flush=True)
+        target.cleanup()
+        raise E2EError(
+            f"native sample build failed with status {result.returncode}; log: {build_log}"
+        )
+    if not executable.is_file():
+        target.cleanup()
+        raise E2EError(
+            f"MoonBit build succeeded but did not produce the expected native binary: {executable}"
+        )
+    print(f"Native sample built: {executable}", flush=True)
+    print(f"Native build log: {build_log}", flush=True)
+    return [str(executable)], target
 
 
 def drive(args: argparse.Namespace) -> int:
@@ -581,26 +693,41 @@ def drive(args: argparse.Namespace) -> int:
     workspace_root = env.get("YAMI_NATIVE_WORKSPACE_ROOT")
     if not workspace_root:
         raise E2EError("YAMI_NATIVE_WORKSPACE_ROOT must be set by native_ui_workspace.sh")
-    print(f"Launching native sample: {' '.join(args.command)}", flush=True)
+    workspace_path = Path(workspace_root).resolve()
+    module_root = Path(env.get("YAMI_NATIVE_MODULE_ROOT", workspace_path / "native")).resolve()
+    print(f"Preparing native sample: {' '.join(args.command)}", flush=True)
     print(f"Evidence directory: {evidence_dir}", flush=True)
-    process = subprocess.Popen(
-        args.command,
-        # Keep Moon's cwd at the isolated workspace root so it discovers the
-        # absolute-member moon.work while the selected package path stays absolute.
-        cwd=workspace_root,
-        env=env,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        bufsize=1,
-    )
-    output = ProcessOutput(process, log_path)
+    runtime_target: tempfile.TemporaryDirectory[str] | None = None
+    process: subprocess.Popen[str] | None = None
+    output: ProcessOutput | None = None
     try:
+        run_command, runtime_target = _build_native_sample(
+            args.command,
+            args.platform,
+            workspace_path,
+            module_root,
+            evidence_dir,
+            env,
+        )
+        print(f"Launching native sample: {' '.join(run_command)}", flush=True)
+        process = subprocess.Popen(
+            run_command,
+            # The binary no longer needs Moon's resolver. Keeping the isolated
+            # workspace cwd preserves relative helper/runtime behavior.
+            cwd=workspace_path,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+        output = ProcessOutput(process, log_path)
         ready = output.wait_marker("YAMI_NATIVE_UI_READY", timeout=args.startup_timeout)
         button = _rect(ready.get("button"), "button")
+        button_label = _rect(ready.get("buttonLabel"), "buttonLabel")
         counter = _rect(ready.get("counter"), "counter")
         before = output.wait_marker(
             "YAMI_NATIVE_UI_PRESENTED",
@@ -636,6 +763,7 @@ def drive(args: argparse.Namespace) -> int:
             }[args.platform],
             "windowTitle": run_title,
             "buttonBounds": ready["button"],
+            "buttonLabelBounds": ready["buttonLabel"],
             "counterBounds": ready["counter"],
             "click": click,
             "complete": complete,
@@ -650,15 +778,16 @@ def drive(args: argparse.Namespace) -> int:
         return 0
     except (E2EError, OSError, subprocess.SubprocessError, KeyError, ValueError) as error:
         print(f"Native UI E2E failed: {error}", file=sys.stderr, flush=True)
-        if process.poll() is None:
+        if process is not None and process.poll() is None:
             process.terminate()
             try:
                 process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 process.kill()
                 process.wait(timeout=5)
-        output.drain()
-        output.log.flush()
+        if output is not None:
+            output.drain()
+            output.log.flush()
         if log_path.is_file():
             lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
             print(f"Native sample log: {log_path}", file=sys.stderr, flush=True)
@@ -666,7 +795,10 @@ def drive(args: argparse.Namespace) -> int:
                 print(line, file=sys.stderr)
         raise
     finally:
-        output.close()
+        if output is not None:
+            output.close()
+        if runtime_target is not None:
+            runtime_target.cleanup()
 
 
 def main() -> int:

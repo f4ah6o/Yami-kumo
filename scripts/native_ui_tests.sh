@@ -21,3 +21,5 @@ moon test "$YAMI_NATIVE_MODULE_ROOT/components" \
   --target native --deny-warn --no-parallelize
 moon test "$YAMI_NATIVE_MODULE_ROOT/sample" \
   --target native --deny-warn --no-parallelize
+moon test "$YAMI_NATIVE_MODULE_ROOT/examples/common" \
+  --target native --deny-warn --no-parallelize

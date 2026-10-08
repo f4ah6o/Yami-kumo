@@ -144,6 +144,16 @@ It tracks focus, dirty, filled, touched, and Enter-triggered validity attributes
 from native input events; disabled controls receive `data-disabled` in their
 rendered markup. The state policy remains in MoonBit.
 
+### Native UI preview
+
+An independent nested MoonBit module, `f4ah6o/yami_kumo_native`, provides
+measured plain Text, Button, Card, and semantic AppShell components over GPUI's
+macOS, Linux, and Windows hosts. Its sample and Button state/event logic are
+shared across those hosts. This native slice does not change the Web module,
+and it does not implement native text editing or Input/IME behavior. See
+[`native/README.md`](./native/README.md) for the supported visual subset,
+platform validation, and Input/IME follow-up status.
+
 The `/parity` gallery mounts one implementation at a time and is driven by
 [`fixtures/kumo-cases.json`](./fixtures/kumo-cases.json). It compares actual
 React Kumo components with the production-compiled MoonBit renderer across the
@@ -169,6 +179,7 @@ pnpm run dev:parity
 - `styles/` — checked-in CSS generated from the pinned Kumo package
 - `fixtures/kumo-cases.json` — canonical React/MoonBit interaction cases
 - `docs/UX.md` — guidance for choosing and composing shell regions
+- `native/README.md` — native MoonBit UI support and Input/IME follow-up
 - `ACKNOWLEDGEMENTS.md` — upstream and layout-reference acknowledgements
 
 ## Acknowledgements
