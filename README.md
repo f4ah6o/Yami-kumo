@@ -108,12 +108,66 @@ vp test
 vp build
 ```
 
+## MoonBit components
+
+Yami-kumo also exposes the semantic shell and a small component set as the pure
+MoonBit module `f4ah6o/yami_kumo`. The exported HTML tree only accepts known
+element names and validated attributes; text and attribute values are escaped
+when rendered. Button, Input, Text, and LayerCard classes are generated from
+the pinned Cloudflare Kumo package, currently `2.14.0`.
+
+```moonbit
+let brand = @yami_kumo.text("Workspace")
+let main = @yami_kumo.text_component(
+  @yami_kumo.text("Project settings"),
+  variant=@yami_kumo.Heading,
+  size=@yami_kumo.Lg,
+)
+let shell = @yami_kumo.app_shell(brand, main)
+let html = @yami_kumo.render_html(shell)
+```
+
+`input` always requires a caller-provided stable `id`. When labels, helper
+text, or errors are rendered, the value creates unique label and
+description/error references, so a page can safely compose multiple fields.
+The API deliberately has no raw-HTML or inline-style escape hatch.
+
+The browser-independent component module has no React dependency. Include
+`styles/kumo-standalone.css` and `styles/yami-kumo-components.css` in a consumer
+that renders its output; these checked-in assets come from the exact pinned
+Kumo version. The generated emphasis classes keep primary/destructive buttons
+compatible with strict `style-src 'self'` Content Security Policy.
+
+Browser consumers that need Kumo Field state markers should import
+`f4ah6o/yami_kumo/dom` and call `@dom.enhance()` after inserting the markup.
+It tracks focus, dirty, filled, touched, and Enter-triggered validity attributes
+from native input events; disabled controls receive `data-disabled` in their
+rendered markup. The state policy remains in MoonBit.
+
+The `/parity` gallery mounts one implementation at a time and is driven by
+[`fixtures/kumo-cases.json`](./fixtures/kumo-cases.json). It compares actual
+React Kumo components with the production-compiled MoonBit renderer across the
+full supported Button and Text matrices, Input states, LayerCard layouts, and
+the Yami AppShell. `pnpm run build:parity` regenerates/checks the pinned Kumo
+contract, runs MoonBit checks and tests, verifies the compiled renderer has no
+React imports, then builds the gallery. The MoonBit browser module must exist
+before Vite typechecking or builds, so CI runs `pnpm run moon:build` before
+those steps; `build:parity` also creates it through the contract check pipeline.
+
+```bash
+pnpm run dev:parity
+# open http://127.0.0.1:5173/parity
+```
+
 ## Structure
 
 - `src/shell/AppShell.tsx` — reusable semantic slot contract
 - `src/shell/layout.ts` — layout-region model and tests
 - `src/App.tsx` — small starter application
 - `src/styles.css` — responsive shell plus starter styles
+- `html.mbt`, `components.mbt`, `app_shell.mbt` — pure MoonBit API
+- `styles/` — checked-in CSS generated from the pinned Kumo package
+- `fixtures/kumo-cases.json` — canonical React/MoonBit interaction cases
 - `docs/UX.md` — guidance for choosing and composing shell regions
 - `ACKNOWLEDGEMENTS.md` — upstream and layout-reference acknowledgements
 

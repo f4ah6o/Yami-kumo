@@ -1,0 +1,1433 @@
+{
+  "schemaVersion": 1,
+  "kumoVersion": "2.14.0",
+  "viewports": [
+    {
+      "id": "desktop",
+      "width": 1280,
+      "height": 900
+    },
+    {
+      "id": "mobile",
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "cases": [
+    {
+      "id": "button-primary-xs",
+      "component": "button",
+      "content": "primary xs",
+      "props": {
+        "variant": "primary",
+        "size": "xs",
+        "disabled": false,
+        "target": "button-primary-xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-primary-xs-disabled",
+      "component": "button",
+      "content": "primary xs",
+      "props": {
+        "variant": "primary",
+        "size": "xs",
+        "disabled": true,
+        "target": "button-primary-xs-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-primary-sm",
+      "component": "button",
+      "content": "primary sm",
+      "props": {
+        "variant": "primary",
+        "size": "sm",
+        "disabled": false,
+        "target": "button-primary-sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-primary-sm-disabled",
+      "component": "button",
+      "content": "primary sm",
+      "props": {
+        "variant": "primary",
+        "size": "sm",
+        "disabled": true,
+        "target": "button-primary-sm-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-primary-base",
+      "component": "button",
+      "content": "primary base",
+      "props": {
+        "variant": "primary",
+        "size": "base",
+        "disabled": false,
+        "target": "button-primary-base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-primary-base-disabled",
+      "component": "button",
+      "content": "primary base",
+      "props": {
+        "variant": "primary",
+        "size": "base",
+        "disabled": true,
+        "target": "button-primary-base-disabled"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "button-primary-base-disabled",
+          "expect": {
+            "clickCount": 0
+          }
+        },
+        {
+          "type": "hover",
+          "target": "button-primary-base-disabled",
+          "expect": {
+            "clickCount": 0
+          }
+        },
+        {
+          "type": "click",
+          "target": "button-primary-base-disabled",
+          "expect": {
+            "clickCount": 0
+          }
+        },
+        {
+          "type": "press",
+          "target": "button-primary-base-disabled",
+          "value": "Enter",
+          "expect": {
+            "clickCount": 0
+          }
+        },
+        {
+          "type": "press",
+          "target": "button-primary-base-disabled",
+          "value": "Space",
+          "expect": {
+            "clickCount": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "button-primary-lg",
+      "component": "button",
+      "content": "Save changes",
+      "props": {
+        "variant": "primary",
+        "size": "lg",
+        "disabled": false,
+        "target": "button-primary-lg"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "button-primary-lg"
+        },
+        {
+          "type": "hover",
+          "target": "button-primary-lg"
+        },
+        {
+          "type": "click",
+          "target": "button-primary-lg",
+          "expectText": "Saved"
+        }
+      ]
+    },
+    {
+      "id": "button-primary-lg-disabled",
+      "component": "button",
+      "content": "Save changes",
+      "props": {
+        "variant": "primary",
+        "size": "lg",
+        "disabled": true,
+        "target": "button-primary-lg-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-xs",
+      "component": "button",
+      "content": "secondary xs",
+      "props": {
+        "variant": "secondary",
+        "size": "xs",
+        "disabled": false,
+        "target": "button-secondary-xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-xs-disabled",
+      "component": "button",
+      "content": "secondary xs",
+      "props": {
+        "variant": "secondary",
+        "size": "xs",
+        "disabled": true,
+        "target": "button-secondary-xs-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-sm",
+      "component": "button",
+      "content": "secondary sm",
+      "props": {
+        "variant": "secondary",
+        "size": "sm",
+        "disabled": false,
+        "target": "button-secondary-sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-sm-disabled",
+      "component": "button",
+      "content": "secondary sm",
+      "props": {
+        "variant": "secondary",
+        "size": "sm",
+        "disabled": true,
+        "target": "button-secondary-sm-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-base",
+      "component": "button",
+      "content": "secondary base",
+      "props": {
+        "variant": "secondary",
+        "size": "base",
+        "disabled": false,
+        "target": "button-secondary-base"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "button-secondary-base"
+        },
+        {
+          "type": "press",
+          "target": "button-secondary-base",
+          "value": "Enter",
+          "expectText": "Saved"
+        },
+        {
+          "type": "press",
+          "target": "button-secondary-base",
+          "value": "Space",
+          "expectText": "Saved"
+        }
+      ]
+    },
+    {
+      "id": "button-secondary-base-disabled",
+      "component": "button",
+      "content": "secondary base",
+      "props": {
+        "variant": "secondary",
+        "size": "base",
+        "disabled": true,
+        "target": "button-secondary-base-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-lg",
+      "component": "button",
+      "content": "secondary lg",
+      "props": {
+        "variant": "secondary",
+        "size": "lg",
+        "disabled": false,
+        "target": "button-secondary-lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-lg-disabled",
+      "component": "button",
+      "content": "secondary lg",
+      "props": {
+        "variant": "secondary",
+        "size": "lg",
+        "disabled": true,
+        "target": "button-secondary-lg-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-ghost-xs",
+      "component": "button",
+      "content": "ghost xs",
+      "props": {
+        "variant": "ghost",
+        "size": "xs",
+        "disabled": false,
+        "target": "button-ghost-xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-ghost-xs-disabled",
+      "component": "button",
+      "content": "ghost xs",
+      "props": {
+        "variant": "ghost",
+        "size": "xs",
+        "disabled": true,
+        "target": "button-ghost-xs-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-ghost-sm",
+      "component": "button",
+      "content": "ghost sm",
+      "props": {
+        "variant": "ghost",
+        "size": "sm",
+        "disabled": false,
+        "target": "button-ghost-sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-ghost-sm-disabled",
+      "component": "button",
+      "content": "ghost sm",
+      "props": {
+        "variant": "ghost",
+        "size": "sm",
+        "disabled": true,
+        "target": "button-ghost-sm-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-ghost-base",
+      "component": "button",
+      "content": "ghost base",
+      "props": {
+        "variant": "ghost",
+        "size": "base",
+        "disabled": false,
+        "target": "button-ghost-base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-ghost-base-disabled",
+      "component": "button",
+      "content": "ghost base",
+      "props": {
+        "variant": "ghost",
+        "size": "base",
+        "disabled": true,
+        "target": "button-ghost-base-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-ghost-lg",
+      "component": "button",
+      "content": "ghost lg",
+      "props": {
+        "variant": "ghost",
+        "size": "lg",
+        "disabled": false,
+        "target": "button-ghost-lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-ghost-lg-disabled",
+      "component": "button",
+      "content": "ghost lg",
+      "props": {
+        "variant": "ghost",
+        "size": "lg",
+        "disabled": true,
+        "target": "button-ghost-lg-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-destructive-xs",
+      "component": "button",
+      "content": "destructive xs",
+      "props": {
+        "variant": "destructive",
+        "size": "xs",
+        "disabled": false,
+        "target": "button-destructive-xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-destructive-xs-disabled",
+      "component": "button",
+      "content": "destructive xs",
+      "props": {
+        "variant": "destructive",
+        "size": "xs",
+        "disabled": true,
+        "target": "button-destructive-xs-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-destructive-sm",
+      "component": "button",
+      "content": "destructive sm",
+      "props": {
+        "variant": "destructive",
+        "size": "sm",
+        "disabled": false,
+        "target": "button-destructive-sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-destructive-sm-disabled",
+      "component": "button",
+      "content": "destructive sm",
+      "props": {
+        "variant": "destructive",
+        "size": "sm",
+        "disabled": true,
+        "target": "button-destructive-sm-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-destructive-base",
+      "component": "button",
+      "content": "destructive base",
+      "props": {
+        "variant": "destructive",
+        "size": "base",
+        "disabled": false,
+        "target": "button-destructive-base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-destructive-base-disabled",
+      "component": "button",
+      "content": "destructive base",
+      "props": {
+        "variant": "destructive",
+        "size": "base",
+        "disabled": true,
+        "target": "button-destructive-base-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-destructive-lg",
+      "component": "button",
+      "content": "destructive lg",
+      "props": {
+        "variant": "destructive",
+        "size": "lg",
+        "disabled": false,
+        "target": "button-destructive-lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-destructive-lg-disabled",
+      "component": "button",
+      "content": "destructive lg",
+      "props": {
+        "variant": "destructive",
+        "size": "lg",
+        "disabled": true,
+        "target": "button-destructive-lg-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-destructive-xs",
+      "component": "button",
+      "content": "secondary-destructive xs",
+      "props": {
+        "variant": "secondary-destructive",
+        "size": "xs",
+        "disabled": false,
+        "target": "button-secondary-destructive-xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-destructive-xs-disabled",
+      "component": "button",
+      "content": "secondary-destructive xs",
+      "props": {
+        "variant": "secondary-destructive",
+        "size": "xs",
+        "disabled": true,
+        "target": "button-secondary-destructive-xs-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-destructive-sm",
+      "component": "button",
+      "content": "secondary-destructive sm",
+      "props": {
+        "variant": "secondary-destructive",
+        "size": "sm",
+        "disabled": false,
+        "target": "button-secondary-destructive-sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-destructive-sm-disabled",
+      "component": "button",
+      "content": "secondary-destructive sm",
+      "props": {
+        "variant": "secondary-destructive",
+        "size": "sm",
+        "disabled": true,
+        "target": "button-secondary-destructive-sm-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-destructive-base",
+      "component": "button",
+      "content": "secondary-destructive base",
+      "props": {
+        "variant": "secondary-destructive",
+        "size": "base",
+        "disabled": false,
+        "target": "button-secondary-destructive-base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-destructive-base-disabled",
+      "component": "button",
+      "content": "secondary-destructive base",
+      "props": {
+        "variant": "secondary-destructive",
+        "size": "base",
+        "disabled": true,
+        "target": "button-secondary-destructive-base-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-destructive-lg",
+      "component": "button",
+      "content": "secondary-destructive lg",
+      "props": {
+        "variant": "secondary-destructive",
+        "size": "lg",
+        "disabled": false,
+        "target": "button-secondary-destructive-lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-secondary-destructive-lg-disabled",
+      "component": "button",
+      "content": "secondary-destructive lg",
+      "props": {
+        "variant": "secondary-destructive",
+        "size": "lg",
+        "disabled": true,
+        "target": "button-secondary-destructive-lg-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-outline-xs",
+      "component": "button",
+      "content": "outline xs",
+      "props": {
+        "variant": "outline",
+        "size": "xs",
+        "disabled": false,
+        "target": "button-outline-xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-outline-xs-disabled",
+      "component": "button",
+      "content": "outline xs",
+      "props": {
+        "variant": "outline",
+        "size": "xs",
+        "disabled": true,
+        "target": "button-outline-xs-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-outline-sm",
+      "component": "button",
+      "content": "outline sm",
+      "props": {
+        "variant": "outline",
+        "size": "sm",
+        "disabled": false,
+        "target": "button-outline-sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-outline-sm-disabled",
+      "component": "button",
+      "content": "outline sm",
+      "props": {
+        "variant": "outline",
+        "size": "sm",
+        "disabled": true,
+        "target": "button-outline-sm-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-outline-base",
+      "component": "button",
+      "content": "outline base",
+      "props": {
+        "variant": "outline",
+        "size": "base",
+        "disabled": false,
+        "target": "button-outline-base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-outline-base-disabled",
+      "component": "button",
+      "content": "outline base",
+      "props": {
+        "variant": "outline",
+        "size": "base",
+        "disabled": true,
+        "target": "button-outline-base-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-outline-lg",
+      "component": "button",
+      "content": "outline lg",
+      "props": {
+        "variant": "outline",
+        "size": "lg",
+        "disabled": false,
+        "target": "button-outline-lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "button-outline-lg-disabled",
+      "component": "button",
+      "content": "outline lg",
+      "props": {
+        "variant": "outline",
+        "size": "lg",
+        "disabled": true,
+        "target": "button-outline-lg-disabled"
+      },
+      "interactions": []
+    },
+    {
+      "id": "input-default-xs",
+      "component": "input",
+      "props": {
+        "id": "yk-input-default-xs",
+        "label": "Account name",
+        "description": "Shown to your team",
+        "placeholder": "Workspace name",
+        "variant": "default",
+        "size": "xs",
+        "required": true,
+        "target": "input-default-xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "input-error-xs",
+      "component": "input",
+      "props": {
+        "id": "yk-input-error-xs",
+        "label": "Email address",
+        "description": "Helper text is superseded when a validation error is present",
+        "error": "Enter a valid email address",
+        "placeholder": "name@example.com",
+        "variant": "error",
+        "size": "xs",
+        "required": true,
+        "target": "input-error-xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "input-disabled-xs",
+      "component": "input",
+      "props": {
+        "id": "yk-input-disabled-xs",
+        "label": "Managed account",
+        "description": "This value is controlled by your organization",
+        "placeholder": "Locked",
+        "variant": "default",
+        "size": "xs",
+        "disabled": true,
+        "required": false,
+        "target": "input-disabled-xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "input-default-sm",
+      "component": "input",
+      "props": {
+        "id": "yk-input-default-sm",
+        "label": "Account name",
+        "description": "Shown to your team",
+        "placeholder": "Workspace name",
+        "variant": "default",
+        "size": "sm",
+        "required": true,
+        "target": "input-default-sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "input-error-sm",
+      "component": "input",
+      "props": {
+        "id": "yk-input-error-sm",
+        "label": "Email address",
+        "description": "Helper text is superseded when a validation error is present",
+        "error": "Enter a valid email address",
+        "placeholder": "name@example.com",
+        "variant": "error",
+        "size": "sm",
+        "required": true,
+        "target": "input-error-sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "input-disabled-sm",
+      "component": "input",
+      "props": {
+        "id": "yk-input-disabled-sm",
+        "label": "Managed account",
+        "description": "This value is controlled by your organization",
+        "placeholder": "Locked",
+        "variant": "default",
+        "size": "sm",
+        "disabled": true,
+        "required": false,
+        "target": "input-disabled-sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "input-default-base",
+      "component": "input",
+      "props": {
+        "id": "yk-input-default-base",
+        "label": "Account name",
+        "description": "Shown to your team",
+        "placeholder": "Workspace name",
+        "variant": "default",
+        "size": "base",
+        "required": true,
+        "target": "input-default-base"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "input-default-base"
+        },
+        {
+          "type": "hover",
+          "target": "input-default-base"
+        },
+        {
+          "type": "fill",
+          "target": "input-default-base",
+          "value": "Northstar"
+        }
+      ]
+    },
+    {
+      "id": "input-error-base",
+      "component": "input",
+      "props": {
+        "id": "yk-input-error-base",
+        "label": "Email address",
+        "description": "Helper text is superseded when a validation error is present",
+        "error": "Enter a valid email address",
+        "placeholder": "name@example.com",
+        "variant": "error",
+        "size": "base",
+        "required": true,
+        "target": "input-error-base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "input-disabled-base",
+      "component": "input",
+      "props": {
+        "id": "yk-input-disabled-base",
+        "label": "Managed account",
+        "description": "This value is controlled by your organization",
+        "placeholder": "Locked",
+        "variant": "default",
+        "size": "base",
+        "disabled": true,
+        "required": false,
+        "target": "input-disabled-base"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "input-disabled-base"
+        },
+        {
+          "type": "fill",
+          "target": "input-disabled-base",
+          "value": "must-not-stick"
+        }
+      ]
+    },
+    {
+      "id": "input-prefilled-reset-state",
+      "component": "input",
+      "props": {
+        "id": "yk-input-prefilled-reset-state",
+        "label": "Workspace name",
+        "description": "Visible to teammates",
+        "value": "Northstar",
+        "variant": "default",
+        "size": "base",
+        "target": "input-prefilled-reset-state"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "input-prefilled-reset-state",
+          "expect": {
+            "attribute": "data-focused",
+            "value": ""
+          }
+        },
+        {
+          "type": "fill",
+          "target": "input-prefilled-reset-state",
+          "value": "Aurora",
+          "expect": {
+            "attribute": "data-dirty",
+            "value": ""
+          }
+        },
+        {
+          "type": "fill",
+          "target": "input-prefilled-reset-state",
+          "value": ""
+        },
+        {
+          "type": "fill",
+          "target": "input-prefilled-reset-state",
+          "value": "Northstar",
+          "expect": {
+            "attribute": "data-filled",
+            "value": ""
+          }
+        },
+        {
+          "type": "blur",
+          "target": "input-prefilled-reset-state",
+          "expect": {
+            "attribute": "data-touched",
+            "value": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "input-enter-touched",
+      "component": "input",
+      "props": {
+        "id": "yk-input-enter-touched",
+        "label": "Search workspace",
+        "ariaLabel": "Search workspace",
+        "variant": "default",
+        "size": "base",
+        "required": true,
+        "target": "input-enter-touched"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "input-enter-touched"
+        },
+        {
+          "type": "press",
+          "target": "input-enter-touched",
+          "value": "Enter",
+          "expect": {
+            "attribute": "data-valid",
+            "value": ""
+          }
+        }
+      ]
+    },
+    {
+      "id": "input-enter-invalid-after-edit",
+      "component": "input",
+      "props": {
+        "id": "yk-input-enter-invalid-after-edit",
+        "label": "Required workspace name",
+        "variant": "default",
+        "size": "base",
+        "required": true,
+        "target": "input-enter-invalid-after-edit"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "input-enter-invalid-after-edit"
+        },
+        {
+          "type": "fill",
+          "target": "input-enter-invalid-after-edit",
+          "value": "Northstar"
+        },
+        {
+          "type": "fill",
+          "target": "input-enter-invalid-after-edit",
+          "value": ""
+        },
+        {
+          "type": "press",
+          "target": "input-enter-invalid-after-edit",
+          "value": "Enter",
+          "expect": {
+            "attribute": "data-invalid",
+            "value": ""
+          }
+        },
+        {
+          "type": "fill",
+          "target": "input-enter-invalid-after-edit",
+          "value": "Recovered",
+          "expect": {
+            "attribute": "data-valid",
+            "value": ""
+          }
+        },
+        {
+          "type": "fill",
+          "target": "input-enter-invalid-after-edit",
+          "value": "",
+          "expect": {
+            "attribute": "data-valid",
+            "value": ""
+          }
+        },
+        {
+          "type": "press",
+          "target": "input-enter-invalid-after-edit",
+          "value": "Enter",
+          "expect": {
+            "attribute": "aria-invalid",
+            "value": "true"
+          }
+        }
+      ]
+    },
+    {
+      "id": "input-default-lg",
+      "component": "input",
+      "props": {
+        "id": "yk-input-default-lg",
+        "label": "Account name",
+        "description": "Shown to your team",
+        "placeholder": "Workspace name",
+        "variant": "default",
+        "size": "lg",
+        "required": true,
+        "target": "input-default-lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "input-error-lg",
+      "component": "input",
+      "props": {
+        "id": "yk-input-error-lg",
+        "label": "Email address",
+        "description": "Helper text is superseded when a validation error is present",
+        "error": "Enter a valid email address",
+        "placeholder": "name@example.com",
+        "variant": "error",
+        "size": "lg",
+        "required": true,
+        "target": "input-error-lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "input-disabled-lg",
+      "component": "input",
+      "props": {
+        "id": "yk-input-disabled-lg",
+        "label": "Managed account",
+        "description": "This value is controlled by your organization",
+        "placeholder": "Locked",
+        "variant": "default",
+        "size": "lg",
+        "disabled": true,
+        "required": false,
+        "target": "input-disabled-lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "input-unlabelled-explicit-id",
+      "component": "input",
+      "props": {
+        "id": "parity-search-field",
+        "placeholder": "Search workspace",
+        "ariaLabel": "Search workspace",
+        "variant": "default",
+        "size": "base",
+        "target": "unlabelled-search"
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "unlabelled-search"
+        },
+        {
+          "type": "fill",
+          "target": "unlabelled-search",
+          "value": "Project atlas"
+        }
+      ]
+    },
+    {
+      "id": "input-multiple-linked-fields",
+      "component": "input",
+      "props": {
+        "firstId": "parity-first-name",
+        "firstLabel": "Display name",
+        "firstDescription": "Shown to teammates",
+        "firstTarget": "first-field",
+        "secondId": "parity-email",
+        "secondLabel": "Email address",
+        "secondDescription": "Helper text is superseded by the error",
+        "secondError": "Enter a valid email address",
+        "secondTarget": "second-field",
+        "grouped": true
+      },
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "first-field"
+        },
+        {
+          "type": "fill",
+          "target": "first-field",
+          "value": "Ada Lovelace"
+        },
+        {
+          "type": "focus",
+          "target": "second-field"
+        },
+        {
+          "type": "fill",
+          "target": "second-field",
+          "value": "ada@example.com"
+        }
+      ]
+    },
+    {
+      "id": "text-heading-xs",
+      "component": "text",
+      "content": "Project settings",
+      "props": {
+        "variant": "heading",
+        "size": "xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-heading-sm",
+      "component": "text",
+      "content": "Project settings",
+      "props": {
+        "variant": "heading",
+        "size": "sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-heading-base",
+      "component": "text",
+      "content": "Project settings",
+      "props": {
+        "variant": "heading",
+        "size": "base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-heading-lg",
+      "component": "text",
+      "content": "Project settings",
+      "props": {
+        "variant": "heading",
+        "size": "lg",
+        "as": "h2"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-body-xs",
+      "component": "text",
+      "content": "body sample",
+      "props": {
+        "variant": "body",
+        "size": "xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-body-sm",
+      "component": "text",
+      "content": "body sample",
+      "props": {
+        "variant": "body",
+        "size": "sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-body-base",
+      "component": "text",
+      "content": "body sample",
+      "props": {
+        "variant": "body",
+        "size": "base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-body-lg",
+      "component": "text",
+      "content": "body sample",
+      "props": {
+        "variant": "body",
+        "size": "lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-secondary-xs",
+      "component": "text",
+      "content": "secondary sample",
+      "props": {
+        "variant": "secondary",
+        "size": "xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-secondary-sm",
+      "component": "text",
+      "content": "secondary sample",
+      "props": {
+        "variant": "secondary",
+        "size": "sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-secondary-base",
+      "component": "text",
+      "content": "secondary sample",
+      "props": {
+        "variant": "secondary",
+        "size": "base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-secondary-lg",
+      "component": "text",
+      "content": "secondary sample",
+      "props": {
+        "variant": "secondary",
+        "size": "lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-success-xs",
+      "component": "text",
+      "content": "success sample",
+      "props": {
+        "variant": "success",
+        "size": "xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-success-sm",
+      "component": "text",
+      "content": "success sample",
+      "props": {
+        "variant": "success",
+        "size": "sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-success-base",
+      "component": "text",
+      "content": "success sample",
+      "props": {
+        "variant": "success",
+        "size": "base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-success-lg",
+      "component": "text",
+      "content": "success sample",
+      "props": {
+        "variant": "success",
+        "size": "lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-error-xs",
+      "component": "text",
+      "content": "error sample",
+      "props": {
+        "variant": "error",
+        "size": "xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-error-sm",
+      "component": "text",
+      "content": "error sample",
+      "props": {
+        "variant": "error",
+        "size": "sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-error-base",
+      "component": "text",
+      "content": "error sample",
+      "props": {
+        "variant": "error",
+        "size": "base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-error-lg",
+      "component": "text",
+      "content": "error sample",
+      "props": {
+        "variant": "error",
+        "size": "lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-mono-xs",
+      "component": "text",
+      "content": "mono sample",
+      "props": {
+        "variant": "mono",
+        "size": "xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-mono-sm",
+      "component": "text",
+      "content": "mono sample",
+      "props": {
+        "variant": "mono",
+        "size": "sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-mono-base",
+      "component": "text",
+      "content": "mono sample",
+      "props": {
+        "variant": "mono",
+        "size": "base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-mono-lg",
+      "component": "text",
+      "content": "mono sample",
+      "props": {
+        "variant": "mono",
+        "size": "lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-mono-secondary-xs",
+      "component": "text",
+      "content": "mono-secondary sample",
+      "props": {
+        "variant": "mono-secondary",
+        "size": "xs"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-mono-secondary-sm",
+      "component": "text",
+      "content": "mono-secondary sample",
+      "props": {
+        "variant": "mono-secondary",
+        "size": "sm"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-mono-secondary-base",
+      "component": "text",
+      "content": "mono-secondary sample",
+      "props": {
+        "variant": "mono-secondary",
+        "size": "base"
+      },
+      "interactions": []
+    },
+    {
+      "id": "text-mono-secondary-lg",
+      "component": "text",
+      "content": "mono-secondary sample",
+      "props": {
+        "variant": "mono-secondary",
+        "size": "lg"
+      },
+      "interactions": []
+    },
+    {
+      "id": "layer-card-simple",
+      "component": "layerCard",
+      "content": "A simple surface",
+      "props": {
+        "layered": false
+      },
+      "interactions": []
+    },
+    {
+      "id": "layer-card-layered",
+      "component": "layerCard",
+      "content": "Team settings",
+      "props": {
+        "layered": true,
+        "secondary": "Workspace"
+      },
+      "interactions": []
+    },
+    {
+      "id": "app-shell-minimum",
+      "component": "appShell",
+      "content": "The main task stays in the workspace.",
+      "props": {
+        "brand": "Workspace"
+      },
+      "interactions": []
+    },
+    {
+      "id": "app-shell-full-drawer",
+      "component": "appShell",
+      "content": "The main task stays in the workspace.",
+      "props": {
+        "full": true,
+        "brand": "Workspace",
+        "triggerLabel": "Open navigation",
+        "search": "Search projects",
+        "headerActions": "Create project",
+        "accountMenu": "Account",
+        "rail": "Primary navigation",
+        "sidebar": "Workspace navigation",
+        "tabs": "Overview · Activity",
+        "contextPanel": "Project details",
+        "contextPanelLabel": "Project details",
+        "bottomBar": "Connected",
+        "primaryNavigationLabel": "Primary navigation",
+        "workspaceNavigationLabel": "Workspace navigation",
+        "closeWorkspaceNavigationLabel": "Close workspace navigation",
+        "closeContextPanelLabel": "Close Project details"
+      },
+      "interactions": [
+        {
+          "type": "click",
+          "target": "nav-trigger",
+          "viewports": ["mobile"],
+          "expect": {
+            "attribute": "aria-expanded",
+            "value": "true"
+          }
+        },
+        {
+          "type": "press",
+          "target": "nav-trigger",
+          "value": "Escape",
+          "viewports": ["mobile"],
+          "expect": {
+            "attribute": "aria-expanded",
+            "value": "false"
+          }
+        }
+      ]
+    }
+  ]
+}

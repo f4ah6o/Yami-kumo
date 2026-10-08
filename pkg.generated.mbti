@@ -1,0 +1,86 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "f4ah6o/yami_kumo"
+
+// Values
+pub fn app_shell(Html, Html, navigation_trigger? : Html, global_search? : Html, header_actions? : Html, account_menu? : Html, rail? : Html, sidebar? : Html, tabs? : Html, context_panel? : Html, context_panel_label? : String, bottom_bar? : Html, sidebar_collapsed? : Bool, mobile_sidebar_open? : Bool, context_panel_open? : Bool, primary_navigation_label? : String, workspace_navigation_label? : String, close_workspace_navigation_label? : String, close_context_panel_label? : String) -> Html
+
+pub fn attr(String, String) -> Result[Attribute, HtmlError]
+
+pub fn boolean_attr(String) -> Result[Attribute, HtmlError]
+
+pub fn button(Html, variant? : ButtonVariant, size? : ControlSize, disabled? : Bool, button_type? : String, class_name? : String, attrs? : Array[Attribute]) -> Html
+
+pub fn element(String, Array[Attribute], Array[Html]) -> Result[Html, HtmlError]
+
+pub fn fragment(Array[Html]) -> Html
+
+pub fn input(id~ : String, size? : ControlSize, variant? : InputVariant, label? : Html, description? : Html, error? : Html, placeholder? : String, disabled? : Bool, required? : Bool, class_name? : String, attrs? : Array[Attribute]) -> Html
+
+pub fn layer_card(Html, layered? : Bool, class_name? : String, attrs? : Array[Attribute]) -> Html
+
+pub fn layer_card_primary(Html, class_name? : String, attrs? : Array[Attribute]) -> Html
+
+pub fn layer_card_secondary(Html, class_name? : String, attrs? : Array[Attribute]) -> Html
+
+pub fn render_html(Html) -> Result[String, HtmlError]
+
+pub fn text(String) -> Html
+
+pub fn text_component(Html, variant? : TextVariant, size? : ControlSize, as_element? : String, bold? : Bool, truncate? : Bool, class_name? : String, attrs? : Array[Attribute]) -> Html
+
+// Errors
+
+// Types and methods
+pub struct Attribute {
+  // private fields
+}
+
+pub(all) enum ButtonVariant {
+  Primary
+  Secondary
+  Ghost
+  Destructive
+  SecondaryDestructive
+  Outline
+}
+
+pub(all) enum ControlSize {
+  Xs
+  Sm
+  Base
+  Lg
+}
+
+pub struct Html {
+  // private fields
+}
+
+pub enum HtmlError {
+  InvalidTag(String)
+  InvalidAttributeName(String)
+  UnsafeAttribute(String)
+  UnsafeUrl(String)
+  DuplicateAttribute(String)
+  VoidElementHasChildren(String)
+}
+
+type HtmlNode
+
+pub(all) enum InputVariant {
+  Default
+  Error
+}
+
+pub(all) enum TextVariant {
+  Heading
+  Body
+  Secondary
+  Success
+  Error
+  Mono
+  MonoSecondary
+}
+
+// Type aliases
+
+// Traits

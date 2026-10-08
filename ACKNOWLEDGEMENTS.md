@@ -5,6 +5,11 @@ Yami-kumo is built on top of:
 - [Cloudflare Kumo](https://github.com/cloudflare/kumo) for accessible UI primitives and design-system components.
 - [Vite+](https://viteplus.dev/) for the `vp` development, check, test, and build workflow.
 
+The checked-in standalone stylesheet and generated component contracts are
+derived from the pinned `@cloudflare/kumo` 2.14.0 package. The upstream package
+license is reproduced verbatim at
+[`licenses/cloudflare-kumo-LICENSE`](./licenses/cloudflare-kumo-LICENSE).
+
 ## Layout inspiration
 
 The canonical shell shape in this repository was inspired by the application-layout references shared in these posts:

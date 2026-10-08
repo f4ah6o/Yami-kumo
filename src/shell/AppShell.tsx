@@ -11,6 +11,10 @@ export interface AppShellProps {
   tabs?: ReactNode;
   contextPanel?: ReactNode;
   contextPanelLabel?: string;
+  closeContextPanelLabel?: string;
+  primaryNavigationLabel?: string;
+  workspaceNavigationLabel?: string;
+  closeWorkspaceNavigationLabel?: string;
   bottomBar?: ReactNode;
   children: ReactNode;
   sidebarCollapsed?: boolean;
@@ -31,6 +35,10 @@ export function AppShell({
   tabs,
   contextPanel,
   contextPanelLabel = 'Context panel',
+  closeContextPanelLabel,
+  primaryNavigationLabel = 'Primary',
+  workspaceNavigationLabel = 'Workspace navigation',
+  closeWorkspaceNavigationLabel = 'Close workspace navigation',
   bottomBar,
   children,
   sidebarCollapsed = false,
@@ -67,7 +75,7 @@ export function AppShell({
       </header>
 
       {rail ? (
-        <nav className="yk-rail" aria-label="Primary">
+        <nav className="yk-rail" aria-label={primaryNavigationLabel}>
           {rail}
         </nav>
       ) : null}
@@ -77,10 +85,14 @@ export function AppShell({
           <button
             type="button"
             className="yk-drawer-scrim yk-sidebar-scrim"
-            aria-label="Close workspace navigation"
+            aria-label={closeWorkspaceNavigationLabel}
             onClick={onMobileSidebarDismiss}
           />
-          <aside id="yk-mobile-navigation" className="yk-sidebar" aria-label="Workspace navigation">
+          <aside
+            id="yk-mobile-navigation"
+            className="yk-sidebar"
+            aria-label={workspaceNavigationLabel}
+          >
             {sidebar}
           </aside>
         </>
@@ -100,7 +112,7 @@ export function AppShell({
           <button
             type="button"
             className="yk-drawer-scrim yk-context-panel-scrim"
-            aria-label={`Close ${contextPanelLabel}`}
+            aria-label={closeContextPanelLabel ?? `Close ${contextPanelLabel}`}
             onClick={onContextPanelDismiss}
           />
           <aside id="yk-context-panel" className="yk-context-panel" aria-label={contextPanelLabel}>
