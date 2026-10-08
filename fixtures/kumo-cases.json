@@ -84,7 +84,45 @@
         "disabled": true,
         "target": "button-primary-base-disabled"
       },
-      "interactions": []
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "button-primary-base-disabled",
+          "expect": {
+            "clickCount": 0
+          }
+        },
+        {
+          "type": "hover",
+          "target": "button-primary-base-disabled",
+          "expect": {
+            "clickCount": 0
+          }
+        },
+        {
+          "type": "click",
+          "target": "button-primary-base-disabled",
+          "expect": {
+            "clickCount": 0
+          }
+        },
+        {
+          "type": "press",
+          "target": "button-primary-base-disabled",
+          "value": "Enter",
+          "expect": {
+            "clickCount": 0
+          }
+        },
+        {
+          "type": "press",
+          "target": "button-primary-base-disabled",
+          "value": "Space",
+          "expect": {
+            "clickCount": 0
+          }
+        }
+      ]
     },
     {
       "id": "button-primary-lg",
@@ -774,7 +812,17 @@
         "required": false,
         "target": "input-disabled-base"
       },
-      "interactions": []
+      "interactions": [
+        {
+          "type": "focus",
+          "target": "input-disabled-base"
+        },
+        {
+          "type": "fill",
+          "target": "input-disabled-base",
+          "value": "must-not-stick"
+        }
+      ]
     },
     {
       "id": "input-default-lg",
