@@ -1,0 +1,18 @@
+# Publish only the MoonBit library, its browser adapter, styles, docs, and licenses.
+*
+!/.moonignore
+!/moon.mod
+!/moon.pkg
+!/pkg.generated.mbti
+!/README.mbt.md
+!/LICENSE
+!/ACKNOWLEDGEMENTS.md
+!/*.mbt
+!/dom/
+!/dom/moon.pkg
+!/dom/*.mbt
+!/styles/
+!/styles/kumo-standalone.css
+!/styles/yami-kumo-components.css
+!/licenses/
+!/licenses/cloudflare-kumo-LICENSE
