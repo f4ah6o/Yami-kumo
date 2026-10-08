@@ -13,20 +13,25 @@ all three host entrypoints in `examples/`.
 
 ## Platform status
 
-| Host    | Text measurement and display                                 | Input proof                                                                                                                                        |
-| ------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS   | CoreText measurement and Metal scene presentation            | Local E2E sends a test-only NSEvent through the owned NSWindow's normal `sendEvent:` route. This is synthetic native input, not physical hardware. |
-| Linux   | Pango system-sans measurement and the GPUI Wayland host      | Configured CI proof sends input through XTest, Xvfb and Weston's X11 backend.                                                                      |
-| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Configured CI proof sends input to the uniquely titled visible HWND with Win32 `SendInput`.                                                        |
+| Host    | Text measurement and display                                 | Native UI proof                                                                                                                                                                                                                  |
+| ------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS   | CoreText measurement and Metal scene presentation            | Passed local E2E: a test-only synthetic NSEvent goes through the owned NSWindow's normal `sendEvent:` route; frame readback confirms the count update and window destruction.                                                    |
+| Linux   | Pango system-sans measurement and the GPUI Wayland host      | Passed hosted E2E: XTest input is delivered through Xvfb and Weston's X11 backend, with completed-frame readback. The runner pins both generic sans aliases to the same DejaVu Sans file for matching measurement and rendering. |
+| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Passed hosted E2E: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback.                                                                                                                    |
 
-The local macOS end-to-end proof passed for this change. The hosted Linux and
-Windows proof jobs are configured, but their runs for this change are still
-pending.
+The local macOS proof passed on Yami `086cfd1` with approved GPUI candidate
+`ae45429`; its tree is identical to merged GPUI revision
+`2c6e9a3df469922f79d7b2b8eb977a0524086486`. Hosted Linux and Windows proofs
+passed in [native UI CI run 37808645019](https://github.com/f4ah6o/Yami-kumo/actions/runs/37808645019)
+on those same source trees.
 
 These checks cover labeled Text and Button rendering, readback of a completed
 native frame, and a host-delivered click that changes the sample's App Entity
-and counter text. They do not qualify a native text editor or an Input
-component. The browser `Input` API remains separate.
+and counter text. Headless tests and cross-compilation alone do not count as a
+native UI pass. The macOS input is a GPUI test-hook NSEvent, while Linux and
+Windows use host-delivered XTest and Win32 `SendInput`; none of these checks
+claims physical-hardware input coverage. They do not qualify a native text
+editor or an Input component. The browser `Input` API remains separate.
 
 ## Kumo visual subset
 
@@ -69,13 +74,13 @@ focus. Disabled controls, an outside primary release, focus loss, and layout
 invalidation cancel pending gestures. This does not establish text editing or
 IME behavior.
 
-The GPUI host capabilities differ by platform. The [macOS host guide](https://github.com/gpui-mbt/gpui.mbt/blob/31c6d86530fb8c99545484a92d15eb85170629d3/docs/macos-native.md)
+The GPUI host capabilities differ by platform. The [macOS host guide](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/macos-native.md)
 covers bounded single-line measurement and drawing; a native editor and IME
-are not implemented. The [Ubuntu text-field guide](https://github.com/gpui-mbt/gpui.mbt/blob/31c6d86530fb8c99545484a92d15eb85170629d3/docs/linux-text-field.md)
+are not implemented. The [Ubuntu text-field guide](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/linux-text-field.md)
 documents an experimental single-line LTR field with caret, selection, undo,
 and a private direct-keyboard route. Public `TextInput` and IME transport are
-not supported; the [Wayland IME transport](https://github.com/gpui-mbt/gpui.mbt/blob/31c6d86530fb8c99545484a92d15eb85170629d3/docs/ubuntu-ime.md)
-is private opt-in work and is not qualified. The [Windows host guide](https://github.com/gpui-mbt/gpui.mbt/blob/31c6d86530fb8c99545484a92d15eb85170629d3/docs/windows-native.md)
+not supported; the [Wayland IME transport](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/ubuntu-ime.md)
+is private opt-in work and is not qualified. The [Windows host guide](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/windows-native.md)
 describes a focused single-line field and a private, default-off IMM32 session;
 real Japanese IME and candidate-window behavior are not qualified.
 
