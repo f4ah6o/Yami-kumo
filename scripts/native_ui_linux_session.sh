@@ -31,11 +31,31 @@ export LIBGL_ALWAYS_SOFTWARE=1
 export GALLIUM_DRIVER=llvmpipe
 export GPUI_SOURCE="$gpui_root"
 export YAMI_NATIVE_UI_EVIDENCE_DIR="$evidence_dir"
-export FONTCONFIG_FILE="$gpui_root/tests/linux_text/fonts.conf"
+export FONTCONFIG_FILE="$yami_root/tests/native-ui/fonts.conf"
 fontconfig_path=$(dirname "$FONTCONFIG_FILE")
 export FONTCONFIG_PATH="$fontconfig_path"
 export XDG_CACHE_HOME="$evidence_dir/font-cache"
 mkdir -p "$XDG_CACHE_HOME"
+
+sans_match=$(fc-match -f '%{family}|%{file}' sans)
+sans_serif_match=$(fc-match -f '%{family}|%{file}' sans-serif)
+case "$sans_match" in
+  "DejaVu Sans|"*) ;;
+  *) echo "Fontconfig 'sans' did not resolve to DejaVu Sans: $sans_match" >&2; exit 1 ;;
+esac
+case "$sans_serif_match" in
+  "DejaVu Sans|"*) ;;
+  *) echo "Fontconfig 'sans-serif' did not resolve to DejaVu Sans: $sans_serif_match" >&2; exit 1 ;;
+esac
+if [ "${sans_match#*|}" != "${sans_serif_match#*|}" ]; then
+  echo "Fontconfig generic sans aliases resolved to different font files" >&2
+  exit 1
+fi
+{
+  printf 'FONTCONFIG_FILE=%s\n' "$FONTCONFIG_FILE"
+  printf 'sans: %s\n' "$sans_match"
+  printf 'sans-serif: %s\n' "$sans_serif_match"
+} > "$evidence_dir/font-profile.log"
 
 weston \
   --backend=x11-backend.so \
