@@ -158,3 +158,5 @@ After the interaction-polish slice has been exercised by real applications:
 3. add row/list conventions for common CRUD and settings surfaces;
 4. evaluate command/search behavior;
 5. add visual regression / interaction fixtures for the shared vocabulary.
+
+Rechecked against main at 9bb6527 (2026-10-09): still open — the first interaction-polish slice landed on `demo` via #2 (merge 57c80e0), but shared vocabulary items and later slices are not started, and `main` has no shared motion/focus tokens yet.
