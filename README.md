@@ -89,6 +89,17 @@ On phones, durable navigation becomes a left drawer. Contextual support becomes 
 
 See [docs/UX.md](./docs/UX.md) for the full composition guidance.
 
+## Planned gpui.mbt support
+
+Yami-kumo is planning shared UX across React/Kumo and
+[gpui.mbt](https://github.com/gpui-mbt/gpui.mbt): familiar shell roles,
+interaction rules, focus behavior and state feedback, with Kumo update
+extraction, native definition generation and cross-target verification owned
+here. The generator and native adapter are not implemented yet.
+
+See the [shared UX implementation plan](./issues/open/20261005-kumo-gpui-shared-ux.md)
+for the inspected baseline, framework dependencies and acceptance scenarios.
+
 ## Branches
 
 - **`main`** — copy-ready starter; no GitHub Pages deployment.
