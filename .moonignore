@@ -7,6 +7,8 @@
 !/README.mbt.md
 !/LICENSE
 !/ACKNOWLEDGEMENTS.md
+# Keep the nested native module packageable as its own Mooncakes module.
+!/native/
 !/*.mbt
 !/dom/
 !/dom/moon.pkg
