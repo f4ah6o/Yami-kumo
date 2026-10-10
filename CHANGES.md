@@ -14,6 +14,7 @@
 ### Changed
 
 - Pinned `@cloudflare/kumo` to `2.14.0` so generated class and stylesheet contracts remain reproducible.
+- Updated the native MoonBit module for GPUI `0.3.0` and added self-contained README and MIT license files for the `0.2.0` package.
 
 ### Fixed
 
