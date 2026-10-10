@@ -8,8 +8,6 @@ description = "Portable native Text and Button components for Yami-kumo"
 
 repository = "https://github.com/f4ah6o/Yami-kumo"
 
-readme = "README.md"
-
 license = "MIT"
 
 import {
