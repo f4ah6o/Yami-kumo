@@ -145,3 +145,64 @@ jobs:
           name: yami-native-ui-windows
           path: Yami-kumo/_build/native-ui/windows/
           if-no-files-found: warn
+
+  macos-native-build:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - name: Checkout Yami-kumo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: Yami-kumo
+
+      - name: Read pinned GPUI revision
+        id: gpui
+        shell: bash
+        run: |
+          revision="$(tr -d '[:space:]' < Yami-kumo/tests/native-ui/gpui-revision.txt)"
+          if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "tests/native-ui/gpui-revision.txt must contain one lowercase 40-character commit SHA" >&2
+            exit 2
+          fi
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pinned GPUI source
+        uses: actions/checkout@v6
+        with:
+          repository: gpui-mbt/gpui.mbt
+          ref: ${{ steps.gpui.outputs.revision }}
+          path: gpui.mbt
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.14+7d59c7ec9
+          core-version: 0.10.14+7d59c7ec9
+
+      - name: Verify Xcode and MoonBit environment
+        shell: bash
+        run: |
+          xcodebuild -version
+          xcrun --find clang
+          moon version --all
+
+      - name: Build GPUI test hooks and run macOS portable tests
+        shell: bash
+        env:
+          GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
+          YAMI_NATIVE_UI_EVIDENCE_DIR: ${{ github.workspace }}/Yami-kumo/_build/native-ui/macos
+        run: sh Yami-kumo/scripts/native_ui_macos.sh --build-and-test
+
+      - name: Upload macOS build and test logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: yami-native-ui-macos-build
+          path: Yami-kumo/_build/native-ui/macos/
+          if-no-files-found: warn

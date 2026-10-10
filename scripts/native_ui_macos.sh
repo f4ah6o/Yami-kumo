@@ -1,6 +1,19 @@
 #!/bin/sh
 set -eu
 
+mode=${1:---ui-proof}
+if [ "$#" -gt 1 ]; then
+  echo "usage: $0 [--ui-proof|--build-and-test]" >&2
+  exit 2
+fi
+case "$mode" in
+  --ui-proof|--build-and-test) ;;
+  *)
+    echo "usage: $0 [--ui-proof|--build-and-test]" >&2
+    exit 2
+    ;;
+esac
+
 yami_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd -P)
 gpui_root=${GPUI_SOURCE:-"$yami_root/../gpui.mbt"}
 if [ "$(uname -s)" != Darwin ]; then
@@ -27,7 +40,7 @@ if [ -n "${GPUI_MACOS_LIBRARY:-}" ]; then
   echo "Using prebuilt GPUI native library: $gpui_library"
 else
   set +e
-  sh "$gpui_root/script/build_and_run.sh" --test-hooks > "$evidence_dir/gpui-test-hooks-build.log" 2>&1
+  bash "$gpui_root/script/build_and_run.sh" --test-hooks > "$evidence_dir/gpui-test-hooks-build.log" 2>&1
   build_status=$?
   set -e
   if [ "$build_status" -ne 0 ]; then
@@ -50,6 +63,14 @@ sh "$yami_root/scripts/native_ui_workspace.sh" \
 
 sh "$yami_root/scripts/native_ui_workspace.sh" \
   sh "$yami_root/scripts/native_ui_tests.sh"
+
+if [ "$mode" = "--build-and-test" ]; then
+  sh "$yami_root/scripts/native_ui_workspace.sh" \
+    moon build "$yami_root/native/examples/macos" --target native --deny-warn
+  echo "macOS native build and portable tests passed; runtime UI proof was not run."
+  exit 0
+fi
+
 sh "$yami_root/scripts/native_ui_workspace.sh" \
   python3 "$yami_root/tests/native-ui/drive_native_ui.py" \
     --platform macos \

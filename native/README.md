@@ -1,9 +1,22 @@
-# Native MoonBit UI preview
+# Native MoonBit UI components
 
-`native/` is an independent MoonBit module named `f4ah6o/yami_kumo_native`.
-It imports the existing `f4ah6o/yami_kumo` enums and the portable layout,
+`f4ah6o/yami_kumo_native` is an independent MoonBit module. It imports the
+existing `f4ah6o/yami_kumo` enums and the portable layout,
 element, text-measurement, and scene APIs from gpui. The root Web module does
 not depend on this module, and its HTML/CSS APIs are unchanged.
+
+Install the native module with:
+
+```sh
+moon add f4ah6o/yami_kumo_native
+```
+
+Building this module for MoonBit's native/LLVM targets requires Python 3
+(`python3`) on `PATH`. GPUI 0.3.0 runs a Python prebuild during compilation to
+propagate macOS CoreText framework link settings. Python is needed only while
+building; the resulting application has no Python runtime dependency.
+
+The module source is MIT licensed; the package includes [LICENSE](LICENSE).
 
 The first native slice provides measured plain `NativeText`, square `NativeButton`
 surfaces and interaction state, a rectangular `NativeCard`, and a semantic
@@ -15,9 +28,14 @@ all three host entrypoints in `examples/`.
 
 | Host    | Text measurement and display                                 | Native UI proof                                                                                                                                                                                                                  |
 | ------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS   | CoreText measurement and Metal scene presentation            | Passed local E2E: a test-only synthetic NSEvent goes through the owned NSWindow's normal `sendEvent:` route; frame readback confirms the count update, and the lifecycle marker confirms window destruction.                     |
+| macOS   | CoreText measurement and Metal scene presentation            | Previously passed local E2E: a test-only synthetic NSEvent goes through the owned NSWindow's normal `sendEvent:` route; frame readback confirms the count update, and the lifecycle marker confirms window destruction.          |
 | Linux   | Pango system-sans measurement and the GPUI Wayland host      | Passed hosted E2E: XTest input is delivered through Xvfb and Weston's X11 backend, with completed-frame readback. The runner pins both generic sans aliases to the same DejaVu Sans file for matching measurement and rendering. |
 | Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Passed hosted E2E: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback.                                                                                                                    |
+
+The hosted macOS lane builds GPUI's test-hook library, runs the CoreText and
+shared native package tests, and compiles the Yami macOS sample. It does not
+launch a window or exercise runtime rendering or input, so it is build and
+portable-test evidence rather than a hosted native UI proof.
 
 The local macOS proof passed on Yami `086cfd1` with approved GPUI candidate
 `ae45429`; its tree is identical to merged GPUI revision
@@ -89,9 +107,11 @@ per-platform committed-text, composition, and caret integration with separate
 tests. The native Button click/frame proof above does not qualify text input or
 IME support.
 
-## Checks
+## Maintainer checks
 
-The cross-platform native UI scripts create a temporary Moon workspace that
+These checks use scripts in the Yami source repository and are for maintainers;
+they are not required when consuming the published module. The cross-platform
+native UI scripts create a temporary Moon workspace that
 links the Yami and gpui checkouts without adding a local workspace manifest to
 either repository. From the Yami-kumo repository root, set `GPUI_SOURCE` when
 the GPUI checkout is not the sibling `../gpui.mbt`:
@@ -102,6 +122,13 @@ GPUI_SOURCE=/path/to/gpui.mbt sh "$YAMI_SOURCE/scripts/native_ui_workspace.sh" \
   sh "$YAMI_SOURCE/scripts/native_ui_tests.sh"
 GPUI_SOURCE=/path/to/gpui.mbt sh "$YAMI_SOURCE/scripts/native_ui_macos.sh"
 GPUI_SOURCE=/path/to/gpui.mbt sh "$YAMI_SOURCE/scripts/native_ui_linux.sh"
+```
+
+The hosted macOS build and portable checks can be run locally without opening
+the sample window:
+
+```sh
+GPUI_SOURCE=/path/to/gpui.mbt sh "$YAMI_SOURCE/scripts/native_ui_macos.sh" --build-and-test
 ```
 
 On Windows, run `scripts/native_ui_windows.ps1` from PowerShell with the native

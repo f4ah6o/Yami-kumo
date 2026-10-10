@@ -17,8 +17,14 @@ local macOS script builds GPUI with `--test-hooks`; its test-only
 `NSWindow.sendEvent:` click and Escape events are synthetic host events, not
 physical hardware input.
 
+The hosted macOS job runs the CoreText and shared native package tests and
+builds the macOS sample. It does not launch the sample window, so it verifies
+macOS compilation and portable behavior without claiming runtime UI proof.
+
 On macOS, run `sh scripts/native_ui_macos.sh` from any directory with MoonBit,
 Xcode command-line tools, and the Yami and GPUI worktrees as siblings. The
+hosted build and portable-test subset is `sh scripts/native_ui_macos.sh --build-and-test`;
+it compiles the sample without launching it. The
 Linux launcher is `sh scripts/native_ui_linux.sh` and requires Xvfb, Weston,
 xdotool, Wayland development packages, PangoFT2, and the configured fonts. On
 Windows, run `./scripts/native_ui_windows.ps1` in a PowerShell session with the
