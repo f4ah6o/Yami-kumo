@@ -14,7 +14,6 @@
 ### Changed
 
 - Pinned `@cloudflare/kumo` to `2.14.0` so generated class and stylesheet contracts remain reproducible.
-- Updated the native MoonBit module for GPUI `0.3.0` and added self-contained README and MIT license files for the `0.2.0` package.
 
 ### Fixed
 
@@ -27,3 +26,14 @@
 - Escaped text and attribute values, restricted element and attribute names, and removed inline styles from generated button markup for strict Content Security Policy compatibility.
 
 ### Migration
+
+## native-0.2.0 - 2026-10-10
+
+### Added
+
+- Added a hosted macOS build and portable-test lane for the native MoonBit module; it builds the example without launching a GUI.
+
+### Changed
+
+- Released native MoonBit module `f4ah6o/yami_kumo_native` at `0.2.0` against GPUI `0.3.0`; its package README and MIT license originate in upstream PR #9.
+- The macOS native runner invokes GPUI's Bash-shebang build script with `bash`.
