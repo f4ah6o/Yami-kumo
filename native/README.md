@@ -11,6 +11,11 @@ Install the native module with:
 moon add f4ah6o/yami_kumo_native
 ```
 
+Building this module for MoonBit's native/LLVM targets requires Python 3
+(`python3`) on `PATH`. GPUI 0.3.0 runs a Python prebuild during compilation to
+propagate macOS CoreText framework link settings. Python is needed only while
+building; the resulting application has no Python runtime dependency.
+
 The module source is MIT licensed; the package includes [LICENSE](LICENSE).
 
 The first native slice provides measured plain `NativeText`, square `NativeButton`

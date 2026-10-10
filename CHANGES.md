@@ -37,3 +37,4 @@
 
 - Released native MoonBit module `f4ah6o/yami_kumo_native` at `0.2.0` against GPUI `0.3.0`; its package README and MIT license originate in upstream PR #9.
 - The macOS native runner invokes GPUI's Bash-shebang build script with `bash`.
+- Native/LLVM builds require Python 3 for GPUI's macOS framework-link prebuild; resulting applications have no Python runtime dependency.
