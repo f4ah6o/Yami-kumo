@@ -1,11 +1,22 @@
 #!/bin/sh
 set -eu
 
-if command -v python3 >/dev/null 2>&1; then
-  python_bin=python3
-elif command -v python >/dev/null 2>&1; then
-  python_bin=python
+python_bin=${YAMI_PYTHON_BIN:-}
+if [ -n "$python_bin" ]; then
+  if ! "$python_bin" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
+    echo "YAMI_PYTHON_BIN must name a working Python 3.11 or newer executable" >&2
+    exit 2
+  fi
 else
+  for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 &&
+      "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
+      python_bin=$candidate
+      break
+    fi
+  done
+fi
+if [ -z "$python_bin" ]; then
   echo "Python 3.11 or newer is required to manage moon.work" >&2
   exit 2
 fi
@@ -221,6 +232,7 @@ PY
 fi
 
 export YAMI_NATIVE_WORKSPACE_ROOT="$workspace_root_native"
+export YAMI_PYTHON_BIN="$python_bin"
 export YAMI_NATIVE_YAMI_ROOT="$yami_root_native"
 export YAMI_NATIVE_GPUI_ROOT="$gpui_root_native"
 export YAMI_NATIVE_MODULE_ROOT="$yami_root_native/native"
