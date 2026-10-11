@@ -15,6 +15,8 @@
 
 - Pinned `@cloudflare/kumo` to `2.14.0` so generated class and stylesheet contracts remain reproducible.
 
+### Fixed
+
 ### Deprecated
 
 ### Removed
