@@ -27,6 +27,16 @@
 
 ### Migration
 
+## native-0.2.3 - 2026-10-11
+
+### Added
+
+- Added a Windows copied Button accessibility projection with source-owner and layout-generation revalidation; native UI Automation transport remains unsupported.
+
+### Changed
+
+- Bumped native module `f4ah6o/yami_kumo_native` to `0.2.3` against GPUI `0.6.0`.
+
 ## native-0.2.2 - 2026-10-11
 
 ### Added
