@@ -106,6 +106,7 @@ if ($null -eq $pythonPath) {
   throw "Python 3.11 or newer is required. Install Python or set YAMI_PYTHON_PATH to its executable; Microsoft Store aliases are ignored."
 }
 $env:YAMI_PYTHON_BIN = Convert-ToBashPath $pythonPath
+$bashPython = $env:YAMI_PYTHON_BIN
 Write-Output "Using Python: $pythonPath"
 moon version --all
 
@@ -113,7 +114,7 @@ $env:YAMI_NATIVE_UI_EVIDENCE_DIR = $EvidenceDirectory
 Invoke-BashChecked @($workspaceScript, "sh", $testsScript)
 Invoke-BashChecked @(
   $workspaceScript,
-  "python",
+  $bashPython,
   $driverScript,
   "--platform", "windows",
   "--evidence-dir", $bashEvidence,
