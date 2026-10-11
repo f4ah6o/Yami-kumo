@@ -12,9 +12,21 @@ moon add f4ah6o/yami_kumo_native
 ```
 
 Building this module for MoonBit's native/LLVM targets requires Python 3
-(`python3`) on `PATH`. GPUI 0.3.0 runs a Python prebuild during compilation to
+(`python3`) on `PATH`. GPUI 0.5.0 runs a Python prebuild during compilation to
 propagate macOS CoreText framework link settings. Python is needed only while
 building; the resulting application has no Python runtime dependency.
+
+Windows native builds also require the Visual C++ compiler and SDK on `PATH`.
+Run the build from a Visual Studio Developer PowerShell, or initialize the
+environment with `VsDevCmd.bat -arch=x64 -host_arch=x64` before running the
+Windows validation script. The script locates Git Bash from Git for Windows,
+checks for an importable Python 3.11 or newer interpreter, and ignores Windows
+Store execution aliases. Set `YAMI_GIT_BASH` to `bash.exe` if automatic Git
+discovery cannot find it. Set `YAMI_PYTHON_PATH` to the executable when it is
+not on `PATH`; the script temporarily provides a `python3` forwarder so Moon's
+prebuild uses that interpreter without relocating it. Pass `-TestsOnly` to run
+the native package tests without opening the visible sample window.
+The runner checks argument boundaries, stdout, stderr, and exit status through the forwarder before running native tests.
 
 The module source is MIT licensed; the package includes [LICENSE](LICENSE).
 
@@ -37,11 +49,15 @@ shared native package tests, and compiles the Yami macOS sample. It does not
 launch a window or exercise runtime rendering or input, so it is build and
 portable-test evidence rather than a hosted native UI proof.
 
-The local macOS proof passed on Yami `086cfd1` with approved GPUI candidate
-`ae45429`; its tree is identical to merged GPUI revision
+The earlier local macOS pointer proof passed on Yami `086cfd1` with approved
+GPUI candidate `ae45429`; its tree is identical to merged GPUI revision
 `2c6e9a3df469922f79d7b2b8eb977a0524086486`. Hosted Linux and Windows proofs
 passed in [native UI CI run 37808645019](https://github.com/f4ah6o/Yami-kumo/actions/runs/37808645019)
-on those same source trees.
+on those same source trees, qualifying native `0.2.0`. The `0.2.2` candidate
+uses GPUI `0.5.0` at
+[`1ec90df`](https://github.com/gpui-mbt/gpui.mbt/commit/1ec90dfad7a3bc9f8ffbfad80928eaba737ab0bd);
+the source revision is also recorded in
+[`gpui-revision.txt`](../tests/native-ui/gpui-revision.txt).
 
 These checks cover labeled Text and Button rendering, readback of a completed
 native frame, and a host-delivered click that changes the sample's App Entity
@@ -99,13 +115,13 @@ focus. Disabled controls, an outside primary release, focus loss, and layout
 invalidation cancel pending gestures. This does not establish text editing or
 IME behavior.
 
-The GPUI host capabilities differ by platform. The [macOS host guide](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/macos-native.md)
+The GPUI host capabilities differ by platform. The [macOS host guide](https://github.com/gpui-mbt/gpui.mbt/blob/1ec90dfad7a3bc9f8ffbfad80928eaba737ab0bd/docs/macos-native.md)
 covers bounded single-line measurement and drawing; a native editor and IME
-are not implemented. The [Ubuntu text-field guide](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/linux-text-field.md)
+are not implemented. The [Ubuntu text-field guide](https://github.com/gpui-mbt/gpui.mbt/blob/1ec90dfad7a3bc9f8ffbfad80928eaba737ab0bd/docs/linux-text-field.md)
 documents an experimental single-line LTR field with caret, selection, undo,
 and a private direct-keyboard route. Public `TextInput` and IME transport are
-not supported; the [Wayland IME transport](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/ubuntu-ime.md)
-is private opt-in work and is not qualified. The [Windows host guide](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/windows-native.md)
+not supported; the [Wayland IME transport](https://github.com/gpui-mbt/gpui.mbt/blob/1ec90dfad7a3bc9f8ffbfad80928eaba737ab0bd/docs/ubuntu-ime.md)
+is private opt-in work and is not qualified. The [Windows host guide](https://github.com/gpui-mbt/gpui.mbt/blob/1ec90dfad7a3bc9f8ffbfad80928eaba737ab0bd/docs/windows-native.md)
 describes a focused single-line field and a private, default-off IMM32 session;
 real Japanese IME and candidate-window behavior are not qualified.
 
