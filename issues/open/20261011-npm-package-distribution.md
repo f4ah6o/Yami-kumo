@@ -1,0 +1,144 @@
+# Publish Yami-kumo as a consumable JavaScript/TypeScript npm package
+
+- Status: proposed; implementation and npm publication are not complete.
+- Tracking: repository Markdown issue packet; GitHub Issues is currently disabled for this repository.
+- Repository: `f4ah6o/Yami-kumo`.
+- Inspected baseline: [`955c5bbc31f279976049a6b14a02424410010c6d`](https://github.com/f4ah6o/Yami-kumo/tree/955c5bbc31f279976049a6b14a02424410010c6d).
+- Proposed npm name: `@f4ah6o/yami-kumo`; registry availability and scope ownership must be verified before the first release.
+
+## Problem
+
+Yami-kumo can currently be copied as an application starter, and its MoonBit library can be consumed through Mooncakes. A JavaScript/TypeScript application cannot yet install a supported npm library with stable imports, declarations, and packaged styles.
+
+Publishing the existing application manifest alone would not solve this:
+
+- `package.json` has `private: true`, application dependencies, and no library `exports` or declaration entry.
+- `browser/moon.pkg` already builds a MoonBit foreign library as JavaScript ESM, but `browser/parity.mbt` exports `renderParityCase` and `enhanceYamiKumo` for the comparison gallery rather than a general component API.
+- `src/shell/AppShell.tsx` is reusable React source, but has no packaged JS/declaration entry.
+- `src/styles.css` combines shell rules with starter-wide `body`, `#root`, and other global styling.
+- Generated Kumo CSS and its upstream license are checked in, but no npm artifact contract guarantees their inclusion.
+
+## Goal
+
+A consumer installs the published package and uses it from normal JS or TS without installing MoonBit, copying this repository, running its generators, or compiling `.mbt` source. Both plain browser applications and React applications can reuse Yami-kumo's existing supported Web UI.
+
+MoonBit remains the implementation of the existing framework-independent HTML validation, escaping, components, and field-state policy. The npm package distributes production-compiled JS and a small JS/TS-facing boundary. The existing Mooncakes module remains supported.
+
+## Scope and decisions
+
+1. Add a dedicated publishable package manifest/build output while keeping the starter application's root manifest private. The starter and `demo` branch remain usable.
+2. Ship ESM JS, TypeScript declarations, external CSS, README, project license, and the applicable Kumo license/acknowledgements. CommonJS is outside the first release.
+3. Keep the default entry React-independent. Export the existing React `AppShell` through a separate `/react` subpath with React as an optional peer dependency, externalized from the build.
+4. Use only the currently supported component subset: Button, Input, Text, LayerCard, and semantic AppShell. npm publication does not claim full Kumo compatibility.
+5. Keep GPUI hosts, native libraries, native build tools, parity fixtures, and showcase content outside the npm runtime and tarball.
+6. Treat package preparation and actual registry publication as separate checkpoints. This proposal PR changes documentation only.
+
+## Proposed public surface
+
+All paths below are the intended contract, not already available imports.
+
+| Import path | Contract |
+| --- | --- |
+| `@f4ah6o/yami-kumo` | React-independent node/component composition and safe HTML rendering, usable in Node for rendering and in browser bundles |
+| `@f4ah6o/yami-kumo/dom` | Explicit browser enhancement after markup insertion; importing the module does not initialize listeners |
+| `@f4ah6o/yami-kumo/react` | Existing `AppShell` and `AppShellProps`, preserving semantic slots and responsive behavior |
+| `@f4ah6o/yami-kumo/styles.css` | Ordered, prebuilt Kumo/component/shell styles; no consumer Tailwind build or source scanning required |
+
+### JavaScript/TypeScript boundary
+
+- Expose typed component props and composition for `text`, `button`, `input`, `textComponent`, `layerCard`, `appShell`, and `renderHtml`; finalize signatures against the existing MoonBit contract before implementation.
+- Keep MoonBit runtime representations and generated symbol names private. Consumers must not depend on `_build` paths, fixture JSON, or `renderParityCase`.
+- Accept ordinary JS strings, booleans, supported variants, props, and children. Validate runtime inputs as well as declaring their TS types.
+- Preserve HTML escaping, URL/attribute validation, the lack of a raw-HTML/inline-style escape hatch, and stable caller-provided Input IDs.
+- Preserve field label/help/error references and native input state transitions supported by the existing DOM adapter.
+- Keep public declarations consistent with actual compiled exports; the facade translates values rather than reimplementing MoonBit component behavior.
+- Default-entry imports and rendering must work without `window` or `document`. DOM enhancement runs only when explicitly called in a browser.
+
+### React and dependency boundaries
+
+- The `/react` entry packages the existing `AppShell` implementation, including its props and shell layout contract; it does not substitute string-rendered HTML for React children.
+- Keep React/JSX runtime imports external and require a compatible consumer React installation only for `/react`. Exercise the currently used React 19 line before declaring a supported version range.
+- Do not make `react-dom`, icon packages, Vite+, TypeScript, the MoonBit compiler, or the React Kumo package required production dependencies of the framework-independent entry.
+- Kumo remains pinned to the inspected `2.14.0` contract until a deliberate upstream update. Any Kumo code needed for extraction stays build-time only for this first package surface.
+- Consumers needing additional React Kumo components install Kumo explicitly; blanket Kumo re-exports are outside this issue.
+
+### CSS and artifact contract
+
+- Build a distributable stylesheet from the pinned `styles/kumo-standalone.css`, `styles/yami-kumo-components.css`, and reusable shell styles in the required order.
+- Extract shell styling from starter-specific page styling. Importing the package stylesheet must not require a host element named `#root`, overwrite host `body` layout/background, or import the starter/demo app.
+- Document any remaining global Kumo theme/reset selectors and how the host supplies or overrides theme tokens. Verify behavior in an existing page as well as a full-window shell.
+- Package CSS through an explicit export, and mark CSS as side-effectful so consumer bundlers retain an intentional stylesheet import.
+- Include `LICENSE`, `licenses/cloudflare-kumo-LICENSE`, and applicable acknowledgements in the tarball.
+- Restrict `files`/exports to supported artifacts; omit `.mbt` build inputs, native outputs, gallery data, source checkout dependencies, and accidental application assets.
+- Resolve all runtime imports and any auxiliary generated JS from inside the tarball or declared dependencies. No consumer compilation, postinstall download, or `moon` invocation is permitted.
+
+## Implementation slices
+
+### 1. Public bridge and declarations
+
+Create a production JS export bridge separate from the parity module, add the typed JS/TS facade, and package the existing React shell. Test supported values, invalid input behavior, HTML escaping, stable IDs, and Node rendering through the public entry points.
+
+### 2. Package build and styles
+
+Add the dedicated publishable manifest with `exports`, declaration mappings, CSS side-effect metadata, dependency boundaries, and a files allowlist. Build release JS and declarations before `npm pack`, package CSS/licenses, and keep starter/parity builds working.
+
+### 3. Consumer acceptance from the packed artifact
+
+Install the `.tgz` in isolated fixtures outside the source checkout. Fixtures must not resolve workspace files, aliases, root `node_modules`, or `_build` output. Include a JS-only consumer, a TypeScript consumer, a browser/Vite consumer, and a React consumer.
+
+### 4. Release automation and documentation
+
+Document install/import/style examples and the exact supported Web subset. Use explicit version releases, verify registry name/scope/authentication, run packed-consumer checks before publishing, and record the package version, source SHA, compiler/core pin, and Kumo contract version. Build tooling requirements belong to maintainers, not package consumers.
+
+Keep the npm package version in the release manifest. If it differs from the Mooncakes module version, document the mapping rather than silently coupling release numbers.
+
+## Acceptance criteria
+
+- [ ] The intended npm name is available or an agreed replacement is recorded; publishing access is verified.
+- [ ] `npm pack --dry-run --json` contains all supported JS/declaration/CSS/license files and excludes starter/demo/native/parity artifacts.
+- [ ] A JS-only fixture installs the `.tgz`, imports the default entry, renders a shell and supported components, and has no MoonBit compiler or source checkout available.
+- [ ] The framework-independent fixture imports/renders with React, React DOM, and `@cloudflare/kumo` absent; `npm ls --all` succeeds for its installed dependency graph.
+- [ ] A Node fixture imports the default entry and renders without browser globals or automatic DOM enhancement.
+- [ ] The TypeScript fixture passes `tsc --noEmit` against installed declarations and rejects unsupported props/variants.
+- [ ] A browser/Vite fixture imports the installed JS and `styles.css`, builds without Tailwind source scanning, and displays the supported shell/components.
+- [ ] A React fixture imports `/react`, uses `AppShellProps`, preserves React children/event handlers, and uses the consumer's React instance.
+- [ ] Browser checks cover Input focus/dirty/filled/touched/validity markers, multiple-field references, Button variants, and desktop/phone shell regions from the supported subset.
+- [ ] Importing `styles.css` preserves an unrelated host page's body/root layout; documented Kumo theme/reset effects are explicit.
+- [ ] Hostile text/attribute/URL inputs retain existing validation/escaping, and strict external-stylesheet CSP behavior remains supported.
+- [ ] Consumer installs execute no MoonBit compilation or postinstall fetching; exported entries resolve entirely from the packed artifact.
+- [ ] Existing starter and parity checks remain green alongside package-consumer checks.
+- [ ] Documentation clearly distinguishes installable Web functionality, React requirements, supported Kumo subset, and native UI support.
+- [ ] An explicit-version npm release is published only after preparation/authentication checks pass, and a clean install of that registry version passes the consumer smoke checks.
+
+## Validation plan
+
+These are requirements for the implementation; they have not been run by this documentation-only proposal.
+
+| Target | Evidence |
+| --- | --- |
+| Source regression | Existing `pnpm run moon:build`, `vp check`, `vp exec tsc --noEmit`, `vp test`, `vp build`, and `pnpm run build:parity` checks |
+| Package contents | `npm pack --dry-run --json` and `npm pack` artifact manifest, with export/declaration/license resolution checked |
+| JS and SSR | Isolated installed-tarball Node smoke test with no browser globals/MoonBit/React dependencies |
+| TypeScript | Installed-tarball `tsc --noEmit` fixture, including invalid-prop assertions |
+| Browser and React | Installed-tarball browser build, rendered UI/interaction evidence, and React dependency graph |
+| Release | Versioned tarball/source metadata and the same smoke tests after installing the published registry version |
+
+## Risks and release blockers
+
+- The current JS exports are parity-oriented. Public bridge/declarations must be completed before advertising component imports.
+- Separating shell CSS may expose assumptions about viewport sizing or global theme tokens. Check embedding in an unrelated existing application, not only the starter page.
+- Optional React peers and declaration resolution must be proven with both React-free and React fixtures; importing `/react` without React should give an actionable dependency error.
+- Scope/name availability and publishing credentials are not verified by this proposal. Do not describe the package as already published.
+- A Kumo/toolchain update may change generated classes, output ABI, or behavior; pin and rerun parity/packed-consumer checks for each release.
+
+## Inspected sources
+
+- [Application manifest](https://github.com/f4ah6o/Yami-kumo/blob/955c5bbc31f279976049a6b14a02424410010c6d/package.json)
+- [MoonBit ESM build configuration](https://github.com/f4ah6o/Yami-kumo/blob/955c5bbc31f279976049a6b14a02424410010c6d/browser/moon.pkg)
+- [Current parity exports](https://github.com/f4ah6o/Yami-kumo/blob/955c5bbc31f279976049a6b14a02424410010c6d/browser/parity.mbt)
+- [React AppShell](https://github.com/f4ah6o/Yami-kumo/blob/955c5bbc31f279976049a6b14a02424410010c6d/src/shell/AppShell.tsx)
+- [Starter/shell styles](https://github.com/f4ah6o/Yami-kumo/blob/955c5bbc31f279976049a6b14a02424410010c6d/src/styles.css)
+- [MoonBit component documentation](https://github.com/f4ah6o/Yami-kumo/blob/955c5bbc31f279976049a6b14a02424410010c6d/README.mbt.md)
+- [Existing CI](https://github.com/f4ah6o/Yami-kumo/blob/955c5bbc31f279976049a6b14a02424410010c6d/.github/workflows/ci.yml)
+- [npm package manifest reference](https://docs.npmjs.com/cli/v11/configuring-npm/package-json/)
+- [TypeScript declaration publishing](https://www.typescriptlang.org/docs/handbook/declaration-files/publishing.html)
