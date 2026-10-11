@@ -26,11 +26,11 @@ all three host entrypoints in `examples/`.
 
 ## Platform status
 
-| Host    | Text measurement and display                                 | Native UI proof                                                                                                                                                                                                                  |
-| ------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Host    | Text measurement and display                                 | Native UI proof                                                                                                                                                                                                                                                            |
+| ------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | macOS   | CoreText measurement and Metal scene presentation            | Local pointer E2E uses a test-only synthetic NSEvent through the owned NSWindow. The separate `--ax-proof` checks the sample Button's AXPress action and same-owner counter update through `AXUIElement`; neither proof covers general widget accessibility or text input. |
-| Linux   | Pango system-sans measurement and the GPUI Wayland host      | Passed hosted E2E: XTest input is delivered through Xvfb and Weston's X11 backend, with completed-frame readback. The runner pins both generic sans aliases to the same DejaVu Sans file for matching measurement and rendering. |
-| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Passed hosted E2E: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback.                                                                                                                    |
+| Linux   | Pango system-sans measurement and the GPUI Wayland host      | Passed hosted E2E: XTest input is delivered through Xvfb and Weston's X11 backend, with completed-frame readback. The runner pins both generic sans aliases to the same DejaVu Sans file for matching measurement and rendering.                                           |
+| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Passed hosted E2E: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback.                                                                                                                                                              |
 
 The hosted macOS lane builds GPUI's test-hook library, runs the CoreText and
 shared native package tests, and compiles the Yami macOS sample. It does not
