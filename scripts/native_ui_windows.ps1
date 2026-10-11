@@ -1,7 +1,8 @@
 param(
   [string]$GpuiSource = $env:GPUI_SOURCE,
   [string]$EvidenceDirectory = $env:YAMI_NATIVE_UI_EVIDENCE_DIR,
-  [string]$GitBashPath = $env:YAMI_GIT_BASH
+  [string]$GitBashPath = $env:YAMI_GIT_BASH,
+  [switch]$TestsOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -61,6 +62,9 @@ if (-not [string]::IsNullOrWhiteSpace($env:MSYS2_ENV_CONV_EXCL)) {
 }
 if (-not ($msysEnvConversionExclusions | Where-Object { $_ -ceq 'CL=' })) {
   $msysEnvConversionExclusions += 'CL='
+}
+if (-not ($msysEnvConversionExclusions | Where-Object { $_ -ceq 'YAMI_SELECTED_PYTHON_PATH=' })) {
+  $msysEnvConversionExclusions += 'YAMI_SELECTED_PYTHON_PATH='
 }
 $env:MSYS2_ENV_CONV_EXCL = $msysEnvConversionExclusions -join ';'
 
@@ -137,26 +141,41 @@ $bashPython = Convert-ToBashPath $pythonPath
 Write-Output "Using Python: $pythonPath"
 $pythonDirectory = Split-Path -Path $pythonPath -Parent
 $pythonShimDirectory = Join-Path ([IO.Path]::GetTempPath()) ("yami-native-ui-python-$PID-" + [guid]::NewGuid().ToString('N'))
+$forwarderSource = Join-Path $PSScriptRoot 'native_ui_python_forwarder.c'
+$forwarderPath = Join-Path $pythonShimDirectory 'python3.exe'
+$forwarderObject = Join-Path $pythonShimDirectory 'python3_forwarder.obj'
 $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
 $originalPath = $env:PATH
 New-Item -ItemType Directory -Path $pythonShimDirectory | Out-Null
 try {
-  # Moon runs GPUI's Python prebuild by the name `python3`. Some valid Python
-  # distributions only ship `python.exe`; provide a per-run alias so that the
-  # selected interpreter wins over Windows Store aliases without changing the
-  # machine or user's PATH.
-  Copy-Item -LiteralPath $pythonPath -Destination (Join-Path $pythonShimDirectory 'python3.exe')
-  $env:PATH = "$pythonShimDirectory;$pythonDirectory;$originalPath"
-  $pythonVersion = & (Join-Path $pythonShimDirectory 'python3.exe') -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
-  if ($LASTEXITCODE -ne 0 -or [version]$pythonVersion.Trim() -lt [version]'3.11') {
-    throw "Selected Python could not be exposed as python3: $pythonPath"
+  # Moon runs GPUI's Python prebuild by the name `python3`. A native forwarder
+  # keeps the selected interpreter at its original path, which preserves venv
+  # discovery, and inherits the runner's stdio while forwarding argv and exit.
+  if (-not (Test-Path -LiteralPath $forwarderSource -PathType Leaf)) {
+    throw "Python forwarder source was not found: $forwarderSource"
   }
+  & cl.exe /nologo /O2 /W4 /DUNICODE /D_UNICODE "/Fo:$forwarderObject" "/Fe:$forwarderPath" $forwarderSource /link Shell32.lib
+  if ($LASTEXITCODE -ne 0) {
+    throw "Could not build the Python forwarder (cl.exe exit code $LASTEXITCODE)"
+  }
+  $env:PATH = "$pythonShimDirectory;$pythonDirectory;$originalPath"
+  $env:YAMI_SELECTED_PYTHON_PATH = $pythonPath
   $env:YAMI_PYTHON_BIN = $bashPython
+  $env:YAMI_PYTHON_FORWARDER_PATH = $forwarderPath
+  $forwarderTest = Join-Path $yamiRoot 'tests\native-ui\test_windows_python_forwarder.py'
+  & $pythonPath $forwarderTest
+  if ($LASTEXITCODE -ne 0) {
+    throw "Python forwarder contract test failed with exit code $LASTEXITCODE"
+  }
   Write-Output "Using Python 3 alias for Moon prebuild: $(Join-Path $pythonShimDirectory 'python3.exe')"
   moon version --all
 
   $env:YAMI_NATIVE_UI_EVIDENCE_DIR = $EvidenceDirectory
   Invoke-BashChecked @($workspaceScript, "sh", $testsScript)
+  if ($TestsOnly) {
+    Write-Output 'Tests-only mode passed; skipping the visible Windows sample E2E.'
+    return
+  }
   Invoke-BashChecked @(
     $workspaceScript,
     $bashPython,

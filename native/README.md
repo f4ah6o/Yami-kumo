@@ -23,8 +23,10 @@ Windows validation script. The script locates Git Bash from Git for Windows,
 checks for an importable Python 3.11 or newer interpreter, and ignores Windows
 Store execution aliases. Set `YAMI_GIT_BASH` to `bash.exe` if automatic Git
 discovery cannot find it. Set `YAMI_PYTHON_PATH` to the executable when it is
-not on `PATH`; the script makes that interpreter available as `python3` for
-the duration of its process so Moon's prebuild uses the same Python.
+not on `PATH`; the script temporarily provides a `python3` forwarder so Moon's
+prebuild uses that interpreter without relocating it. Pass `-TestsOnly` to run
+the native package tests without opening the visible sample window.
+The runner checks argument boundaries, stdout, stderr, and exit status through the forwarder before running native tests.
 
 The module source is MIT licensed; the package includes [LICENSE](LICENSE).
 
