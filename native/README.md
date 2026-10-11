@@ -19,10 +19,12 @@ building; the resulting application has no Python runtime dependency.
 Windows native builds also require the Visual C++ compiler and SDK on `PATH`.
 Run the build from a Visual Studio Developer PowerShell, or initialize the
 environment with `VsDevCmd.bat -arch=x64 -host_arch=x64` before running the
-Windows validation script. The script selects Git for Windows Bash, checks for
-an importable Python 3.11 or newer interpreter, and ignores Windows Store
-execution aliases; set `YAMI_PYTHON_PATH` to the executable when it is not on
-`PATH`.
+Windows validation script. The script locates Git Bash from Git for Windows,
+checks for an importable Python 3.11 or newer interpreter, and ignores Windows
+Store execution aliases. Set `YAMI_GIT_BASH` to `bash.exe` if automatic Git
+discovery cannot find it. Set `YAMI_PYTHON_PATH` to the executable when it is
+not on `PATH`; the script makes that interpreter available as `python3` for
+the duration of its process so Moon's prebuild uses the same Python.
 
 The module source is MIT licensed; the package includes [LICENSE](LICENSE).
 
@@ -38,7 +40,7 @@ all three host entrypoints in `examples/`.
 | ------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | macOS   | CoreText measurement and Metal scene presentation            | Previously passed local E2E: a test-only synthetic NSEvent goes through the owned NSWindow's normal `sendEvent:` route; frame readback confirms the count update, and the lifecycle marker confirms window destruction.          |
 | Linux   | Pango system-sans measurement and the GPUI Wayland host      | Passed hosted E2E: XTest input is delivered through Xvfb and Weston's X11 backend, with completed-frame readback. The runner pins both generic sans aliases to the same DejaVu Sans file for matching measurement and rendering. |
-| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Historical hosted E2E for native `0.2.0`: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback. The `0.2.1` candidate still needs exact-head Windows qualification. |
+| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Historical hosted E2E for native `0.2.0`: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback. The `0.2.1` candidate still needs exact-head Windows qualification.                         |
 
 The hosted macOS lane builds GPUI's test-hook library, runs the CoreText and
 shared native package tests, and compiles the Yami macOS sample. It does not

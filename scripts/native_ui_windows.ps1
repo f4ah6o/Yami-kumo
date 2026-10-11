@@ -1,6 +1,7 @@
 param(
   [string]$GpuiSource = $env:GPUI_SOURCE,
-  [string]$EvidenceDirectory = $env:YAMI_NATIVE_UI_EVIDENCE_DIR
+  [string]$EvidenceDirectory = $env:YAMI_NATIVE_UI_EVIDENCE_DIR,
+  [string]$GitBashPath = $env:YAMI_GIT_BASH
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,12 +13,31 @@ $GpuiSource = (Resolve-Path $GpuiSource).Path
 if ($null -eq (Get-Command git.exe -ErrorAction SilentlyContinue)) {
   throw "Git for Windows is required for the native UI runner."
 }
-$gitCommand = Get-Command git.exe
-$gitCommandDirectory = Split-Path -Path $gitCommand.Source -Parent
-$gitInstallDirectory = Split-Path -Path $gitCommandDirectory -Parent
-$gitBash = Join-Path $gitInstallDirectory 'bin\bash.exe'
-if (-not (Test-Path -LiteralPath $gitBash)) {
-  throw "Git Bash was not found beside $($gitCommand.Source). Install Git for Windows."
+if ([string]::IsNullOrWhiteSpace($GitBashPath)) {
+  $gitBash = $null
+  foreach ($gitCommand in @(Get-Command git.exe -All -ErrorAction SilentlyContinue)) {
+    $directory = Get-Item -LiteralPath (Split-Path -Path $gitCommand.Source -Parent)
+    while ($null -ne $directory) {
+      foreach ($relativePath in @('bin\bash.exe', 'usr\bin\bash.exe')) {
+        $candidate = Join-Path $directory.FullName $relativePath
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+          $gitBash = $candidate
+          break
+        }
+      }
+      if ($null -ne $gitBash) { break }
+      $directory = $directory.Parent
+    }
+    if ($null -ne $gitBash) { break }
+  }
+  if ($null -eq $gitBash) {
+    throw "Git Bash was not found beside any Git for Windows executable on PATH. Set YAMI_GIT_BASH to its bash.exe path."
+  }
+} else {
+  if (-not (Test-Path -LiteralPath $GitBashPath -PathType Leaf)) {
+    throw "YAMI_GIT_BASH does not exist: $GitBashPath"
+  }
+  $gitBash = (Resolve-Path -LiteralPath $GitBashPath).Path
 }
 $cygpath = & $gitBash -c 'command -v cygpath' 2>$null
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($cygpath)) {
@@ -90,8 +110,15 @@ if (-not [string]::IsNullOrWhiteSpace($env:YAMI_PYTHON_PATH)) {
 }
 $pythonPath = $null
 foreach ($candidatePath in $pythonCandidates) {
-  $pythonVersion = & $candidatePath -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
-  if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($pythonVersion)) {
+  try {
+    $pythonVersion = & $candidatePath -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
+    $pythonExitCode = $LASTEXITCODE
+  } catch {
+    # Windows Store execution aliases can write stderr and terminate a native
+    # command under Windows PowerShell 5.1 even when it is redirected.
+    continue
+  }
+  if ($pythonExitCode -eq 0 -and -not [string]::IsNullOrWhiteSpace($pythonVersion)) {
     try {
       if ([version]$pythonVersion.Trim() -ge [version]'3.11') {
         $pythonPath = $candidatePath
@@ -105,20 +132,46 @@ foreach ($candidatePath in $pythonCandidates) {
 if ($null -eq $pythonPath) {
   throw "Python 3.11 or newer is required. Install Python or set YAMI_PYTHON_PATH to its executable; Microsoft Store aliases are ignored."
 }
-$env:YAMI_PYTHON_BIN = Convert-ToBashPath $pythonPath
-$bashPython = $env:YAMI_PYTHON_BIN
+$pythonPath = (Resolve-Path -LiteralPath $pythonPath).Path
+$bashPython = Convert-ToBashPath $pythonPath
 Write-Output "Using Python: $pythonPath"
-moon version --all
+$pythonDirectory = Split-Path -Path $pythonPath -Parent
+$pythonShimDirectory = Join-Path ([IO.Path]::GetTempPath()) ("yami-native-ui-python-$PID-" + [guid]::NewGuid().ToString('N'))
+$temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
+$originalPath = $env:PATH
+New-Item -ItemType Directory -Path $pythonShimDirectory | Out-Null
+try {
+  # Moon runs GPUI's Python prebuild by the name `python3`. Some valid Python
+  # distributions only ship `python.exe`; provide a per-run alias so that the
+  # selected interpreter wins over Windows Store aliases without changing the
+  # machine or user's PATH.
+  Copy-Item -LiteralPath $pythonPath -Destination (Join-Path $pythonShimDirectory 'python3.exe')
+  $env:PATH = "$pythonShimDirectory;$pythonDirectory;$originalPath"
+  $pythonVersion = & (Join-Path $pythonShimDirectory 'python3.exe') -c "import sys; print('%d.%d' % sys.version_info[:2])" 2>$null
+  if ($LASTEXITCODE -ne 0 -or [version]$pythonVersion.Trim() -lt [version]'3.11') {
+    throw "Selected Python could not be exposed as python3: $pythonPath"
+  }
+  $env:YAMI_PYTHON_BIN = $bashPython
+  Write-Output "Using Python 3 alias for Moon prebuild: $(Join-Path $pythonShimDirectory 'python3.exe')"
+  moon version --all
 
-$env:YAMI_NATIVE_UI_EVIDENCE_DIR = $EvidenceDirectory
-Invoke-BashChecked @($workspaceScript, "sh", $testsScript)
-Invoke-BashChecked @(
-  $workspaceScript,
-  $bashPython,
-  $driverScript,
-  "--platform", "windows",
-  "--evidence-dir", $bashEvidence,
-  "--log", "$bashEvidence/native-ui.log",
-  "--",
-  "moon", "run", $examplePackage, "--target", "native"
-)
+  $env:YAMI_NATIVE_UI_EVIDENCE_DIR = $EvidenceDirectory
+  Invoke-BashChecked @($workspaceScript, "sh", $testsScript)
+  Invoke-BashChecked @(
+    $workspaceScript,
+    $bashPython,
+    $driverScript,
+    "--platform", "windows",
+    "--evidence-dir", $bashEvidence,
+    "--log", "$bashEvidence/native-ui.log",
+    "--",
+    "moon", "run", $examplePackage, "--target", "native"
+  )
+} finally {
+  $env:PATH = $originalPath
+  $resolvedShimDirectory = [IO.Path]::GetFullPath($pythonShimDirectory)
+  if ($resolvedShimDirectory.StartsWith("$temporaryRoot\", [StringComparison]::OrdinalIgnoreCase) -and
+      (Split-Path -Path $resolvedShimDirectory -Leaf).StartsWith("yami-native-ui-python-$PID-", [StringComparison]::OrdinalIgnoreCase)) {
+    Remove-Item -LiteralPath $resolvedShimDirectory -Recurse -Force
+  }
+}
