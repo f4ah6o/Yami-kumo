@@ -29,3 +29,9 @@ moon test "$YAMI_NATIVE_MODULE_ROOT/sample" \
   --target native --deny-warn --no-parallelize
 moon test "$YAMI_NATIVE_MODULE_ROOT/examples/common" \
   --target native --deny-warn --no-parallelize
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    moon test "$YAMI_NATIVE_MODULE_ROOT/examples/windows" \
+      --target native --deny-warn --no-parallelize
+    ;;
+esac

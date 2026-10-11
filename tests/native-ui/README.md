@@ -21,6 +21,11 @@ The hosted macOS job runs the CoreText and shared native package tests and
 builds the macOS sample. It does not launch the sample window, so it verifies
 macOS compilation and portable behavior without claiming runtime UI proof.
 
+The Windows tests also compile and exercise the sample's copied Button
+accessibility projection, including stale owner/layout rejection before its
+App Entity effect. Windows UI Automation transport is not implemented; these
+checks do not claim screen-reader or assistive-technology interaction.
+
 The local macOS `--ax-proof` mode launches the same sample and uses a separate
 `AXUIElement` client to verify the launched process's registered bundle
 identity, then finds an `AXWindow` owned by that exact PID and its named Button.

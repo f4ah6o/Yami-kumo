@@ -12,7 +12,7 @@ moon add f4ah6o/yami_kumo_native
 ```
 
 Building this module for MoonBit's native/LLVM targets requires Python 3
-(`python3`) on `PATH`. GPUI 0.5.0 runs a Python prebuild during compilation to
+(`python3`) on `PATH`. GPUI 0.7.0 runs a Python prebuild during compilation to
 propagate macOS CoreText framework link settings. Python is needed only while
 building; the resulting application has no Python runtime dependency.
 
@@ -38,11 +38,11 @@ all three host entrypoints in `examples/`.
 
 ## Platform status
 
-| Host    | Text measurement and display                                 | Native UI proof                                                                                                                                                                                                                                                            |
-| ------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS   | CoreText measurement and Metal scene presentation            | Local pointer E2E uses a test-only synthetic NSEvent through the owned NSWindow. The separate `--ax-proof` checks the sample Button's AXPress action and same-owner counter update through `AXUIElement`; neither proof covers general widget accessibility or text input. |
-| Linux   | Pango system-sans measurement and the GPUI Wayland host      | Passed hosted E2E: XTest input is delivered through Xvfb and Weston's X11 backend, with completed-frame readback. The runner pins both generic sans aliases to the same DejaVu Sans file for matching measurement and rendering.                                           |
-| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Passed hosted E2E: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback.                                                                                                                                                              |
+| Host    | Text measurement and display                                 | Native UI proof                                                                                                                                                                                                                                                                       |
+| ------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| macOS   | CoreText measurement and Metal scene presentation            | Local pointer E2E uses a test-only synthetic NSEvent through the owned NSWindow. The separate `--ax-proof` checks the sample Button's AXPress action and same-owner counter update through `AXUIElement`; neither proof covers general widget accessibility or text input.            |
+| Linux   | Pango system-sans measurement and the GPUI Wayland host      | Passed hosted E2E: XTest input is delivered through Xvfb and Weston's X11 backend, with completed-frame readback. The runner pins both generic sans aliases to the same DejaVu Sans file for matching measurement and rendering.                                                      |
+| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Passed hosted E2E: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback. The sample also tests a copied Button projection with owner/layout freshness checks; no UI Automation provider or assistive-technology action transport is implemented. |
 
 The hosted macOS lane builds GPUI's test-hook library, runs the CoreText and
 shared native package tests, and compiles the Yami macOS sample. It does not
@@ -53,10 +53,8 @@ The earlier local macOS pointer proof passed on Yami `086cfd1` with approved
 GPUI candidate `ae45429`; its tree is identical to merged GPUI revision
 `2c6e9a3df469922f79d7b2b8eb977a0524086486`. Hosted Linux and Windows proofs
 passed in [native UI CI run 37808645019](https://github.com/f4ah6o/Yami-kumo/actions/runs/37808645019)
-on those same source trees, qualifying native `0.2.0`. The `0.2.2` candidate
-uses GPUI `0.5.0` at
-[`1ec90df`](https://github.com/gpui-mbt/gpui.mbt/commit/1ec90dfad7a3bc9f8ffbfad80928eaba737ab0bd);
-the source revision is also recorded in
+on those same source trees, qualifying native `0.2.0`. The `0.2.3` candidate
+uses GPUI `0.7.0`; the exact source revision is recorded in
 [`gpui-revision.txt`](../tests/native-ui/gpui-revision.txt).
 
 These checks cover labeled Text and Button rendering, readback of a completed
@@ -73,6 +71,13 @@ snapshot is published with its enabled state and activation count, and an
 and layout generations reject requests from another sample or an invalidated
 layout. This is not a general accessibility API for `NativeButton`, and it
 does not qualify VoiceOver interaction quality or text/IME support.
+
+The Windows sample copies its current Button semantics through GPUI's
+transport-free `AccessibilityProjection`; its fixture checks immutable node
+data, supported Invoke actions, owner freshness and layout-generation
+revalidation before the same sample-owned App Entity can change. The Windows
+adapter has no UI Automation provider and returns no host requests, so this is
+contract coverage rather than an assistive-technology proof.
 
 ## Kumo visual subset
 
