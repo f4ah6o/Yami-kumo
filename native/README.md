@@ -12,7 +12,7 @@ moon add f4ah6o/yami_kumo_native
 ```
 
 Building this module for MoonBit's native/LLVM targets requires Python 3
-(`python3`) on `PATH`. GPUI 0.6.0 runs a Python prebuild during compilation to
+(`python3`) on `PATH`. GPUI 0.7.0 runs a Python prebuild during compilation to
 propagate macOS CoreText framework link settings. Python is needed only while
 building; the resulting application has no Python runtime dependency.
 
@@ -54,7 +54,7 @@ GPUI candidate `ae45429`; its tree is identical to merged GPUI revision
 `2c6e9a3df469922f79d7b2b8eb977a0524086486`. Hosted Linux and Windows proofs
 passed in [native UI CI run 37808645019](https://github.com/f4ah6o/Yami-kumo/actions/runs/37808645019)
 on those same source trees, qualifying native `0.2.0`. The `0.2.3` candidate
-uses GPUI `0.6.0`; the exact source revision is recorded in
+uses GPUI `0.7.0`; the exact source revision is recorded in
 [`gpui-revision.txt`](../tests/native-ui/gpui-revision.txt).
 
 These checks cover labeled Text and Button rendering, readback of a completed
