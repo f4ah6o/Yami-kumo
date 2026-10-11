@@ -3,13 +3,13 @@ set -eu
 
 mode=${1:---ui-proof}
 if [ "$#" -gt 1 ]; then
-  echo "usage: $0 [--ui-proof|--build-and-test]" >&2
+  echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test]" >&2
   exit 2
 fi
 case "$mode" in
-  --ui-proof|--build-and-test) ;;
+  --ui-proof|--ax-proof|--build-and-test) ;;
   *)
-    echo "usage: $0 [--ui-proof|--build-and-test]" >&2
+    echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test]" >&2
     exit 2
     ;;
 esac
@@ -54,6 +54,13 @@ export GPUI_SOURCE="$gpui_root"
 export GPUI_MACOS_LIBRARY="$gpui_library"
 export YAMI_NATIVE_UI_EVIDENCE_DIR="$evidence_dir"
 
+run_macos_python_driver() {
+  driver=$1
+  shift
+  sh "$yami_root/scripts/native_ui_workspace.sh" \
+    sh -c 'exec "$YAMI_PYTHON_BIN" "$@"' yami-python "$driver" "$@"
+}
+
 sh "$yami_root/scripts/native_ui_workspace.sh" \
   sh -c 'moon test "$GPUI_SOURCE/platform/macos_text" --target native --deny-warn --no-parallelize' \
   > "$evidence_dir/core-text-tests.log" 2>&1 || {
@@ -71,8 +78,15 @@ if [ "$mode" = "--build-and-test" ]; then
   exit 0
 fi
 
-sh "$yami_root/scripts/native_ui_workspace.sh" \
-  python3 "$yami_root/tests/native-ui/drive_native_ui.py" \
+if [ "$mode" = "--ax-proof" ]; then
+  run_macos_python_driver "$yami_root/tests/native-ui/drive_macos_ax.py" \
+      --evidence-dir "$evidence_dir" \
+      --log "$evidence_dir/native-ax.log" \
+      -- moon run "$yami_root/native/examples/macos" --target native
+  exit 0
+fi
+
+run_macos_python_driver "$yami_root/tests/native-ui/drive_native_ui.py" \
     --platform macos \
     --evidence-dir "$evidence_dir" \
     --log "$evidence_dir/native-ui.log" \

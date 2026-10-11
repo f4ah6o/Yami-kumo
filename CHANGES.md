@@ -14,11 +14,8 @@
 ### Changed
 
 - Pinned `@cloudflare/kumo` to `2.14.0` so generated class and stylesheet contracts remain reproducible.
-- Bumped the native MoonBit module `f4ah6o/yami_kumo_native` to `0.2.1` against GPUI `0.4.0`.
 
 ### Fixed
-
-- Made the Windows native UI runner select Git for Windows Bash, preserve shell-script LF endings, and check for usable Python 3.11+ and MSVC tools before building.
 
 ### Deprecated
 
@@ -29,6 +26,20 @@
 - Escaped text and attribute values, restricted element and attribute names, and removed inline styles from generated button markup for strict Content Security Policy compatibility.
 
 ### Migration
+
+## native-0.2.2 - 2026-10-11
+
+### Added
+
+- Added a macOS accessibility action to the native sample Button; AXPress updates the sample's existing click counter.
+
+### Changed
+
+- Bumped the native MoonBit module `f4ah6o/yami_kumo_native` to `0.2.2` against GPUI `0.5.0`.
+
+### Fixed
+
+- Made the Windows native UI runner select Git for Windows Bash, preserve shell-script LF endings, and check for usable Python 3.11+ and MSVC tools before building.
 
 ## native-0.2.0 - 2026-10-10
 

@@ -42,6 +42,38 @@ fn main {
   let escape : @common.NativeTestEscape = fn(window) {
     host.post_test_escape(window)
   }
+  let publish_accessibility_button : @common.NativeButtonAXPublish = fn(
+    window,
+    existing_binding,
+    snapshot,
+  ) {
+    host.publish_button_accessibility(
+      window,
+      existing_binding,
+      @mac_host.ButtonAccessibilitySnapshot::new(
+        snapshot.name(),
+        snapshot.bounds(),
+        snapshot.enabled(),
+        snapshot.loading(),
+        snapshot.focused(),
+        snapshot.activations(),
+      ),
+    )
+  }
+  let revoke_accessibility_button : @common.NativeButtonAXRevoke = fn(
+    window,
+    token,
+  ) {
+    host.revoke_button_accessibility(window, token)
+  }
+  let take_accessibility_request : @common.NativeButtonAXTakeRequest = fn(
+    window,
+  ) {
+    host.take_button_accessibility_request(window)
+  }
+  let accessibility_port = @common.NativeButtonAXPort::new(
+    publish_accessibility_button, revoke_accessibility_button, take_accessibility_request,
+  )
   let result = @common.run_native_sample(
     host,
     @common.Macos,
@@ -49,6 +81,7 @@ fn main {
     capture,
     click,
     escape,
+    accessibility_port=Some(accessibility_port),
   )
   let stopped = host.stop()
   match result {
