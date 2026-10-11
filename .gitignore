@@ -1,5 +1,6 @@
 node_modules
 _build
+native/.mooncakes
 dist
 .vite
 .DS_Store

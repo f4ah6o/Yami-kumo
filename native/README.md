@@ -12,9 +12,17 @@ moon add f4ah6o/yami_kumo_native
 ```
 
 Building this module for MoonBit's native/LLVM targets requires Python 3
-(`python3`) on `PATH`. GPUI 0.3.0 runs a Python prebuild during compilation to
+(`python3`) on `PATH`. GPUI 0.4.0 runs a Python prebuild during compilation to
 propagate macOS CoreText framework link settings. Python is needed only while
 building; the resulting application has no Python runtime dependency.
+
+Windows native builds also require the Visual C++ compiler and SDK on `PATH`.
+Run the build from a Visual Studio Developer PowerShell, or initialize the
+environment with `VsDevCmd.bat -arch=x64 -host_arch=x64` before running the
+Windows validation script. The script selects Git for Windows Bash, checks for
+an importable Python 3.11 or newer interpreter, and ignores Windows Store
+execution aliases; set `YAMI_PYTHON_PATH` to the executable when it is not on
+`PATH`.
 
 The module source is MIT licensed; the package includes [LICENSE](LICENSE).
 
@@ -30,7 +38,7 @@ all three host entrypoints in `examples/`.
 | ------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | macOS   | CoreText measurement and Metal scene presentation            | Previously passed local E2E: a test-only synthetic NSEvent goes through the owned NSWindow's normal `sendEvent:` route; frame readback confirms the count update, and the lifecycle marker confirms window destruction.          |
 | Linux   | Pango system-sans measurement and the GPUI Wayland host      | Passed hosted E2E: XTest input is delivered through Xvfb and Weston's X11 backend, with completed-frame readback. The runner pins both generic sans aliases to the same DejaVu Sans file for matching measurement and rendering. |
-| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Passed hosted E2E: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback.                                                                                                                    |
+| Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Historical hosted E2E for native `0.2.0`: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback. The `0.2.1` candidate still needs exact-head Windows qualification. |
 
 The hosted macOS lane builds GPUI's test-hook library, runs the CoreText and
 shared native package tests, and compiles the Yami macOS sample. It does not
@@ -41,7 +49,12 @@ The local macOS proof passed on Yami `086cfd1` with approved GPUI candidate
 `ae45429`; its tree is identical to merged GPUI revision
 `2c6e9a3df469922f79d7b2b8eb977a0524086486`. Hosted Linux and Windows proofs
 passed in [native UI CI run 37808645019](https://github.com/f4ah6o/Yami-kumo/actions/runs/37808645019)
-on those same source trees.
+on those same source trees. These results qualify native `0.2.0` only. The
+`0.2.1` candidate updates the GPUI dependency to `0.4.0` at
+[`b9340f6`](https://github.com/gpui-mbt/gpui.mbt/commit/b9340f61fc1751feba304d52278b1ee7bab02549);
+the source revision is also recorded in
+[`gpui-revision.txt`](../tests/native-ui/gpui-revision.txt). A hosted Windows
+proof must finish on the candidate PR head before that version is released.
 
 These checks cover labeled Text and Button rendering, readback of a completed
 native frame, and a host-delivered click that changes the sample's App Entity
@@ -92,13 +105,13 @@ focus. Disabled controls, an outside primary release, focus loss, and layout
 invalidation cancel pending gestures. This does not establish text editing or
 IME behavior.
 
-The GPUI host capabilities differ by platform. The [macOS host guide](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/macos-native.md)
+The GPUI host capabilities differ by platform. The [macOS host guide](https://github.com/gpui-mbt/gpui.mbt/blob/b9340f61fc1751feba304d52278b1ee7bab02549/docs/macos-native.md)
 covers bounded single-line measurement and drawing; a native editor and IME
-are not implemented. The [Ubuntu text-field guide](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/linux-text-field.md)
+are not implemented. The [Ubuntu text-field guide](https://github.com/gpui-mbt/gpui.mbt/blob/b9340f61fc1751feba304d52278b1ee7bab02549/docs/linux-text-field.md)
 documents an experimental single-line LTR field with caret, selection, undo,
 and a private direct-keyboard route. Public `TextInput` and IME transport are
-not supported; the [Wayland IME transport](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/ubuntu-ime.md)
-is private opt-in work and is not qualified. The [Windows host guide](https://github.com/gpui-mbt/gpui.mbt/blob/2c6e9a3df469922f79d7b2b8eb977a0524086486/docs/windows-native.md)
+not supported; the [Wayland IME transport](https://github.com/gpui-mbt/gpui.mbt/blob/b9340f61fc1751feba304d52278b1ee7bab02549/docs/ubuntu-ime.md)
+is private opt-in work and is not qualified. The [Windows host guide](https://github.com/gpui-mbt/gpui.mbt/blob/b9340f61fc1751feba304d52278b1ee7bab02549/docs/windows-native.md)
 describes a focused single-line field and a private, default-off IMM32 session;
 real Japanese IME and candidate-window behavior are not qualified.
 
