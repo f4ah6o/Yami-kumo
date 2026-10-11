@@ -28,7 +28,7 @@ all three host entrypoints in `examples/`.
 
 | Host    | Text measurement and display                                 | Native UI proof                                                                                                                                                                                                                  |
 | ------- | ------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS   | CoreText measurement and Metal scene presentation            | Previously passed local E2E: a test-only synthetic NSEvent goes through the owned NSWindow's normal `sendEvent:` route; frame readback confirms the count update, and the lifecycle marker confirms window destruction.          |
+| macOS   | CoreText measurement and Metal scene presentation            | Local pointer E2E uses a test-only synthetic NSEvent through the owned NSWindow. The separate `--ax-proof` checks the sample Button's AXPress action and same-owner counter update through `AXUIElement`; neither proof covers general widget accessibility or text input. |
 | Linux   | Pango system-sans measurement and the GPUI Wayland host      | Passed hosted E2E: XTest input is delivered through Xvfb and Weston's X11 backend, with completed-frame readback. The runner pins both generic sans aliases to the same DejaVu Sans file for matching measurement and rendering. |
 | Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Passed hosted E2E: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback.                                                                                                                    |
 
@@ -50,6 +50,13 @@ native UI pass. The macOS input is a GPUI test-hook NSEvent, while Linux and
 Windows use host-delivered XTest and Win32 `SendInput`; none of these checks
 claims physical-hardware input coverage. They do not qualify a native text
 editor or an Input component. The browser `Input` API remains separate.
+
+The macOS AX proof is an additional sample-only lane: the current Button
+snapshot is published with its enabled state and activation count, and an
+`AXPress` request increments the same sample-owned App Entity. Snapshot owner
+and layout generations reject requests from another sample or an invalidated
+layout. This is not a general accessibility API for `NativeButton`, and it
+does not qualify VoiceOver interaction quality or text/IME support.
 
 ## Kumo visual subset
 
@@ -121,6 +128,7 @@ YAMI_SOURCE=$PWD
 GPUI_SOURCE=/path/to/gpui.mbt sh "$YAMI_SOURCE/scripts/native_ui_workspace.sh" \
   sh "$YAMI_SOURCE/scripts/native_ui_tests.sh"
 GPUI_SOURCE=/path/to/gpui.mbt sh "$YAMI_SOURCE/scripts/native_ui_macos.sh"
+GPUI_SOURCE=/path/to/gpui.mbt sh "$YAMI_SOURCE/scripts/native_ui_macos.sh" --ax-proof
 GPUI_SOURCE=/path/to/gpui.mbt sh "$YAMI_SOURCE/scripts/native_ui_linux.sh"
 ```
 

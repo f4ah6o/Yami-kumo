@@ -21,10 +21,24 @@ The hosted macOS job runs the CoreText and shared native package tests and
 builds the macOS sample. It does not launch the sample window, so it verifies
 macOS compilation and portable behavior without claiming runtime UI proof.
 
+The local macOS `--ax-proof` mode launches the same sample and uses a separate
+`AXUIElement` client to verify the launched process's registered bundle
+identity, then finds an `AXWindow` owned by that exact PID and its named Button.
+The requested unique title is preferred; if macOS reports another title, the
+client accepts only a sole AXWindow owned by that PID and records the observed
+title and whether it matched. The client verifies the Button's enabled state
+and `AXPress` action, presses it, and reads activation count 1 from the same
+sample-owned accessibility element before closing the window. This proves the
+sample adapter and its counter routing only; it does not establish
+VoiceOver quality, accessibility coverage for other widgets, text editing, or
+IME behavior. macOS may require the terminal or test runner to be allowed to
+control the sample in Privacy & Security settings.
+
 On macOS, run `sh scripts/native_ui_macos.sh` from any directory with MoonBit,
 Xcode command-line tools, and the Yami and GPUI worktrees as siblings. The
 hosted build and portable-test subset is `sh scripts/native_ui_macos.sh --build-and-test`;
-it compiles the sample without launching it. The
+it compiles the sample without launching it. The sample-only native accessibility
+proof is `sh scripts/native_ui_macos.sh --ax-proof`. The
 Linux launcher is `sh scripts/native_ui_linux.sh` and requires Xvfb, Weston,
 xdotool, Wayland development packages, PangoFT2, and the configured fonts. On
 Windows, run `./scripts/native_ui_windows.ps1` in a PowerShell session with the

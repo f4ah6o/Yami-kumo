@@ -27,6 +27,12 @@
 
 ### Migration
 
+## native-0.2.1 - 2026-10-11
+
+### Added
+
+- Added a macOS accessibility action to the native sample Button; AXPress updates the sample's existing click counter.
+
 ## native-0.2.0 - 2026-10-10
 
 ### Added

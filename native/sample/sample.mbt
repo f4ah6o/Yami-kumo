@@ -24,6 +24,9 @@ pub const SAMPLE_BUTTON_ID : UInt64 = 40
 pub const SAMPLE_BUTTON_LABEL_ID : UInt64 = 41
 
 ///|
+const SAMPLE_BUTTON_NAME : String = "Click me"
+
+///|
 const SAMPLE_CARD_WIDTH : Double = 416.0
 
 ///|
@@ -46,10 +49,89 @@ struct SampleState {
 pub struct NativeSample {
   app : @core.App
   state : @core.Entity[SampleState]
+  state_id : @core.EntityId
   theme : @components.Theme
   disabled : Bool
   mut interaction : @components.ButtonInteraction?
   mut tree : @element.ElementTree?
+  mut button_bounds : @primitives.Rect?
+  mut layout_generation : UInt64
+  mut snapshot_generation_exhausted : Bool
+}
+
+///|
+/// Current native accessibility state for the sample's one Button.
+/// The activation count is read from the sample's App Entity, so assistive
+/// actions share the same owner as pointer and keyboard activation.
+pub struct NativeButtonAccessibilitySnapshot {
+  id : UInt64
+  name : String
+  bounds : @primitives.Rect
+  enabled : Bool
+  loading : Bool
+  focused : Bool
+  activations : Int
+  priv owner : @core.EntityId
+  priv layout_generation : UInt64
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::id(
+  self : NativeButtonAccessibilitySnapshot,
+) -> UInt64 {
+  self.id
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::name(
+  self : NativeButtonAccessibilitySnapshot,
+) -> String {
+  self.name
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::bounds(
+  self : NativeButtonAccessibilitySnapshot,
+) -> @primitives.Rect {
+  self.bounds
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::enabled(
+  self : NativeButtonAccessibilitySnapshot,
+) -> Bool {
+  self.enabled
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::loading(
+  self : NativeButtonAccessibilitySnapshot,
+) -> Bool {
+  self.loading
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::focused(
+  self : NativeButtonAccessibilitySnapshot,
+) -> Bool {
+  self.focused
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::activations(
+  self : NativeButtonAccessibilitySnapshot,
+) -> Int {
+  self.activations
+}
+
+///|
+/// Return whether two snapshots refer to the same sample and committed layout.
+/// The owner identity and generation remain opaque to native host adapters.
+pub fn NativeButtonAccessibilitySnapshot::same_revision(
+  self : NativeButtonAccessibilitySnapshot,
+  other : NativeButtonAccessibilitySnapshot,
+) -> Bool {
+  self.owner == other.owner && self.layout_generation == other.layout_generation
 }
 
 ///|
@@ -135,7 +217,18 @@ pub fn NativeSample::new(
           match app.create_entity(SampleState::{ count: 0, }) {
             Err(error) => Err(error)
             Ok(state) =>
-              Ok({ app, state, theme, disabled, interaction: None, tree: None, })
+              Ok({
+                app,
+                state,
+                state_id: state.id(),
+                theme,
+                disabled,
+                interaction: None,
+                tree: None,
+                button_bounds: None,
+                layout_generation: 0,
+                snapshot_generation_exhausted: false,
+              })
           }
       }
   }
@@ -149,6 +242,67 @@ pub fn NativeSample::count(
 }
 
 ///|
+/// Return the current, committed Button snapshot when the sample has a live
+/// layout. A resize or invalidation removes the snapshot until the next render.
+pub fn NativeSample::button_accessibility_snapshot(
+  self : NativeSample,
+) -> Result[NativeButtonAccessibilitySnapshot?, @diagnostics.FrameworkError] {
+  match (self.tree, self.button_bounds) {
+    (Some(tree), Some(bounds)) if !self.snapshot_generation_exhausted =>
+      match self.count() {
+        Err(error) => Err(error)
+        Ok(activations) =>
+          Ok(
+            Some({
+              id: SAMPLE_BUTTON_ID,
+              name: SAMPLE_BUTTON_NAME,
+              bounds,
+              enabled: !self.disabled,
+              loading: false,
+              focused: tree.focused() == Some(SAMPLE_BUTTON_ID),
+              activations,
+              owner: self.state_id,
+              layout_generation: self.layout_generation,
+            }),
+          )
+      }
+    _ => Ok(None)
+  }
+}
+
+///|
+/// Activate only if the native request still names the exact live Button
+/// snapshot. Accepted requests use the same App Entity counter as all other
+/// sample activation paths.
+pub fn NativeSample::activate_accessibility_button(
+  self : NativeSample,
+  expected : NativeButtonAccessibilitySnapshot,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  if !expected.enabled {
+    return Ok(false)
+  }
+  let current = match self.button_accessibility_snapshot() {
+    Err(error) => return Err(error)
+    Ok(None) => return Ok(false)
+    Ok(Some(value)) => value
+  }
+  if current.id != expected.id ||
+    current.name != expected.name ||
+    current.bounds != expected.bounds ||
+    current.enabled != expected.enabled ||
+    current.loading != expected.loading ||
+    current.focused != expected.focused ||
+    current.activations != expected.activations ||
+    !current.same_revision(expected) {
+    return Ok(false)
+  }
+  match self.increment() {
+    Err(error) => Err(error)
+    Ok(_) => Ok(true)
+  }
+}
+
+///|
 /// Regenerate the view at the latest window size and measurement provider.
 /// This clears old gesture ownership so a resize cannot complete a stale
 /// press against newly laid out geometry.
@@ -159,6 +313,24 @@ pub fn NativeSample::render(
   scale : Double,
   measure : @components.TextMeasure,
 ) -> Result[SampleFrame, @diagnostics.FrameworkError] {
+  match self.render_inner(width, height, scale, measure) {
+    Err(error) => {
+      self.advance_layout_generation()
+      Err(error)
+    }
+    Ok(frame) => Ok(frame)
+  }
+}
+
+///|
+fn NativeSample::render_inner(
+  self : NativeSample,
+  width : Double,
+  height : Double,
+  scale : Double,
+  measure : @components.TextMeasure,
+) -> Result[SampleFrame, @diagnostics.FrameworkError] {
+  let previous_button_bounds = self.button_bounds
   let restore_button_focus = match self.tree {
     None => false
     Some(tree) => tree.focused() == Some(SAMPLE_BUTTON_ID)
@@ -166,6 +338,7 @@ pub fn NativeSample::render(
   self.cancel_gesture()
   self.tree = None
   self.interaction = None
+  self.button_bounds = None
   if !finite(width) || !finite(height) || width <= 0.0 || height <= 0.0 {
     return Err(
       sample_error(
@@ -438,6 +611,11 @@ pub fn NativeSample::render(
       )
     Some(value) => value
   }
+  match previous_button_bounds {
+    Some(previous) if previous != button_bounds =>
+      self.advance_layout_generation()
+    _ => ()
+  }
   let button_label_bounds = match button.label_bounds(button_bounds) {
     Err(error) => return Err(error)
     Ok(value) => value
@@ -543,6 +721,7 @@ pub fn NativeSample::render(
   }
   self.tree = Some(tree)
   self.interaction = Some(button.interaction())
+  self.button_bounds = Some(button_bounds)
   Ok({
     snapshot,
     count,
@@ -643,6 +822,19 @@ pub fn NativeSample::focus_changed(self : NativeSample, focused : Bool) -> Unit 
 pub fn NativeSample::invalidate_layout(self : NativeSample) -> Unit {
   self.cancel_gesture()
   self.tree = None
+  self.interaction = None
+  self.button_bounds = None
+  self.advance_layout_generation()
+}
+
+///|
+fn NativeSample::advance_layout_generation(self : NativeSample) -> Unit {
+  let max_uint64 : UInt64 = 0xffff_ffff_ffff_ffff
+  if self.layout_generation == max_uint64 {
+    self.snapshot_generation_exhausted = true
+  } else {
+    self.layout_generation += 1
+  }
 }
 
 ///|

@@ -171,6 +171,145 @@ test "shared sample uses Flex layout and App Entity state to rerender Text after
 }
 
 ///|
+test "accessibility activation uses the live Button snapshot and the same App Entity counter" {
+  let sample = new_sample()
+  let frame = render_sample(sample)
+  let initial = match sample.button_accessibility_snapshot() {
+    Err(_) =>
+      fail("live sample Button should expose its accessibility snapshot")
+    Ok(None) => fail("rendered sample Button should be accessible")
+    Ok(Some(value)) => value
+  }
+  assert_eq(initial.id(), @sample.SAMPLE_BUTTON_ID)
+  assert_eq(initial.name(), "Click me")
+  assert_true(initial.enabled())
+  assert_true(!initial.loading())
+  assert_true(!initial.focused())
+  assert_eq(initial.activations(), 0)
+  assert_true(initial.bounds() == frame.button_bounds())
+
+  assert_true(sample.activate_accessibility_button(initial) is Ok(true))
+  assert_sample_count(sample, 1)
+  assert_true(sample.activate_accessibility_button(initial) is Ok(false))
+
+  let updated = match sample.button_accessibility_snapshot() {
+    Err(_) => fail("updated App Entity count should remain accessible")
+    Ok(None) => fail("updated sample Button should remain accessible")
+    Ok(Some(value)) => value
+  }
+  assert_eq(updated.activations(), 1)
+  assert_true(initial.same_revision(updated))
+  assert_true(sample.activate_accessibility_button(updated) is Ok(true))
+  assert_sample_count(sample, 2)
+}
+
+///|
+test "accessibility activation rejects disabled, unfocused-stale, and invalidated snapshots" {
+  let disabled = new_sample(disabled=true)
+  let _ = render_sample(disabled)
+  let disabled_snapshot = match disabled.button_accessibility_snapshot() {
+    Err(_) => fail("disabled sample Button should expose its state")
+    Ok(None) => fail("disabled rendered Button should be accessible")
+    Ok(Some(value)) => value
+  }
+  assert_true(!disabled_snapshot.enabled())
+  assert_true(
+    disabled.activate_accessibility_button(disabled_snapshot) is Ok(false),
+  )
+  assert_sample_count(disabled, 0)
+
+  let sample = new_sample()
+  let frame = render_sample(sample)
+  let stale = match sample.button_accessibility_snapshot() {
+    Err(_) => fail("rendered sample Button should expose its state")
+    Ok(None) => fail("rendered sample Button should be accessible")
+    Ok(Some(value)) => value
+  }
+  assert_true(
+    sample.handle_input(pointer_event(true, button_center(frame))) is Ok(false),
+  )
+  let focused = match sample.button_accessibility_snapshot() {
+    Err(_) => fail("focused sample Button should expose its state")
+    Ok(None) => fail("focused sample Button should remain accessible")
+    Ok(Some(value)) => value
+  }
+  assert_true(focused.focused())
+  assert_true(sample.activate_accessibility_button(stale) is Ok(false))
+  assert_sample_count(sample, 0)
+
+  sample.invalidate_layout()
+  assert_true(sample.button_accessibility_snapshot() is Ok(None))
+  assert_true(sample.activate_accessibility_button(focused) is Ok(false))
+  assert_sample_count(sample, 0)
+}
+
+///|
+test "accessibility snapshots are scoped to their sample and exact layout generation" {
+  let first = new_sample()
+  let first_frame = render_sample(first)
+  let first_snapshot = match first.button_accessibility_snapshot() {
+    Err(_) => fail("first sample Button should expose its snapshot")
+    Ok(None) => fail("rendered first sample Button should be accessible")
+    Ok(Some(value)) => value
+  }
+
+  let second = new_sample()
+  let second_frame = render_sample(second)
+  let second_snapshot = match second.button_accessibility_snapshot() {
+    Err(_) => fail("second sample Button should expose its snapshot")
+    Ok(None) => fail("rendered second sample Button should be accessible")
+    Ok(Some(value)) => value
+  }
+  assert_true(first_frame.button_bounds() == second_frame.button_bounds())
+  assert_true(!first_snapshot.same_revision(second_snapshot))
+  assert_true(second.activate_accessibility_button(first_snapshot) is Ok(false))
+  assert_sample_count(first, 0)
+  assert_sample_count(second, 0)
+
+  first.invalidate_layout()
+  assert_true(first.button_accessibility_snapshot() is Ok(None))
+  let rerendered_frame = render_sample(first)
+  let rerendered_snapshot = match first.button_accessibility_snapshot() {
+    Err(_) => fail("rerendered sample Button should expose its snapshot")
+    Ok(None) => fail("rerendered sample Button should be accessible")
+    Ok(Some(value)) => value
+  }
+  assert_true(first_frame.button_bounds() == rerendered_frame.button_bounds())
+  assert_true(!first_snapshot.same_revision(rerendered_snapshot))
+  assert_true(first.activate_accessibility_button(first_snapshot) is Ok(false))
+  assert_true(
+    first.activate_accessibility_button(rerendered_snapshot) is Ok(true),
+  )
+  assert_sample_count(first, 1)
+}
+
+///|
+test "a failed render cannot revive an old accessibility snapshot" {
+  let sample = new_sample()
+  let first_frame = render_sample(sample)
+  let stale = match sample.button_accessibility_snapshot() {
+    Err(_) => fail("rendered sample Button should expose its snapshot")
+    Ok(None) => fail("rendered sample Button should be accessible")
+    Ok(Some(value)) => value
+  }
+
+  assert_true(sample.render(0.0, 600.0, 1.0, sample_test_measure) is Err(_))
+  assert_true(sample.button_accessibility_snapshot() is Ok(None))
+  assert_true(sample.activate_accessibility_button(stale) is Ok(false))
+
+  let rerendered_frame = render_sample(sample)
+  let current = match sample.button_accessibility_snapshot() {
+    Err(_) => fail("rerendered sample Button should expose its snapshot")
+    Ok(None) => fail("rerendered sample Button should be accessible")
+    Ok(Some(value)) => value
+  }
+  assert_true(first_frame.button_bounds() == rerendered_frame.button_bounds())
+  assert_true(!stale.same_revision(current))
+  assert_true(sample.activate_accessibility_button(stale) is Ok(false))
+  assert_sample_count(sample, 0)
+}
+
+///|
 test "shared sample allocates disjoint stable scene item IDs" {
   let sample = new_sample()
   let frame = render_sample(sample)

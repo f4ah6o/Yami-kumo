@@ -3,13 +3,13 @@ set -eu
 
 mode=${1:---ui-proof}
 if [ "$#" -gt 1 ]; then
-  echo "usage: $0 [--ui-proof|--build-and-test]" >&2
+  echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test]" >&2
   exit 2
 fi
 case "$mode" in
-  --ui-proof|--build-and-test) ;;
+  --ui-proof|--ax-proof|--build-and-test) ;;
   *)
-    echo "usage: $0 [--ui-proof|--build-and-test]" >&2
+    echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test]" >&2
     exit 2
     ;;
 esac
@@ -68,6 +68,15 @@ if [ "$mode" = "--build-and-test" ]; then
   sh "$yami_root/scripts/native_ui_workspace.sh" \
     moon build "$yami_root/native/examples/macos" --target native --deny-warn
   echo "macOS native build and portable tests passed; runtime UI proof was not run."
+  exit 0
+fi
+
+if [ "$mode" = "--ax-proof" ]; then
+  sh "$yami_root/scripts/native_ui_workspace.sh" \
+    python3 "$yami_root/tests/native-ui/drive_macos_ax.py" \
+      --evidence-dir "$evidence_dir" \
+      --log "$evidence_dir/native-ax.log" \
+      -- moon run "$yami_root/native/examples/macos" --target native
   exit 0
 fi
 
