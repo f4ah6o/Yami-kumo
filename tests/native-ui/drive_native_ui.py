@@ -672,14 +672,15 @@ def _run_macos_input_helper(
     )
     try:
         stdout, stderr = process.communicate(timeout=MACOS_HELPER_TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired as timeout_error:
+    except (OSError, subprocess.SubprocessError) as communication_error:
         cleanup = {"terminate": "not-attempted", "reaped": False}
+        # SIGTERM asks the helper to cancel and release any owned down event.
         try:
             process.terminate()
             cleanup["terminate"] = "sent"
         except ProcessLookupError:
             cleanup["terminate"] = "already-exited"
-        except OSError as error:
+        except (OSError, subprocess.SubprocessError) as error:
             cleanup["terminate"] = f"failed: {error}"
         try:
             stdout, stderr = process.communicate(timeout=MACOS_HELPER_TERM_SECONDS)
@@ -696,7 +697,7 @@ def _run_macos_input_helper(
                 cleanup["kill"] = "sent"
             except ProcessLookupError:
                 cleanup["kill"] = "already-exited"
-            except OSError as error:
+            except (OSError, subprocess.SubprocessError) as error:
                 cleanup["kill"] = f"failed: {error}"
             try:
                 stdout, stderr = process.communicate(timeout=MACOS_HELPER_KILL_SECONDS)
@@ -709,11 +710,18 @@ def _run_macos_input_helper(
                 stdout, stderr = "", ""
                 cleanup["reaped"] = False
                 cleanup["killWait"] = f"failed: {error}"
-        detail = (stderr or "").strip() or str(timeout_error)
+        if isinstance(communication_error, subprocess.TimeoutExpired):
+            failure = "macOS host-input helper exceeded its execution deadline"
+        else:
+            failure = "macOS host-input helper communication failed"
+        details = [f"initial communication error: {communication_error}"]
+        if (stdout or "").strip():
+            details.append(f"cleanup stdout: {stdout.strip()}")
+        if (stderr or "").strip():
+            details.append(f"cleanup stderr: {stderr.strip()}")
         raise E2EError(
-            "macOS host-input helper exceeded its execution deadline; "
-            f"helper cleanup={cleanup}; detail={detail}"
-        ) from timeout_error
+            f"{failure}; helper cleanup={cleanup}; detail={' | '.join(details)}"
+        ) from communication_error
     if process.returncode != 0:
         detail = stderr.strip() or stdout.strip() or f"status {process.returncode}"
         raise E2EError(f"macOS host-input helper refused the event: {detail}")

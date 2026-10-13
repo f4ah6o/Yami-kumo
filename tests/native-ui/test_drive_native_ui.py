@@ -353,6 +353,80 @@ class MacHostInputTests(unittest.TestCase):
         process.terminate.assert_called_once_with()
         self.assertEqual(process.communicate.call_count, 2)
 
+    def test_helper_communication_error_is_terminated_and_reaped(self) -> None:
+        args = type("Args", (), {
+            "macos_helper": pathlib.Path("/tmp/helper"), "sample_pid": 123,
+            "window_title": "Yami Native UI [native-ui-abc]",
+        })()
+        process = Mock()
+        process.communicate.side_effect = [
+            OSError("helper stdout pipe failed"),
+            ("", "helper stopped after cancellation request"),
+        ]
+        with patch.object(driver.subprocess, "Popen", return_value=process):
+            with self.assertRaisesRegex(
+                driver.E2EError,
+                "communication failed.*'terminate': 'sent'.*'reaped': True.*helper stdout pipe failed",
+            ):
+                driver._run_macos_input_helper(
+                    args,
+                    ["--click", "123", args.window_title, "Click me", "120", "36"],
+                    "CGEventPost(kCGHIDEventTap) left click",
+                )
+        process.terminate.assert_called_once_with()
+        process.kill.assert_not_called()
+        self.assertEqual(process.communicate.call_count, 2)
+
+    def test_helper_communication_error_uses_bounded_kill_fallback(self) -> None:
+        args = type("Args", (), {
+            "macos_helper": pathlib.Path("/tmp/helper"), "sample_pid": 123,
+            "window_title": "Yami Native UI [native-ui-abc]",
+        })()
+        process = Mock()
+        process.communicate.side_effect = [
+            OSError("helper stderr pipe failed"),
+            subprocess.TimeoutExpired(["/tmp/helper"], driver.MACOS_HELPER_TERM_SECONDS),
+            ("", "helper stopped after kill"),
+        ]
+        with patch.object(driver.subprocess, "Popen", return_value=process):
+            with self.assertRaises(driver.E2EError) as raised:
+                driver._run_macos_input_helper(
+                    args,
+                    ["--click", "123", args.window_title, "Click me", "120", "36"],
+                    "CGEventPost(kCGHIDEventTap) left click",
+                )
+        message = str(raised.exception)
+        self.assertIn("communication failed", message)
+        self.assertIn("helper stderr pipe failed", message)
+        self.assertIn("'kill': 'sent'", message)
+        self.assertIn("'reaped': True", message)
+        process.terminate.assert_called_once_with()
+        process.kill.assert_called_once_with()
+        self.assertEqual(process.communicate.call_count, 3)
+
+    def test_helper_communication_error_tolerates_already_exited_child(self) -> None:
+        args = type("Args", (), {
+            "macos_helper": pathlib.Path("/tmp/helper"), "sample_pid": 123,
+            "window_title": "Yami Native UI [native-ui-abc]",
+        })()
+        process = Mock()
+        process.communicate.side_effect = [
+            OSError("helper pipe read failed"),
+            ("", ""),
+        ]
+        process.terminate.side_effect = ProcessLookupError()
+        with patch.object(driver.subprocess, "Popen", return_value=process):
+            with self.assertRaisesRegex(driver.E2EError, "communication failed") as raised:
+                driver._run_macos_input_helper(
+                    args,
+                    ["--click", "123", args.window_title, "Click me", "120", "36"],
+                    "CGEventPost(kCGHIDEventTap) left click",
+                )
+        self.assertIn("'terminate': 'already-exited'", str(raised.exception))
+        self.assertIn("'reaped': True", str(raised.exception))
+        process.kill.assert_not_called()
+        self.assertEqual(process.communicate.call_count, 2)
+
     def test_escape_pid_release_requires_terminal_evidence_and_zero_flags(self) -> None:
         args = type("Args", (), {
             "macos_helper": pathlib.Path("/tmp/helper"), "sample_pid": 123,
