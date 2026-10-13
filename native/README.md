@@ -40,7 +40,7 @@ all three host entrypoints in `examples/`.
 
 | Host    | Text measurement and display                                 | Native UI proof                                                                                                                                                                                                                                                                       |
 | ------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| macOS   | CoreText measurement and Metal scene presentation            | Local pointer E2E uses guarded synthetic `CGEventPost(kCGHIDEventTap)` input for the exact frontmost sample window and AX-hit-tested Button. The separate `--ax-proof` checks the sample Button's AXPress action and same-owner counter update through `AXUIElement`; neither proof covers general widget accessibility or text input. |
+| macOS   | CoreText measurement and Metal scene presentation            | A previously passed local pointer E2E on native `0.2.3` used guarded synthetic `CGEventPost(kCGHIDEventTap)` input for the exact frontmost sample window and AX-hit-tested Button. The current external-helper route remains unqualified; the separate sample-only `--ax-proof` checks the Button's AXPress action and same-owner counter update through `AXUIElement`. Neither proof covers general widget accessibility or text input. |
 | Linux   | Pango system-sans measurement and the GPUI Wayland host      | Passed hosted E2E: XTest input is delivered through Xvfb and Weston's X11 backend, with completed-frame readback. The runner pins both generic sans aliases to the same DejaVu Sans file for matching measurement and rendering.                                                      |
 | Windows | DirectWrite `Segoe UI` measurement and the GPUI Windows host | Passed hosted E2E: Win32 `SendInput` targets the uniquely titled visible HWND, with completed-frame readback. The sample also tests a copied Button projection with owner/layout freshness checks; no UI Automation provider or assistive-technology action transport is implemented. |
 
@@ -54,9 +54,17 @@ The earlier local macOS pointer proof passed on Yami `086cfd1` with approved
 GPUI candidate `ae45429`; its tree is identical to merged GPUI revision
 `2c6e9a3df469922f79d7b2b8eb977a0524086486`. Hosted Linux and Windows proofs
 passed in [native UI CI run 37808645019](https://github.com/f4ah6o/Yami-kumo/actions/runs/37808645019)
-on those same source trees, qualifying native `0.2.0`. The `0.2.4` candidate
-uses GPUI `0.7.1`; the reviewed source revision used for qualification is
-recorded in [`gpui-revision.txt`](../tests/native-ui/gpui-revision.txt).
+on those same source trees, qualifying native `0.2.0`. Native `0.2.3` used
+GPUI `0.7.0`; its hosted proofs remain tied to the exact source revisions
+recorded by their CI run. Native `0.2.4` updates the module dependencies to
+GPUI `0.7.1` and the pure MoonBit module `f4ah6o/yami_kumo` `0.1.1`. The native
+UI workflows now pin the reviewed GPUI source at
+[`gpui-revision.txt`](../tests/native-ui/gpui-revision.txt). Native `0.2.5`
+updates that dependency to GPUI `0.7.2` and includes stricter per-event target
+revalidation, bounded AX/helper lifetimes, owned input cleanup, and explicit
+zero-modifier events for the opt-in macOS sample runner. These guard fixtures
+use fake event posters only. The current external-input route remains
+unqualified at runtime, as detailed below.
 
 These checks cover labeled Text and Button rendering, readback of a completed
 native frame, and a host-delivered click that changes the sample's App Entity
