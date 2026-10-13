@@ -316,7 +316,10 @@ class MacHostInputTests(unittest.TestCase):
         escape_process.returncode = 0
         with patch.object(driver.subprocess, "Popen", return_value=escape_process) as run:
             driver._send_escape("macos", args)
-        self.assertEqual(run.call_args.args[0], ["/tmp/helper", "--escape", "123", args.window_title])
+        self.assertEqual(
+            run.call_args.args[0],
+            [str(args.macos_helper), "--escape", "123", args.window_title],
+        )
 
         mismatched = dict(click_report, pid=999)
         mismatch_process = Mock()
