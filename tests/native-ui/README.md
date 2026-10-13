@@ -25,7 +25,8 @@ not physical hardware input.
 The hosted macOS job runs the CoreText and shared native package tests,
 builds the macOS sample, and compiles the external Objective-C host-input
 helper. It does not launch the sample window, so it verifies macOS compilation
-and portable behavior without claiming runtime UI proof.
+and portable behavior, including inert helper guard fixtures, without claiming
+runtime UI proof.
 
 The Windows tests also compile and exercise the sample's copied Button
 accessibility projection, including stale owner/layout rejection before its
@@ -44,6 +45,22 @@ sample adapter and its counter routing only; it does not establish
 VoiceOver quality, accessibility coverage for other widgets, text editing, or
 IME behavior. macOS may require the terminal or test runner to be allowed to
 control the sample in Privacy & Security settings.
+
+For the external macOS input route, the helper takes a fresh, shared-deadline
+snapshot before each global down or release. The snapshot includes the unlocked
+session, exact frontmost PID, focused AXWindow, unique visible WindowServer
+window ID and frame, and (for clicks) the current enabled Button identity and
+frame, topmost window owner, and AX hit ancestry. Each AX object gets its own
+short messaging timeout. The helper records down ownership before posting; if
+the release snapshot changes, it may send only a zero-modifier release to that
+same PID. A click with a refused global release remains a failed run. Escape
+can use the PID-targeted release only after the original window is confirmed
+gone or its process has exited, and the driver still requires the sample's
+completion marker. The runner bounds helper execution, requests termination
+and reaps it on timeout, then writes a failed report before and after sample
+cleanup. `--guard-fixtures` exercises stale target states, overlays,
+expiration, modifier clearing, and pending-release cleanup through fake event
+posters; it sends no native input and does not qualify a live run.
 
 On macOS, run `sh scripts/native_ui_macos.sh` from any directory with MoonBit,
 Xcode command-line tools, and the Yami and GPUI worktrees as siblings. The

@@ -47,7 +47,8 @@ all three host entrypoints in `examples/`.
 The hosted macOS lane builds GPUI's test-hook library, runs the CoreText and
 shared native package tests, and compiles the Yami macOS sample. It does not
 launch a window or exercise runtime rendering or input, so it is build and
-portable-test evidence rather than a hosted native UI proof.
+portable-test evidence rather than a hosted native UI proof. Its external
+helper guard fixtures use fake posters only and send no native events.
 
 The earlier local macOS pointer proof passed on Yami `086cfd1` with approved
 GPUI candidate `ae45429`; its tree is identical to merged GPUI revision
@@ -62,11 +63,21 @@ native frame, and a host-delivered click that changes the sample's App Entity
 and counter text. Headless tests and cross-compilation alone do not count as a
 native UI pass. The macOS helper posts synthetic mouse and Escape events via
 the global HID event tap only after an unlocked on-console and Accessibility
-preflight; it verifies the exact frontmost PID/title, focused and visible
-window, topmost point owner, and AX Button hit ancestry. Linux uses XTest and
-Windows uses Win32 `SendInput`. None of these checks claims physical-hardware
-input coverage. They do not qualify a native text editor, an Input component,
-or IME behavior. The browser `Input` API remains separate.
+preflight. It rechecks the complete target snapshot before every event,
+including the exact frontmost PID, focused AXWindow, unique visible
+WindowServer window and frame, and (for clicks) the current Button, topmost
+point owner, and AX hit ancestry. Each AX object receives a bounded messaging
+timeout, and the runner bounds the helper process and records sample cleanup on
+failure. The helper records pending input before its down post. If a release
+guard changes, cleanup is zero-modifier and PID-targeted to the original
+process; a click remains failed if its global release was refused. Escape may
+use that release only when the original window is gone or the target process
+has exited, and the driver still requires the sample completion marker. The
+inert `--guard-fixtures` mode tests the production guard/post seam with fake
+posters and never sends native input. Linux uses XTest and Windows uses Win32
+`SendInput`. None of these checks claims physical-hardware input coverage.
+They do not qualify a native text editor, an Input component, or IME behavior.
+The browser `Input` API remains separate.
 
 The current macOS external-input route has not yet been run end-to-end on this
 source tree: the local console was locked during qualification. The helper's
