@@ -54,11 +54,13 @@ GPUI candidate `ae45429`; its tree is identical to merged GPUI revision
 `2c6e9a3df469922f79d7b2b8eb977a0524086486`. Hosted Linux and Windows proofs
 passed in [native UI CI run 37808645019](https://github.com/f4ah6o/Yami-kumo/actions/runs/37808645019)
 on those same source trees, qualifying native `0.2.0`. Native `0.2.3` used
-GPUI `0.7.0`; the exact source revision for the hosted native UI lanes is
-recorded in [`gpui-revision.txt`](../tests/native-ui/gpui-revision.txt).
-Native `0.2.4` updates the module dependencies to GPUI `0.7.1` and the pure
-MoonBit module `f4ah6o/yami_kumo` `0.1.1`. This dependency-only release does not
-change the component API or expand the platform proof scope documented here.
+GPUI `0.7.0`; its hosted proofs remain tied to the exact source revisions
+recorded by their CI run. Native `0.2.4` updates the module dependencies to
+GPUI `0.7.1` and the pure MoonBit module `f4ah6o/yami_kumo` `0.1.1`. The native
+UI workflows now pin the merged GPUI `0.7.1` source at
+[`gpui-revision.txt`](../tests/native-ui/gpui-revision.txt). This
+dependency-only release does not change the component API or expand the
+platform proof scope documented here.
 
 These checks cover labeled Text and Button rendering, readback of a completed
 native frame, and a host-delivered click that changes the sample's App Entity
