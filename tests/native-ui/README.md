@@ -13,14 +13,18 @@ The Ubuntu job runs Weston’s X11 backend in a private 800×600 Xvfb display.
 the sample marker is only produced after the ordinary event queue and button
 dispatch receive it. The Windows job uses `SendInput` against the visible
 sample HWND and fails if that window cannot become the foreground window. The
-local macOS script builds GPUI with `--test-hooks` and a small native input
-helper. After checking that Accessibility permission is already granted and
-the console session is on-console and unlocked, the helper posts synthetic
+historical native `0.2.0` local macOS pointer proof used GPUI's test hook to
+deliver a synthetic `NSEvent` through the sample's owned `NSWindow`. The
+current local macOS script instead builds an external input helper. After
+checking that Accessibility permission is already granted and the console
+session is on-console and unlocked, that helper is designed to post synthetic
 mouse and Escape events through `CGEventPost(kCGHIDEventTap)`. It sends input
 only when the launched PID, unique window title, focused AXWindow, visible
 WindowServer window, and point-tested sample AXButton all match. A locked or
-unknown session fails before the sample launches. These events are host input,
-not physical hardware input.
+unknown session fails before the sample launches. The external-helper route
+remains runtime-unqualified: the latest preflight found a locked session and
+refused before launching the sample, so no native event was sent. These events
+are host input, not physical hardware input.
 
 The hosted macOS job runs the CoreText and shared native package tests,
 builds the macOS sample, and compiles the external Objective-C host-input

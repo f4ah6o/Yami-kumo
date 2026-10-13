@@ -26,7 +26,7 @@
 ### Changed
 
 - Pinned `@cloudflare/kumo` to `2.14.0` so generated class and stylesheet contracts remain reproducible.
-- Bumped the native module to `0.2.5` against GPUI `0.7.2` and pure MoonBit module `0.1.1`; its macOS sample runner revalidates the target before each event, bounds AX/helper lifetimes, and uses zero-modifier input. The route remains unqualified in a live runtime session.
+- Bumped the native module to `0.2.5` against GPUI `0.7.2` and pure MoonBit module `0.1.1`; its macOS sample runner revalidates the target before each event, bounds AX/helper lifetimes, and uses zero-modifier input. The external input route remains runtime-unqualified.
 - Made the macOS native UI runner fail closed on locked or unknown console sessions and record blocked preflight evidence before launching the sample.
 
 ### Fixed
