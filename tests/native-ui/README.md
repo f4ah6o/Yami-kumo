@@ -13,13 +13,19 @@ The Ubuntu job runs Weston’s X11 backend in a private 800×600 Xvfb display.
 the sample marker is only produced after the ordinary event queue and button
 dispatch receive it. The Windows job uses `SendInput` against the visible
 sample HWND and fails if that window cannot become the foreground window. The
-local macOS script builds GPUI with `--test-hooks`; its test-only
-`NSWindow.sendEvent:` click and Escape events are synthetic host events, not
-physical hardware input.
+local macOS script builds GPUI with `--test-hooks` and a small native input
+helper. After checking that Accessibility permission is already granted and
+the console session is on-console and unlocked, the helper posts synthetic
+mouse and Escape events through `CGEventPost(kCGHIDEventTap)`. It sends input
+only when the launched PID, unique window title, focused AXWindow, visible
+WindowServer window, and point-tested sample AXButton all match. A locked or
+unknown session fails before the sample launches. These events are host input,
+not physical hardware input.
 
-The hosted macOS job runs the CoreText and shared native package tests and
-builds the macOS sample. It does not launch the sample window, so it verifies
-macOS compilation and portable behavior without claiming runtime UI proof.
+The hosted macOS job runs the CoreText and shared native package tests,
+builds the macOS sample, and compiles the external Objective-C host-input
+helper. It does not launch the sample window, so it verifies macOS compilation
+and portable behavior without claiming runtime UI proof.
 
 The Windows tests also compile and exercise the sample's copied Button
 accessibility projection, including stale owner/layout rejection before its
@@ -43,7 +49,9 @@ On macOS, run `sh scripts/native_ui_macos.sh` from any directory with MoonBit,
 Xcode command-line tools, and the Yami and GPUI worktrees as siblings. The
 hosted build and portable-test subset is `sh scripts/native_ui_macos.sh --build-and-test`;
 it compiles the sample without launching it. The sample-only native accessibility
-proof is `sh scripts/native_ui_macos.sh --ax-proof`. The
+proof is `sh scripts/native_ui_macos.sh --ax-proof`. The default local macOS UI
+proof uses the guarded external host-input helper and requires an already
+unlocked console session; it does not open permission prompts. The
 Linux launcher is `sh scripts/native_ui_linux.sh` and requires Xvfb, Weston,
 xdotool, Wayland development packages, PangoFT2, and the configured fonts. On
 Windows, run `./scripts/native_ui_windows.ps1` in a PowerShell session with the

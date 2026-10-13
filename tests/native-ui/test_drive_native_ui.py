@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import pathlib
+import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import sys
 sys.dont_write_bytecode = True
@@ -202,6 +205,96 @@ class NativeLaunchPlanTests(unittest.TestCase):
                 module_root,
                 target_dir,
             )
+
+
+class MacHostInputTests(unittest.TestCase):
+    def test_compiles_existing_ax_client_as_host_input_helper(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            evidence = pathlib.Path(directory)
+            completed = subprocess.CompletedProcess([], 0, "compiled")
+            with patch.object(driver.subprocess, "run", return_value=completed) as run:
+                helper = driver._compile_macos_input_helper(evidence)
+            self.assertTrue((evidence / "macos-host-input-helper-build.log").is_file())
+
+        self.assertEqual(helper.name, "macos_host_input")
+        argv = run.call_args.args[0]
+        self.assertTrue(any(item.endswith("macos_ax_client.m") for item in argv))
+        self.assertIn("CoreGraphics", argv)
+
+    def test_locked_or_unknown_session_fails_preflight_before_launch(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            args = type("Args", (), {
+                "command": ["moon", "run", "/workspace/native/examples/macos", "--target", "native"],
+                "platform": "macos", "evidence_dir": root / "evidence", "log": root / "native.log",
+                "window_title": "Yami Native UI", "startup_timeout": 1.0, "marker_timeout": 1.0,
+            })()
+            with patch.dict("os.environ", {"YAMI_NATIVE_WORKSPACE_ROOT": str(root)}), \
+                    patch.object(driver, "_compile_macos_input_helper", return_value=root / "helper"), \
+                    patch.object(driver, "_macos_input_preflight", side_effect=driver.E2EBlocked("locked")), \
+                    patch.object(driver, "_build_native_sample") as build, \
+                    patch.object(driver.subprocess, "Popen") as launch:
+                with self.assertRaisesRegex(driver.E2EBlocked, "locked"):
+                    driver.drive(args)
+            build.assert_not_called()
+            launch.assert_not_called()
+            report = json.loads((root / "evidence/native-ui-report.json").read_text())
+            self.assertEqual(report["status"], "blocked")
+            self.assertFalse(report["sampleLaunched"])
+
+    def test_preflight_accepts_only_authorized_unlocked_console(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            evidence = pathlib.Path(directory)
+            helper = evidence / "helper"
+            allowed = subprocess.CompletedProcess(
+                [], 0, json.dumps({"accessibility": True, "on_console": True,
+                                   "session_locked": False}), "")
+            with patch.object(driver.subprocess, "run", return_value=allowed) as run:
+                status = driver._macos_input_preflight(helper, evidence)
+            self.assertTrue(status["accessibility"])
+            self.assertEqual(run.call_args.args[0], [str(helper), "--preflight"])
+
+            locked = subprocess.CompletedProcess(
+                [], 78, json.dumps({"accessibility": True, "on_console": True,
+                                    "session_locked": True}), "")
+            with patch.object(driver.subprocess, "run", return_value=locked):
+                with self.assertRaisesRegex(driver.E2EBlocked, "refused UI input"):
+                    driver._macos_input_preflight(helper, evidence)
+            self.assertTrue(json.loads(
+                (evidence / "macos-host-input-preflight.json").read_text()
+            )["session_locked"])
+
+    def test_click_and_escape_use_external_helper_and_validate_identity(self) -> None:
+        args = type("Args", (), {
+            "macos_helper": pathlib.Path("/tmp/helper"), "sample_pid": 123,
+            "window_title": "Yami Native UI [native-ui-abc]",
+        })()
+        click_report = {
+            "action": "CGEventPost(kCGHIDEventTap) left click", "pid": 123,
+            "windowTitle": args.window_title, "button": "Click me", "windowNumber": 42,
+            "point": {"x": 64.5, "y": 90.5}, "axHitWithinButton": True,
+        }
+        with patch.object(driver.subprocess, "run", return_value=subprocess.CompletedProcess(
+                [], 0, json.dumps(click_report), "")) as run:
+            driver._send_click("macos", {"button": {"x": 0, "y": 0, "width": 120, "height": 36}}, args)
+        self.assertEqual(run.call_args.args[0][1:5], ["--click", "123", args.window_title, "Click me"])
+        self.assertEqual(run.call_args.args[0][5:], ["120.0", "36.0"])
+
+        escape_report = {
+            "action": "CGEventPost(kCGHIDEventTap) Escape", "pid": 123,
+            "windowTitle": args.window_title,
+        }
+        with patch.object(driver.subprocess, "run", return_value=subprocess.CompletedProcess(
+                [], 0, json.dumps(escape_report), "")) as run:
+            driver._send_escape("macos", args)
+        self.assertEqual(run.call_args.args[0], ["/tmp/helper", "--escape", "123", args.window_title])
+
+        mismatched = dict(click_report, pid=999)
+        with patch.object(driver.subprocess, "run", return_value=subprocess.CompletedProcess(
+                [], 0, json.dumps(mismatched), "")):
+            with self.assertRaisesRegex(driver.E2EError, "launched PID"):
+                driver._send_click("macos", {"button": {"x": 0, "y": 0, "width": 120, "height": 36}}, args)
+
 
 if __name__ == "__main__":
     unittest.main()

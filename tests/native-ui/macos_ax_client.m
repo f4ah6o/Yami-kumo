@@ -1,15 +1,18 @@
 #import <AppKit/AppKit.h>
 #import <ApplicationServices/ApplicationServices.h>
 #import <CoreFoundation/CoreFoundation.h>
+#import <CoreGraphics/CGSession.h>
 
 #include <errno.h>
 #include <limits.h>
+#include <math.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 static void fail(const char *message, AXError error) {
   if (error == kAXErrorSuccess) {
@@ -914,7 +917,430 @@ static void print_json_string(const char *value) {
   putchar('"');
 }
 
+static bool copy_dictionary_boolean(CFDictionaryRef dictionary,
+                                    CFStringRef key, bool *out_value) {
+  if (dictionary == NULL) return false;
+  CFTypeRef value = CFDictionaryGetValue(dictionary, key);
+  if (value == NULL) return false;
+  if (CFGetTypeID(value) == CFBooleanGetTypeID()) {
+    *out_value = CFBooleanGetValue((CFBooleanRef)value);
+    return true;
+  }
+  if (CFGetTypeID(value) == CFNumberGetTypeID()) {
+    int number = 0;
+    if (CFNumberGetValue((CFNumberRef)value, kCFNumberIntType, &number)) {
+      *out_value = number != 0;
+      return true;
+    }
+  }
+  return false;
+}
+
+static int input_preflight(bool emit_report) {
+  bool on_console = false;
+  bool session_locked = true;
+  bool on_console_known = false;
+  bool locked_known = false;
+  CFDictionaryRef session = CGSessionCopyCurrentDictionary();
+  if (session != NULL) {
+    on_console_known = copy_dictionary_boolean(
+        session, CFSTR("kCGSSessionOnConsoleKey"), &on_console);
+    bool lock_marker_present =
+        CFDictionaryContainsKey(session, CFSTR("CGSSessionScreenIsLocked"));
+    locked_known = copy_dictionary_boolean(
+        session, CFSTR("CGSSessionScreenIsLocked"), &session_locked);
+    if (!lock_marker_present && on_console_known && on_console) {
+      // This host omits the private lock marker in an unlocked console session.
+      session_locked = false;
+      locked_known = true;
+    }
+  }
+  bool accessibility = AXIsProcessTrusted();
+  if (emit_report) {
+    printf("{\"accessibility\":%s,\"on_console\":",
+           accessibility ? "true" : "false");
+    if (on_console_known) printf("%s", on_console ? "true" : "false");
+    else printf("null");
+    fputs(",\"session_locked\":", stdout);
+    if (locked_known) printf("%s", session_locked ? "true" : "false");
+    else printf("null");
+    fputs("}\n", stdout);
+  }
+  if (session != NULL) CFRelease(session);
+  if (!accessibility) return 77;
+  if (!on_console_known || !on_console || !locked_known || session_locked) {
+    return 78;
+  }
+  return 0;
+}
+
+static bool read_cf_number(CFDictionaryRef dictionary, CFStringRef key,
+                           double *out_value) {
+  if (dictionary == NULL) return false;
+  CFTypeRef value = CFDictionaryGetValue(dictionary, key);
+  if (value == NULL || CFGetTypeID(value) != CFNumberGetTypeID()) return false;
+  return CFNumberGetValue((CFNumberRef)value, kCFNumberDoubleType, out_value) &&
+         isfinite(*out_value);
+}
+
+static bool copy_visible_target_window(pid_t pid, const char *title,
+                                       CGWindowID *out_window_id,
+                                       CGRect *out_bounds) {
+  CFArrayRef windows = CGWindowListCopyWindowInfo(
+      kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+      kCGNullWindowID);
+  if (windows == NULL) return false;
+  CFIndex matches = 0;
+  for (CFIndex index = 0; index < CFArrayGetCount(windows); index++) {
+    CFTypeRef raw = CFArrayGetValueAtIndex(windows, index);
+    if (raw == NULL || CFGetTypeID(raw) != CFDictionaryGetTypeID()) continue;
+    CFDictionaryRef record = (CFDictionaryRef)raw;
+    double owner = 0, layer = -1, alpha = 0, number = 0;
+    bool on_screen = false;
+    CFTypeRef name = CFDictionaryGetValue(record, kCGWindowName);
+    if (!read_cf_number(record, kCGWindowOwnerPID, &owner) || owner != pid ||
+        !read_cf_number(record, kCGWindowLayer, &layer) || layer != 0 ||
+        !read_cf_number(record, kCGWindowAlpha, &alpha) || alpha <= 0 ||
+        !read_cf_number(record, kCGWindowNumber, &number) || number <= 0 ||
+        !copy_dictionary_boolean(record, kCGWindowIsOnscreen, &on_screen) ||
+        !on_screen || name == NULL || CFGetTypeID(name) != CFStringGetTypeID()) {
+      continue;
+    }
+    char observed[512] = "";
+    if (!CFStringGetCString((CFStringRef)name, observed, sizeof(observed),
+                            kCFStringEncodingUTF8) || strcmp(observed, title) != 0) {
+      continue;
+    }
+    CFTypeRef raw_bounds = CFDictionaryGetValue(record, kCGWindowBounds);
+    if (raw_bounds == NULL || CFGetTypeID(raw_bounds) != CFDictionaryGetTypeID()) {
+      continue;
+    }
+    double x = 0, y = 0, width = 0, height = 0;
+    CFDictionaryRef bounds = (CFDictionaryRef)raw_bounds;
+    if (!read_cf_number(bounds, CFSTR("X"), &x) ||
+        !read_cf_number(bounds, CFSTR("Y"), &y) ||
+        !read_cf_number(bounds, CFSTR("Width"), &width) ||
+        !read_cf_number(bounds, CFSTR("Height"), &height) ||
+        width <= 0 || height <= 0 || number > UINT32_MAX) {
+      continue;
+    }
+    matches += 1;
+    *out_window_id = (CGWindowID)number;
+    *out_bounds = CGRectMake(x, y, width, height);
+  }
+  CFRelease(windows);
+  return matches == 1;
+}
+
+static bool target_is_frontmost(pid_t pid) {
+  NSRunningApplication *frontmost = [[NSWorkspace sharedWorkspace] frontmostApplication];
+  return frontmost != nil && frontmost.processIdentifier == pid;
+}
+
+static bool copy_focused_target_window(pid_t pid, const char *title,
+                                       AXUIElementRef *out_app,
+                                       AXUIElementRef *out_window) {
+  AXUIElementRef app = AXUIElementCreateApplication(pid);
+  if (app == NULL) return false;
+  (void)AXUIElementSetMessagingTimeout(app, 0.25f);
+  AXError app_error = kAXErrorNoValue;
+  AXError system_error = kAXErrorNoValue;
+  CFIndex app_count = 0, app_owned = 0, app_exact = 0;
+  CFIndex system_count = 0, system_owned = 0, system_exact = 0;
+  WindowSearchDiagnostics app_diagnostics = {0};
+  WindowSearchDiagnostics system_diagnostics = {0};
+  WindowSearchDiagnostics app_tree_diagnostics = {0};
+  WindowSearchDiagnostics system_tree_diagnostics = {0};
+  WindowSearchDiagnostics focused_diagnostics = {0};
+  WindowSearchDiagnostics main_diagnostics = {0};
+  bool title_matched = false;
+  char last_title[512] = "";
+  AXUIElementRef exact = find_window(
+      app, pid, title, &app_error, &app_count, &app_owned, &app_exact,
+      &system_error, &system_count, &system_owned, &system_exact,
+      last_title, sizeof(last_title), &title_matched,
+      &app_diagnostics, &system_diagnostics, &app_tree_diagnostics,
+      &system_tree_diagnostics, &focused_diagnostics, &main_diagnostics,
+      monotonic_seconds() + 3.0);
+  if (exact == NULL || !title_matched) {
+    if (exact != NULL) CFRelease(exact);
+    CFRelease(app);
+    return false;
+  }
+  CFTypeRef raw_focused = NULL;
+  AXError error = AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute,
+                                                &raw_focused);
+  bool focused_matches = error == kAXErrorSuccess && raw_focused != NULL &&
+                         CFGetTypeID(raw_focused) == AXUIElementGetTypeID() &&
+                         CFEqual((AXUIElementRef)raw_focused, exact);
+  if (raw_focused != NULL) CFRelease(raw_focused);
+  if (!focused_matches) {
+    CFRelease(exact);
+    CFRelease(app);
+    return false;
+  }
+  *out_app = app;
+  *out_window = exact;
+  return true;
+}
+
+static bool ax_hit_is_inside(AXUIElementRef hit, pid_t pid,
+                             AXUIElementRef button) {
+  AXUIElementRef current = (AXUIElementRef)CFRetain(hit);
+  bool inside = false;
+  for (unsigned depth = 0; depth < 16 && current != NULL; depth++) {
+    pid_t owner = 0;
+    if (AXUIElementGetPid(current, &owner) != kAXErrorSuccess || owner != pid) break;
+    if (CFEqual(current, button)) {
+      inside = true;
+      break;
+    }
+    CFTypeRef raw_parent = NULL;
+    AXError error = AXUIElementCopyAttributeValue(current, kAXParentAttribute,
+                                                  &raw_parent);
+    CFRelease(current);
+    current = NULL;
+    if (error == kAXErrorSuccess && raw_parent != NULL &&
+        CFGetTypeID(raw_parent) == AXUIElementGetTypeID()) {
+      current = (AXUIElementRef)raw_parent;
+    } else if (raw_parent != NULL) {
+      CFRelease(raw_parent);
+    }
+  }
+  if (current != NULL) CFRelease(current);
+  return inside;
+}
+
+static bool topmost_window_owns_point(pid_t pid, const char *title,
+                                     CGPoint point, CGWindowID expected_id) {
+  CFArrayRef windows = CGWindowListCopyWindowInfo(
+      kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+      kCGNullWindowID);
+  if (windows == NULL) return false;
+  bool owned = false;
+  for (CFIndex index = 0; index < CFArrayGetCount(windows); index++) {
+    CFTypeRef raw = CFArrayGetValueAtIndex(windows, index);
+    if (raw == NULL || CFGetTypeID(raw) != CFDictionaryGetTypeID()) continue;
+    CFDictionaryRef record = (CFDictionaryRef)raw;
+    double alpha = 0, number = 0;
+    bool on_screen = false;
+    if (!read_cf_number(record, kCGWindowAlpha, &alpha) || alpha <= 0 ||
+        !read_cf_number(record, kCGWindowNumber, &number) ||
+        !copy_dictionary_boolean(record, kCGWindowIsOnscreen, &on_screen) ||
+        !on_screen) continue;
+    CFTypeRef raw_bounds = CFDictionaryGetValue(record, kCGWindowBounds);
+    if (raw_bounds == NULL || CFGetTypeID(raw_bounds) != CFDictionaryGetTypeID()) continue;
+    double x = 0, y = 0, width = 0, height = 0;
+    CFDictionaryRef bounds = (CFDictionaryRef)raw_bounds;
+    if (!read_cf_number(bounds, CFSTR("X"), &x) ||
+        !read_cf_number(bounds, CFSTR("Y"), &y) ||
+        !read_cf_number(bounds, CFSTR("Width"), &width) ||
+        !read_cf_number(bounds, CFSTR("Height"), &height)) continue;
+    if (!CGRectContainsPoint(CGRectMake(x, y, width, height), point)) continue;
+    double owner = 0;
+    if (!read_cf_number(record, kCGWindowOwnerPID, &owner) || owner != pid ||
+        number != expected_id) break;
+    CFTypeRef name = CFDictionaryGetValue(record, kCGWindowName);
+    char observed[512] = "";
+    owned = name != NULL && CFGetTypeID(name) == CFStringGetTypeID() &&
+            CFStringGetCString((CFStringRef)name, observed, sizeof(observed),
+                               kCFStringEncodingUTF8) &&
+            strcmp(observed, title) == 0;
+    break;
+  }
+  CFRelease(windows);
+  return owned;
+}
+
+static bool copy_ax_point(AXUIElementRef element, CFStringRef attribute,
+                          AXValueType type, CGPoint *out_point,
+                          CGSize *out_size) {
+  CFTypeRef raw = NULL;
+  AXError error = AXUIElementCopyAttributeValue(element, attribute, &raw);
+  if (error != kAXErrorSuccess || raw == NULL ||
+      CFGetTypeID(raw) != AXValueGetTypeID()) {
+    if (raw != NULL) CFRelease(raw);
+    return false;
+  }
+  bool ok = false;
+  if (type == kAXValueCGPointType) {
+    ok = AXValueGetValue((AXValueRef)raw, type, out_point);
+  } else if (type == kAXValueCGSizeType) {
+    ok = AXValueGetValue((AXValueRef)raw, type, out_size);
+  }
+  CFRelease(raw);
+  return ok;
+}
+
+static int external_input(int argc, char **argv) {
+  bool click = strcmp(argv[1], "--click") == 0;
+  if ((!click && (argc != 4 || strcmp(argv[1], "--escape") != 0)) ||
+      (click && argc != 7)) {
+    fprintf(stderr, "usage: --click PID WINDOW_TITLE BUTTON_NAME WIDTH HEIGHT | --escape PID WINDOW_TITLE\n");
+    return 2;
+  }
+  char *end = NULL;
+  long parsed_pid = strtol(argv[2], &end, 10);
+  if (end == argv[2] || *end != '\0' || parsed_pid <= 0 || parsed_pid > INT_MAX) {
+    fprintf(stderr, "invalid sample PID\n");
+    return 2;
+  }
+  pid_t pid = (pid_t)parsed_pid;
+  const char *title = argv[3];
+  if (input_preflight(false) != 0) return 1;
+  if (!target_is_frontmost(pid)) {
+    fprintf(stderr, "refusing host input because the exact sample PID is not frontmost\n");
+    return 1;
+  }
+  AXUIElementRef app = NULL;
+  AXUIElementRef window = NULL;
+  if (!copy_focused_target_window(pid, title, &app, &window)) {
+    fprintf(stderr, "refusing host input because the exact titled AXWindow is not uniquely focused\n");
+    return 1;
+  }
+  CGWindowID window_id = 0;
+  CGRect window_bounds = CGRectZero;
+  if (!copy_visible_target_window(pid, title, &window_id, &window_bounds)) {
+    CFRelease(window);
+    CFRelease(app);
+    fprintf(stderr, "refusing host input because the exact titled sample window is not uniquely visible\n");
+    return 1;
+  }
+  if (!click) {
+    if (input_preflight(false) != 0 || !target_is_frontmost(pid)) {
+      CFRelease(window);
+      CFRelease(app);
+      fprintf(stderr, "refusing Escape because the session or frontmost identity changed\n");
+      return 1;
+    }
+    CGEventRef down = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)53, true);
+    CGEventRef up = CGEventCreateKeyboardEvent(NULL, (CGKeyCode)53, false);
+    if (down == NULL || up == NULL) {
+      if (down != NULL) CFRelease(down);
+      if (up != NULL) CFRelease(up);
+      CFRelease(window);
+      CFRelease(app);
+      fprintf(stderr, "could not create Escape events\n");
+      return 1;
+    }
+    CGEventPost(kCGHIDEventTap, down);
+    CGEventPost(kCGHIDEventTap, up);
+    CFRelease(down);
+    CFRelease(up);
+    printf("{\"action\":\"CGEventPost(kCGHIDEventTap) Escape\",\"pid\":%d,\"windowTitle\":",
+           (int)pid);
+    print_json_string(title);
+    fputs("}\n", stdout);
+    CFRelease(window);
+    CFRelease(app);
+    return 0;
+  }
+  const char *button_name = argv[4];
+  char *width_end = NULL, *height_end = NULL;
+  double expected_width = strtod(argv[5], &width_end);
+  double expected_height = strtod(argv[6], &height_end);
+  if (width_end == argv[5] || *width_end != '\0' || !isfinite(expected_width) ||
+      expected_width <= 0 || height_end == argv[6] || *height_end != '\0' ||
+      !isfinite(expected_height) || expected_height <= 0) {
+    CFRelease(window);
+    CFRelease(app);
+    fprintf(stderr, "invalid expected Button dimensions\n");
+    return 2;
+  }
+  unsigned visited = 0;
+  AXUIElementRef button = find_button(window, button_name, 0, &visited,
+                                      monotonic_seconds() + 2.0);
+  if (button == NULL) {
+    CFRelease(window);
+    CFRelease(app);
+    fprintf(stderr, "refusing host click because the named sample AXButton is absent\n");
+    return 1;
+  }
+  CGPoint position = CGPointZero;
+  CGSize size = CGSizeZero;
+  int activation_count = -1;
+  AXError enabled_error = kAXErrorSuccess;
+  bool valid_button = button_enabled(button, &enabled_error) &&
+                      button_help_count(button, &activation_count) &&
+                      activation_count == 0 &&
+                      copy_ax_point(button, kAXPositionAttribute,
+                                    kAXValueCGPointType, &position, NULL) &&
+                      copy_ax_point(button, kAXSizeAttribute,
+                                    kAXValueCGSizeType, NULL, &size) &&
+                      fabs(size.width - expected_width) <= 1.0 &&
+                      fabs(size.height - expected_height) <= 1.0;
+  CGPoint point = CGPointMake(position.x + size.width / 2.0,
+                              position.y + size.height / 2.0);
+  if (!valid_button || !CGRectContainsPoint(window_bounds, point) ||
+      !topmost_window_owns_point(pid, title, point, window_id)) {
+    CFRelease(button);
+    CFRelease(window);
+    CFRelease(app);
+    fprintf(stderr, "refusing host click because the enabled Button frame is invalid, occluded, or not in the selected window\n");
+    return 1;
+  }
+  AXUIElementRef system = AXUIElementCreateSystemWide();
+  AXUIElementRef hit = NULL;
+  AXError hit_error = system == NULL ? kAXErrorFailure :
+      AXUIElementCopyElementAtPosition(system, (float)point.x, (float)point.y, &hit);
+  bool point_owner_matches = hit_error == kAXErrorSuccess && hit != NULL &&
+      ax_hit_is_inside(hit, pid, button);
+  if (hit != NULL) CFRelease(hit);
+  if (system != NULL) CFRelease(system);
+  if (!point_owner_matches || !target_is_frontmost(pid)) {
+    CFRelease(button);
+    CFRelease(window);
+    CFRelease(app);
+    fprintf(stderr, "refusing host click because AX point ownership or frontmost identity changed\n");
+    return 1;
+  }
+  CGEventRef down = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseDown,
+                                            point, kCGMouseButtonLeft);
+  CGEventRef up = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseUp,
+                                          point, kCGMouseButtonLeft);
+  if (down == NULL || up == NULL) {
+    if (down != NULL) CFRelease(down);
+    if (up != NULL) CFRelease(up);
+    CFRelease(button);
+    CFRelease(window);
+    CFRelease(app);
+    fprintf(stderr, "could not create mouse click events\n");
+    return 1;
+  }
+  if (input_preflight(false) != 0 || !target_is_frontmost(pid)) {
+    CFRelease(down);
+    CFRelease(up);
+    CFRelease(button);
+    CFRelease(window);
+    CFRelease(app);
+    fprintf(stderr, "refusing host click because the session or frontmost identity changed\n");
+    return 1;
+  }
+  CGEventPost(kCGHIDEventTap, down);
+  CGEventPost(kCGHIDEventTap, up);
+  CFRelease(down);
+  CFRelease(up);
+  printf("{\"action\":\"CGEventPost(kCGHIDEventTap) left click\",\"pid\":%d,\"windowTitle\":",
+         (int)pid);
+  print_json_string(title);
+  fputs(",\"button\":", stdout);
+  print_json_string(button_name);
+  printf(",\"windowNumber\":%u,\"point\":{\"x\":%.3f,\"y\":%.3f},\"axHitWithinButton\":true}\n",
+         (unsigned int)window_id, point.x, point.y);
+  CFRelease(button);
+  CFRelease(window);
+  CFRelease(app);
+  return 0;
+}
+
 int main(int argc, char **argv) {
+  if (argc == 2 && strcmp(argv[1], "--preflight") == 0) {
+    return input_preflight(true);
+  }
+  if (argc >= 2 && (strcmp(argv[1], "--click") == 0 ||
+                    strcmp(argv[1], "--escape") == 0)) {
+    return external_input(argc, argv);
+  }
   if (argc != 6) {
     fprintf(stderr, "usage: macos_ax_client PID WINDOW_TITLE BUTTON_NAME BUNDLE_ID BUNDLE_PATH\n");
     return 2;

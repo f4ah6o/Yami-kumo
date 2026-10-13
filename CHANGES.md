@@ -14,6 +14,8 @@
 ### Changed
 
 - Pinned `@cloudflare/kumo` to `2.14.0` so generated class and stylesheet contracts remain reproducible.
+- Bumped the native module to `0.2.4` against GPUI `0.7.1`; its macOS sample now waits for guarded external host input instead of in-process test events.
+- Made the macOS native UI runner fail closed on locked or unknown console sessions and record blocked preflight evidence before launching the sample.
 
 ### Fixed
 

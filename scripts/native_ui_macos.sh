@@ -74,6 +74,15 @@ sh "$yami_root/scripts/native_ui_workspace.sh" \
 if [ "$mode" = "--build-and-test" ]; then
   sh "$yami_root/scripts/native_ui_workspace.sh" \
     moon build "$yami_root/native/examples/macos" --target native --deny-warn
+  if ! /usr/bin/clang -fobjc-arc -Wall -Wextra \
+      "$yami_root/tests/native-ui/macos_ax_client.m" \
+      -framework AppKit -framework ApplicationServices \
+      -framework CoreFoundation -framework CoreGraphics \
+      -o "$evidence_dir/macos_host_input" \
+      > "$evidence_dir/macos-host-input-helper-build.log" 2>&1; then
+    tail -n 120 "$evidence_dir/macos-host-input-helper-build.log" >&2 || true
+    exit 1
+  fi
   echo "macOS native build and portable tests passed; runtime UI proof was not run."
   exit 0
 fi

@@ -28,6 +28,10 @@ class E2EError(RuntimeError):
     pass
 
 
+class E2EBlocked(E2EError):
+    pass
+
+
 @dataclass(frozen=True)
 class PPM:
     width: int
@@ -498,10 +502,17 @@ def _send_click(platform: str, ready: dict[str, Any], args: argparse.Namespace) 
     elif platform == "windows":
         _windows_click(ready, args.window_title)
     else:
-        print(
-            "macOS E2E: waiting for the GPUI testing-only NSEvent to traverse "
-            "the owned NSWindow host event path.",
-            flush=True,
+        _run_macos_input_helper(
+            args,
+            [
+                "--click",
+                str(args.sample_pid),
+                args.window_title,
+                "Click me",
+                str(_rect(ready.get("button"), "button")[2]),
+                str(_rect(ready.get("button"), "button")[3]),
+            ],
+            "CGEventPost(kCGHIDEventTap) left click",
         )
 
 
@@ -511,11 +522,128 @@ def _send_escape(platform: str, args: argparse.Namespace) -> None:
     elif platform == "windows":
         _windows_escape(args.window_title)
     else:
-        print(
-            "macOS E2E: the GPUI testing-only Escape event will traverse the "
-            "owned NSWindow host event path.",
-            flush=True,
+        _run_macos_input_helper(
+            args,
+            ["--escape", str(args.sample_pid), args.window_title],
+            "CGEventPost(kCGHIDEventTap) Escape",
         )
+
+
+def _compile_macos_input_helper(evidence_dir: Path) -> Path:
+    helper = evidence_dir / "macos_host_input"
+    result = subprocess.run(
+        [
+            "/usr/bin/clang",
+            "-fobjc-arc",
+            "-Wall",
+            "-Wextra",
+            str(Path(__file__).with_name("macos_ax_client.m")),
+            "-framework",
+            "AppKit",
+            "-framework",
+            "ApplicationServices",
+            "-framework",
+            "CoreFoundation",
+            "-framework",
+            "CoreGraphics",
+            "-o",
+            str(helper),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    (evidence_dir / "macos-host-input-helper-build.log").write_text(
+        result.stdout, encoding="utf-8"
+    )
+    if result.returncode != 0:
+        raise E2EError(
+            "macOS host-input helper compilation failed; log: "
+            f"{evidence_dir / 'macos-host-input-helper-build.log'}"
+        )
+    return helper
+
+
+def _run_macos_input_helper(
+    args: argparse.Namespace, command: list[str], expected_action: str
+) -> dict[str, Any]:
+    helper = getattr(args, "macos_helper", None)
+    pid = getattr(args, "sample_pid", None)
+    if helper is None or not isinstance(pid, int) or pid <= 0:
+        raise E2EError("macOS host input requires a compiled helper and launched sample PID")
+    result = subprocess.run(
+        [str(helper), *command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or f"status {result.returncode}"
+        raise E2EError(f"macOS host-input helper refused the event: {detail}")
+    try:
+        report = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        raise E2EError(f"macOS host-input helper returned invalid JSON: {result.stdout!r}") from error
+    if not isinstance(report, dict) or report.get("pid") != pid:
+        raise E2EError(f"macOS host-input report does not identify the launched PID: {report!r}")
+    if report.get("windowTitle") != args.window_title or report.get("action") != expected_action:
+        raise E2EError(f"macOS host-input report does not match the requested window/action: {report!r}")
+    if expected_action.endswith("left click"):
+        point = report.get("point")
+        try:
+            point_is_finite = isinstance(point, dict) and all(
+                math.isfinite(float(point.get(axis, math.nan))) for axis in ("x", "y")
+            )
+        except (TypeError, ValueError):
+            point_is_finite = False
+        if (
+            report.get("button") != command[3]
+            or report.get("axHitWithinButton") is not True
+            or type(report.get("windowNumber")) is not int
+            or not point_is_finite
+        ):
+            raise E2EError(f"macOS click report lacks exact AX Button/window ownership: {report!r}")
+    return report
+
+
+def _macos_input_preflight(
+    helper: Path, evidence_dir: Path | None = None
+) -> dict[str, Any]:
+    result = subprocess.run(
+        [str(helper), "--preflight"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    try:
+        status = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        detail = result.stderr.strip() or result.stdout.strip() or f"status {result.returncode}"
+        raise E2EError(f"macOS host-input preflight returned invalid output: {detail}") from error
+    if evidence_dir is not None:
+        (evidence_dir / "macos-host-input-preflight.json").write_text(
+            json.dumps(status, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    if not isinstance(status, dict):
+        raise E2EError(f"macOS host-input preflight returned an invalid status: {status!r}")
+    if (
+        status.get("accessibility") is not True
+        or status.get("on_console") is not True
+        or status.get("session_locked") is not False
+    ):
+        raise E2EBlocked(f"macOS host-input preflight refused UI input: {status!r}")
+    if result.returncode != 0:
+        raise E2EError(f"macOS host-input preflight refused UI input: {status!r}")
+    return status
 
 
 def _assert_frames(
@@ -701,6 +829,9 @@ def drive(args: argparse.Namespace) -> int:
     process: subprocess.Popen[str] | None = None
     output: ProcessOutput | None = None
     try:
+        if args.platform == "macos":
+            args.macos_helper = _compile_macos_input_helper(evidence_dir)
+            _macos_input_preflight(args.macos_helper, evidence_dir)
         run_command, runtime_target = _build_native_sample(
             args.command,
             args.platform,
@@ -724,6 +855,9 @@ def drive(args: argparse.Namespace) -> int:
             errors="replace",
             bufsize=1,
         )
+        click_args = argparse.Namespace(**vars(args))
+        click_args.window_title = run_title
+        click_args.sample_pid = process.pid
         output = ProcessOutput(process, log_path)
         ready = output.wait_marker("YAMI_NATIVE_UI_READY", timeout=args.startup_timeout)
         button = _rect(ready.get("button"), "button")
@@ -735,8 +869,6 @@ def drive(args: argparse.Namespace) -> int:
             timeout=args.marker_timeout,
         )
         _marker_state(before, 0)
-        click_args = argparse.Namespace(**vars(args))
-        click_args.window_title = run_title
         _send_click(args.platform, ready, click_args)
         click = output.wait_marker("YAMI_NATIVE_UI_CLICK", timeout=args.marker_timeout)
         if click.get("count") != 1 or click.get("value") != 1:
@@ -756,10 +888,11 @@ def drive(args: argparse.Namespace) -> int:
             raise E2EError(f"native sample exited with status {return_code}")
         report = {
             "platform": args.platform,
+            "status": "passed",
             "inputDelivery": {
                 "linux": "XTest pointer input through Xvfb -> Weston X11 backend -> Wayland client",
                 "windows": "Win32 SendInput to the visible native HWND",
-                "macos": "synthetic NSEvent through the owned NSWindow sendEvent path; not physical hardware",
+                "macos": "global CGEventPost synthetic mouse/keyboard input guarded by the unlocked session, exact frontmost PID/title, visible window and AX Button hit target; not physical hardware",
             }[args.platform],
             "windowTitle": run_title,
             "buttonBounds": ready["button"],
@@ -778,6 +911,23 @@ def drive(args: argparse.Namespace) -> int:
         return 0
     except (E2EError, OSError, subprocess.SubprocessError, KeyError, ValueError) as error:
         print(f"Native UI E2E failed: {error}", file=sys.stderr, flush=True)
+        if args.platform == "macos":
+            report = {
+                "platform": "macos",
+                "status": "blocked" if isinstance(error, E2EBlocked) else "failed",
+                "windowTitle": run_title,
+                "sampleLaunched": process is not None,
+                "error": str(error),
+            }
+            preflight_path = evidence_dir / "macos-host-input-preflight.json"
+            if preflight_path.is_file():
+                report["preflight"] = json.loads(
+                    preflight_path.read_text(encoding="utf-8")
+                )
+            report_path = evidence_dir / "native-ui-report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
         if process is not None and process.poll() is None:
             process.terminate()
             try:
