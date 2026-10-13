@@ -40,9 +40,20 @@ to `a`. The remaining body mutants concern boolean-attribute classification and
 void tags, outside this escaping property. Coarse body mutations do not establish
 fine-grained escape coverage or comprehensive correctness.
 
-Pristine and final root MoonBit tests pass twice on wasm, wasm-gc, JS and native
-backends (12 tests before, 15 after). Root all-target check, browser JS release
-build and compiled-renderer smoke check pass. Full root formatting fails on
-pre-existing README.mbt.md and generated contract formatting; unrelated formatter
-changes were not retained. React/Vite and generated-contract gates were blocked
-by missing JS dependencies/tool setup. This is not a full application CI pass.
+Pristine and property-only root MoonBit tests pass twice on wasm, wasm-gc, JS
+and native backends (12 tests before, 15 after). Root all-target check, browser
+JS release build and compiled-renderer smoke check also pass. During that initial
+property-only validation, full root formatting failed on pre-existing
+README.mbt.md and generated-contract formatting, while React/Vite and
+generated-contract gates were blocked by missing JS dependencies/tool setup.
+
+The combined property and generator-formatting patch resolves those validation
+blockers. With MoonBit 0.10.14+7d59c7ec9 and pnpm 11.24.0, root `moon fmt --check`
+and all-target check pass, with 15 tests passing on each of the four backends.
+Vite check, TypeScript checking, all 3 frontend unit tests, the Vite build,
+generated-contract check and complete `build:parity` pass. The generator now uses
+a visible temporary package so MoonBit actually formats the generated contract;
+its tokens, comments and all 180 string literals remain unchanged. README.mbt.md
+also receives formatter normalization, including explicit `nocheck` fence metadata.
+These root-module and frontend gates do not establish real UI end-to-end behavior,
+browser visual/interaction parity, or comprehensive sanitization correctness.
