@@ -12,14 +12,21 @@ moon add f4ah6o/yami_kumo
 
 ## Render an application shell
 
-```moonbit
+```moonbit nocheck
+///|
 let brand = @yami_kumo.text("Workspace")
+
+///|
 let main = @yami_kumo.text_component(
   @yami_kumo.text("Project settings"),
   variant=@yami_kumo.Heading,
   size=@yami_kumo.Lg,
 )
+
+///|
 let shell = @yami_kumo.app_shell(brand, main)
+
+///|
 let html = @yami_kumo.render_html(shell)
 ```
 
