@@ -39,6 +39,12 @@
 
 ### Migration
 
+## native-0.2.4 - 2026-10-13
+
+### Changed
+
+- Bumped `f4ah6o/yami_kumo_native` to `0.2.4` against GPUI `0.7.1` and pure MoonBit module `f4ah6o/yami_kumo` `0.1.1`; native APIs and platform proof scope are unchanged.
+
 ## native-0.2.3 - 2026-10-11
 
 ### Added
