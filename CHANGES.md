@@ -1,5 +1,17 @@
 # Changes
 
+## 0.1.1 - 2026-10-13
+
+### Added
+
+- Added bounded property-based tests for text and title-attribute HTML escaping.
+
+### Fixed
+
+- Resolve the compiled renderer URL directly so the Windows smoke handles drive-letter paths.
+- Keep generated Kumo contract code in MoonBit's canonical formatted layout.
+- Format the package README example as valid MoonBit code blocks.
+
 ## Unreleased
 
 ### Added
