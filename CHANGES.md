@@ -26,8 +26,12 @@
 ### Changed
 
 - Pinned `@cloudflare/kumo` to `2.14.0` so generated class and stylesheet contracts remain reproducible.
+- Bumped the native module to `0.2.5` against GPUI `0.7.2` and pure MoonBit module `0.1.1`; its macOS sample runner revalidates the target before each event, bounds AX/helper lifetimes, and uses zero-modifier input. The external input route remains runtime-unqualified.
+- Made the macOS native UI runner fail closed on locked or unknown console sessions and record blocked preflight evidence before launching the sample.
 
 ### Fixed
+
+- Make guarded macOS input cleanup preserve pending event ownership and report teardown failures instead of passing qualification after an incomplete release.
 
 ### Deprecated
 
@@ -36,6 +40,7 @@
 ### Security
 
 - Escaped text and attribute values, restricted element and attribute names, and removed inline styles from generated button markup for strict Content Security Policy compatibility.
+- Revalidate the full macOS target snapshot before every global input post, bound AX queries and helper lifetime, and clear inherited modifier flags in the native UI sample helper.
 
 ### Migration
 

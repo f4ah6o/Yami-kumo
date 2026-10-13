@@ -13,17 +13,6 @@ pub type NativeFrameCapture = (@platform.WindowId) -> Result[
 ]
 
 ///|
-pub type NativeTestClick = (@platform.WindowId, @primitives.Point) -> Result[
-  Unit,
-  @diagnostics.FrameworkError,
-]
-
-///|
-pub type NativeTestEscape = (@platform.WindowId) -> Result[
-  Unit,
-  @diagnostics.FrameworkError,
-]
-
 ///|
 pub type NativeButtonAXPublish = (
   @platform.WindowId,
@@ -135,14 +124,12 @@ fn PresentationGate::completed_frame_is_current(
 ///|
 /// Run the same common sample and event controller on each native backend.
 /// Platform mains only start a Host, adapt its text-measurement provider and
-/// supply E2E-scoped native input/readback callbacks.
+/// supply E2E-scoped native frame readback. The platform driver supplies input.
 pub fn run_native_sample(
   host : &@platform.Backend,
   platform : NativeSamplePlatform,
   measure : @components.TextMeasure,
   capture : NativeFrameCapture,
-  test_click : NativeTestClick,
-  test_escape : NativeTestEscape,
   accessibility_port? : NativeButtonAXPort? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let args = @env.args()
@@ -208,8 +195,8 @@ pub fn run_native_sample(
   }
   let evidence = { initial: None, }
   let result = run_native_loop(
-    host, window, sample, platform, measure, capture, test_click, test_escape, e2e,
-    smoke, ax_e2e, accessibility_port, evidence_dir, evidence,
+    host, window, sample, platform, measure, capture, e2e, smoke, ax_e2e,
+    accessibility_port, evidence_dir, evidence,
   )
   let stopped = sample.shutdown()
   match result {
@@ -226,8 +213,6 @@ fn run_native_loop(
   platform : NativeSamplePlatform,
   measure : @components.TextMeasure,
   capture : NativeFrameCapture,
-  test_click : NativeTestClick,
-  test_escape : NativeTestEscape,
   e2e : Bool,
   smoke : Bool,
   ax_e2e : Bool,
@@ -304,8 +289,7 @@ fn run_native_loop(
                   presented_frames += 1
                   match
                     publish_frame(
-                      host, window, frame, platform, e2e, evidence_dir, capture,
-                      test_click, test_escape, evidence,
+                      host, window, frame, e2e, evidence_dir, capture, evidence,
                     ) {
                     Err(error) => return Err(error)
                     Ok(_) => ()
@@ -423,10 +407,9 @@ fn run_native_loop(
           )
         }
         match
-          publish_frame(
-            host, window, frame, platform, e2e, evidence_dir, capture, test_click,
-            test_escape, evidence,
-          ) {
+        publish_frame(
+          host, window, frame, e2e, evidence_dir, capture, evidence,
+        ) {
           Err(error) => return Err(error)
           Ok(_) => ()
         }
@@ -646,12 +629,9 @@ fn publish_frame(
   _host : &@platform.Backend,
   window : @platform.WindowId,
   frame : @sample.SampleFrame,
-  platform : NativeSamplePlatform,
   e2e : Bool,
   evidence_dir : String?,
   capture : NativeFrameCapture,
-  test_click : NativeTestClick,
-  test_escape : NativeTestEscape,
   evidence : FrameEvidence,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   if !e2e {
@@ -771,27 +751,6 @@ fn publish_frame(
     emit_native_marker(
       "YAMI_NATIVE_UI_READY {\"windowId\":\{window.value()},\"title\":\"\{title}\",\"buttonId\":40,\"scale\":\{captured.scale()},\"button\":\{rect_json(frame.button_bounds())},\"buttonLabel\":\{rect_json(frame.button_label_bounds())},\"counter\":\{rect_json(frame.counter_bounds())}}",
     )
-    if platform is Macos {
-      let button = frame.button_bounds()
-      let center = match
-        @primitives.Point::new(
-          button.left() + button.size().width() / 2.0,
-          button.top() + button.size().height() / 2.0,
-        ) {
-        Err(_) =>
-          return Err(runner_error("publish_frame", "Button center is invalid"))
-        Ok(value) => value
-      }
-      match test_click(window, center) {
-        Err(error) => return Err(error)
-        Ok(_) => ()
-      }
-    }
-  } else if platform is Macos {
-    match test_escape(window) {
-      Err(error) => return Err(error)
-      Ok(_) => ()
-    }
   }
   Ok(())
 }
