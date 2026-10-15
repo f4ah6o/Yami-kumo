@@ -8,8 +8,11 @@ export const REQUIRED_HEADROOM_BYTES = 512 * 1024 * 1024;
 const RESERVATION_CHUNK = 64 * 1024;
 
 export function assessHeadroom(availableBytes, requiredBytes = REQUIRED_HEADROOM_BYTES) {
-  return { available_bytes: availableBytes, required_headroom_bytes: requiredBytes,
-    sufficient: Number.isFinite(availableBytes) && availableBytes >= requiredBytes };
+  return {
+    available_bytes: availableBytes,
+    required_headroom_bytes: requiredBytes,
+    sufficient: Number.isFinite(availableBytes) && availableBytes >= requiredBytes,
+  };
 }
 
 export function assessMeasurementHost(platform) {
@@ -29,19 +32,33 @@ export function resolveChromeExecutable(platform, override) {
   return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 }
 
-export function canMarkObserved(report, { stdoutTruncated = false, stderrTruncated = false, aborting = false } = {}) {
-  return report.measurement_complete === true && report.cases.length === 7 &&
-    report.cases.every((item) => item.status === 'observed') && report.browser?.returncode === 0 && !report.browser?.signal &&
-    report.browser?.closed_returncode === 0 && !report.browser?.closed_signal &&
+export function canMarkObserved(
+  report,
+  { stdoutTruncated = false, stderrTruncated = false, aborting = false } = {},
+) {
+  return (
+    report.measurement_complete === true &&
+    report.cases.length === 7 &&
+    report.cases.every((item) => item.status === 'observed') &&
+    report.browser?.returncode === 0 &&
+    !report.browser?.signal &&
+    report.browser?.closed_returncode === 0 &&
+    !report.browser?.closed_signal &&
     report.server_cleanup?.succeeded === true &&
-    !report.retention_error && !stdoutTruncated && !stderrTruncated && !report.cleanup_error && !aborting;
+    !report.retention_error &&
+    !stdoutTruncated &&
+    !stderrTruncated &&
+    !report.cleanup_error &&
+    !aborting
+  );
 }
 
 function writeFully(fd, buffer, position, io = fs) {
   let written = 0;
   while (written < buffer.length) {
     const count = io.writeSync(fd, buffer, written, buffer.length - written, position + written);
-    if (count <= 0) throw Object.assign(new Error('Evidence write made no progress'), { code: 'EIO' });
+    if (count <= 0)
+      throw Object.assign(new Error('Evidence write made no progress'), { code: 'EIO' });
     written += count;
   }
 }
@@ -72,9 +89,12 @@ function reserve(fd, capacity, fillByte, io = fs) {
 function jsonBlock(value, capacity) {
   const payload = Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
   if (payload.length > capacity) {
-    throw Object.assign(new Error(`Checkpoint needs ${payload.length} bytes; reserved ${capacity}`), {
-      code: 'EVIDENCE_CAPACITY',
-    });
+    throw Object.assign(
+      new Error(`Checkpoint needs ${payload.length} bytes; reserved ${capacity}`),
+      {
+        code: 'EVIDENCE_CAPACITY',
+      },
+    );
   }
   const block = Buffer.alloc(capacity, 0x20);
   payload.copy(block);
@@ -88,9 +108,13 @@ function writeJsonSlot(fd, capacity, value, io = fs) {
   const readback = readFully(fd, capacity, 0, io);
   if (!readback.equals(block)) throw new Error('Durable JSON readback differs');
   let parsed;
-  try { parsed = JSON.parse(readback.toString('utf8')); }
-  catch { throw new Error('Durable JSON readback is invalid'); }
-  if (JSON.stringify(parsed) !== JSON.stringify(value)) throw new Error('Durable JSON value differs');
+  try {
+    parsed = JSON.parse(readback.toString('utf8'));
+  } catch {
+    throw new Error('Durable JSON readback is invalid');
+  }
+  if (JSON.stringify(parsed) !== JSON.stringify(value))
+    throw new Error('Durable JSON value differs');
 }
 
 /** Keeps the original raw bytes, while making any capped retention explicit. */
@@ -121,7 +145,9 @@ export class RawLogCapture {
     return this.truncated;
   }
 
-  bytes() { return Buffer.concat(this.chunks, this.retainedLength); }
+  bytes() {
+    return Buffer.concat(this.chunks, this.retainedLength);
+  }
 
   metadata() {
     return {
@@ -165,7 +191,12 @@ export class EvidenceStore {
         const fd = this.io.openSync(path, 'wx+', 0o600);
         this.handles.set(key, fd);
         reserve(fd, this.reportCapacity, 0x20, this.io);
-        writeJsonSlot(fd, this.reportCapacity, { ...initial, status: 'unverified', checkpoint_generation: 0 }, this.io);
+        writeJsonSlot(
+          fd,
+          this.reportCapacity,
+          { ...initial, status: 'unverified', checkpoint_generation: 0 },
+          this.io,
+        );
       }
       for (const [index, path] of this.paths.logs.entries()) {
         const fd = this.io.openSync(path, 'wx+', 0o600);
@@ -173,7 +204,11 @@ export class EvidenceStore {
         reserve(fd, this.logCapacity, 0xa5, this.io);
       }
     } catch (error) {
-      try { this.close(); } catch { /* preserve the reservation failure */ }
+      try {
+        this.close();
+      } catch {
+        /* preserve the reservation failure */
+      }
       throw error;
     }
   }
@@ -184,7 +219,9 @@ export class EvidenceStore {
     const logMetadata = [];
     for (const [index, capture] of logs.entries()) {
       if (capture.retainedLength > this.logCapacity) {
-        throw Object.assign(new Error('Captured browser log exceeds reserved capacity'), { code: 'EVIDENCE_CAPACITY' });
+        throw Object.assign(new Error('Captured browser log exceeds reserved capacity'), {
+          code: 'EVIDENCE_CAPACITY',
+        });
       }
       const fd = this.handles.get(`log${index}`);
       const bytes = capture.bytes();
@@ -205,7 +242,14 @@ export class EvidenceStore {
       status: 'unverified',
       checkpoint_generation: this.generation,
       ...(progress ? { progress } : {}),
-      ...(report.browser ? { browser: { ...report.browser, logs: { stdout: logMetadata[0], stderr: logMetadata[1] } } } : {}),
+      ...(report.browser
+        ? {
+            browser: {
+              ...report.browser,
+              logs: { stdout: logMetadata[0], stderr: logMetadata[1] },
+            },
+          }
+        : {}),
     };
     const index = this.nextSlot;
     writeJsonSlot(this.handles.get(`checkpoint${index}`), this.reportCapacity, value, this.io);
@@ -225,9 +269,12 @@ export class EvidenceStore {
 
   finalizeObserved(report, stdout, stderr) {
     this.assertOpen();
-    if (report.status !== 'observed') throw new Error('Only a fully checked report can be finalized as observed');
+    if (report.status !== 'observed')
+      throw new Error('Only a fully checked report can be finalized as observed');
     if (stdout.truncated || stderr.truncated) {
-      throw Object.assign(new Error('Browser output exceeded the raw-log retention limit'), { code: 'LOG_OVERFLOW' });
+      throw Object.assign(new Error('Browser output exceeded the raw-log retention limit'), {
+        code: 'LOG_OVERFLOW',
+      });
     }
 
     // Store a final unverified checkpoint before committing the observed file.
@@ -245,8 +292,11 @@ export class EvidenceStore {
       retention: { final_report: 'report.json', raw_logs_verified: true },
     };
     const finalFd = this.io.openSync(this.paths.final, 'r+');
-    try { writeJsonSlot(finalFd, this.reportCapacity, observedReport, this.io); }
-    finally { this.io.closeSync(finalFd); }
+    try {
+      writeJsonSlot(finalFd, this.reportCapacity, observedReport, this.io);
+    } finally {
+      this.io.closeSync(finalFd);
+    }
     // Atomic publication makes the verified, fsynced candidate authoritative.
     this.io.renameSync(this.paths.final, this.paths.canonical);
     return observedReport;
@@ -257,7 +307,9 @@ export class EvidenceStore {
     const verified = [];
     for (const [index, capture] of logs.entries()) {
       if (capture.truncated) {
-        throw Object.assign(new Error('Browser output exceeded the raw-log retention limit'), { code: 'LOG_OVERFLOW' });
+        throw Object.assign(new Error('Browser output exceeded the raw-log retention limit'), {
+          code: 'LOG_OVERFLOW',
+        });
       }
       const fd = this.handles.get(`log${index}`);
       const bytes = capture.bytes();
@@ -272,10 +324,12 @@ export class EvidenceStore {
       }
       verified.push({ ...metadata, sha256: digest, retained_sha256: digest, verified: true });
     }
-    return report.browser ? {
-      ...report,
-      browser: { ...report.browser, logs: { stdout: verified[0], stderr: verified[1] } },
-    } : report;
+    return report.browser
+      ? {
+          ...report,
+          browser: { ...report.browser, logs: { stdout: verified[0], stderr: verified[1] } },
+        }
+      : report;
   }
 
   close() {
@@ -283,7 +337,11 @@ export class EvidenceStore {
     this.closed = true;
     let firstError;
     for (const fd of this.handles.values()) {
-      try { this.io.closeSync(fd); } catch (error) { firstError ??= error; }
+      try {
+        this.io.closeSync(fd);
+      } catch (error) {
+        firstError ??= error;
+      }
     }
     this.handles.clear();
     if (firstError) throw firstError;
