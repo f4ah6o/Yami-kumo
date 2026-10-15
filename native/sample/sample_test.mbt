@@ -361,6 +361,79 @@ test "focus loss cancels an armed pointer gesture" {
 }
 
 ///|
+test "same-layout repaint preserves a held pointer and focus until matching release" {
+  let sample = new_sample()
+  let initial = render_sample(sample)
+  let point = button_center(initial)
+  assert_true(!initial.button_pressed())
+  assert_true(sample.handle_input(pointer_event(true, point)) is Ok(false))
+
+  let pressed = render_sample(sample)
+  assert_true(pressed.button_bounds() == initial.button_bounds())
+  assert_true(pressed.button_pressed())
+  let focused = match sample.button_accessibility_snapshot() {
+    Err(_) => fail("repainted Button should expose its focus state")
+    Ok(None) => fail("repainted Button should remain accessible")
+    Ok(Some(value)) => value
+  }
+  assert_true(focused.focused())
+  assert_eq(focused.activations(), 0)
+
+  assert_true(
+    sample.handle_input(pointer_event(false, button_center(pressed)))
+    is Ok(true),
+  )
+  assert_sample_count(sample, 1)
+  let released = render_sample(sample)
+  assert_true(!released.button_pressed())
+}
+
+///|
+test "held Enter survives repeat and same-layout repaint until one matching release" {
+  let sample = new_sample()
+  let initial = render_sample(sample)
+  let point = button_center(initial)
+  assert_true(sample.handle_input(pointer_event(true, point)) is Ok(false))
+  assert_true(sample.handle_input(pointer_event(false, point)) is Ok(true))
+  let focused = render_sample(sample)
+  assert_true(!focused.button_pressed())
+
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyPressed(
+        key=@primitives.Enter,
+        modifiers=@primitives.Modifiers::none(),
+        repeat=false,
+      ),
+    )
+    is Ok(false),
+  )
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyPressed(
+        key=@primitives.Enter,
+        modifiers=@primitives.Modifiers::none(),
+        repeat=true,
+      ),
+    )
+    is Ok(false),
+  )
+  let pressed = render_sample(sample)
+  assert_true(pressed.button_bounds() == focused.button_bounds())
+  assert_true(pressed.button_pressed())
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyReleased(
+        key=@primitives.Enter,
+        modifiers=@primitives.Modifiers::none(),
+      ),
+    )
+    is Ok(true),
+  )
+  assert_sample_count(sample, 2)
+}
+
+///|
 test "resize invalidates the old press before the view is rebuilt" {
   let sample = new_sample()
   let frame = render_sample(sample)

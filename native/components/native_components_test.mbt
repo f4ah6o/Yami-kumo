@@ -309,10 +309,13 @@ fn component_test_button_interaction(
 ///|
 test "Button interaction activates only a matching primary down and up once" {
   let interaction = component_test_button_interaction()
+  assert_true(!interaction.is_pressed())
   assert_true(interaction.pointer_down(Some(50), @primitives.Primary))
   assert_true(interaction.is_pointer_armed())
+  assert_true(interaction.is_pressed())
   assert_true(interaction.pointer_up(Some(50), @primitives.Primary))
   assert_true(!interaction.is_pointer_armed())
+  assert_true(!interaction.is_pressed())
   assert_true(!interaction.pointer_up(Some(50), @primitives.Primary))
 }
 
@@ -340,12 +343,17 @@ test "disabled Button interaction cannot arm pointer or keyboard activation" {
 test "keyboard activation needs a matching focused key release" {
   let interaction = component_test_button_interaction()
   interaction.key_down(Some(50), @primitives.Enter)
+  assert_true(interaction.is_pressed())
   assert_true(!interaction.key_up(Some(50), @primitives.Space))
+  assert_true(!interaction.is_pressed())
   assert_true(!interaction.key_up(Some(50), @primitives.Enter))
   interaction.key_down(Some(50), @primitives.Space)
+  assert_true(interaction.is_pressed())
   assert_true(!interaction.key_up(None, @primitives.Space))
+  assert_true(!interaction.is_pressed())
   interaction.key_down(Some(50), @primitives.Space)
   assert_true(interaction.key_up(Some(50), @primitives.Space))
+  assert_true(!interaction.is_pressed())
 }
 
 ///|

@@ -140,6 +140,7 @@ pub struct SampleFrame {
   snapshot : @scene.SceneSnapshot
   count : Int
   counter_text : String
+  button_pressed : Bool
   button_bounds : @primitives.Rect
   button_label_bounds : @primitives.Rect
   counter_bounds : @primitives.Rect
@@ -162,6 +163,12 @@ pub fn SampleFrame::count(self : SampleFrame) -> Int {
 ///|
 pub fn SampleFrame::counter_text(self : SampleFrame) -> String {
   self.counter_text
+}
+
+///|
+/// Whether the rendered Button frame represents an armed pointer or key press.
+pub fn SampleFrame::button_pressed(self : SampleFrame) -> Bool {
+  self.button_pressed
 }
 
 ///|
@@ -315,6 +322,10 @@ pub fn NativeSample::render(
 ) -> Result[SampleFrame, @diagnostics.FrameworkError] {
   match self.render_inner(width, height, scale, measure) {
     Err(error) => {
+      self.cancel_gesture()
+      self.interaction = None
+      self.tree = None
+      self.button_bounds = None
       self.advance_layout_generation()
       Err(error)
     }
@@ -335,9 +346,7 @@ fn NativeSample::render_inner(
     None => false
     Some(tree) => tree.focused() == Some(SAMPLE_BUTTON_ID)
   }
-  self.cancel_gesture()
   self.tree = None
-  self.interaction = None
   self.button_bounds = None
   if !finite(width) || !finite(height) || width <= 0.0 || height <= 0.0 {
     return Err(
@@ -616,6 +625,14 @@ fn NativeSample::render_inner(
       self.advance_layout_generation()
     _ => ()
   }
+  let interaction = match (previous_button_bounds, self.interaction) {
+    (Some(previous), Some(current)) if previous == button_bounds => current
+    (_, Some(current)) => {
+      current.cancel()
+      button.interaction()
+    }
+    (_, None) => button.interaction()
+  }
   let button_label_bounds = match button.label_bounds(button_bounds) {
     Err(error) => return Err(error)
     Ok(value) => value
@@ -720,12 +737,13 @@ fn NativeSample::render_inner(
     tree
   }
   self.tree = Some(tree)
-  self.interaction = Some(button.interaction())
+  self.interaction = Some(interaction)
   self.button_bounds = Some(button_bounds)
   Ok({
     snapshot,
     count,
     counter_text,
+    button_pressed: interaction.is_pressed(),
     button_bounds,
     button_label_bounds,
     counter_bounds,

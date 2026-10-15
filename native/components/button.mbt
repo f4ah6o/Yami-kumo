@@ -181,6 +181,12 @@ pub fn ButtonInteraction::is_pointer_armed(self : ButtonInteraction) -> Bool {
 }
 
 ///|
+/// Whether a matching pointer or activation key is currently held.
+pub fn ButtonInteraction::is_pressed(self : ButtonInteraction) -> Bool {
+  self.pointer_armed || self.key_armed is Some(_)
+}
+
+///|
 fn is_activation_key(key : @primitives.Key) -> Bool {
   key is @primitives.Enter || key is @primitives.Space
 }
