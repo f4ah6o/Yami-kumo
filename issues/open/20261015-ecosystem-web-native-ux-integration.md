@@ -1,8 +1,11 @@
 # Yami-kumo：Web / Nativeのcross-platform UX integration
 
 Status: open — 設計課題。構想名Yami-kumo.mbtの作業先はこのrepo。改名・移転は対象外。
+
 Priority: P1
+
 Decision date: 2026-10-15
+
 Parent: [ecosystem方針・共通マージ基準](https://github.com/gpui-mbt/gpui.mbt/pull/82)
 
 ## 1. 役割
@@ -33,16 +36,14 @@ WebとNativeで「同じ操作が同じ意味を持つ」「同じ状態が分�
 3. **adapterとparity**：同じfixture IDと初期状態からWeb/Nativeを実行し、操作後のdomain state・event列・semantic情報を比較する。画像はそのprofileのvisual regressionとして別に扱う。
 4. **未対応機能の表現とconsumer**：Native Input／IME／AXなど不足能力を表示し、no-opで成功扱いしない。Web用とNative用の最小consumerを持ち、アプリsourceのコピーやprivate APIなしでpublic APIを使えることを確認する。
 
-## 5. 最初の受入matrix
+## 5. 最初の受入条件
 
-| 対象 | 共通に保証すること | 許容する差／未検証 |
-| --- | --- | --- |
-| Button | enabled時の1操作1event、disabled/loading時の規定、focus可視性 | OS別キー表現やraster差は明示 |
-| Text / Card | 内容・階層・配置上の意味・overflow方針 | font rasterのpixel完全一致は要求しない |
-| AppShell | brand/main必須、任意領域の省略、navigationとcontextの区別 | mobile drawerとdesktop panelの配置差 |
-| Panel開閉 | 開閉状態・操作の意味・適切なfocus復帰 | profile固有のfocus実装は別途証拠化 |
-| Input / IME | 対応したprofileだけで入力・composition契約を検証 | Native未対応をWeb成功で埋めない |
-| Accessibility | 検査可能なrole/name/stateと操作の対応 | DOMがあるだけ／画像が似るだけではNative AX合格にしない |
+1. **Button**：enabled時の1操作1event、disabled/loading時の規定、focus可視性を共通に保証する。OS別キー表現やraster差は明示する。
+2. **Text / Card**：内容・階層・配置上の意味・overflow方針を共通に保証する。font rasterのpixel完全一致は要求しない。
+3. **AppShell**：brand/main必須、任意領域の省略、navigationとcontextの区別を共通に保証する。mobile drawerとdesktop panelの配置差を許容する。
+4. **Panel開閉**：開閉状態・操作の意味・適切なfocus復帰を共通に保証する。profile固有のfocus実装は別途証拠化する。
+5. **Input / IME**：対応したprofileだけで入力・composition契約を検証する。Native未対応をWeb成功で埋めない。
+6. **Accessibility**：検査可能なrole/name/stateと操作の対応を確認する。DOMがあるだけ／画像が似るだけではNative AX合格にしない。
 
 対応範囲はcomponent×state×操作×platform×観測層で表示する。初回はWebと利用可能なNative profileのButton縦切りを必須とし、macOS Apple Silicon／Linux／Windowsの未実行profileは明記する。対応OS全部の成功を一つの実行から推定しない。
 
