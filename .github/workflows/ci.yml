@@ -23,6 +23,19 @@ jobs:
           node-version: 'lts'
           run-install: true
 
+      - name: Setup Python for inert oracle tests
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Run inert Kumo Button oracle tests
+        run: |
+          node --check scripts/measure-button-phases.mjs
+          node --check scripts/button_phase_evidence.mjs
+          node --check tests/button-phase/evidence-storage.test.mjs
+          node tests/button-phase/evidence-storage.test.mjs
+          python -B tests/button-phase/test_supervisor_inert.py
+
       - name: Setup MoonBit
         uses: hustcer/setup-moonbit@v1.23
         with:
