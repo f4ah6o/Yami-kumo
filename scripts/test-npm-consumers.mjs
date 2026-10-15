@@ -266,6 +266,12 @@ try {
           await page.locator('.yk-shell').getAttribute('data-context-panel-open'),
           'false',
         );
+        await page.locator('#react-menu').click();
+        assert.equal(
+          await page.locator('.yk-shell').getAttribute('data-mobile-sidebar-open'),
+          'true',
+        );
+        await page.locator('.yk-sidebar-scrim').click({ position: { x: 320, y: 200 } });
         assert.equal(
           await page.locator('.yk-shell').getAttribute('data-mobile-sidebar-open'),
           'false',
