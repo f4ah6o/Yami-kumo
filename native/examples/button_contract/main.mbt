@@ -101,6 +101,32 @@ fn main {
     let modifiers = @primitives.Modifiers::none()
     match phase {
       "initial" | "repaint" => ()
+      "pointer-hover" | "pointer-away" =>
+        activated = unwrap(
+          sample.handle_input(
+            @primitives.PointerMoved(
+              position=if phase == "pointer-hover" { point } else { outside },
+            ),
+          ),
+        )
+      "keyboard-focus" => {
+        activated = unwrap(
+          sample.handle_input(
+            @primitives.KeyPressed(
+              key=@primitives.ArrowLeft,
+              modifiers~,
+              repeat=false,
+            ),
+          ),
+        )
+        ignore(
+          unwrap(
+            sample.handle_input(
+              @primitives.KeyReleased(key=@primitives.ArrowLeft, modifiers~),
+            ),
+          ),
+        )
+      }
       "focus-loss" => sample.focus_changed(false)
       "pointer-down" =>
         activated = unwrap(
@@ -164,6 +190,8 @@ fn main {
       "activation_event": activated,
       "focused": snapshot.focused(),
       "pressed": frame.button_pressed(),
+      "hovered": frame.button_hovered(),
+      "focus_visible": frame.button_focus_visible(),
       "disabled": !snapshot.enabled(),
       "loading": snapshot.loading(),
       "scene": scene,

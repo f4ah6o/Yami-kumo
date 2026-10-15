@@ -8,6 +8,9 @@ export function loadFixtures(path) {
   assert.equal(suite.component, 'Button');
   const operations = new Set([
     'pointer-down',
+    'pointer-hover',
+    'pointer-away',
+    'keyboard-focus',
     'pointer-up',
     'pointer-up-outside',
     'enter-down',
@@ -50,7 +53,7 @@ export function compareCase(specification, web, native) {
       assert.equal(trace.phase, phase);
       for (const field of ['activation_count', 'activation_delta'])
         assert(Number.isSafeInteger(trace[field]) && trace[field] >= 0, field);
-      for (const field of ['focused', 'pressed', 'disabled', 'loading'])
+      for (const field of ['focused', 'pressed', 'disabled', 'loading', 'hovered', 'focus_visible'])
         assert.equal(typeof trace[field], 'boolean', field);
     }
     const differences = [];
@@ -61,6 +64,8 @@ export function compareCase(specification, web, native) {
       'pressed',
       'disabled',
       'loading',
+      'hovered',
+      'focus_visible',
     ]) {
       if (left[field] !== right[field])
         differences.push({ field, web: left[field], native: right[field] });
@@ -93,6 +98,7 @@ export function compareCase(specification, web, native) {
 
 export function compareStyles(web, native) {
   if (web.status !== 'observed' || native.status !== 'observed') return { status: 'unverified' };
+  assert.equal(web.phases.length, native.phases.length, 'Incomplete visual phase trace');
   const observations = web.phases.map((phase, index) => {
     const nativePhase = native.phases[index];
     const surface = nativePhase.scene.items.filter((item) => item.id >= 40 && item.id <= 45);
@@ -105,23 +111,49 @@ export function compareStyles(web, native) {
       phase: phase.phase,
       web_pressed: phase.pressed,
       native_pressed: nativePhase.pressed,
+      web_hovered: phase.hovered,
+      native_hovered: nativePhase.hovered,
+      web_focus_visible: phase.focus_visible,
+      native_focus_visible: nativePhase.focus_visible,
       web_computed: phase.computed,
+      web_style_sha256: sha256(JSON.stringify(phase.computed)),
       native_surface_sha256: sha256(JSON.stringify(surface)),
       native_surface: surface,
+      native_gpu_button_sha256: nativePhase.gpu_button_sha256,
     };
   });
-  const resting = observations.find((item) => !item.web_pressed && !item.native_pressed);
-  const held = observations.filter((item) => item.web_pressed || item.native_pressed);
-  const noNativeChange =
-    resting &&
-    held.some(
-      (item) => item.native_pressed && item.native_surface_sha256 === resting.native_surface_sha256,
-    );
+  const transitions = observations.slice(1).map((item, offset) => {
+    const previous = observations[offset];
+    const webChanged = item.web_style_sha256 !== previous.web_style_sha256;
+    const sceneChanged = item.native_surface_sha256 !== previous.native_surface_sha256;
+    const gpuChanged =
+      item.native_gpu_button_sha256 === undefined
+        ? undefined
+        : item.native_gpu_button_sha256 !== previous.native_gpu_button_sha256;
+    return {
+      index: item.index,
+      phase: item.phase,
+      web_style_changed: webChanged,
+      native_scene_changed: sceneChanged,
+      native_gpu_button_changed: gpuChanged,
+      status:
+        webChanged === sceneChanged && (gpuChanged === undefined || gpuChanged === webChanged)
+          ? 'matched-feedback'
+          : 'diverged',
+    };
+  });
+  const disabled = web.phases.some((phase) => phase.disabled);
   return {
-    status: noNativeChange ? 'gap-detected' : held.length ? 'observed' : 'not-exercised',
-    reason: noNativeChange
-      ? 'Native scene does not change its Button surface while pressed; no GPU/style parity claim'
-      : 'Computed Web style and Native scene retained separately; raster/color equivalence is not inferred',
+    status: disabled
+      ? 'unsupported-disabled-style'
+      : transitions.some((item) => item.status === 'diverged')
+        ? 'gap-detected'
+        : 'matched-feedback',
+    reason:
+      'Temporal feedback compares actual Web CSS changes (including the decorative gradient) with Native scene/GPU changes; unchanged Web press feedback must stay unchanged in Native',
+    raster_equivalence: 'unverified',
+    native_representation: 'flat-gradient-midpoint-and-square-ring',
+    transitions,
     observations,
   };
 }

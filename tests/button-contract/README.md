@@ -33,11 +33,24 @@ into a JavaScript model or another controller.
 ## What is compared
 
 Per phase: activation count and delta, the observed activation event's phase,
-focus, disabled/loading state, held/pressed state, Web computed style and
+focus, focus-visible, hover, disabled/loading state, held/pressed state, Web computed style and
 Native Button scene items. The Web trace retains trusted DOM event records,
 including keyboard repeat, and real Kumo onClick actions. The native consumer
 calls `handle_input`, `render` and `focus_changed`; deterministic text metrics
 qualify neither OS font rendering nor native window presentation.
+
+The pinned Kumo 2.14.0 primary Button has no independent pressed fill:
+`:active` selects the same emphasis ring color as rest. Its decorative child
+changes the gradient start on hover, and keyboard focus widens the ring from
+1px to 2px. `pointer-hover` and `keyboard-focus` (ArrowLeft down/up) isolate
+these changes before a press. Press, repaint and release must preserve an
+otherwise unchanged surface. The observer records the decorative child's CSS
+and a padded Button PNG, in addition to the parent style.
+
+Native emphasis fills approximate the gradient's OKLCH midpoint with a solid
+color, and the square ring is drawn outside the Button bounds. This qualifies
+the **timing of visual feedback**, not gradient/radius/shadow/font or whole-image
+equivalence. `matched-feedback` never means raster equivalence.
 
 `focus-loss` transfers DOM focus to the outside control and calls the public
 NativeSample focus-loss method in the consumer profile. It does not establish
@@ -45,9 +58,14 @@ native window focus delivery. Pointer cancel means release outside the Button.
 The host repaint phase uses an observed pointer move to request another frame;
 the raw log distinguishes this from the Web's React repaint.
 
-The Linux host profile currently covers Enter down/up, Space down/repaint/up,
-pointer release outside, and disabled controls. Repeat, focus transfer, unmatched
-release, and loading remain explicitly `not-run` at this layer. Synthetic host
+The Linux host profile covers hover, Enter down/up, keyboard focus,
+Space down/repaint/up, pointer release outside, native window focus loss,
+and disabled controls. The focus-loss driver transfers X11 keyboard focus from
+the owned Weston window to the isolated Xvfb root and requires an actual
+`YAMI_NATIVE_UI_FOCUS` event and a subsequent presented frame. It restores window
+focus before sending the unmatched Space release; Button focus stays cleared.
+This host path is distinct from the Web's element focus transfer.
+Repeat, other unmatched-release scenarios, and loading remain explicitly `not-run` at this layer. Synthetic host
 input is not physical hardware input. macOS/Windows host execution, physical
 keyboards and external Accessibility are not qualified by these fixtures.
 
@@ -62,8 +80,17 @@ keyboards and external Accessibility are not qualified by these fixtures.
   observed. `YAMI_BUTTON_REQUIRE_COMPLETE=1` returns exit code 2 for such a report.
 - Native loading is `unsupported`: NativeSample has no loading API. It is not
   simulated by substituting a disabled Button.
-- Native pressed scene items currently do not change. `gap-detected` records
-  that missing feedback independently of activation parity. Browser `:active`
+- The feedback gate compares actual Web computed-style changes with Native
+  Button scene changes, and, when supplied, padded GPU ROI changes. Frozen GPU
+  pixels despite a changed scene, missing hover/focus feedback, invented
+  Native-only pressed colors, and repaint/release regressions fail CI for the
+  enabled profile. Both changing and preserving the surface are checked.
+  GPU `gpu_button_sha256` hashes RGB pixels in Button bounds padded by 4 logical
+  pixels to include the focus ring; `gpu_button_interior_sha256` retains the
+  unpadded interior separately. Every phase retains the PPM SHA-256, ROI bounds
+  and input/presentation sequence. The driver also compares scene versus GPU
+  changes before writing successful evidence.
+- Disabled style is separately `unsupported-disabled-style`. Browser `:active`
   can also be true for a disabled button while native held state is false; that
   is retained as `diverged`, not silently normalized into a match.
 - Computed CSS, a Native scene, GPU readback, OS input delivery, physical input

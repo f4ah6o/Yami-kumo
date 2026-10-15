@@ -141,6 +141,19 @@ rendering with another. Measured text items keep the complete copied
 `TextMeasurement` and use the union of logical and ink bounds, including
 negative glyph overhangs.
 
+`NativeButton::scene_items` accepts optional `hovered` and `focus_visible`
+arguments. Primary/Destructive fills use the midpoint of Kumo 2.14.0's emphasis
+gradient, with the start mixed toward 15% white normally and 30% on hover.
+For example, light Primary uses `(39,122,255)` normally and `(60,134,255)` on
+hover, with ring `(4,94,222)`. These are solid approximations, not gradient or
+raster parity. Other variants retain their bounded flat palettes; their hover
+CSS is not qualified by this primary Button fixture. The outset square ring is
+1px normally and 2px for enabled keyboard focus. Kumo's `:active` has no separate
+emphasis fill, so held state alone does not choose another palette. The sample
+preserves hover and keyboard focus across repaint/release, clears keyboard
+focus on focus loss, and clears hover on pointer exit. Disabled hover/style and
+loading support remain separate compatibility gaps.
+
 Component IDs are caller-owned. A Text uses its ID. A Card reserves `id..id+4`
 for its fill and border; a Button reserves `id..id+5` for its background,
 label, and border. Keep those ranges disjoint from every other scene item in a

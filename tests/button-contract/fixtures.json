@@ -6,13 +6,22 @@
       "id": "enter-repeat",
       "disabled": false,
       "loading": false,
-      "steps": ["pointer-down", "pointer-up", "enter-down", "enter-repeat", "repaint", "enter-up"]
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "enter-down",
+        "enter-repeat",
+        "repaint",
+        "enter-up"
+      ]
     },
     {
       "id": "space-repeat",
       "disabled": false,
       "loading": false,
       "steps": [
+        "pointer-hover",
         "pointer-down",
         "pointer-up",
         "space-down",
@@ -27,6 +36,7 @@
       "disabled": false,
       "loading": false,
       "steps": [
+        "pointer-hover",
         "pointer-down",
         "pointer-up",
         "space-down",
@@ -40,7 +50,7 @@
       "id": "cancel",
       "disabled": false,
       "loading": false,
-      "steps": ["pointer-down", "repaint", "pointer-up-outside", "pointer-up"]
+      "steps": ["pointer-hover", "pointer-down", "repaint", "pointer-up-outside", "pointer-up"]
     },
     {
       "id": "unfocused",
@@ -53,6 +63,7 @@
       "disabled": true,
       "loading": false,
       "steps": [
+        "pointer-hover",
         "pointer-down",
         "pointer-up",
         "enter-down",
@@ -67,6 +78,7 @@
       "disabled": false,
       "loading": true,
       "steps": [
+        "pointer-hover",
         "pointer-down",
         "pointer-up",
         "enter-down",
@@ -81,28 +93,61 @@
       "disabled": false,
       "loading": false,
       "host": true,
-      "steps": ["pointer-down", "pointer-up", "enter-down", "enter-up"]
+      "steps": ["pointer-hover", "pointer-down", "pointer-up", "enter-down", "enter-up"]
     },
     {
       "id": "space",
       "disabled": false,
       "loading": false,
       "host": true,
-      "steps": ["pointer-down", "pointer-up", "space-down", "repaint", "space-up"]
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "keyboard-focus",
+        "space-down",
+        "repaint",
+        "space-up"
+      ]
     },
     {
       "id": "pointer-cancel",
       "disabled": false,
       "loading": false,
       "host": true,
-      "steps": ["pointer-down", "repaint", "pointer-up-outside"]
+      "steps": ["pointer-hover", "pointer-down", "repaint", "pointer-up-outside"]
     },
     {
       "id": "disabled-host",
       "disabled": true,
       "loading": false,
       "host": true,
-      "steps": ["pointer-down", "pointer-up", "enter-down", "enter-up", "space-down", "space-up"]
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "enter-down",
+        "enter-up",
+        "space-down",
+        "space-up"
+      ]
+    },
+    {
+      "id": "hover-focus-loss",
+      "disabled": false,
+      "loading": false,
+      "host": true,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "keyboard-focus",
+        "space-down",
+        "repaint",
+        "focus-loss",
+        "space-up",
+        "pointer-away"
+      ]
     }
   ]
 }

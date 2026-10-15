@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import ctypes
 import json
 import os
 from pathlib import Path
@@ -31,6 +32,34 @@ def key_command(phase: str) -> list[str]:
     return ["keydown" if action == "down" else "keyup", "Return" if key == "enter" else "space"]
 
 
+def isolated_root_window() -> str:
+    x11 = ctypes.CDLL("libX11.so.6")
+    x11.XOpenDisplay.argtypes = [ctypes.c_char_p]
+    x11.XOpenDisplay.restype = ctypes.c_void_p
+    x11.XDefaultRootWindow.argtypes = [ctypes.c_void_p]
+    x11.XDefaultRootWindow.restype = ctypes.c_ulong
+    x11.XCloseDisplay.argtypes = [ctypes.c_void_p]
+    display = x11.XOpenDisplay(None)
+    if not display:
+        raise RuntimeError("Owned X11 display is unavailable")
+    try:
+        return str(x11.XDefaultRootWindow(display))
+    finally:
+        x11.XCloseDisplay(display)
+
+
+def validate_gpu_feedback(phases: list[dict]) -> list[dict]:
+    transitions = []
+    for previous, current in zip(phases, phases[1:]):
+        surface = lambda phase: [item for item in phase["scene"]["items"] if 40 <= item["id"] <= 45]
+        scene_changed = surface(previous) != surface(current)
+        gpu_changed = previous["gpu_button_sha256"] != current["gpu_button_sha256"]
+        if scene_changed != gpu_changed:
+            raise RuntimeError(f"Button GPU feedback differs from its scene at {current['phase']}")
+        transitions.append({"phase": current["phase"], "scene_changed": scene_changed, "gpu_button_changed": gpu_changed})
+    return transitions
+
+
 def main() -> None:
     if os.environ.get("YAMI_NATIVE_UI_ISOLATED") != "1" or os.environ.get("WAYLAND_DISPLAY") != "yami-native-ui":
         raise RuntimeError("Button host fixtures require the script-owned isolated Xvfb/Weston session")
@@ -51,7 +80,7 @@ def main() -> None:
     try:
         for case in suite["cases"]:
             if not case.get("host"):
-                report["cases"].append({"id": case["id"], "status": "not-run", "reason": "This host driver does not yet qualify repeat, focus transfer, unmatched release or loading"})
+                report["cases"].append({"id": case["id"], "status": "not-run", "reason": "This host profile does not qualify repeat, unmatched release or loading"})
                 continue
             directory = out / case["id"]
             directory.mkdir()
@@ -66,6 +95,9 @@ def main() -> None:
             save()
             try:
                 current = output.wait_marker("YAMI_NATIVE_UI_CONTRACT", timeout=60)
+                pointer_at = (790, 590)
+                weston_window = subprocess.check_output(["xdotool", "getwindowfocus"], text=True).strip()
+                focus_lost = False
 
                 def collect(phase: str, index: int, frame: dict) -> None:
                     image = read_ppm(Path(frame["frame"]["path"]))
@@ -73,11 +105,14 @@ def main() -> None:
                         raise RuntimeError("GPU capture dimensions differ from the presented frame")
                     previous = record["phases"][-1]["activation_count"] if record["phases"] else 0
                     button = frame["button"]
-                    pixels = _region_pixels(image, tuple(button[key] for key in ("x", "y", "width", "height")), frame["frame"]["scale"])
+                    region = tuple(button[key] for key in ("x", "y", "width", "height"))
+                    interior = _region_pixels(image, region, frame["frame"]["scale"])
+                    padded = (region[0] - 4, region[1] - 4, region[2] + 8, region[3] + 8)
+                    pixels = _region_pixels(image, padded, frame["frame"]["scale"])
                     clicks = [payload for name, payload in output.events if name == "YAMI_NATIVE_UI_CLICK" and previous < payload["count"] <= frame["count"]]
                     if len(clicks) != frame["count"] - previous:
                         raise RuntimeError("Presented activation count has no matching host action marker")
-                    record["phases"].append({"index": index, "phase": phase, "activation_count": frame["count"], "activation_delta": frame["count"] - previous, "activation_event": bool(clicks), "focused": frame["focused"], "pressed": frame["pressed"], "disabled": case["disabled"], "loading": False, "scene": frame["scene"], "gpu": frame["frame"], "gpu_sha256": hashlib.sha256(Path(frame["frame"]["path"]).read_bytes()).hexdigest(), "gpu_button_sha256": hashlib.sha256(bytes(channel for pixel in pixels for channel in pixel)).hexdigest(), "host_sequence": frame["sequence"]})
+                    record["phases"].append({"index": index, "phase": phase, "activation_count": frame["count"], "activation_delta": frame["count"] - previous, "activation_event": bool(clicks), "focused": frame["focused"], "pressed": frame["pressed"], "hovered": frame["hovered"], "focus_visible": frame["focus_visible"], "disabled": case["disabled"], "loading": False, "scene": frame["scene"], "gpu": frame["frame"], "gpu_sha256": hashlib.sha256(Path(frame["frame"]["path"]).read_bytes()).hexdigest(), "gpu_button_roi": padded, "gpu_button_sha256": hashlib.sha256(bytes(channel for pixel in pixels for channel in pixel)).hexdigest(), "gpu_button_interior_sha256": hashlib.sha256(bytes(channel for pixel in interior for channel in pixel)).hexdigest(), "host_sequence": frame["sequence"]})
 
                 def observed_action(phase: str, arguments: list[str]) -> dict:
                     after = max([payload["sequence"] for name, payload in output.events if name == "YAMI_NATIVE_UI_INPUT"] + [current["sequence"]])
@@ -85,24 +120,54 @@ def main() -> None:
                     event = output.wait_marker("YAMI_NATIVE_UI_INPUT", lambda value: value["sequence"] > after and value["phase"] == phase and value["delivered"], timeout=10)
                     return output.wait_marker("YAMI_NATIVE_UI_CONTRACT", lambda value: value["sequence"] >= event["sequence"], timeout=10)
 
+                def move(x: int, y: int) -> dict:
+                    nonlocal pointer_at
+                    if pointer_at == (x, y):
+                        return current
+                    result = observed_action("pointer-move", ["mousemove", str(x), str(y)])
+                    pointer_at = (x, y)
+                    return result
+
+                def window_focus(window: str, focused: bool) -> dict:
+                    after = max([payload["sequence"] for name, payload in output.events if name == "YAMI_NATIVE_UI_FOCUS"] + [current["sequence"]])
+                    inject("windowfocus", window)
+                    event = output.wait_marker("YAMI_NATIVE_UI_FOCUS", lambda value: value["sequence"] > after and value["focused"] is focused, timeout=10)
+                    return output.wait_marker("YAMI_NATIVE_UI_CONTRACT", lambda value: value["sequence"] >= event["sequence"], timeout=10)
+
                 collect("initial", 0, current)
                 for index, phase in enumerate(case["steps"], 1):
+                    if focus_lost and phase != "focus-loss":
+                        current = window_focus(weston_window, True)
+                        focus_lost = False
                     bounds = current["button"]
                     x = round(bounds["x"] + bounds["width"] / 2)
                     y = round(bounds["y"] + bounds["height"] / 2)
-                    if phase == "pointer-down":
-                        current = observed_action("pointer-move", ["mousemove", "--sync", str(x), str(y)])
+                    if phase in ("pointer-hover", "pointer-away"):
+                        current = move(x, y) if phase == "pointer-hover" else move(790, 590)
+                    elif phase == "pointer-down":
+                        current = move(x, y)
                         current = observed_action("pointer-down", ["mousedown", "1"])
                     elif phase in ("pointer-up", "pointer-up-outside"):
                         if phase.endswith("outside"):
-                            current = observed_action("pointer-move", ["mousemove", "--sync", "790", "590"])
+                            current = move(790, 590)
+                        else:
+                            current = move(x, y)
                         current = observed_action("pointer-up", ["mouseup", "1"])
                     elif phase == "repaint":
-                        current = observed_action("pointer-move", ["mousemove", "--sync", str(x + 1), str(y)])
+                        current = move(x + 1 if pointer_at != (x + 1, y) else x, y)
+                    elif phase == "keyboard-focus":
+                        current = observed_action("focus-key-down", ["keydown", "Left"])
+                        current = observed_action("focus-key-up", ["keyup", "Left"])
+                    elif phase == "focus-loss":
+                        current = window_focus(isolated_root_window(), False)
+                        focus_lost = True
                     else:
                         current = observed_action(phase, key_command(phase))
                     collect(phase, index, current)
                     save()
+                record["gpu_feedback"] = validate_gpu_feedback(record["phases"])
+                if focus_lost:
+                    current = window_focus(weston_window, True)
                 inject("key", "Escape")
                 if process.wait(timeout=10) != 0:
                     raise RuntimeError("Native host exited unsuccessfully")

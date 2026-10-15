@@ -166,6 +166,7 @@ try {
         activation_delta: state.action_count - previousCount,
         focused: state.focused,
         pressed: state.pressed,
+        hovered: state.hovered,
         disabled: state.disabled,
         loading: state.loading,
         computed: state.computed,
@@ -184,11 +185,27 @@ try {
       )
         throw new Error('Browser did not deliver the requested repeat phase');
       await page.screenshot({ path: resolve(out, `${specification.id}.${index}.png`) });
+      const [x, y, width, height] = state.bounds;
+      const roi = {
+        x: x - 4,
+        y: y - 4,
+        width: Math.ceil(width) + 8,
+        height: Math.ceil(height) + 8,
+      };
+      const roiPath = `${specification.id}.${index}.button.png`;
+      const png = await page.screenshot({ path: resolve(out, roiPath), clip: roi });
+      value.button_raster = { path: roiPath, roi, png_sha256: sha256(png) };
     };
     await snapshot('initial', 0);
     for (const [index, phase] of specification.steps.entries()) {
       const bounds = await page.locator('#target').boundingBox();
-      if (phase === 'pointer-down') {
+      if (phase === 'pointer-hover' || phase === 'pointer-away') {
+        await page.mouse.move(
+          phase === 'pointer-hover' ? bounds.x + bounds.width / 2 : 790,
+          phase === 'pointer-hover' ? bounds.y + bounds.height / 2 : 590,
+        );
+      } else if (phase === 'keyboard-focus') await page.keyboard.press('ArrowLeft');
+      else if (phase === 'pointer-down') {
         await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
         await page.mouse.down();
       } else if (phase === 'pointer-up' || phase === 'pointer-up-outside') {
@@ -236,6 +253,8 @@ try {
     'disabled',
     'loading',
     'activation_event_phase',
+    'focus_visible',
+    'hovered',
   ]);
   const regressions = report.cases
     .flatMap((item) => [item.comparison, item.host_comparison].filter(Boolean))
@@ -244,6 +263,16 @@ try {
   report.supported_semantics = regressions.length ? 'failed' : 'passed';
   if (regressions.length)
     throw new Error(`Supported Button semantics differ: ${JSON.stringify(regressions)}`);
+  const visualRegressions = report.cases.filter(
+    (item) =>
+      item.pressed_style.status === 'gap-detected' ||
+      item.host_pressed_style?.status === 'gap-detected',
+  );
+  report.supported_feedback = visualRegressions.length ? 'failed' : 'passed';
+  if (visualRegressions.length)
+    throw new Error(
+      `Supported Button visual feedback differs: ${visualRegressions.map((item) => item.id).join(', ')}`,
+    );
   report.status =
     report.cases.some(
       (item) =>

@@ -12,6 +12,8 @@ const phase = (index, name, count, delta) => ({
   activation_event: delta > 0,
   focused: true,
   pressed: false,
+  hovered: false,
+  focus_visible: false,
   disabled: false,
   loading: false,
   events: delta ? [{ type: 'click', target_button: 'target' }] : [],
@@ -68,11 +70,41 @@ test('activation on the wrong event phase and lost focus cannot match', () => {
   native.phases[1].focused = false;
   assert.equal(compareCase(specification, trace(), native).status, 'diverged');
 });
-test('held state without a changed native Button scene is a visual gap', () => {
+test('unchanged Web press feedback does not require an invented Native palette', () => {
   const native = trace();
   native.phases[1].pressed = true;
   const web = trace();
   web.phases[1].pressed = true;
-  assert.equal(compareStyles(web, native).status, 'gap-detected');
+  assert.equal(compareStyles(web, native).status, 'matched-feedback');
   assert.equal(compareCase(specification, web, native).status, 'matched');
+});
+
+test('missing hover/focus feedback and a Native-only pressed color cannot match', () => {
+  const web = trace();
+  web.phases[1].computed = { layers: [{ background_image: 'hover gradient' }] };
+  assert.equal(compareStyles(web, trace()).status, 'gap-detected');
+  const native = trace();
+  native.phases[1].scene.items[0].color = 'invented pressed color';
+  assert.equal(compareStyles(trace(), native).status, 'gap-detected');
+});
+
+test('changed scenes with frozen GPU feedback and spurious GPU changes cannot match', () => {
+  const web = trace(),
+    native = trace();
+  for (const phase of native.phases) phase.gpu_button_sha256 = 'same-frame';
+  web.phases[1].computed = { box_shadow: 'focus ring 2px' };
+  native.phases[1].scene.items[0].color = 'focus ring';
+  assert.equal(compareStyles(web, native).status, 'gap-detected');
+  const stable = trace();
+  for (const phase of stable.phases) phase.gpu_button_sha256 = 'same-frame';
+  stable.phases[1].gpu_button_sha256 = 'spurious-change';
+  assert.equal(compareStyles(trace(), stable).status, 'gap-detected');
+});
+
+test('disabled visual differences stay unsupported and missing loading observations unverified', () => {
+  const web = trace(),
+    native = trace();
+  for (const phase of web.phases) phase.disabled = true;
+  assert.equal(compareStyles(web, native).status, 'unsupported-disabled-style');
+  assert.equal(compareStyles(web, { status: 'unsupported' }).status, 'unverified');
 });

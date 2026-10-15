@@ -86,15 +86,25 @@ window.phaseFixture = {
       focused: document.activeElement === button,
       focus_visible: button.matches(':focus-visible'),
       pressed: button.matches(':active'),
+      hovered: button.matches(':hover'),
       bounds: [rect.x, rect.y, rect.width, rect.height],
       repaint_generation: Number(document.querySelector('main').dataset.generation),
       computed: {
         background: style.backgroundColor,
+        background_image: style.backgroundImage,
         color: style.color,
         box_shadow: style.boxShadow,
         outline_style: style.outlineStyle,
         outline_width: style.outlineWidth,
         transform: style.transform,
+        layers: Array.from(button.children, (child) => {
+          const layer = getComputedStyle(child);
+          return {
+            background: layer.backgroundColor,
+            background_image: layer.backgroundImage,
+            box_shadow: layer.boxShadow,
+          };
+        }),
       },
       events: events.slice(),
       actions: actions.slice(),

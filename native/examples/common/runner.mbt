@@ -144,7 +144,10 @@ pub fn run_native_sample(
   let ax_e2e = args.contains("--ax-e2e") ||
     @env.get_env_var("YAMI_NATIVE_UI_AX_E2E") == Some("1")
   let contract = @env.get_env_var("YAMI_NATIVE_UI_BUTTON_CONTRACT") == Some("1")
-  if (e2e && smoke) || (e2e && ax_e2e) || (smoke && ax_e2e) || (contract && (e2e || smoke || ax_e2e)) {
+  if (e2e && smoke) ||
+    (e2e && ax_e2e) ||
+    (smoke && ax_e2e) ||
+    (contract && (e2e || smoke || ax_e2e)) {
     return Err(
       runner_error(
         "run_native_sample", "native UI proof modes cannot be combined",
@@ -265,6 +268,11 @@ fn run_native_loop(
           }
           @platform.FocusChanged(focused) => {
             sample.focus_changed(focused)
+            if evidence.contract {
+              emit_native_marker(
+                "YAMI_NATIVE_UI_FOCUS {\"sequence\":\{sequence},\"focused\":\{focused}}",
+              )
+            }
             dirty = true
           }
           @platform.VisibilityChanged(visible) => if visible { dirty = true }
@@ -524,6 +532,8 @@ fn button_input_phase(input : @primitives.InputEvent) -> String {
       }
     @primitives.KeyReleased(key=@primitives.Enter, ..) => "enter-up"
     @primitives.KeyReleased(key=@primitives.Space, ..) => "space-up"
+    @primitives.KeyPressed(key=@primitives.ArrowLeft, ..) => "focus-key-down"
+    @primitives.KeyReleased(key=@primitives.ArrowLeft, ..) => "focus-key-up"
     @primitives.PointerButtonPressed(..) => "pointer-down"
     @primitives.PointerButtonReleased(..) => "pointer-up"
     @primitives.PointerMoved(..) => "pointer-move"
@@ -704,7 +714,7 @@ fn publish_frame(
       Ok(_) => ()
     }
     emit_native_marker(
-      "YAMI_NATIVE_UI_CONTRACT {\"index\":\{index},\"sequence\":\{evidence.input_sequence},\"count\":\{frame.count()},\"focused\":\{frame.button_focused()},\"pressed\":\{frame.button_pressed()},\"button\":\{rect_json(frame.button_bounds())},\"scene\":\{frame.canonical_scene()},\"frame\":{\"path\":\"\{json_escape(path)}\",\"width\":\{captured.width()},\"height\":\{captured.height()},\"scale\":\{captured.scale()}}}",
+      "YAMI_NATIVE_UI_CONTRACT {\"index\":\{index},\"sequence\":\{evidence.input_sequence},\"count\":\{frame.count()},\"focused\":\{frame.button_focused()},\"pressed\":\{frame.button_pressed()},\"hovered\":\{frame.button_hovered()},\"focus_visible\":\{frame.button_focus_visible()},\"button\":\{rect_json(frame.button_bounds())},\"scene\":\{frame.canonical_scene()},\"frame\":{\"path\":\"\{json_escape(path)}\",\"width\":\{captured.width()},\"height\":\{captured.height()},\"scale\":\{captured.scale()}}}",
     )
     return Ok(())
   }

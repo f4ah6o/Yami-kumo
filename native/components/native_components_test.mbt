@@ -139,8 +139,8 @@ test "NativeButton keeps Kumo size geometry and emits flat background border and
       assert_eq(items.length(), 6)
       match items[0] {
         @scene.QuadItem(color~, ..) => {
-          assert_eq(color.red(), 5)
-          assert_eq(color.green(), 109)
+          assert_eq(color.red(), 39)
+          assert_eq(color.green(), 122)
           assert_eq(color.blue(), 255)
         }
         _ => fail("first Button item should be its background quad")
@@ -259,9 +259,9 @@ test "Kumo 2.14 theme resolves light and dark system colors" {
   assert_eq(secondary_destructive.foreground().green(), 0)
   assert_eq(secondary_destructive.foreground().blue(), 7)
   let destructive = light.button_colors(@yami_kumo.Destructive, false)
-  assert_eq(destructive.background().red(), 251)
-  assert_eq(destructive.background().green(), 44)
-  assert_eq(destructive.background().blue(), 54)
+  assert_eq(destructive.background().red(), 254)
+  assert_eq(destructive.background().green(), 71)
+  assert_eq(destructive.background().blue(), 71)
   match dark.text_color(@yami_kumo.Error) {
     Err(_) =>
       fail("dark Error text should resolve from Kumo's danger text token")
@@ -284,6 +284,30 @@ test "disabled Button opacity preserves transparent fills and token line alpha" 
   assert_eq(outline.background().alpha(), 0)
   assert_eq(outline.border().alpha(), 13)
   assert_eq(secondary.border().alpha(), 13)
+}
+
+///|
+test "emphasis hover uses the pinned gradient midpoint and disabled does not gain a hover palette" {
+  for theme in [@components.Theme::light(), @components.Theme::dark()] {
+    for variant in [@yami_kumo.Primary, @yami_kumo.Destructive] {
+      let rest = theme.button_colors(variant, false)
+      let hover = theme.button_colors(variant, false, hovered=true)
+      assert_true(rest.background() != hover.background())
+      assert_true(rest.border() == hover.border())
+      assert_true(
+        theme.button_colors(variant, true).background() ==
+        theme.button_colors(variant, true, hovered=true).background(),
+      )
+    }
+  }
+  let hover = @components.Theme::light().button_colors(
+    @yami_kumo.Primary,
+    false,
+    hovered=true,
+  )
+  assert_eq(hover.background().red(), 60)
+  assert_eq(hover.background().green(), 134)
+  assert_eq(hover.background().blue(), 255)
 }
 
 ///|
