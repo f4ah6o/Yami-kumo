@@ -56,7 +56,9 @@ def main() -> None:
             directory = out / case["id"]
             directory.mkdir()
             case_env = dict(env, YAMI_NATIVE_UI_EVIDENCE_DIR=str(directory), YAMI_NATIVE_UI_DISABLED="1" if case["disabled"] else "0", YAMI_NATIVE_UI_WINDOW_TITLE=f"Button contract {uuid.uuid4().hex}")
-            inject("mousemove", "--sync", "790", "590")
+            # --sync waits forever when the previous case ended here already.
+            # Per-operation delivery is acknowledged by host sequence markers.
+            inject("mousemove", "790", "590")
             process = subprocess.Popen(command, cwd=workspace, env=case_env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             output = ProcessOutput(process, directory / "host.log")
             record = {"id": case["id"], "status": "running", "phases": []}
