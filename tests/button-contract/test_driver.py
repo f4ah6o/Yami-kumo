@@ -2,10 +2,16 @@ import json
 from pathlib import Path
 import unittest
 
-from drive_linux import key_command, validate_gpu_feedback
+from drive_linux import key_command, validate_gpu_feedback, pointer_window
 
 
 class HostFixtureTest(unittest.TestCase):
+    def test_pointer_root_is_not_accepted_as_a_weston_window(self):
+        for value in ("0", "1", "123", "invalid"):
+            with self.assertRaisesRegex(RuntimeError, "Weston window"):
+                pointer_window(f"X=790\nY=590\nSCREEN=0\nWINDOW={value}\n", "123")
+        self.assertEqual(pointer_window("WINDOW=2097157\n", "123"), "2097157")
+
     def test_repeat_is_not_converted_to_release(self):
         for phase in ("enter-repeat", "space-repeat", "focus-loss"):
             with self.assertRaises(ValueError):

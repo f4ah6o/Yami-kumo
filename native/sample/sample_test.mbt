@@ -243,6 +243,62 @@ test "cancel outside removes hover without an activation or stale focus ring" {
 }
 
 ///|
+test "modified keys preserve focus modality and reclick retains an existing keyboard ring" {
+  let sample = new_sample()
+  let initial = render_sample(sample)
+  let point = button_center(initial)
+  assert_true(sample.handle_input(pointer_event(true, point)) is Ok(false))
+  assert_true(sample.handle_input(pointer_event(false, point)) is Ok(true))
+  let modifiers = [
+    @primitives.Modifiers::new(shift=false, control=true, alt=false, meta=false),
+    @primitives.Modifiers::new(shift=false, control=false, alt=true, meta=false),
+    @primitives.Modifiers::new(shift=false, control=false, alt=false, meta=true),
+  ]
+  for modifier in modifiers {
+    assert_true(
+      sample.handle_input(
+        @primitives.KeyPressed(
+          key=@primitives.Character("c"),
+          modifiers=modifier,
+          repeat=false,
+        ),
+      )
+      is Ok(false),
+    )
+    assert_true(!render_sample(sample).button_focus_visible())
+  }
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyPressed(
+        key=@primitives.ArrowLeft,
+        modifiers=@primitives.Modifiers::none(),
+        repeat=false,
+      ),
+    )
+    is Ok(false),
+  )
+  let keyboard = render_sample(sample)
+  assert_true(keyboard.button_focus_visible())
+  for modifier in modifiers {
+    assert_true(
+      sample.handle_input(
+        @primitives.KeyPressed(
+          key=@primitives.Character("c"),
+          modifiers=modifier,
+          repeat=false,
+        ),
+      )
+      is Ok(false),
+    )
+    assert_eq(button_surface(render_sample(sample)), button_surface(keyboard))
+  }
+  assert_true(sample.handle_input(pointer_event(true, point)) is Ok(false))
+  assert_eq(button_surface(render_sample(sample)), button_surface(keyboard))
+  assert_true(sample.handle_input(pointer_event(false, point)) is Ok(true))
+  assert_eq(button_surface(render_sample(sample)), button_surface(keyboard))
+}
+
+///|
 test "shared sample uses Flex layout and App Entity state to rerender Text after a matching click" {
   let sample = new_sample()
   let initial = render_sample(sample)

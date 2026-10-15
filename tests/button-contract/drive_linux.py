@@ -48,6 +48,14 @@ def isolated_root_window() -> str:
         x11.XCloseDisplay(display)
 
 
+def pointer_window(output: str, root: str) -> str:
+    fields = dict(line.split("=", 1) for line in output.splitlines() if "=" in line)
+    window = fields.get("WINDOW", "0")
+    if not window.isdecimal() or int(window) <= 1 or window == root:
+        raise RuntimeError("Pointer does not identify the isolated Weston window")
+    return window
+
+
 def validate_gpu_feedback(phases: list[dict]) -> list[dict]:
     transitions = []
     for previous, current in zip(phases, phases[1:]):
@@ -96,7 +104,10 @@ def main() -> None:
             try:
                 current = output.wait_marker("YAMI_NATIVE_UI_CONTRACT", timeout=60)
                 pointer_at = (790, 590)
-                weston_window = subprocess.check_output(["xdotool", "getwindowfocus"], text=True).strip()
+                # Xvfb may use PointerRoot (1), which is not a window XID.
+                # The only mapped client under this owned pointer is Weston.
+                root_window = isolated_root_window()
+                weston_window = pointer_window(subprocess.check_output(["xdotool", "getmouselocation", "--shell"], text=True), root_window)
                 focus_lost = False
 
                 def collect(phase: str, index: int, frame: dict) -> None:
@@ -159,7 +170,7 @@ def main() -> None:
                         current = observed_action("focus-key-down", ["keydown", "Left"])
                         current = observed_action("focus-key-up", ["keyup", "Left"])
                     elif phase == "focus-loss":
-                        current = window_focus(isolated_root_window(), False)
+                        current = window_focus(root_window, False)
                         focus_lost = True
                     else:
                         current = observed_action(phase, key_command(phase))

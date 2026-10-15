@@ -53,6 +53,12 @@ const report = {
     physical_hardware: 'not-run',
     native_accessibility: 'not-run',
   },
+  limits: {
+    window_pointer_leave: 'unsupported-by-pinned-GPUI-event-API',
+    native_raster_equivalence: 'unverified',
+    disabled_style: 'unsupported',
+    loading: 'unsupported',
+  },
   cases: [],
 };
 const save = () =>
@@ -205,6 +211,10 @@ try {
           phase === 'pointer-hover' ? bounds.y + bounds.height / 2 : 590,
         );
       } else if (phase === 'keyboard-focus') await page.keyboard.press('ArrowLeft');
+      else if (phase === 'control-key' || phase === 'alt-key' || phase === 'meta-key')
+        await page.keyboard.press(
+          `${phase === 'control-key' ? 'Control' : phase === 'alt-key' ? 'Alt' : 'Meta'}+c`,
+        );
       else if (phase === 'pointer-down') {
         await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
         await page.mouse.down();

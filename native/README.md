@@ -151,7 +151,10 @@ CSS is not qualified by this primary Button fixture. The outset square ring is
 1px normally and 2px for enabled keyboard focus. Kumo's `:active` has no separate
 emphasis fill, so held state alone does not choose another palette. The sample
 preserves hover and keyboard focus across repaint/release, clears keyboard
-focus on focus loss, and clears hover on pointer exit. Disabled hover/style and
+focus on focus loss, and clears hover on a delivered pointer move outside the
+Button bounds. The pinned GPUI event API does not deliver a window-level
+pointer-leave event; leaving the window directly can retain stale hover and
+is unsupported by this slice. Disabled hover/style and
 loading support remain separate compatibility gaps.
 
 Component IDs are caller-owned. A Text uses its ID. A Card reserves `id..id+4`

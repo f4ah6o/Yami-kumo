@@ -127,6 +127,33 @@ fn main {
           ),
         )
       }
+      "control-key" | "alt-key" | "meta-key" => {
+        let modifiers = @primitives.Modifiers::new(
+          shift=false,
+          control=phase == "control-key",
+          alt=phase == "alt-key",
+          meta=phase == "meta-key",
+        )
+        activated = unwrap(
+          sample.handle_input(
+            @primitives.KeyPressed(
+              key=@primitives.Character("c"),
+              modifiers~,
+              repeat=false,
+            ),
+          ),
+        )
+        ignore(
+          unwrap(
+            sample.handle_input(
+              @primitives.KeyReleased(
+                key=@primitives.Character("c"),
+                modifiers~,
+              ),
+            ),
+          ),
+        )
+      }
       "focus-loss" => sample.focus_changed(false)
       "pointer-down" =>
         activated = unwrap(

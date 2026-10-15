@@ -52,6 +52,15 @@ color, and the square ring is drawn outside the Button bounds. This qualifies
 the **timing of visual feedback**, not gradient/radius/shadow/font or whole-image
 equivalence. `matched-feedback` never means raster equivalence.
 
+Ctrl/Alt/Meta-modified keys do not enter keyboard focus-visible mode; existing
+keyboard focus remains visible. The consumer/Web `modifier-focus` case checks
+this against trusted input. Host delivery of this case is not yet qualified.
+Reclicking the same focused Button retains its keyboard ring; the shared
+`focus-retained-click` host case checks that the ring does not flicker off.
+Pointer exit in this suite means a delivered move outside Button bounds within
+the same window. The pinned GPUI event API does not report window pointer leave,
+so leaving the window directly may retain hover and remains unsupported.
+
 `focus-loss` transfers DOM focus to the outside control and calls the public
 NativeSample focus-loss method in the consumer profile. It does not establish
 native window focus delivery. Pointer cancel means release outside the Button.

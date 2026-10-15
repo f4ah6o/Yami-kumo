@@ -148,6 +148,44 @@
         "space-up",
         "pointer-away"
       ]
+    },
+    {
+      "id": "modifier-focus",
+      "disabled": false,
+      "loading": false,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "control-key",
+        "alt-key",
+        "meta-key",
+        "repaint",
+        "keyboard-focus",
+        "control-key",
+        "alt-key",
+        "meta-key",
+        "space-down",
+        "space-up"
+      ]
+    },
+    {
+      "id": "focus-retained-click",
+      "disabled": false,
+      "loading": false,
+      "host": true,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "keyboard-focus",
+        "pointer-down",
+        "repaint",
+        "pointer-up",
+        "space-down",
+        "space-up",
+        "pointer-away"
+      ]
     }
   ]
 }

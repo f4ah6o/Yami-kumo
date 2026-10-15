@@ -835,7 +835,10 @@ pub fn NativeSample::handle_input(
   }
   match event {
     @primitives.PointerButtonPressed(button~, ..) => {
-      self.focus_visible = false
+      if tree.focused() != Some(SAMPLE_BUTTON_ID) ||
+        target != Some(SAMPLE_BUTTON_ID) {
+        self.focus_visible = false
+      }
       if interaction.pointer_down(target, button) {
         match tree.with_focus(SAMPLE_BUTTON_ID) {
           Ok(focused) => self.tree = Some(focused)
@@ -855,8 +858,12 @@ pub fn NativeSample::handle_input(
           Ok(_) => return Ok(true)
         }
       }
-    @primitives.KeyPressed(key~, ..) => {
-      if tree.focused() == Some(SAMPLE_BUTTON_ID) && !self.disabled {
+    @primitives.KeyPressed(key~, modifiers~, ..) => {
+      if tree.focused() == Some(SAMPLE_BUTTON_ID) &&
+        !self.disabled &&
+        !modifiers.control() &&
+        !modifiers.alt() &&
+        !modifiers.meta() {
         self.focus_visible = true
       }
       if interaction.key_down(target, key) {
