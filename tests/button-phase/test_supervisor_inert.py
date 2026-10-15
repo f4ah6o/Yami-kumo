@@ -43,6 +43,32 @@ class FailingReceipts:
         raise OSError("injected receipt write failure")
 
 
+def log_metadata(raw):
+    digest = hashlib.sha256(raw).hexdigest()
+    return {
+        "observed_length": len(raw),
+        "retained_length": len(raw),
+        "sha256": digest,
+        "retained_sha256": digest,
+        "truncated": False,
+        "write_error": None,
+        "verified": True,
+    }
+
+
+def observed_inner_report(token):
+    return {
+        "status": "observed",
+        "run_token": token,
+        "measurement_complete": True,
+        "cases": [{"status": "observed"} for _ in range(7)],
+        "browser": {
+            "returncode": 0, "signal": None, "closed_returncode": 0, "closed_signal": None,
+            "logs": {"stdout": log_metadata(b""), "stderr": log_metadata(b"")},
+        },
+    }
+
+
 class SupervisorInertTests(unittest.TestCase):
     def test_node_retention_error_is_preserved_from_cli_json(self):
         raw = (b"noise\n"
@@ -70,6 +96,37 @@ class SupervisorInertTests(unittest.TestCase):
         self.assertEqual(metadata["retained_sha256"], hashlib.sha256(kept).hexdigest())
         self.assertTrue(metadata["truncated"])
         self.assertFalse(metadata["verified"])
+
+    def test_final_stdout_write_failure_after_zero_exit_cannot_promote_observed(self):
+        raw = b"runner summary after successful child exit"
+        capture = SUPERVISOR.RawCapture(99, capacity=128)
+        with mock.patch.object(SUPERVISOR, "write_all", side_effect=OSError(28, "injected disk full")), \
+             mock.patch.object(SUPERVISOR.os, "fsync"), \
+             mock.patch.object(SUPERVISOR.os, "ftruncate"), \
+             mock.patch.object(SUPERVISOR, "read_exact", return_value=b""):
+            with self.assertRaisesRegex(OSError, "injected disk full"):
+                capture.append(raw)
+            stdout_meta = capture.finalize()
+
+        self.assertEqual(stdout_meta["observed_length"], len(raw))
+        self.assertEqual(stdout_meta["retained_length"], 0)
+        self.assertEqual(stdout_meta["write_error"]["code"], 28)
+        self.assertFalse(stdout_meta["verified"])
+
+        token = "test-token"
+        result = {
+            "returncode": 0,
+            "timed_out": False,
+            "cancelled": None,
+            "owned_group_gone": True,
+            "reason": "injected disk full",
+            "failure_type": "OSError",
+            "raw_logs": {"stdout": stdout_meta, "stderr": log_metadata(b"")},
+        }
+        self.assertFalse(SUPERVISOR.outer_report_is_observed(result, observed_inner_report(token), token))
+        result.pop("reason")
+        result.pop("failure_type")
+        self.assertFalse(SUPERVISOR.outer_report_is_observed(result, observed_inner_report(token), token))
 
     def test_post_popen_receipt_failure_stops_and_reaps_only_fresh_group(self):
         child = FakeProcess()

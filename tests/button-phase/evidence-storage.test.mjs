@@ -2,8 +2,11 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
   assessHeadroom,
+  assessMeasurementHost,
+  canMarkObserved,
   EvidenceStore,
   RawLogCapture,
+  resolveChromeExecutable,
   REQUIRED_HEADROOM_BYTES,
 } from '../../scripts/button_phase_evidence.mjs';
 
@@ -111,6 +114,20 @@ assert.throws(() => store.finalizeObserved({ status: 'observed', browser: {} }, 
 assert.equal(assessHeadroom(REQUIRED_HEADROOM_BYTES - 1).sufficient, false);
 assert.equal(assessHeadroom(REQUIRED_HEADROOM_BYTES).sufficient, true);
 assert.equal(assessHeadroom(Number.NaN).sufficient, false);
+assert.equal(assessMeasurementHost('darwin').supported, true);
+assert.equal(assessMeasurementHost('linux').supported, false);
+assert.equal(resolveChromeExecutable('darwin', '/opt/test/chrome'), '/opt/test/chrome');
+assert.equal(resolveChromeExecutable('linux', '/usr/bin/chromium'), null);
+assert.throws(() => resolveChromeExecutable('darwin', 'chrome'), { code: 'KUMO_CHROME_PATH_NOT_ABSOLUTE' });
+const completeReport = {
+  measurement_complete: true,
+  cases: Array.from({ length: 7 }, () => ({ status: 'observed' })),
+  browser: { returncode: 0, signal: null, closed_returncode: 0, closed_signal: null },
+  server_cleanup: { attempted: true, succeeded: true },
+};
+assert.equal(canMarkObserved(completeReport), true);
+assert.equal(canMarkObserved({ ...completeReport, server_cleanup: { attempted: true, succeeded: false } }), false,
+  'failed fixture-server cleanup cannot be promoted to observed');
 store.close();
 
 console.log('evidence storage checks passed (in-memory fake filesystem; no browser or disk reservations)');

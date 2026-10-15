@@ -2,12 +2,12 @@
 // Owned headless-browser measurement only: no desktop input/capture or profile.
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, statfsSync, writeFileSync } from 'node:fs';
+import { accessSync, closeSync, constants as fsConstants, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, realpathSync, statfsSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { createServer } from 'vite';
-import { assessHeadroom, EvidenceStore, RawLogCapture } from './button_phase_evidence.mjs';
+import { assessHeadroom, assessMeasurementHost, canMarkObserved, EvidenceStore, RawLogCapture, resolveChromeExecutable } from './button_phase_evidence.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const output = process.argv[2];
@@ -28,9 +28,7 @@ const processGroup = Number(execFileSync('ps', ['-o', 'pgid=', '-p', String(proc
 if (processGroup !== process.pid) throw new Error('Node must be the leader of its fresh supervisor process group');
 if (existsSync(out)) throw new Error('Output exists; preserve prior evidence');
 mkdirSync(out, { recursive: true, mode: 0o700 });
-const chromePath = process.env.KUMO_HEADLESS_CHROME ?? (process.platform === 'darwin'
-  ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-  : ['/usr/bin/google-chrome-stable', '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'].find(existsSync));
+let chromePath = null;
 const sourceHashes = Object.fromEntries([
   'pnpm-lock.yaml', 'package.json', 'tests/button-phase/fixture.js', 'tests/button-phase/index.html',
   'scripts/measure-button-phases.mjs', 'scripts/button_phase_evidence.mjs', 'scripts/measure_button_phases.py',
@@ -54,6 +52,7 @@ try {
 const browserOut = new RawLogCapture();
 const browserErr = new RawLogCapture();
 let server, chrome, ws, chromeClosePromise, aborting = false, retentionError = null, abortTimer;
+let serverCleanup = { attempted: false, succeeded: true };
 let rejectAbort;
 const abortPromise = new Promise((_, reject) => { rejectAbort = reject; });
 abortPromise.catch(() => {});
@@ -133,9 +132,17 @@ async function cdp(method, params = {}, sessionId) {
   }));
 }
 try {
+  const host = assessMeasurementHost(process.platform);
+  report.preflight = { ...host, status: host.supported ? 'supported' : 'unsupported-host',
+    evidence_reserved: true, browser_started: false };
+  checkpoint({ stage: 'host-preflight', ...report.preflight });
+  if (!host.supported) {
+    throw Object.assign(new Error('Unsupported host ' + host.platform + '; this oracle currently supports Darwin only'), {
+      code: 'UNSUPPORTED_HOST',
+    });
+  }
   const free = statfsSync(out);
-  const availableBytes = free.bavail * free.bsize;
-  report.preflight = { ...assessHeadroom(availableBytes), evidence_reserved: true, browser_started: false };
+  report.preflight = { ...report.preflight, ...assessHeadroom(free.bavail * free.bsize) };
   checkpoint({ stage: 'launch-intent-reserved' });
   if (!report.preflight.sufficient) {
     throw Object.assign(new Error('Insufficient disk headroom for a fresh browser profile, Vite and full dependency inventory'), {
@@ -143,7 +150,11 @@ try {
     });
   }
   if (report.source_dirty) throw new Error('Measurement source must be committed and clean');
+  chromePath = resolveChromeExecutable(process.platform, process.env.KUMO_HEADLESS_CHROME);
   if (!chromePath || !existsSync(chromePath)) throw new Error('No installed headless Chrome executable was found');
+  chromePath = realpathSync(chromePath);
+  if (!statSync(chromePath).isFile()) throw new Error('Headless Chrome path must resolve to a regular file');
+  accessSync(chromePath, fsConstants.X_OK);
   const kumo = JSON.parse(readFileSync(resolve(root, 'node_modules/@cloudflare/kumo/package.json')));
   if (kumo.version !== '2.14.0') throw new Error('Expected pinned Kumo 2.14.0');
   report.dependencies = { kumo: kumo.version,
@@ -302,19 +313,28 @@ try {
     }
   }
   if (chromeClosePromise) await Promise.race([chromeClosePromise, delay(1000)]);
-  try {
-    if (server) await Promise.race([withAbort(server.close()), delay(2000).then(() => { throw new Error('Owned server cleanup timed out'); })]);
-  } catch (error) { report.status = 'unverified'; report.reason = `Owned server cleanup failed: ${error}`; }
+  if (server) {
+    serverCleanup = { attempted: true, succeeded: false };
+    try {
+      await Promise.race([withAbort(server.close()), delay(2000).then(() => { throw new Error('Owned server cleanup timed out'); })]);
+      serverCleanup.succeeded = true;
+    } catch (error) {
+      serverCleanup.error = String(error);
+      report.status = 'unverified';
+      report.reason = 'Owned server cleanup failed: ' + error;
+      report.cleanup_error ??= serverCleanup.error;
+    }
+  }
+  report.server_cleanup = serverCleanup;
   if (report.browser) {
     report.browser.returncode = chrome?.exitCode ?? null;
     report.browser.signal = chrome?.signalCode ?? null;
     report.browser.finished_at ??= new Date().toISOString();
   }
   report.finished_at = new Date().toISOString();
-  const complete = report.measurement_complete === true && report.cases.length === 7 &&
-    report.cases.every((item) => item.status === 'observed') && report.browser?.returncode === 0 && !report.browser?.signal &&
-    report.browser?.closed_returncode === 0 && !report.browser?.closed_signal &&
-    !report.retention_error && !browserOut.truncated && !browserErr.truncated && !report.cleanup_error && !aborting;
+  const complete = canMarkObserved(report, {
+    stdoutTruncated: browserOut.truncated, stderrTruncated: browserErr.truncated, aborting,
+  });
   if (complete) {
     report.status = 'observed';
     try { store.finalizeObserved(report, browserOut, browserErr); }

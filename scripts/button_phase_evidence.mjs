@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 
 export const DEFAULT_REPORT_CAPACITY = 1024 * 1024;
 export const DEFAULT_LOG_CAPACITY = 1024 * 1024;
@@ -10,6 +10,31 @@ const RESERVATION_CHUNK = 64 * 1024;
 export function assessHeadroom(availableBytes, requiredBytes = REQUIRED_HEADROOM_BYTES) {
   return { available_bytes: availableBytes, required_headroom_bytes: requiredBytes,
     sufficient: Number.isFinite(availableBytes) && availableBytes >= requiredBytes };
+}
+
+export function assessMeasurementHost(platform) {
+  return { platform, supported: platform === 'darwin', supported_platforms: ['darwin'] };
+}
+
+export function resolveChromeExecutable(platform, override) {
+  if (platform !== 'darwin') return null;
+  if (override !== undefined && override !== null) {
+    if (!isAbsolute(override)) {
+      throw Object.assign(new Error('KUMO_HEADLESS_CHROME must be an absolute path'), {
+        code: 'KUMO_CHROME_PATH_NOT_ABSOLUTE',
+      });
+    }
+    return resolve(override);
+  }
+  return '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+}
+
+export function canMarkObserved(report, { stdoutTruncated = false, stderrTruncated = false, aborting = false } = {}) {
+  return report.measurement_complete === true && report.cases.length === 7 &&
+    report.cases.every((item) => item.status === 'observed') && report.browser?.returncode === 0 && !report.browser?.signal &&
+    report.browser?.closed_returncode === 0 && !report.browser?.closed_signal &&
+    report.server_cleanup?.succeeded === true &&
+    !report.retention_error && !stdoutTruncated && !stderrTruncated && !report.cleanup_error && !aborting;
 }
 
 function writeFully(fd, buffer, position, io = fs) {

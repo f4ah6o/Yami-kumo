@@ -120,13 +120,21 @@ class RawCapture:
         self.full_hash = hashlib.sha256()
         self.retained_hash = hashlib.sha256()
         self.truncated = False
+        self.write_error = None
 
     def append(self, raw):
         self.length += len(raw)
         self.full_hash.update(raw)
         keep = raw[: max(0, self.capacity - self.retained)]
-        if keep:
-            write_all(self.fd, keep, self.retained)
+        if keep and self.write_error is None:
+            try:
+                write_all(self.fd, keep, self.retained)
+            except BaseException as error:
+                self.write_error = {
+                    "code": getattr(error, "errno", None) or "ERR_RAW_LOG_WRITE",
+                    "message": str(error),
+                }
+                raise
             self.retained_hash.update(keep)
             self.retained += len(keep)
         if len(keep) != len(raw):
@@ -139,14 +147,20 @@ class RawCapture:
         readback = read_exact(self.fd, self.retained)
         digest = hashlib.sha256(readback).hexdigest()
         if digest != self.retained_hash.hexdigest():
-            raise OSError("outer raw log readback hash differs")
+            self.write_error = self.write_error or {
+                "code": "RAW_LOG_READBACK_MISMATCH",
+                "message": "outer raw log readback hash differs",
+            }
+        full_digest = self.full_hash.hexdigest()
         return {
             "observed_length": self.length,
             "retained_length": self.retained,
-            "sha256": self.full_hash.hexdigest(),
+            "sha256": full_digest,
             "retained_sha256": digest,
             "truncated": self.truncated,
-            "verified": not self.truncated,
+            "write_error": self.write_error,
+            "verified": (not self.truncated and self.length == self.retained
+                         and full_digest == digest and self.write_error is None),
         }
 
 
@@ -300,7 +314,24 @@ def report_is_observed(report, token):
             return False
         if log.get("observed_length") != log.get("retained_length"):
             return False
+        if log.get("sha256") != log.get("retained_sha256"):
+            return False
     return True
+
+
+def outer_report_is_observed(result, inner, token):
+    if (result.get("returncode") != 0 or result.get("timed_out") or result.get("cancelled")
+            or not result.get("owned_group_gone") or result.get("reason") or result.get("failure_type")
+            or result.get("retention_error") or result.get("node_retention_error")):
+        return False
+    raw_logs = result.get("raw_logs") or {}
+    for name in ("stdout", "stderr"):
+        log = raw_logs.get(name) or {}
+        if (log.get("verified") is not True or log.get("truncated") is not False
+                or log.get("observed_length") != log.get("retained_length")
+                or log.get("sha256") != log.get("retained_sha256")):
+            return False
+    return report_is_observed(inner, token)
 
 
 def parse_node_summary(raw):
@@ -399,12 +430,24 @@ def main(argv=None, *, popen_factory=subprocess.Popen, receipts_factory=ReceiptS
                 returncode = result.get("returncode")
                 group_gone = bool(result["owned_group_gone"])
             if stdout_capture is not None and stderr_capture is not None:
-                try:
-                    result["raw_logs"] = {"stdout": stdout_capture.finalize(), "stderr": stderr_capture.finalize()}
-                except BaseException as error:
-                    retention_error = {"code": getattr(error, "errno", None) or "ERR_RETENTION",
-                                       "stage": "outer_log_finalize", "run_token": token}
-                    result["retention_error"] = retention_error
+                raw_logs = {}
+                for name, capture in (("stdout", stdout_capture), ("stderr", stderr_capture)):
+                    try:
+                        raw_logs[name] = capture.finalize()
+                    except BaseException as error:
+                        retention_error = {"code": getattr(error, "errno", None) or "ERR_RETENTION",
+                                           "stage": "outer_log_finalize", "run_token": token}
+                        result["retention_error"] = retention_error
+                result["raw_logs"] = raw_logs
+                if retention_error is None:
+                    for name, capture in (("stdout", stdout_capture), ("stderr", stderr_capture)):
+                        if not raw_logs.get(name, {}).get("verified"):
+                            write_error = capture.write_error or {}
+                            code = write_error.get("code") or ("RAW_LOG_OVERFLOW" if capture.truncated else
+                                                               "RAW_LOG_VERIFICATION_FAILED")
+                            retention_error = {"code": code, "stage": "outer_log_finalize", "run_token": token}
+                            result["retention_error"] = retention_error
+                            break
             result["node_artifacts"] = {}
             for filename in ("node.stdout", "node.stderr"):
                 path = output / filename
@@ -438,10 +481,7 @@ def main(argv=None, *, popen_factory=subprocess.Popen, receipts_factory=ReceiptS
                 result["disposable_profile_removed"] = True
             else:
                 result["disposable_profile_removed"] = False
-            if (returncode == 0 and not timed_out and cancelled_reason is None and group_gone
-                    and stdout_capture is not None and stderr_capture is not None
-                    and not stdout_capture.truncated and not stderr_capture.truncated
-                    and report_is_observed(inner, token) and retention_error is None):
+            if outer_report_is_observed(result, inner, token):
                 result["status"] = "observed"
             else:
                 result["status"] = "unverified"
