@@ -389,7 +389,7 @@ test "same-layout repaint preserves a held pointer and focus until matching rele
 }
 
 ///|
-test "held Enter survives repeat and same-layout repaint until one matching release" {
+test "Enter activates on every down and remains unpressed through repaint and release" {
   let sample = new_sample()
   let initial = render_sample(sample)
   let point = button_center(initial)
@@ -406,8 +406,20 @@ test "held Enter survives repeat and same-layout repaint until one matching rele
         repeat=false,
       ),
     )
-    is Ok(false),
+    is Ok(true),
   )
+  assert_sample_count(sample, 2)
+  let after_first_down = render_sample(sample)
+  assert_true(after_first_down.button_bounds() == focused.button_bounds())
+  assert_true(!after_first_down.button_pressed())
+  let focused_snapshot = match sample.button_accessibility_snapshot() {
+    Err(_) => fail("repainted Button should expose its focus state")
+    Ok(None) => fail("repainted Button should remain accessible")
+    Ok(Some(value)) => value
+  }
+  assert_true(focused_snapshot.focused())
+  assert_eq(focused_snapshot.activations(), 2)
+
   assert_true(
     sample.handle_input(
       @primitives.KeyPressed(
@@ -416,11 +428,9 @@ test "held Enter survives repeat and same-layout repaint until one matching rele
         repeat=true,
       ),
     )
-    is Ok(false),
+    is Ok(true),
   )
-  let pressed = render_sample(sample)
-  assert_true(pressed.button_bounds() == focused.button_bounds())
-  assert_true(pressed.button_pressed())
+  assert_sample_count(sample, 3)
   assert_true(
     sample.handle_input(
       @primitives.KeyReleased(
@@ -428,9 +438,12 @@ test "held Enter survives repeat and same-layout repaint until one matching rele
         modifiers=@primitives.Modifiers::none(),
       ),
     )
-    is Ok(true),
+    is Ok(false),
   )
-  assert_sample_count(sample, 2)
+  assert_sample_count(sample, 3)
+  let released = render_sample(sample)
+  assert_true(released.button_bounds() == after_first_down.button_bounds())
+  assert_true(!released.button_pressed())
 }
 
 ///|
@@ -449,24 +462,26 @@ test "resize invalidates the old press before the view is rebuilt" {
 }
 
 ///|
-test "keyboard activation requires a matching key press and release" {
+test "Enter activates on down and Space activates once on matching release" {
   let sample = new_sample()
   let frame = render_sample(sample)
   let point = button_center(frame)
   assert_true(sample.handle_input(pointer_event(true, point)) is Ok(false))
   assert_true(sample.handle_input(pointer_event(false, point)) is Ok(true))
   let _after_click = render_sample(sample)
-  match
+  assert_true(
     sample.handle_input(
       @primitives.KeyPressed(
         key=@primitives.Enter,
         modifiers=@primitives.Modifiers::none(),
         repeat=false,
       ),
-    ) {
-    Ok(false) => ()
-    _ => fail("Enter down should arm the focused Button without activation")
-  }
+    )
+    is Ok(true),
+  )
+  assert_sample_count(sample, 2)
+  let after_enter_down = render_sample(sample)
+  assert_true(!after_enter_down.button_pressed())
   assert_true(
     sample.handle_input(
       @primitives.KeyReleased(
@@ -474,21 +489,52 @@ test "keyboard activation requires a matching key press and release" {
         modifiers=@primitives.Modifiers::none(),
       ),
     )
-    is Ok(true),
+    is Ok(false),
   )
   assert_sample_count(sample, 2)
-  let _after_enter = render_sample(sample)
-  match
+
+  assert_true(
     sample.handle_input(
       @primitives.KeyPressed(
         key=@primitives.Space,
         modifiers=@primitives.Modifiers::none(),
         repeat=false,
       ),
-    ) {
-    Ok(false) => ()
-    _ => fail("Space down should remain routed after a state-driven rerender")
+    )
+    is Ok(false),
+  )
+  assert_sample_count(sample, 2)
+  let held_space = render_sample(sample)
+  assert_true(held_space.button_bounds() == after_enter_down.button_bounds())
+  assert_true(held_space.button_pressed())
+  let held_snapshot = match sample.button_accessibility_snapshot() {
+    Err(_) => fail("held Space Button should expose its focus state")
+    Ok(None) => fail("held Space Button should remain accessible")
+    Ok(Some(value)) => value
   }
+  assert_true(held_snapshot.focused())
+  assert_eq(held_snapshot.activations(), 2)
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyPressed(
+        key=@primitives.Space,
+        modifiers=@primitives.Modifiers::none(),
+        repeat=true,
+      ),
+    )
+    is Ok(false),
+  )
+  assert_sample_count(sample, 2)
+  let repeated_space = render_sample(sample)
+  assert_true(repeated_space.button_bounds() == held_space.button_bounds())
+  assert_true(repeated_space.button_pressed())
+  let repeated_snapshot = match sample.button_accessibility_snapshot() {
+    Err(_) => fail("repeated Space Button should expose its focus state")
+    Ok(None) => fail("repeated Space Button should remain accessible")
+    Ok(Some(value)) => value
+  }
+  assert_true(repeated_snapshot.focused())
+  assert_eq(repeated_snapshot.activations(), 2)
   assert_true(
     sample.handle_input(
       @primitives.KeyReleased(
@@ -499,4 +545,149 @@ test "keyboard activation requires a matching key press and release" {
     is Ok(true),
   )
   assert_sample_count(sample, 3)
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyReleased(
+        key=@primitives.Space,
+        modifiers=@primitives.Modifiers::none(),
+      ),
+    )
+    is Ok(false),
+  )
+  let released_space = render_sample(sample)
+  assert_true(!released_space.button_pressed())
+}
+
+///|
+test "focus loss cancels a held Space before its release" {
+  let sample = new_sample()
+  let frame = render_sample(sample)
+  let point = button_center(frame)
+  assert_true(sample.handle_input(pointer_event(true, point)) is Ok(false))
+  assert_true(sample.handle_input(pointer_event(false, point)) is Ok(true))
+  let _focused = render_sample(sample)
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyPressed(
+        key=@primitives.Space,
+        modifiers=@primitives.Modifiers::none(),
+        repeat=false,
+      ),
+    )
+    is Ok(false),
+  )
+  sample.focus_changed(false)
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyReleased(
+        key=@primitives.Space,
+        modifiers=@primitives.Modifiers::none(),
+      ),
+    )
+    is Ok(false),
+  )
+  assert_sample_count(sample, 1)
+  let canceled = render_sample(sample)
+  assert_true(!canceled.button_pressed())
+  let unfocused = match sample.button_accessibility_snapshot() {
+    Err(_) => fail("blurred Button should expose its state")
+    Ok(None) => fail("blurred Button should remain accessible")
+    Ok(Some(value)) => value
+  }
+  assert_true(!unfocused.focused())
+}
+
+///|
+test "Enter down cancels an earlier held Space without a stale release action" {
+  let sample = new_sample()
+  let frame = render_sample(sample)
+  let point = button_center(frame)
+  assert_true(sample.handle_input(pointer_event(true, point)) is Ok(false))
+  assert_true(sample.handle_input(pointer_event(false, point)) is Ok(true))
+  let _focused = render_sample(sample)
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyPressed(
+        key=@primitives.Space,
+        modifiers=@primitives.Modifiers::none(),
+        repeat=false,
+      ),
+    )
+    is Ok(false),
+  )
+  let held_space = render_sample(sample)
+  assert_true(held_space.button_pressed())
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyPressed(
+        key=@primitives.Enter,
+        modifiers=@primitives.Modifiers::none(),
+        repeat=false,
+      ),
+    )
+    is Ok(true),
+  )
+  assert_sample_count(sample, 2)
+  let after_enter = render_sample(sample)
+  assert_true(!after_enter.button_pressed())
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyReleased(
+        key=@primitives.Space,
+        modifiers=@primitives.Modifiers::none(),
+      ),
+    )
+    is Ok(false),
+  )
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyReleased(
+        key=@primitives.Enter,
+        modifiers=@primitives.Modifiers::none(),
+      ),
+    )
+    is Ok(false),
+  )
+  assert_sample_count(sample, 2)
+  assert_true(!render_sample(sample).button_pressed())
+}
+
+///|
+test "unfocused and disabled Enter events do not activate" {
+  let unfocused = new_sample()
+  let _frame = render_sample(unfocused)
+  assert_true(
+    unfocused.handle_input(
+      @primitives.KeyPressed(
+        key=@primitives.Enter,
+        modifiers=@primitives.Modifiers::none(),
+        repeat=false,
+      ),
+    )
+    is Ok(false),
+  )
+  assert_sample_count(unfocused, 0)
+
+  let disabled = new_sample(disabled=true)
+  let _disabled_frame = render_sample(disabled)
+  assert_true(
+    disabled.handle_input(
+      @primitives.KeyPressed(
+        key=@primitives.Enter,
+        modifiers=@primitives.Modifiers::none(),
+        repeat=false,
+      ),
+    )
+    is Ok(false),
+  )
+  assert_true(
+    disabled.handle_input(
+      @primitives.KeyReleased(
+        key=@primitives.Enter,
+        modifiers=@primitives.Modifiers::none(),
+      ),
+    )
+    is Ok(false),
+  )
+  assert_sample_count(disabled, 0)
 }

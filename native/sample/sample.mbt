@@ -813,7 +813,13 @@ pub fn NativeSample::handle_input(
           Ok(_) => return Ok(true)
         }
       }
-    @primitives.KeyPressed(key~, ..) => interaction.key_down(target, key)
+    @primitives.KeyPressed(key~, ..) =>
+      if interaction.key_down(target, key) {
+        match self.increment() {
+          Err(error) => return Err(error)
+          Ok(_) => return Ok(true)
+        }
+      }
     @primitives.KeyReleased(key~, ..) =>
       if interaction.key_up(target, key) {
         match self.increment() {

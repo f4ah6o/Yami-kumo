@@ -335,37 +335,74 @@ test "disabled Button interaction cannot arm pointer or keyboard activation" {
   let interaction = component_test_button_interaction(disabled=true)
   assert_true(!interaction.pointer_down(Some(50), @primitives.Primary))
   assert_true(!interaction.pointer_up(Some(50), @primitives.Primary))
-  interaction.key_down(Some(50), @primitives.Enter)
+  assert_true(!interaction.key_down(Some(50), @primitives.Enter))
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(!interaction.is_pressed())
   assert_true(!interaction.key_up(Some(50), @primitives.Enter))
+  assert_true(!interaction.key_up(Some(50), @primitives.Space))
 }
 
 ///|
-test "keyboard activation needs a matching focused key release" {
+test "Enter activates per focused key down while Space waits for matching release" {
   let interaction = component_test_button_interaction()
-  interaction.key_down(Some(50), @primitives.Enter)
-  assert_true(interaction.is_pressed())
-  assert_true(!interaction.key_up(Some(50), @primitives.Space))
+  assert_true(interaction.key_down(Some(50), @primitives.Enter))
+  assert_true(!interaction.is_pressed())
+  assert_true(interaction.key_down(Some(50), @primitives.Enter))
   assert_true(!interaction.is_pressed())
   assert_true(!interaction.key_up(Some(50), @primitives.Enter))
-  interaction.key_down(Some(50), @primitives.Space)
+
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(interaction.is_pressed())
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(interaction.is_pressed())
+  assert_true(!interaction.key_up(Some(50), @primitives.Enter))
+  assert_true(!interaction.is_pressed())
+
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
   assert_true(interaction.is_pressed())
   assert_true(!interaction.key_up(None, @primitives.Space))
   assert_true(!interaction.is_pressed())
-  interaction.key_down(Some(50), @primitives.Space)
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
   assert_true(interaction.key_up(Some(50), @primitives.Space))
   assert_true(!interaction.is_pressed())
 }
 
 ///|
-test "focus or layout cancellation clears pending Button gestures" {
+test "unfocused activation keys do nothing and cancellation clears held Space" {
   let interaction = component_test_button_interaction()
+  assert_true(!interaction.key_down(None, @primitives.Enter))
+  assert_true(!interaction.key_down(None, @primitives.Space))
+  assert_true(!interaction.is_pressed())
   assert_true(interaction.pointer_down(Some(50), @primitives.Primary))
   interaction.cancel()
   assert_true(!interaction.is_pointer_armed())
   assert_true(!interaction.pointer_up(Some(50), @primitives.Primary))
-  interaction.key_down(Some(50), @primitives.Enter)
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(interaction.is_pressed())
   interaction.cancel()
+  assert_true(!interaction.is_pressed())
+  assert_true(!interaction.key_up(Some(50), @primitives.Space))
+}
+
+///|
+test "Enter down cancels a previously held Space before either release" {
+  let interaction = component_test_button_interaction()
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(interaction.is_pressed())
+  assert_true(interaction.key_down(Some(50), @primitives.Enter))
+  assert_true(!interaction.is_pressed())
+  assert_true(!interaction.key_up(Some(50), @primitives.Space))
   assert_true(!interaction.key_up(Some(50), @primitives.Enter))
+}
+
+///|
+test "Enter activation consumes an earlier pointer press" {
+  let interaction = component_test_button_interaction()
+  assert_true(interaction.pointer_down(Some(50), @primitives.Primary))
+  assert_true(interaction.key_down(Some(50), @primitives.Enter))
+  assert_true(!interaction.is_pointer_armed())
+  assert_true(!interaction.is_pressed())
+  assert_true(!interaction.pointer_up(Some(50), @primitives.Primary))
 }
 
 ///|
