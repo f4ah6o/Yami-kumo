@@ -140,21 +140,37 @@ pub fn ButtonInteraction::pointer_up(
 }
 
 ///|
-/// Arm Enter/Space activation after the focused Button receives a key press.
+/// Handle an activation-key down on the focused Button.
+/// Enter activates on every key down, including repeats. Space remains armed
+/// until its matching key release and reports no action on key down. The
+/// return value is true only for a focused, enabled Enter key down. Enter
+/// clears any older held gesture before activating.
 pub fn ButtonInteraction::key_down(
   self : ButtonInteraction,
   target : UInt64?,
   key : @primitives.Key,
-) -> Unit {
-  if !self.disabled && target == Some(self.id) && is_activation_key(key) {
-    self.pointer_armed = false
-    self.key_armed = Some(key)
+) -> Bool {
+  if self.disabled || target != Some(self.id) {
+    return false
+  }
+  match key {
+    @primitives.Enter => {
+      self.pointer_armed = false
+      self.key_armed = None
+      true
+    }
+    @primitives.Space => {
+      self.pointer_armed = false
+      self.key_armed = Some(@primitives.Space)
+      false
+    }
+    _ => false
   }
 }
 
 ///|
-/// Activate only when the same activation key is released while the Button
-/// still owns keyboard focus. A mismatched release cancels the key gesture.
+/// Activate only when Space is released while the Button still owns keyboard
+/// focus. A mismatched release cancels the held Space gesture.
 pub fn ButtonInteraction::key_up(
   self : ButtonInteraction,
   target : UInt64?,
@@ -184,11 +200,6 @@ pub fn ButtonInteraction::is_pointer_armed(self : ButtonInteraction) -> Bool {
 /// Whether a matching pointer or activation key is currently held.
 pub fn ButtonInteraction::is_pressed(self : ButtonInteraction) -> Bool {
   self.pointer_armed || self.key_armed is Some(_)
-}
-
-///|
-fn is_activation_key(key : @primitives.Key) -> Bool {
-  key is @primitives.Enter || key is @primitives.Space
 }
 
 ///|

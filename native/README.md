@@ -149,10 +149,19 @@ snapshot.
 ## Input and IME follow-up
 
 Button activation is implemented in MoonBit: a matching primary down/up pair
-activates once; Enter/Space use matching key-down/key-up while the Button owns
-focus. Disabled controls, an outside primary release, focus loss, and layout
-invalidation cancel pending gestures. This does not establish text editing or
-IME behavior.
+activates once. A focused enabled Button activates on each Enter key-down,
+including repeat events; Space shows its held state on key-down and activates
+once on the matching key-up. Space remains pressed across a same-layout repaint.
+An Enter down also clears any older held-key gesture; simultaneous-key behavior
+is a deliberate native controller policy, not a measured Kumo phase claim.
+Disabled controls, unmatched key releases, an outside primary release, focus
+loss, and layout invalidation cannot activate. These are portable MoonBit
+controller semantics; they do not establish host-delivered keyboard behavior,
+text editing, or IME behavior.
+
+The native `ButtonInteraction::key_down` return type changes from `Unit` to
+`Bool`; callers must use the result to execute immediate Enter actions. The
+Web API is unchanged.
 
 The GPUI host capabilities differ by platform. The [macOS host guide](https://github.com/gpui-mbt/gpui.mbt/blob/1ec90dfad7a3bc9f8ffbfad80928eaba737ab0bd/docs/macos-native.md)
 covers bounded single-line measurement and drawing; a native editor and IME
