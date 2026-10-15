@@ -40,6 +40,7 @@ function retain() {
 }
 function signalOwned(signal) {
   if (!Number.isInteger(ownedGroup) || ownedGroup <= 0 || ownedGroup !== chrome?.pid) return;
+  if (chrome.exitCode !== null || chrome.signalCode) return;
   try { process.kill(-ownedGroup, signal); }
   catch (error) { if (error.code !== 'ESRCH') report.cleanup_error = String(error); }
 }
@@ -57,6 +58,8 @@ function abort(reason) {
 }
 const watchdog = setTimeout(() => abort('Overall owned-browser deadline expired'), 90000);
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => abort(`Runner received ${signal}`));
+process.on('uncaughtException', (error) => abort(`Uncaught runner error: ${error}`));
+process.on('unhandledRejection', (error) => abort(`Unhandled runner rejection: ${error}`));
 function dependencyInventory() {
   const base = realpathSync(resolve(root, 'node_modules'));
   const entries = [];
@@ -139,14 +142,16 @@ try {
   await new Promise((accept, reject) => { ws.onopen = accept; ws.onerror = reject; });
   checkDeadline();
   ws.onmessage = ({ data }) => {
-    let message;
-    try { message = JSON.parse(data); } catch (error) { abort(`Malformed owned debugger message: ${error}`); return; }
-    const request = pending.get(message.id);
-    if (!request) return;
-    pending.delete(message.id); clearTimeout(request.timer);
-    report.cdp.push({ id: message.id, method: request.method, params: request.params,
-      result: message.result ?? null, error: message.error ?? null, received_at: new Date().toISOString() });
-    if (message.error) request.reject(new Error(JSON.stringify(message.error))); else request.accept(message.result);
+    try {
+      const message = JSON.parse(data);
+      if (!message || typeof message !== 'object' || Array.isArray(message)) throw new Error('Debugger message must be an object');
+      const request = pending.get(message.id);
+      if (!request) return;
+      pending.delete(message.id); clearTimeout(request.timer);
+      report.cdp.push({ id: message.id, method: request.method, params: request.params,
+        result: message.result ?? null, error: message.error ?? null, received_at: new Date().toISOString() });
+      if (message.error) request.reject(new Error(JSON.stringify(message.error))); else request.accept(message.result);
+    } catch (error) { abort(`Malformed owned debugger message: ${error}`); }
   };
   report.browser.version = await cdp('Browser.getVersion');
   const key = (name, up = false, repeat = false) => ({ type: up ? 'keyUp' : 'keyDown',
@@ -225,8 +230,10 @@ try {
       await Promise.race([new Promise((accept) => chrome.once('exit', accept)), delay(2000)]);
     }
   }
-  if (server) await Promise.race([server.close(), delay(2000).then(() => { report.status = 'unverified'; report.reason = 'Owned server cleanup timed out'; })]);
-  retain();
+  try {
+    if (server) await Promise.race([server.close(), delay(2000).then(() => { report.status = 'unverified'; report.reason = 'Owned server cleanup timed out'; })]);
+  } catch (error) { report.status = 'unverified'; report.reason = `Owned server cleanup failed: ${error}`; }
+  try { retain(); } catch (error) { report.status = 'unverified'; report.retention_error = String(error); }
   clearTimeout(watchdog);
 }
 console.log(JSON.stringify({ status: report.status, cases: report.cases.length, reason: report.reason ?? null }));
