@@ -13,6 +13,7 @@ pub type NativeFrameCapture = (@platform.WindowId) -> Result[
 ]
 
 ///|
+
 ///|
 pub type NativeButtonAXPublish = (
   @platform.WindowId,
@@ -60,6 +61,9 @@ priv struct NativeButtonAXBinding {
 ///|
 priv struct FrameEvidence {
   mut initial : @testing.FrameCapture?
+  contract : Bool
+  mut frame_index : Int
+  mut input_sequence : Int64
 }
 
 ///|
@@ -139,7 +143,8 @@ pub fn run_native_sample(
     @env.get_env_var("YAMI_NATIVE_UI_SMOKE") == Some("1")
   let ax_e2e = args.contains("--ax-e2e") ||
     @env.get_env_var("YAMI_NATIVE_UI_AX_E2E") == Some("1")
-  if (e2e && smoke) || (e2e && ax_e2e) || (smoke && ax_e2e) {
+  let contract = @env.get_env_var("YAMI_NATIVE_UI_BUTTON_CONTRACT") == Some("1")
+  if (e2e && smoke) || (e2e && ax_e2e) || (smoke && ax_e2e) || (contract && (e2e || smoke || ax_e2e)) {
     return Err(
       runner_error(
         "run_native_sample", "native UI proof modes cannot be combined",
@@ -153,7 +158,7 @@ pub fn run_native_sample(
       ),
     )
   }
-  if e2e && @env.get_env_var("GPUI_NATIVE_E2E") != Some("1") {
+  if (e2e || contract) && @env.get_env_var("GPUI_NATIVE_E2E") != Some("1") {
     return Err(
       runner_error(
         "run_native_sample", "E2E frame readback requires GPUI_NATIVE_E2E=1",
@@ -161,7 +166,7 @@ pub fn run_native_sample(
     )
   }
   let evidence_dir = @env.get_env_var("YAMI_NATIVE_UI_EVIDENCE_DIR")
-  if e2e && (evidence_dir is None || evidence_dir == Some("")) {
+  if (e2e || contract) && (evidence_dir is None || evidence_dir == Some("")) {
     return Err(
       runner_error(
         "run_native_sample", "E2E mode requires YAMI_NATIVE_UI_EVIDENCE_DIR",
@@ -189,14 +194,17 @@ pub fn run_native_sample(
     Ok(value) => value
   }
   let sample = match
-    @sample.NativeSample::new(theme=@components.Theme::light()) {
+    @sample.NativeSample::new(
+      theme=@components.Theme::light(),
+      disabled=@env.get_env_var("YAMI_NATIVE_UI_DISABLED") == Some("1"),
+    ) {
     Err(error) => return Err(error)
     Ok(value) => value
   }
-  let evidence = { initial: None, }
+  let evidence = { initial: None, contract, frame_index: 0, input_sequence: 0, }
   let result = run_native_loop(
-    host, window, sample, platform, measure, capture, e2e, smoke, ax_e2e,
-    accessibility_port, evidence_dir, evidence,
+    host, window, sample, platform, measure, capture, e2e, smoke, ax_e2e, accessibility_port,
+    evidence_dir, evidence,
   )
   let stopped = sample.shutdown()
   match result {
@@ -230,7 +238,8 @@ fn run_native_loop(
   let mut sequence : Int64 = 0
   let mut final_count = 0
   let mut accessibility_binding : NativeButtonAXBinding? = None
-  while !destroyed && ((!e2e && !smoke && !ax_e2e) || ticks < 2000) {
+  while !destroyed &&
+        ((!e2e && !smoke && !ax_e2e && !evidence.contract) || ticks < 2000) {
     ticks += 1
     let event = match host.next_event(timeout_ms=16) {
       Err(error) => return Err(error)
@@ -254,16 +263,25 @@ fn run_native_loop(
             gate.invalidate_layout(pending is Some(_))
             dirty = true
           }
-          @platform.FocusChanged(focused) => sample.focus_changed(focused)
+          @platform.FocusChanged(focused) => {
+            sample.focus_changed(focused)
+            dirty = true
+          }
           @platform.VisibilityChanged(visible) => if visible { dirty = true }
-          @platform.Input(input) =>
+          @platform.Input(input) => {
+            if evidence.contract {
+              emit_native_marker(
+                "YAMI_NATIVE_UI_INPUT {\"sequence\":\{sequence},\"phase\":\"\{button_input_phase(input)}\",\"delivered\":\{gate.input_ready()}}",
+              )
+            }
             match input {
               @primitives.KeyPressed(key=@primitives.Escape, ..) =>
                 match host.request_close(window) {
                   Err(error) => return Err(error)
                   Ok(_) => ()
                 }
-              _ if gate.input_ready() =>
+              _ if gate.input_ready() => {
+                dirty = true
                 match sample.handle_input(input) {
                   Err(error) => return Err(error)
                   Ok(true) => {
@@ -278,8 +296,10 @@ fn run_native_loop(
                   }
                   Ok(false) => ()
                 }
+              }
               _ => ()
             }
+          }
           @platform.FrameCompleted =>
             match pending {
               None => ()
@@ -379,6 +399,7 @@ fn run_native_loop(
         Err(error) => return Err(error)
         Ok(value) => value
       }
+      evidence.input_sequence = sequence
       match host.present(window, frame.snapshot()) {
         Err(error) => return Err(error)
         Ok(_) => ()
@@ -407,9 +428,9 @@ fn run_native_loop(
           )
         }
         match
-        publish_frame(
-          host, window, frame, e2e, evidence_dir, capture, evidence,
-        ) {
+          publish_frame(
+            host, window, frame, e2e, evidence_dir, capture, evidence,
+          ) {
           Err(error) => return Err(error)
           Ok(_) => ()
         }
@@ -484,6 +505,30 @@ fn run_native_loop(
     )
   }
   Ok(())
+}
+
+///|
+fn button_input_phase(input : @primitives.InputEvent) -> String {
+  match input {
+    @primitives.KeyPressed(key=@primitives.Enter, repeat~, ..) =>
+      if repeat {
+        "enter-repeat"
+      } else {
+        "enter-down"
+      }
+    @primitives.KeyPressed(key=@primitives.Space, repeat~, ..) =>
+      if repeat {
+        "space-repeat"
+      } else {
+        "space-down"
+      }
+    @primitives.KeyReleased(key=@primitives.Enter, ..) => "enter-up"
+    @primitives.KeyReleased(key=@primitives.Space, ..) => "space-up"
+    @primitives.PointerButtonPressed(..) => "pointer-down"
+    @primitives.PointerButtonReleased(..) => "pointer-up"
+    @primitives.PointerMoved(..) => "pointer-move"
+    _ => "other"
+  }
 }
 
 ///|
@@ -634,7 +679,33 @@ fn publish_frame(
   capture : NativeFrameCapture,
   evidence : FrameEvidence,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !e2e {
+  if !e2e && !evidence.contract {
+    return Ok(())
+  }
+  if evidence.contract {
+    let captured = match capture(window) {
+      Err(error) => return Err(error)
+      Ok(value) => value
+    }
+    let directory = match evidence_dir {
+      Some(value) => value
+      None =>
+        return Err(
+          runner_error(
+            "publish_frame", "Button contract evidence directory is missing",
+          ),
+        )
+    }
+    let index = evidence.frame_index
+    evidence.frame_index += 1
+    let path = directory + "/frame-\{index}.ppm"
+    match captured.write_ppm(path) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+    emit_native_marker(
+      "YAMI_NATIVE_UI_CONTRACT {\"index\":\{index},\"sequence\":\{evidence.input_sequence},\"count\":\{frame.count()},\"focused\":\{frame.button_focused()},\"pressed\":\{frame.button_pressed()},\"button\":\{rect_json(frame.button_bounds())},\"scene\":\{frame.canonical_scene()},\"frame\":{\"path\":\"\{json_escape(path)}\",\"width\":\{captured.width()},\"height\":\{captured.height()},\"scale\":\{captured.scale()}}}",
+    )
     return Ok(())
   }
   let count = frame.count()

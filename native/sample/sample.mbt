@@ -141,6 +141,7 @@ pub struct SampleFrame {
   count : Int
   counter_text : String
   button_pressed : Bool
+  button_focused : Bool
   button_bounds : @primitives.Rect
   button_label_bounds : @primitives.Rect
   counter_bounds : @primitives.Rect
@@ -169,6 +170,11 @@ pub fn SampleFrame::counter_text(self : SampleFrame) -> String {
 /// Whether the rendered Button frame represents an armed pointer or key press.
 pub fn SampleFrame::button_pressed(self : SampleFrame) -> Bool {
   self.button_pressed
+}
+
+///|
+pub fn SampleFrame::button_focused(self : SampleFrame) -> Bool {
+  self.button_focused
 }
 
 ///|
@@ -744,6 +750,7 @@ fn NativeSample::render_inner(
     count,
     counter_text,
     button_pressed: interaction.is_pressed(),
+    button_focused: tree.focused() == Some(SAMPLE_BUTTON_ID),
     button_bounds,
     button_label_bounds,
     counter_bounds,

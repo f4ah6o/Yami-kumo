@@ -7,6 +7,7 @@ import '@cloudflare/kumo/styles/standalone';
 // action implementation or expected event trace is installed in the fixture.
 const token = new URL(location.href).searchParams.get('run_token');
 const disabled = new URL(location.href).searchParams.get('disabled') === '1';
+const loading = new URL(location.href).searchParams.get('loading') === '1';
 const events = [];
 const actions = [];
 let repaint;
@@ -25,6 +26,7 @@ for (const type of [
       events.push({
         type,
         target: event.target.id,
+        target_button: event.target.closest?.('button')?.id ?? null,
         key: event.key ?? null,
         repeat: event.repeat ?? null,
         button: event.button ?? null,
@@ -49,6 +51,7 @@ function Fixture() {
         size: 'base',
         variant: 'primary',
         disabled,
+        loading,
         onClick: (event) => {
           actions.push({
             type: event.type,
@@ -76,6 +79,7 @@ window.phaseFixture = {
     return {
       run_token: token,
       disabled: button.disabled,
+      loading,
       tag: button.tagName,
       component: button.dataset.kumoComponent,
       action_count: Number(document.getElementById('action-count').textContent),
