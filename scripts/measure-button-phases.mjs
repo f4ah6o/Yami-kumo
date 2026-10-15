@@ -2,7 +2,7 @@
 // Owned headless-browser measurement only: no desktop input/capture or profile.
 import { spawn, execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
@@ -23,14 +23,66 @@ const report = { schema_version: 1, kind: 'owned-headless-kumo-button-phases', s
   run_token: token, platform: { os: process.platform, architecture: process.arch, release: os.release() },
   source_revision: git('rev-parse', 'HEAD'), source_dirty: Boolean(git('status', '--porcelain', '--untracked-files=no')),
   started_at: new Date().toISOString(), node: process.version, cases: [], cdp: [] };
-let server, chrome, ws;
+let server, chrome, ws, ownedGroup;
+let browserOut = '', browserErr = '', aborting = false;
+function retain() {
+  if (report.browser) {
+    report.browser.returncode = chrome?.exitCode ?? null;
+    report.browser.signal = chrome?.signalCode ?? null;
+    report.browser.cleanup_complete = !ownedGroup || chrome?.exitCode !== null || Boolean(chrome?.signalCode);
+    writeFileSync(resolve(out, 'browser.stdout'), browserOut);
+    writeFileSync(resolve(out, 'browser.stderr'), browserErr);
+    report.browser.stdout_sha256 = hash(resolve(out, 'browser.stdout'));
+    report.browser.stderr_sha256 = hash(resolve(out, 'browser.stderr'));
+  }
+  report.finished_at = new Date().toISOString();
+  writeFileSync(resolve(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+}
+function signalOwned(signal) {
+  if (!Number.isInteger(ownedGroup) || ownedGroup <= 0 || ownedGroup !== chrome?.pid) return;
+  try { process.kill(-ownedGroup, signal); }
+  catch (error) { if (error.code !== 'ESRCH') report.cleanup_error = String(error); }
+}
+function abort(reason) {
+  if (aborting) return;
+  aborting = true;
+  report.status = 'unverified'; report.reason = reason;
+  signalOwned('SIGTERM');
+  // This watchdog also covers stalled startup, WebSocket opens, and finally.
+  setTimeout(() => {
+    if (chrome?.exitCode === null && !chrome?.signalCode) signalOwned('SIGKILL');
+    try { retain(); } finally { process.exit(2); }
+  }, 2000);
+  try { retain(); } catch (error) { report.retention_error = String(error); }
+}
+const watchdog = setTimeout(() => abort('Overall owned-browser deadline expired'), 90000);
+for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => abort(`Runner received ${signal}`));
+function dependencyInventory() {
+  const base = realpathSync(resolve(root, 'node_modules'));
+  const entries = [];
+  function walk(path, prefix = '') {
+    for (const item of readdirSync(path, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const name = prefix ? `${prefix}/${item.name}` : item.name;
+      const full = resolve(path, item.name);
+      if (item.isSymbolicLink()) {
+        const target = realpathSync(full);
+        if (target !== base && !target.startsWith(base + '/')) throw new Error(`Dependency route escapes installed runtime: ${name}`);
+        entries.push({ path: name, type: 'symlink', target: readlinkSync(full) });
+      } else if (item.isDirectory()) walk(full, name);
+      else if (item.isFile()) entries.push({ path: name, type: 'file', sha256: hash(full) });
+      else throw new Error(`Unsupported dependency entry: ${name}`);
+    }
+  }
+  walk(base);
+  return { root: base, entries };
+}
 const pending = new Map();
 let nextId = 0;
 const delay = (ms) => new Promise((accept) => setTimeout(accept, ms));
 const deadline = Date.now() + 90000;
-function checkDeadline() { if (Date.now() >= deadline) throw new Error('Owned browser deadline expired'); }
+function checkDeadline() { if (aborting || Date.now() >= deadline) throw new Error('Owned browser deadline expired'); }
 async function until(callback) {
-  while (Date.now() < deadline) { const value = await callback(); if (value) return value; await delay(25); }
+  while (!aborting && Date.now() < deadline) { const value = await callback(); if (value) return value; await delay(25); }
   throw new Error('Owned browser did not become ready');
 }
 async function cdp(method, params = {}, sessionId) {
@@ -49,6 +101,11 @@ try {
   report.dependencies = { kumo: kumo.version,
     react: JSON.parse(readFileSync(resolve(root, 'node_modules/react/package.json'))).version,
     react_dom: JSON.parse(readFileSync(resolve(root, 'node_modules/react-dom/package.json'))).version };
+  if (report.dependencies.react !== '19.3.0' || report.dependencies.react_dom !== '19.3.0') throw new Error('Locked React versions differ');
+  const inventory = dependencyInventory();
+  const inventoryPath = resolve(out, 'dependency-inventory.json');
+  writeFileSync(inventoryPath, JSON.stringify(inventory, null, 2) + '\n');
+  report.dependency_inventory = { path: 'dependency-inventory.json', sha256: hash(inventoryPath), entries: inventory.entries.length };
   report.source_hashes = Object.fromEntries(['pnpm-lock.yaml', 'package.json', 'tests/button-phase/fixture.js',
     'tests/button-phase/index.html', 'scripts/measure-button-phases.mjs', 'node_modules/@cloudflare/kumo/package.json',
     'node_modules/@cloudflare/kumo/dist/components/button.js', 'node_modules/@cloudflare/kumo/dist/styles/kumo-standalone.css']
@@ -56,19 +113,22 @@ try {
   server = await createServer({ configFile: false, root, cacheDir: resolve(root, '_build/button-phase-vite-cache'),
     server: { host: '127.0.0.1', port: 0 }, logLevel: 'error' });
   await server.listen();
+  checkDeadline();
   const address = server.httpServer.address();
   if (typeof address !== 'object' || address.address !== '127.0.0.1') throw new Error('Fixture server must bind loopback');
   const profile = resolve(out, 'browser-profile');
   const argv = ['--headless=new', '--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1',
     `--user-data-dir=${profile}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions',
     '--disable-background-networking', 'about:blank'];
+  const executableHash = hash(chromePath);
   chrome = spawn(chromePath, argv, { detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
-  report.browser = { executable: chromePath, executable_sha256: hash(chromePath), command: [chromePath, ...argv],
+  ownedGroup = Number.isInteger(chrome.pid) && chrome.pid > 0 ? chrome.pid : null;
+  report.browser = { executable: chromePath, executable_sha256: executableHash, command: [chromePath, ...argv],
     pid: chrome.pid, started_at: new Date().toISOString() };
-  let browserOut = '', browserErr = '';
   chrome.stdout.on('data', (data) => { browserOut += data; });
   chrome.stderr.on('data', (data) => { browserErr += data; });
-  chrome.on('error', (error) => { report.browser.spawn_error = String(error); });
+  chrome.on('error', (error) => { ownedGroup = null; report.browser.spawn_error = String(error); abort('Owned browser spawn failed'); });
+  chrome.on('exit', () => { report.browser.finished_at = new Date().toISOString(); });
   const portFile = resolve(profile, 'DevToolsActivePort');
   const portLines = await until(() => {
     if (chrome.exitCode !== null || chrome.signalCode) throw new Error('Owned browser exited before debugging ready');
@@ -77,8 +137,11 @@ try {
   if (!/^\d+$/.test(portLines[0]) || !portLines[1]?.startsWith('/devtools/browser/')) throw new Error('Invalid owned debugger endpoint');
   ws = new WebSocket(`ws://127.0.0.1:${portLines[0]}${portLines[1]}`);
   await new Promise((accept, reject) => { ws.onopen = accept; ws.onerror = reject; });
+  checkDeadline();
   ws.onmessage = ({ data }) => {
-    const message = JSON.parse(data); const request = pending.get(message.id);
+    let message;
+    try { message = JSON.parse(data); } catch (error) { abort(`Malformed owned debugger message: ${error}`); return; }
+    const request = pending.get(message.id);
     if (!request) return;
     pending.delete(message.id); clearTimeout(request.timer);
     report.cdp.push({ id: message.id, method: request.method, params: request.params,
@@ -141,6 +204,7 @@ try {
     await cdp('Target.closeTarget', { targetId });
   }
   if (git('rev-parse', 'HEAD') !== report.source_revision || git('status', '--porcelain', '--untracked-files=no')) throw new Error('Measurement source changed');
+  if (JSON.stringify(dependencyInventory()) !== JSON.stringify(inventory)) throw new Error('Installed runtime changed during measurement');
   report.status = 'observed';
   await cdp('Browser.close');
   ws.close();
@@ -148,23 +212,22 @@ try {
   report.browser.returncode = chrome.exitCode;
   report.browser.signal = chrome.signalCode;
   report.browser.finished_at = new Date().toISOString();
-  writeFileSync(resolve(out, 'browser.stdout'), browserOut);
-  writeFileSync(resolve(out, 'browser.stderr'), browserErr);
-  report.browser.stdout_sha256 = hash(resolve(out, 'browser.stdout'));
-  report.browser.stderr_sha256 = hash(resolve(out, 'browser.stderr'));
   if (chrome.exitCode !== 0 || chrome.signalCode) throw new Error('Owned browser did not exit normally');
 } catch (error) {
   report.status = 'unverified'; report.reason = String(error);
 } finally {
   if (ws && ws.readyState < 2) ws.close();
-  if (chrome && chrome.exitCode === null && !chrome.signalCode) {
-    process.kill(-chrome.pid, 'SIGTERM');
+  if (ownedGroup && chrome.exitCode === null && !chrome.signalCode) {
+    signalOwned('SIGTERM');
     await Promise.race([new Promise((accept) => chrome.once('exit', accept)), delay(2000)]);
-    if (chrome.exitCode === null && !chrome.signalCode) process.kill(-chrome.pid, 'SIGKILL');
+    if (chrome.exitCode === null && !chrome.signalCode) {
+      signalOwned('SIGKILL');
+      await Promise.race([new Promise((accept) => chrome.once('exit', accept)), delay(2000)]);
+    }
   }
-  if (server) await server.close();
-  report.finished_at = new Date().toISOString();
-  writeFileSync(resolve(out, 'report.json'), JSON.stringify(report, null, 2) + '\n');
+  if (server) await Promise.race([server.close(), delay(2000).then(() => { report.status = 'unverified'; report.reason = 'Owned server cleanup timed out'; })]);
+  retain();
+  clearTimeout(watchdog);
 }
 console.log(JSON.stringify({ status: report.status, cases: report.cases.length, reason: report.reason ?? null }));
-if (report.status !== 'observed') process.exitCode = 2;
+process.exit(report.status === 'observed' ? 0 : 2);
