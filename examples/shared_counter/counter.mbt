@@ -2,7 +2,7 @@
 /// The sole application state. The JS and native consumers import this package
 /// unchanged; hosts own no parallel counter model and there are no OS branches.
 pub struct Model {
-  priv value : Int32
+  priv value : Int
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -11,7 +11,7 @@ pub fn Model::new() -> Model {
 }
 
 ///|
-pub fn Model::value(self : Model) -> Int32 {
+pub fn Model::value(self : Model) -> Int {
   self.value
 }
 

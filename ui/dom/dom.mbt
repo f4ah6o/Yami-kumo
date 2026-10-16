@@ -26,7 +26,7 @@ extern "js" fn node_present(node : DomNode) -> Bool =
   #| (node) => node !== null
 
 ///|
-extern "js" fn claim_root(registry : RootRegistry, root : DomNode) -> Int32 =
+extern "js" fn claim_root(registry : RootRegistry, root : DomNode) -> Int =
   #| (registry, root) => {
   #|   for (const other of registry) {
   #|     if (other === root) return 1;
@@ -51,7 +51,7 @@ extern "js" fn accepts_events(root : DomNode, node : DomNode) -> Bool =
 
 ///|
 extern "js" fn create_node(
-  kind : Int32,
+  kind : Int,
   key : String,
   label : String,
 ) -> DomNode =
@@ -71,7 +71,7 @@ extern "js" fn create_node(
 ///|
 extern "js" fn update_node(
   node : DomNode,
-  kind : Int32,
+  kind : Int,
   label : String,
   disabled : Bool,
   loading : Bool,
@@ -106,7 +106,7 @@ extern "js" fn enqueue_microtask(callback : () -> Unit) -> Unit =
 extern "js" fn position_child(
   parent : DomNode,
   node : DomNode,
-  index : Int32,
+  index : Int,
 ) -> Unit =
   #| (parent, node, index) => {
   #|   const before = parent.childNodes[index] || null;
@@ -207,7 +207,7 @@ pub fn mount(
 }
 
 ///|
-fn kind_number(kind : @core.NodeKind) -> Int32 {
+fn kind_number(kind : @core.NodeKind) -> Int {
   match kind {
     Text => 0
     Button => 1
@@ -235,7 +235,7 @@ fn DomRoot::render_node(
   self : DomRoot,
   view : @core.View,
   parent : DomNode,
-  index : Int32,
+  index : Int,
 ) -> Unit {
   let key = view.key().value()
   let kind = view.kind()

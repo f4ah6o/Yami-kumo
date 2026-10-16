@@ -109,7 +109,7 @@ pub fn mount_counter(id : String) -> String {
 
 ///|
 #export_name("counterValue")
-pub fn counter_value(id : String) -> Int32 {
+pub fn counter_value(id : String) -> Int {
   match counters.get(id) {
     Some(counter) => counter.model.value()
     None => -1
