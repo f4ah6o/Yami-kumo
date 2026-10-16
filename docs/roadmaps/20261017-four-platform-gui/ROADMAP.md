@@ -20,14 +20,14 @@ Linux、Windows、macOS、Webを対等な4つの実行プラットフォーム�
 
 基準SHAは [SOURCES.md](SOURCES.md) に固定した。次表はソース・文書の読取結果であり、この計画の動作テスト結果ではない。
 
-| 既存資産 | 再利用方針 | 注意点 |
-|---|---|---|
-| Yami `components.mbt` / `html.mbt` | 安全な文字・属性の扱いと旧HTML APIを維持 | 戻り値`Html`を新しい全プラットフォーム共通APIにはしない |
-| Yami `native/components/button.mbt` | 既存操作・cancel回帰ケースを保存 | `ButtonInteraction`とGPUI Buttonを並行して二重駆動しない |
-| GPUI `controls/button/button.mbt` | Nativeの再利用候補として比較する | loading、最小bounds、キーrepeatの契約差があるため無条件置換しない |
-| GPUI `text/` / `docs/text-model.md` | UTF-16範囲と厳密なUTF-8変換、composition値モデルを利用 | これはhost IMEではない。新しい文字編集エンジンをYami側で再実装しない |
-| Yami `dom/` / npm preview | 既存Field状態、form reset、明示的DOM導入、配布検査を維持 | 新DOM runtimeはroot単位のmount/update/unmountを別契約で追加 |
-| Yami AppShell / fixtures / Native scripts | 画面の役割、比較入力、3 OSの実行導線を再利用 | 過去SHAのGUI成功を新コードの成功として流用しない |
+| 既存資産                                  | 再利用方針                                               | 注意点                                                               |
+| ----------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------- |
+| Yami `components.mbt` / `html.mbt`        | 安全な文字・属性の扱いと旧HTML APIを維持                 | 戻り値`Html`を新しい全プラットフォーム共通APIにはしない              |
+| Yami `native/components/button.mbt`       | 既存操作・cancel回帰ケースを保存                         | `ButtonInteraction`とGPUI Buttonを並行して二重駆動しない             |
+| GPUI `controls/button/button.mbt`         | Nativeの再利用候補として比較する                         | loading、最小bounds、キーrepeatの契約差があるため無条件置換しない    |
+| GPUI `text/` / `docs/text-model.md`       | UTF-16範囲と厳密なUTF-8変換、composition値モデルを利用   | これはhost IMEではない。新しい文字編集エンジンをYami側で再実装しない |
+| Yami `dom/` / npm preview                 | 既存Field状態、form reset、明示的DOM導入、配布検査を維持 | 新DOM runtimeはroot単位のmount/update/unmountを別契約で追加          |
+| Yami AppShell / fixtures / Native scripts | 画面の役割、比較入力、3 OSの実行導線を再利用             | 過去SHAのGUI成功を新コードの成功として流用しない                     |
 
 調査で判明した調整事項：
 
@@ -37,13 +37,13 @@ Linux、Windows、macOS、Webを対等な4つの実行プラットフォーム�
 
 ## 3. リポジトリの責務
 
-| 作業先 | 所有するもの | 所有しないもの |
-|---|---|---|
-| `f4ah6o/Yami-kumo` | 共通部品API、View構造、テーマ、DOM adapter、GPUI adapter、共通fixture、consumer | OSのIME/providerやGPU backendの別実装 |
-| `gpui-mbt/gpui.mbt` | 既存core/layout/input/textの再利用、汎用focus/IME/AX等の不足を埋める公開API | Kumo互換やYami固有の画面・theme |
-| `gpui-mbt/gpui-conformance` | gpui.rsとの既存互換性ゲートを維持 | Yamiの部品仕様の正解を代わりに決めること |
-| `f4ah6o/vlmkit` | 必要時の実画面・対象window限定の操作検証 | consumer runtimeの必須依存 |
-| `MZed` / `dsh.mbt` | MVP後の任意consumer | MVP完成の前提条件、独自のprovider仕様を共通部品へ入れること |
+| 作業先                      | 所有するもの                                                                    | 所有しないもの                                              |
+| --------------------------- | ------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `f4ah6o/Yami-kumo`          | 共通部品API、View構造、テーマ、DOM adapter、GPUI adapter、共通fixture、consumer | OSのIME/providerやGPU backendの別実装                       |
+| `gpui-mbt/gpui.mbt`         | 既存core/layout/input/textの再利用、汎用focus/IME/AX等の不足を埋める公開API     | Kumo互換やYami固有の画面・theme                             |
+| `gpui-mbt/gpui-conformance` | gpui.rsとの既存互換性ゲートを維持                                               | Yamiの部品仕様の正解を代わりに決めること                    |
+| `f4ah6o/vlmkit`             | 必要時の実画面・対象window限定の操作検証                                        | consumer runtimeの必須依存                                  |
+| `MZed` / `dsh.mbt`          | MVP後の任意consumer                                                             | MVP完成の前提条件、独自のprovider仕様を共通部品へ入れること |
 
 新しい汎用機能が既存GPUIの公開APIで足りると分かった場合、該当GPUI変更は縮小・完了扱いにする。Yamiのprivate API呼び出しで不足を隠さない。gpui-conformance/vlmkitには本計画だけを理由に新しい並行実装を増やさない。
 
@@ -117,14 +117,14 @@ DialogはWebでdialog/showModalを候補とする。開閉状態をアプリが�
 
 日程ではなく受入条件で進む。下位ゲート未達のprofileを、他profileの成功で補わない。
 
-| 段階 | 成果物 | 完了時に新しくできること | 主パケット |
-|---|---|---|---|
-| M0 契約と差分整理 | ADR、再利用表、依存/能力表、初期fixture、証拠schema | 同じ部品・同じ操作の意味と、未対応の扱いが固定される | YK-00、GP-00 |
-| M1 一つの画面を4経路へ | 共通view/runtime、DOM/GPUI adapter、Text+Button+counter | 一つの画面sourceを4つのbootstrapから起動し、操作・再描画・破棄できる | YK-01〜03 |
-| M2 小さな部品ライブラリ | Button完全状態、Text/Card、layout/theme/AppShell | サイズ変更・theme切替でもstate/focusを保持し、画面を共通部品で組める | YK-04〜05 |
-| M3 入力とモーダル | TextField、Dialog、3 OSの必要host機能 | 日本語入力→検証→保存→確認→focus復帰を同じ画面で行える | GP-01、GP-02-L/W/M、GP-03、YK-06〜07 |
-| M4 4プラットフォームMVP検証 | 同一settings consumer、証拠matrix、回帰/寿命検査 | 宣言した4 profileで一連の操作と必要な支援技術経路を証明できる | YK-08 |
-| M5 配布と段階移行 | 独立MoonBit/JS/TS consumer、tarball、移行文書 | checkoutやMoonBit compilerなしで生成済Web版を利用でき、旧APIも維持される | YK-09 |
+| 段階                        | 成果物                                                  | 完了時に新しくできること                                                 | 主パケット                           |
+| --------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------ |
+| M0 契約と差分整理           | ADR、再利用表、依存/能力表、初期fixture、証拠schema     | 同じ部品・同じ操作の意味と、未対応の扱いが固定される                     | YK-00、GP-00                         |
+| M1 一つの画面を4経路へ      | 共通view/runtime、DOM/GPUI adapter、Text+Button+counter | 一つの画面sourceを4つのbootstrapから起動し、操作・再描画・破棄できる     | YK-01〜03                            |
+| M2 小さな部品ライブラリ     | Button完全状態、Text/Card、layout/theme/AppShell        | サイズ変更・theme切替でもstate/focusを保持し、画面を共通部品で組める     | YK-04〜05                            |
+| M3 入力とモーダル           | TextField、Dialog、3 OSの必要host機能                   | 日本語入力→検証→保存→確認→focus復帰を同じ画面で行える                    | GP-01、GP-02-L/W/M、GP-03、YK-06〜07 |
+| M4 4プラットフォームMVP検証 | 同一settings consumer、証拠matrix、回帰/寿命検査        | 宣言した4 profileで一連の操作と必要な支援技術経路を証明できる            | YK-08                                |
+| M5 配布と段階移行           | 独立MoonBit/JS/TS consumer、tarball、移行文書           | checkoutやMoonBit compilerなしで生成済Web版を利用でき、旧APIも維持される | YK-09                                |
 
 M1は「Text+Buttonの経路が動く」だけであり、TextField/IMEや一般GUIの4環境対応完了ではない。M3の難所調査はM1と並行し、M2完了までIMEの存在確認を先送りしない。M4はライブラリの宣言範囲のMVP判定であり、gpui.mbt全体のproduction/Tier 1への昇格ではない。
 
@@ -144,12 +144,12 @@ M1は「Text+Buttonの経路が動く」だけであり、TextField/IMEや一般
 
 ## 7. プラットフォームとターゲットの検証範囲
 
-| profile | 初期対象 | MVPへ必要な実測 | 推定してはいけないこと |
-|---|---|---|---|
-| Linux | 固定したUbuntu/Wayland、compositor/font/IME版を記録 | visible native window、入力、IME確定/取消、candidate位置、Linuxの外部AX経路 | WSL/headless/他distro全体の対応 |
-| Windows | x64、固定OS/toolchain/IME | visible HWND、Microsoft IME等の実経路、UIAの必要操作 | synthetic eventのみで物理/IME対応 |
-| macOS | Apple Siliconのみ | unlocked console、実際の入力/日本語IME、候補位置、AX/VoiceOverの対象範囲 | hosted build成功、Intel Mac対応 |
-| Web | JS + DOM、desktop Chrome/Chromium・Firefox・Safari | browser操作、DOM editing、3 engine自動回帰、対象実ブラウザのIME/支援技術 | ChromiumだけでWeb全般対応、WebKit自動化をSafari実測と呼ぶこと |
+| profile | 初期対象                                            | MVPへ必要な実測                                                             | 推定してはいけないこと                                        |
+| ------- | --------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Linux   | 固定したUbuntu/Wayland、compositor/font/IME版を記録 | visible native window、入力、IME確定/取消、candidate位置、Linuxの外部AX経路 | WSL/headless/他distro全体の対応                               |
+| Windows | x64、固定OS/toolchain/IME                           | visible HWND、Microsoft IME等の実経路、UIAの必要操作                        | synthetic eventのみで物理/IME対応                             |
+| macOS   | Apple Siliconのみ                                   | unlocked console、実際の入力/日本語IME、候補位置、AX/VoiceOverの対象範囲    | hosted build成功、Intel Mac対応                               |
+| Web     | JS + DOM、desktop Chrome/Chromium・Firefox・Safari  | browser操作、DOM editing、3 engine自動回帰、対象実ブラウザのIME/支援技術    | ChromiumだけでWeb全般対応、WebKit自動化をSafari実測と呼ぶこと |
 
 最初の開発ループはLinux + Web/Chromium。WindowsとMacのコンパイル/lifecycleはM1から併走し、実機証拠は各担当へ分担する。4プラットフォームを目標にすることを、Linux先行を理由に変更しない。iOS/Android Native、mobile Safariの正式対応、WasmGC/Wasmのbrowser実行は後続。
 
@@ -157,14 +157,14 @@ M1は「Text+Buttonの経路が動く」だけであり、TextField/IMEや一般
 
 ### 8.1 6つの観測層
 
-| 観測層 | 何を比較するか |
-|---|---|
-| 純粋model | 同じ意味的操作→同じ値・選択・開閉・要求 |
-| host contract | ownership、世代、順序、cancel、未対応/拒否の型付き結果 |
-| 実runtime | 本物のDOM/Native windowで操作→同じdomain結果 |
-| semantic/AX | role/name/state/relationと、外部の必要操作→同じdomain結果 |
-| layout/visual | 固定geometryの差、profile別画像、focus ring/clip/contrast等 |
-| lifecycle/package | root間隔離、dispose、古い完了拒否、独立consumerと依存graph |
+| 観測層            | 何を比較するか                                              |
+| ----------------- | ----------------------------------------------------------- |
+| 純粋model         | 同じ意味的操作→同じ値・選択・開閉・要求                     |
+| host contract     | ownership、世代、順序、cancel、未対応/拒否の型付き結果      |
+| 実runtime         | 本物のDOM/Native windowで操作→同じdomain結果                |
+| semantic/AX       | role/name/state/relationと、外部の必要操作→同じdomain結果   |
+| layout/visual     | 固定geometryの差、profile別画像、focus ring/clip/contrast等 |
+| lifecycle/package | root間隔離、dispose、古い完了拒否、独立consumerと依存graph  |
 
 traceは低レベルOSイベントの全一致を要求しない。意味的なevent/actionと結果を正規化し、raw traceも残す。repeatやblur/composition順など意図的なprofile差は版付きallowlistへ限定し、未知の差は失敗させる。許容差を勝手に増やして結果を合わせない。
 
@@ -194,16 +194,16 @@ pnpm run test:npm
 
 ## 9. 主要リスクと縮小手段
 
-| リスク | 最初の検出 | 対処 |
-|---|---|---|
-| Nativeの日本語IME / AXがpublic APIで不足 | GP-00、M1のhost spike | gpui側でOS別に補強。Yamiで私的APIを隠して使わない |
-| DOMとGPUIのlayout差 | M1最小Box、M2固定fixture | 共通layout範囲を限定し、差を数値化。任意CSS変換へ拡張しない |
-| 再描画でfocus/選択/compositionが消える | YK-02/06 | keyed identity、編集中property書換抑止、世代付き要求 |
-| 既存2つのButton契約差 | GP-00 | 同じfixtureで比較し、旧API維持とvNextの方針を分離 |
-| 依存graphがターゲット非互換 | YK-01 | 独立JS/Native consumerで早期確認、leaf adapter分離 |
-| 新UIのビルドが依然Kumo/Zag/Reactを必要とする | YK-02/09 | 新経路のclean consumer・artifact/module graph検査。dev依存とruntimeを別集計 |
-| CIでIME/AXを合格に見せてしまう | YK-08 | 実機、synthetic、model、browser自動化を別行にする |
-| 複数agentが同じ公共型やCIを競合変更 | 全段階 | 下記責務表と先行contract、短い縦切りPR、共通ファイルは統合担当 |
+| リスク                                       | 最初の検出               | 対処                                                                        |
+| -------------------------------------------- | ------------------------ | --------------------------------------------------------------------------- |
+| Nativeの日本語IME / AXがpublic APIで不足     | GP-00、M1のhost spike    | gpui側でOS別に補強。Yamiで私的APIを隠して使わない                           |
+| DOMとGPUIのlayout差                          | M1最小Box、M2固定fixture | 共通layout範囲を限定し、差を数値化。任意CSS変換へ拡張しない                 |
+| 再描画でfocus/選択/compositionが消える       | YK-02/06                 | keyed identity、編集中property書換抑止、世代付き要求                        |
+| 既存2つのButton契約差                        | GP-00                    | 同じfixtureで比較し、旧API維持とvNextの方針を分離                           |
+| 依存graphがターゲット非互換                  | YK-01                    | 独立JS/Native consumerで早期確認、leaf adapter分離                          |
+| 新UIのビルドが依然Kumo/Zag/Reactを必要とする | YK-02/09                 | 新経路のclean consumer・artifact/module graph検査。dev依存とruntimeを別集計 |
+| CIでIME/AXを合格に見せてしまう               | YK-08                    | 実機、synthetic、model、browser自動化を別行にする                           |
+| 複数agentが同じ公共型やCIを競合変更          | 全段階                   | 下記責務表と先行contract、短い縦切りPR、共通ファイルは統合担当              |
 
 ## 10. 分担と統合順
 
@@ -226,25 +226,24 @@ npm/Mooncakesの消費経路が安定した後で、MZed/dshの一部分に段�
 
 YKパケット10件はYami-kumoの`issues/open`へ登録。GPパケット6件は本計画内の参照ドラフトとして保管し、gpui.mbtの`issues/open`にはまだ反映していない。パケットは責務単位であり、特にOS hostやAXは複数の小さいPRに分けてよい。下記依存関係は実装順の提案であり、既存PR番号ではない。
 
-| ID | 作業先 | 内容 | 依存 |
-|---|---|---|---|
-| [YK-00](../../../issues/open/20261017-ui4-yk-00-architecture.md) | Yami | 4プラットフォーム共通GUIの契約と移行ADR | なし |
-| [GP-00](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-00-public-api-gap.md) | GPUI | 共通GUIが必要とする公開APIの差分調査と既存契約整合 | なし |
-| [YK-01](../../../issues/open/20261017-ui4-yk-01-neutral-runtime.md) | Yami | 共通View・安定ID・寿命管理と独立consumerの最小骨格 | YK-00 |
-| [YK-02](../../../issues/open/20261017-ui4-yk-02-dom-backend.md) | Yami | root単位のDOMバックエンドとkeyed更新 | YK-01 |
-| [YK-03](../../../issues/open/20261017-ui4-yk-03-gpui-adapter.md) | Yami | 共通ViewのGPUI adapterと3 OS bootstrap | YK-01, GP-00 |
-| [YK-04](../../../issues/open/20261017-ui4-yk-04-baseline-controls.md) | Yami | Button/Text/Cardの共通部品契約と全状態 | YK-02, YK-03 |
-| [YK-05](../../../issues/open/20261017-ui4-yk-05-layout-theme-shell.md) | Yami | 制限付き共通layout・標準theme・AppShell | YK-04 |
-| [GP-01](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-01-text-host-contract.md) | GPUI | TextField向けの公開編集session・IME host契約 | GP-00, YK-01 |
-| [GP-02-L](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-l-linux-text-ime.md) | GPUI | Linux/WaylandのTextField・日本語IME host接続 | GP-01 |
-| [GP-02-W](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-w-windows-text-ime.md) | GPUI | WindowsのTextField・日本語IME host接続 | GP-01 |
-| [GP-02-M](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-m-macos-text-ime.md) | GPUI | macOS Apple SiliconのTextField・日本語IME host接続 | GP-01 |
-| [YK-06](../../../issues/open/20261017-ui4-yk-06-textfield.md) | Yami | 共通TextFieldとDOM編集・GPUI接続 | YK-02, YK-03, GP-01 |
-| [GP-03](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-03-focus-accessibility.md) | GPUI | Dialog/TextFieldに必要なfocus scopeと外部semantic action | GP-00, YK-01 |
-| [YK-07](../../../issues/open/20261017-ui4-yk-07-dialog.md) | Yami | 共通Dialogと開閉・focusの往復 | YK-05, YK-06, GP-03 |
-| [YK-08](../../../issues/open/20261017-ui4-yk-08-qualification.md) | Yami | Shared Settingsの4プラットフォーム資格付けと証拠matrix | YK-04, YK-05, YK-06, YK-07, GP-02-L, GP-02-W, GP-02-M, GP-03 |
-| [YK-09](../../../issues/open/20261017-ui4-yk-09-distribution.md) | Yami | 独立MoonBit/JS/TS consumerと配布・段階移行 | YK-08 |
-
+| ID                                                                                      | 作業先 | 内容                                                     | 依存                                                         |
+| --------------------------------------------------------------------------------------- | ------ | -------------------------------------------------------- | ------------------------------------------------------------ |
+| [YK-00](../../../issues/open/20261017-ui4-yk-00-architecture.md)                        | Yami   | 4プラットフォーム共通GUIの契約と移行ADR                  | なし                                                         |
+| [GP-00](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-00-public-api-gap.md)       | GPUI   | 共通GUIが必要とする公開APIの差分調査と既存契約整合       | なし                                                         |
+| [YK-01](../../../issues/open/20261017-ui4-yk-01-neutral-runtime.md)                     | Yami   | 共通View・安定ID・寿命管理と独立consumerの最小骨格       | YK-00                                                        |
+| [YK-02](../../../issues/open/20261017-ui4-yk-02-dom-backend.md)                         | Yami   | root単位のDOMバックエンドとkeyed更新                     | YK-01                                                        |
+| [YK-03](../../../issues/open/20261017-ui4-yk-03-gpui-adapter.md)                        | Yami   | 共通ViewのGPUI adapterと3 OS bootstrap                   | YK-01, GP-00                                                 |
+| [YK-04](../../../issues/open/20261017-ui4-yk-04-baseline-controls.md)                   | Yami   | Button/Text/Cardの共通部品契約と全状態                   | YK-02, YK-03                                                 |
+| [YK-05](../../../issues/open/20261017-ui4-yk-05-layout-theme-shell.md)                  | Yami   | 制限付き共通layout・標準theme・AppShell                  | YK-04                                                        |
+| [GP-01](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-01-text-host-contract.md)   | GPUI   | TextField向けの公開編集session・IME host契約             | GP-00, YK-01                                                 |
+| [GP-02-L](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-l-linux-text-ime.md)   | GPUI   | Linux/WaylandのTextField・日本語IME host接続             | GP-01                                                        |
+| [GP-02-W](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-w-windows-text-ime.md) | GPUI   | WindowsのTextField・日本語IME host接続                   | GP-01                                                        |
+| [GP-02-M](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-m-macos-text-ime.md)   | GPUI   | macOS Apple SiliconのTextField・日本語IME host接続       | GP-01                                                        |
+| [YK-06](../../../issues/open/20261017-ui4-yk-06-textfield.md)                           | Yami   | 共通TextFieldとDOM編集・GPUI接続                         | YK-02, YK-03, GP-01                                          |
+| [GP-03](repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-03-focus-accessibility.md)  | GPUI   | Dialog/TextFieldに必要なfocus scopeと外部semantic action | GP-00, YK-01                                                 |
+| [YK-07](../../../issues/open/20261017-ui4-yk-07-dialog.md)                              | Yami   | 共通Dialogと開閉・focusの往復                            | YK-05, YK-06, GP-03                                          |
+| [YK-08](../../../issues/open/20261017-ui4-yk-08-qualification.md)                       | Yami   | Shared Settingsの4プラットフォーム資格付けと証拠matrix   | YK-04, YK-05, YK-06, YK-07, GP-02-L, GP-02-W, GP-02-M, GP-03 |
+| [YK-09](../../../issues/open/20261017-ui4-yk-09-distribution.md)                        | Yami   | 独立MoonBit/JS/TS consumerと配布・段階移行               | YK-08                                                        |
 
 ## 13. この計画で実際に行ったこと
 

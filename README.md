@@ -212,3 +212,13 @@ An installable JavaScript/TypeScript preview is built separately from this
 private starter. See [npm/README.md](npm/README.md) for supported components,
 optional React imports, styles and the tarball workflow. Registry publication
 is a separate release decision.
+
+## Additive shared UI development slice
+
+The [host-neutral shared UI](docs/shared-ui.md) source-workspace API adds a
+Text/Button counter with stable keyed instances and a root-scoped DOM adapter.
+The same pure model/view/update is compiled by independent JS and native
+consumers. This does not introduce a new native renderer or qualify the full
+four-platform roadmap, IME, external accessibility, or registry distribution.
+Existing HTML, native components and npm preview remain separate supported
+entrypoints.

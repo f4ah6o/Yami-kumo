@@ -1,0 +1,27 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "f4ah6o/yami_kumo/examples/shared_counter"
+
+import {
+  "f4ah6o/yami_kumo/ui/core",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct Model {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::new() -> Self
+pub fn Model::not_equal(Self, Self) -> Bool
+pub fn Model::to_repr(Self) -> @debug.Repr
+pub fn Model::update(Self, @core.SemanticAction) -> Self
+pub fn Model::value(Self) -> Int
+pub fn Model::view(Self) -> @core.View
+
+// Type aliases
+
+// Traits
