@@ -257,6 +257,11 @@ try {
         assert.equal(await resetEmail.inputValue(), 'invalid-email');
         assert.equal(await resetEmail.getAttribute('aria-invalid'), 'true');
         await resetButton.click();
+        await page.waitForFunction(
+          () =>
+            document.querySelector('#reset-required').value === '' &&
+            !document.querySelector('#reset-required').hasAttribute('data-filled'),
+        );
         assert.equal(await resetEmail.inputValue(), 'initial@example.com');
         assert.equal(await resetEmail.getAttribute('aria-invalid'), 'false');
         assert.equal(

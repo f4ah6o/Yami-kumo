@@ -194,6 +194,10 @@ extern "js" fn restore_aria_invalid(
   #| }
 
 ///|
+extern "js" fn after_native_form_reset(callback : () -> Unit) -> Unit =
+  #| (callback) => { setTimeout(callback, 0); }
+
+///|
 extern "js" fn queue_microtask(callback : () -> Unit) -> Unit =
   #| (callback) => typeof queueMicrotask === "function" ? queueMicrotask(callback) : Promise.resolve().then(callback)
 
@@ -313,8 +317,8 @@ fn update_from_reset_event(
 ) -> Unit {
   let form = event_target(event)
   if is_present(form) && is_form_element(form) {
-    // Do not read pre-reset values or alter state when another listener cancels reset.
-    queue_microtask(fn() {
+    // Do not run in a microtask: the browser may still be applying the native reset.
+    after_native_form_reset(fn() {
       if !event_default_prevented(event) {
         let inputs = form_inputs(form)
         for index in 0..<node_list_count(inputs) {
