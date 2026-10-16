@@ -29,7 +29,12 @@ document.querySelector('#app').innerHTML = renderHtml(
           attrs: { type: 'email' },
         }),
       ),
-      input({ id: 'other', label: 'Other', error: 'Error detail' }),
+      input({
+        id: 'other',
+        label: 'Other',
+        error: 'Error detail',
+        attrs: { type: 'email', 'aria-invalid': 'false' },
+      }),
       ...['primary', 'secondary', 'ghost', 'destructive', 'secondary-destructive', 'outline'].map(
         (variant) => button(variant, { variant, attrs: { 'data-variant': variant } }),
       ),
