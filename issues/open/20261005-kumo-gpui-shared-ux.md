@@ -25,6 +25,26 @@ Related: [Familiarity-first design workflow](20261003-familiarity-first-design-w
 - The checkboxes below are end-to-end acceptance gates. Passing an
   intermediate Button or packaging slice does not close them.
 
+## OS child packets — 2026-10-07 (JST)
+
+Native host integration and qualification are tracked separately:
+
+- [Linux native UX conformance](20261007-linux-native-ux-conformance.md)
+- [Apple Silicon macOS native UX conformance](20261007-apple-silicon-macos-native-ux-conformance.md)
+- [Windows native UX conformance](20261007-windows-native-ux-conformance.md)
+
+Keep the shared scenario contract, web-reference qualification, input pinning,
+extraction/generation, adapter ownership and update policy in this parent.
+Children own OS mappings, framework prerequisites and actual native evidence;
+one passing OS cannot complete another. macOS execution is Apple Silicon/arm64
+only; Intel qualification is excluded.
+
+These child packets originated as a stacked documentation change against
+[PR #3](https://github.com/f4ah6o/Yami-kumo/pull/3), which has now merged into
+`main`. Their acceptance criteria remain separate platform gates. The parent's updated checkpoint
+records partial Button evidence without closing native UX acceptance. Passing
+Web CI alone does not qualify shared-scenario or native conformance.
+
 ## 1. Outcome
 
 Make the UX learned in a Yami-kumo web application transferable to an application
