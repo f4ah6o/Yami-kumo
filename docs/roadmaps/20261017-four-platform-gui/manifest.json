@@ -1,0 +1,238 @@
+{
+  "title": "4プラットフォーム共通GUI 実装計画",
+  "date": "2026-10-17",
+  "status": "proposed",
+  "implementation": "not_started",
+  "baselines": {
+    "f4ah6o/Yami-kumo": "7a2c088934e2104e48b9f58b23724c2160520202",
+    "gpui-mbt/gpui.mbt": "a99e111a37c0ac98bd847e9ea493c78589207875"
+  },
+  "packets": [
+    {
+      "id": "YK-00",
+      "repo": "f4ah6o/Yami-kumo",
+      "stage": "M0",
+      "title": "4プラットフォーム共通GUIの契約と移行ADR",
+      "path": "../../../issues/open/20261017-ui4-yk-00-architecture.md",
+      "dependencies": [],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "GP-00",
+      "repo": "gpui-mbt/gpui.mbt",
+      "stage": "M0",
+      "title": "共通GUIが必要とする公開APIの差分調査と既存契約整合",
+      "path": "repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-00-public-api-gap.md",
+      "dependencies": [],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "YK-01",
+      "repo": "f4ah6o/Yami-kumo",
+      "stage": "M1",
+      "title": "共通View・安定ID・寿命管理と独立consumerの最小骨格",
+      "path": "../../../issues/open/20261017-ui4-yk-01-neutral-runtime.md",
+      "dependencies": [
+        "YK-00"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "YK-02",
+      "repo": "f4ah6o/Yami-kumo",
+      "stage": "M1",
+      "title": "root単位のDOMバックエンドとkeyed更新",
+      "path": "../../../issues/open/20261017-ui4-yk-02-dom-backend.md",
+      "dependencies": [
+        "YK-01"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "YK-03",
+      "repo": "f4ah6o/Yami-kumo",
+      "stage": "M1",
+      "title": "共通ViewのGPUI adapterと3 OS bootstrap",
+      "path": "../../../issues/open/20261017-ui4-yk-03-gpui-adapter.md",
+      "dependencies": [
+        "YK-01",
+        "GP-00"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "YK-04",
+      "repo": "f4ah6o/Yami-kumo",
+      "stage": "M2",
+      "title": "Button/Text/Cardの共通部品契約と全状態",
+      "path": "../../../issues/open/20261017-ui4-yk-04-baseline-controls.md",
+      "dependencies": [
+        "YK-02",
+        "YK-03"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "YK-05",
+      "repo": "f4ah6o/Yami-kumo",
+      "stage": "M2",
+      "title": "制限付き共通layout・標準theme・AppShell",
+      "path": "../../../issues/open/20261017-ui4-yk-05-layout-theme-shell.md",
+      "dependencies": [
+        "YK-04"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "GP-01",
+      "repo": "gpui-mbt/gpui.mbt",
+      "stage": "M3",
+      "title": "TextField向けの公開編集session・IME host契約",
+      "path": "repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-01-text-host-contract.md",
+      "dependencies": [
+        "GP-00",
+        "YK-01"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "GP-02-L",
+      "repo": "gpui-mbt/gpui.mbt",
+      "stage": "M3",
+      "title": "Linux/WaylandのTextField・日本語IME host接続",
+      "path": "repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-l-linux-text-ime.md",
+      "dependencies": [
+        "GP-01"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "GP-02-W",
+      "repo": "gpui-mbt/gpui.mbt",
+      "stage": "M3",
+      "title": "WindowsのTextField・日本語IME host接続",
+      "path": "repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-w-windows-text-ime.md",
+      "dependencies": [
+        "GP-01"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "GP-02-M",
+      "repo": "gpui-mbt/gpui.mbt",
+      "stage": "M3",
+      "title": "macOS Apple SiliconのTextField・日本語IME host接続",
+      "path": "repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-m-macos-text-ime.md",
+      "dependencies": [
+        "GP-01"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "YK-06",
+      "repo": "f4ah6o/Yami-kumo",
+      "stage": "M3",
+      "title": "共通TextFieldとDOM編集・GPUI接続",
+      "path": "../../../issues/open/20261017-ui4-yk-06-textfield.md",
+      "dependencies": [
+        "YK-02",
+        "YK-03",
+        "GP-01"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "GP-03",
+      "repo": "gpui-mbt/gpui.mbt",
+      "stage": "M3",
+      "title": "Dialog/TextFieldに必要なfocus scopeと外部semantic action",
+      "path": "repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-03-focus-accessibility.md",
+      "dependencies": [
+        "GP-00",
+        "YK-01"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "YK-07",
+      "repo": "f4ah6o/Yami-kumo",
+      "stage": "M3",
+      "title": "共通Dialogと開閉・focusの往復",
+      "path": "../../../issues/open/20261017-ui4-yk-07-dialog.md",
+      "dependencies": [
+        "YK-05",
+        "YK-06",
+        "GP-03"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "YK-08",
+      "repo": "f4ah6o/Yami-kumo",
+      "stage": "M4",
+      "title": "Shared Settingsの4プラットフォーム資格付けと証拠matrix",
+      "path": "../../../issues/open/20261017-ui4-yk-08-qualification.md",
+      "dependencies": [
+        "YK-04",
+        "YK-05",
+        "YK-06",
+        "YK-07",
+        "GP-02-L",
+        "GP-02-W",
+        "GP-02-M",
+        "GP-03"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    },
+    {
+      "id": "YK-09",
+      "repo": "f4ah6o/Yami-kumo",
+      "stage": "M5",
+      "title": "独立MoonBit/JS/TS consumerと配布・段階移行",
+      "path": "../../../issues/open/20261017-ui4-yk-09-distribution.md",
+      "dependencies": [
+        "YK-08"
+      ],
+      "status": "proposed",
+      "implementation": "not_started",
+      "test_status": "not_run"
+    }
+  ],
+  "publication": {
+    "destination": "f4ah6o/Yami-kumo",
+    "branch": "main",
+    "document_path": "docs/roadmaps/20261017-four-platform-gui/ROADMAP.md",
+    "gpui_package_tasks": "reference copies only; gpui-mbt/gpui.mbt unchanged",
+    "implementation": "not_started"
+  }
+}
