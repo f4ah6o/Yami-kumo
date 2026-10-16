@@ -10,3 +10,7 @@
 !/sample/**
 !/examples/
 !/examples/**
+# The shared UI development path depends on source-workspace-only packages.
+# Do not accidentally expand the existing published native module surface.
+/examples/shared_counter/
+/examples/shared_counter_host/

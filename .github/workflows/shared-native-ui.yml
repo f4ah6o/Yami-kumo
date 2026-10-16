@@ -1,0 +1,259 @@
+name: Shared counter native proof
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  YAMI_SHARED_UI_NATIVE: '1'
+  YAMI_SHARED_UI_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+jobs:
+  portable-adapter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: Yami-kumo
+      - name: Read pinned GPUI revision
+        id: gpui
+        shell: bash
+        run: |
+          revision="$(tr -d '[:space:]' < Yami-kumo/tests/shared-ui/gpui-revision.txt)"
+          [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v6
+        with:
+          repository: gpui-mbt/gpui.mbt
+          ref: ${{ steps.gpui.outputs.revision }}
+          path: gpui.mbt
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
+      - name: Test actual adapter and App on all compiler targets
+        shell: bash
+        env:
+          GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
+          YAMI_NATIVE_UI_EVIDENCE_DIR: ${{ github.workspace }}/Yami-kumo/_build/shared-native-ui/portable
+        run: |
+          mkdir -p "$YAMI_NATIVE_UI_EVIDENCE_DIR"
+          set -o pipefail
+          sh Yami-kumo/scripts/native_ui_workspace.sh sh -ec '
+            moon test "$YAMI_NATIVE_MODULE_ROOT/ui" "$YAMI_NATIVE_MODULE_ROOT/examples/shared_counter" --target all --deny-warn --no-parallelize
+            python3 "$YAMI_NATIVE_YAMI_ROOT/tests/shared-ui/test_native_driver.py"
+            python3 "$YAMI_NATIVE_YAMI_ROOT/scripts/shared_native_ui_provenance.py"
+          ' 2>&1 | tee "$YAMI_NATIVE_UI_EVIDENCE_DIR/portable-tests.log"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: yami-shared-native-portable
+          path: Yami-kumo/_build/shared-native-ui/portable/
+          if-no-files-found: error
+
+  ubuntu-wayland:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout Yami-kumo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: Yami-kumo
+
+      - name: Read pinned GPUI revision
+        id: gpui
+        shell: bash
+        run: |
+          revision="$(tr -d '[:space:]' < Yami-kumo/tests/shared-ui/gpui-revision.txt)"
+          if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "tests/shared-ui/gpui-revision.txt must contain one lowercase 40-character commit SHA" >&2
+            exit 2
+          fi
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pinned GPUI source
+        uses: actions/checkout@v6
+        with:
+          repository: gpui-mbt/gpui.mbt
+          ref: ${{ steps.gpui.outputs.revision }}
+          path: gpui.mbt
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
+
+      - name: Install Wayland, Mesa, fonts, Xvfb, and host input tools
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential pkg-config \
+            libwayland-dev wayland-protocols libwayland-cursor0 \
+            libegl1-mesa-dev libgles2-mesa-dev libxkbcommon-dev libgl1-mesa-dri \
+            libpango1.0-dev libfontconfig1-dev fontconfig \
+            fonts-dejavu-core fonts-noto-cjk fonts-noto-color-emoji \
+            wayland-utils weston xvfb xauth xdotool
+          dpkg-query -W \
+            libwayland-dev wayland-protocols libegl1-mesa-dev libgles2-mesa-dev \
+            libxkbcommon-dev libpango1.0-dev libfontconfig1-dev weston xvfb xauth xdotool
+          moon version --all
+
+      - name: Run shared adapter tests and both real Wayland counter fixtures
+        shell: bash
+        env:
+          GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
+          YAMI_NATIVE_UI_EVIDENCE_DIR: ${{ github.workspace }}/Yami-kumo/_build/shared-native-ui/ubuntu
+        run: sh Yami-kumo/scripts/native_ui_linux.sh
+
+      - name: Upload native Linux frames and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: yami-shared-native-ubuntu
+          path: Yami-kumo/_build/shared-native-ui/ubuntu/
+          if-no-files-found: warn
+
+  windows-d3d11:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    env:
+      MOONBIT_NEW_NATIVE: '0'
+      CL: /EHsc
+    steps:
+      - name: Checkout Yami-kumo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: Yami-kumo
+
+      - name: Read pinned GPUI revision
+        id: gpui
+        shell: bash
+        run: |
+          revision="$(tr -d '[:space:]' < Yami-kumo/tests/shared-ui/gpui-revision.txt)"
+          if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "tests/shared-ui/gpui-revision.txt must contain one lowercase 40-character commit SHA" >&2
+            exit 2
+          fi
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pinned GPUI source
+        uses: actions/checkout@v6
+        with:
+          repository: gpui-mbt/gpui.mbt
+          ref: ${{ steps.gpui.outputs.revision }}
+          path: gpui.mbt
+
+      - name: Enable the MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
+
+      - name: Verify MSVC and MoonBit environment
+        shell: pwsh
+        run: |
+          where.exe cl
+          moon version --all
+
+      - name: Run shared adapter tests and both SendInput counter fixtures
+        shell: pwsh
+        env:
+          GPUI_SOURCE: ${{ github.workspace }}\gpui.mbt
+          YAMI_NATIVE_UI_EVIDENCE_DIR: ${{ github.workspace }}\Yami-kumo\_build\shared-native-ui\windows
+        run: ./Yami-kumo/scripts/native_ui_windows.ps1 -SharedCounter
+
+      - name: Upload native Windows frames and logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: yami-shared-native-windows
+          path: Yami-kumo/_build/shared-native-ui/windows/
+          if-no-files-found: warn
+
+  macos-native-build:
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - name: Checkout Yami-kumo
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: Yami-kumo
+
+      - name: Read pinned GPUI revision
+        id: gpui
+        shell: bash
+        run: |
+          revision="$(tr -d '[:space:]' < Yami-kumo/tests/shared-ui/gpui-revision.txt)"
+          if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "tests/shared-ui/gpui-revision.txt must contain one lowercase 40-character commit SHA" >&2
+            exit 2
+          fi
+          echo "revision=$revision" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout pinned GPUI source
+        uses: actions/checkout@v6
+        with:
+          repository: gpui-mbt/gpui.mbt
+          ref: ${{ steps.gpui.outputs.revision }}
+          path: gpui.mbt
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
+
+      - name: Verify Xcode and MoonBit environment
+        shell: bash
+        run: |
+          xcodebuild -version
+          xcrun --find clang
+          moon version --all
+
+      - name: Build GPUI test hooks and run macOS portable tests
+        shell: bash
+        env:
+          GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
+          YAMI_NATIVE_UI_EVIDENCE_DIR: ${{ github.workspace }}/Yami-kumo/_build/shared-native-ui/macos
+        run: sh Yami-kumo/scripts/native_ui_macos.sh --shared-counter-build-and-test
+
+      - name: Upload macOS build and test logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: yami-shared-native-macos-build
+          path: Yami-kumo/_build/shared-native-ui/macos/
+          if-no-files-found: warn

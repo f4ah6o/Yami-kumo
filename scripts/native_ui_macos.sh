@@ -3,13 +3,13 @@ set -eu
 
 mode=${1:---ui-proof}
 if [ "$#" -gt 1 ]; then
-  echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test]" >&2
+  echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test]" >&2
   exit 2
 fi
 case "$mode" in
-  --ui-proof|--ax-proof|--build-and-test) ;;
+  --ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test) ;;
   *)
-    echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test]" >&2
+    echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test]" >&2
     exit 2
     ;;
 esac
@@ -67,6 +67,17 @@ sh "$yami_root/scripts/native_ui_workspace.sh" \
     tail -n 160 "$evidence_dir/core-text-tests.log" >&2 || true
     exit 1
   }
+
+if [ "$mode" = "--shared-counter-build-and-test" ]; then
+  sh "$yami_root/scripts/native_ui_workspace.sh" \
+    sh "$yami_root/scripts/shared_native_ui_tests.sh"
+  sh "$yami_root/scripts/native_ui_workspace.sh" \
+    moon build "$yami_root/native/examples/shared_counter/macos" --target native --deny-warn
+  printf '%s\n' '{"platform":"macos","build":"passed","runtime":"not-run","accessibility":"not-run"}' \
+    > "$evidence_dir/shared-native-build.json"
+  echo "Shared counter macOS build and portable tests passed; runtime UI and AX were not run."
+  exit 0
+fi
 
 sh "$yami_root/scripts/native_ui_workspace.sh" \
   sh "$yami_root/scripts/native_ui_tests.sh"

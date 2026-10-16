@@ -80,6 +80,19 @@ if ! python3 "$gpui_root/scripts/wait_wayland_ready.py" \
   exit 1
 fi
 
+if [ "${YAMI_SHARED_UI_NATIVE:-}" = 1 ]; then
+  : "${YAMI_SHARED_UI_CANDIDATE_SHA:?exact candidate SHA is required}"
+  sh "$yami_root/scripts/native_ui_workspace.sh" \
+    sh "$yami_root/scripts/shared_native_ui_tests.sh"
+  sh "$yami_root/scripts/native_ui_workspace.sh" \
+    python3 "$yami_root/tests/shared-ui/native_driver.py" \
+      --platform linux --evidence-dir "$evidence_dir" \
+      --candidate-sha "$YAMI_SHARED_UI_CANDIDATE_SHA" \
+      --linux-origin-x 0 --linux-origin-y 0 \
+      -- moon run "$yami_root/native/examples/shared_counter/ubuntu" --target native
+  exit 0
+fi
+
 sh "$yami_root/scripts/native_ui_workspace.sh" \
   sh "$yami_root/scripts/native_ui_tests.sh"
 sh "$yami_root/scripts/native_ui_workspace.sh" \

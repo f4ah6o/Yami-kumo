@@ -12,18 +12,25 @@ inherited from the legacy Kumo API and what remains a separate contract.
   atomic commits, queued activation, per-button disabled/loading cancellation,
   observed focus results and idempotent disposal.
 - `examples/shared_counter`: one pure model/view/update, imported unchanged by
-  standalone JS/native source consumers and the DOM bootstrap.
+  standalone JS/native source consumers, the DOM bootstrap, and the App/Entity native bootstrap.
 - `ui/dom`: explicit mount into an empty element, keyed text spans and native buttons,
   keyed updates, root overlap rejection, retained focus and owned cleanup.
 - `styles/shared-ui.css`: optional layout-only row/column rules, without Kumo.
+- `native/ui`: explicit GPUI Text/Button/Column/Row adapter with private native IDs,
+  common lifetime tokens, staged geometry/scene publication and one GPUI Button
+  controller per live Button.
+- `native/examples/shared_counter`: one App Entity owning the unchanged common
+  Model, plus thin Linux/Windows/macOS entrypoints.
 
 The common packages import only MoonBit core and each other. The DOM adapter is
 JS-only and uses a thin browser FFI. No GPUI, React, Kumo or Zag runtime enters
 this path. The repository's older demo/build tooling still has its own dev and
 legacy runtime dependencies.
 
-These packages are currently a source-workspace API. The existing `.moonignore`
-allowlist, npm preview exports, package names and versions are unchanged. A
+These packages are currently a source-workspace API. The new native examples
+are explicitly excluded from the existing native publication allowlist because
+their common packages are also unpublished. Existing published contents, npm
+preview exports, package names and versions remain unchanged. A
 clean standalone source consumer proves the dependency boundary, not a new
 registry release. Distribution is a later YK-09 gate.
 
@@ -51,7 +58,7 @@ activation therefore share one browser-native route; the adapter never emits a
 second Activate from keydown/keyup. Disabled uses the native disabled property.
 Loading sets `aria-busy` and `aria-disabled`, preserves the existing node/focus,
 and rejects activation in the common runtime. Loading does not create a new
-keyboard controller or prove behavior for a future native adapter.
+keyboard controller or establish universal DOM/native keyboard equivalence.
 
 A focus request and its host observation are separate. `mounted.focus(key)`
 reports whether the DOM actually focused that current button; the corresponding
@@ -97,11 +104,77 @@ Dirty local source may pass behavior assertions but cannot qualify an exact
 commit. CI runs these checks and retains `shared-ui-evidence` separately from
 legacy npm/native UI evidence.
 
+## Native App/Entity host
+
+The native adapter imports the same `ui/core`, `ui/runtime`, and
+`examples/shared_counter` source packages. `NativeCounter` owns exactly one
+`App` Entity containing `Model`; it does not keep a second counter state.
+`handle_event` only routes the owned window's monotonically sequenced events and
+queues semantic actions. After dispatch returns, `drain_one` stages the next
+layout and scene, updates the Entity through `App.update`/`Context.set`/`notify`,
+and publishes the next view before another action drains. App notifications are
+pumped only after that publication; disposal also drains Entity release work
+so shutdown reaches Stopped. Measurement failure leaves the model and accepted
+scene unchanged.
+
+`native/ui.Mounted` maps root-wide keys to private, nonzero native IDs and common
+runtime incarnation tokens. Same-key/same-kind updates preserve identity.
+Removal/retype, viewport or scale invalidation, changed Button bounds/label,
+loading/disabled transitions, focus loss and disposal revoke the relevant old
+input. Foreign-window events cannot consume the owned window's sequence.
+Geometry/scene preparation finishes before common runtime publication; stale,
+foreign and already-published preparations fail closed.
+
+The adapter uses existing GPUI Element/flex/focus/Scene and measured NativeText.
+Each Button uses exactly one existing `gpui/controls/button.Button`. It does not
+also dispatch to legacy Yami `ButtonInteraction`. The audited native policies
+remain visible: Enter repeat is ignored; the first held activation key owns the
+keyboard gesture; matching Space release activates; pointer-plus-Space can
+produce two activations; loading retains enabled focus while cancelling presses;
+Button bounds must be at least 24 by 24. These are not silently normalized into
+browser policy. See GPUI's `docs/shared-ui-host-contract.md` at the pinned source.
+Row/Column are a bounded flex subset with fixed system-sans text; general themes,
+Box, grids, text editing and IME are not part of this adapter.
+
+The opt-in `Shared counter native proof` workflow uses its own pinned GPUI
+revision in `tests/shared-ui/gpui-revision.txt` and MoonBit toolchain. Existing
+legacy native jobs keep their old pins and default runners. Linux and Windows
+run both fixed shared fixtures with actual host-delivered pointer input:
+`[0, 1, 2]` and `[0, 0, 0, 1]`. The latter starts disabled, advances to loading
+only after the first actual primary release, then enabled after the second;
+the third click increments the unchanged model. These test-only props are not
+an alternate model or synthetic Button recognizer.
+
+The driver retains exact source and GPUI revisions, source hashes, raw build and
+host logs, real completed-frame PPM captures, scene/geometry/action traces and
+teardown. It rejects dirty or changed source, missing phases, incorrect gates,
+blank text regions, unchanged final counter pixels and incomplete destruction.
+Linux input uses an isolated Xvfb/Weston session; Windows input checks the exact
+visible foreground HWND/title. Frame evidence is emitted after completion, once
+per settled phase, never from transient pressed frames. macOS CI builds the same
+bootstrap and runs portable tests, but reports runtime and AX as `not-run`.
+
+```sh
+# Set GPUI_SOURCE to the clean revision in tests/shared-ui/gpui-revision.txt.
+export YAMI_SHARED_UI_CANDIDATE_SHA=$(git rev-parse HEAD)
+YAMI_SHARED_UI_NATIVE=1 sh scripts/native_ui_linux.sh
+# Windows Developer PowerShell:
+# ./scripts/native_ui_windows.ps1 -SharedCounter
+# macOS build and portable tests only:
+sh scripts/native_ui_macos.sh --shared-counter-build-and-test
+```
+
+Actual host qualification is the result of the exact candidate's CI artifacts,
+not the existence of these commands. The new driver does not claim external
+accessibility, keyboard parity, arbitrary window placement on Linux or physical
+hardware input. The native platform API has no general pointer-leave event;
+this slice does not claim to fix hover after an unreported window exit.
+
 ## Explicitly still open
 
-The new native GPUI adapter and its visible-window proofs are YK-03 work.
-Compiling a portable consumer on Linux is not a Linux native GUI pass, nor does
-it qualify Windows or macOS. General themes/layout, Input/TextField, composition,
+The bounded YK-03 adapter is present, but macOS visible-window execution remains
+unqualified. Compiling a portable consumer or macOS bootstrap is not a native
+GUI pass. M1 is not complete without all required platform evidence. General themes/layout, Input/TextField, composition,
 Dialog, external accessibility and packaged distribution are later gates.
 Browser coverage in this slice is Chromium only; Firefox, WebKit, actual Safari,
 real IME and assistive technology require their own measured profiles. The

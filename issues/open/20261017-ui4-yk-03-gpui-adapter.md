@@ -1,10 +1,10 @@
 # YK-03 — 共通ViewのGPUI adapterと3 OS bootstrap
 
-状態：proposed／実装未着手／製品テスト未実行／Yami-kumo mainへ計画ドラフト登録。
+状態：bounded implementation candidate／共通counterとGPUI adapterの実装候補／実機結果は候補HEADのCI artifactで判定。macOS runtime・AXは未実行、M1全体は未完了。
 作成日：2026-10-17 JST。
 作業先：`f4ah6o/Yami-kumo`。段階：M1。依存：YK-01, GP-00。
 
-本ファイルは計画ドラフトであり、承認済み仕様・既存PR番号・実装完了を示さない。実装開始時に最新mainと関連PRを再確認する。
+本ファイルの存在だけでは公開・mergeを承認しない。bounded実装はText/Button/Column/Rowと単一App Entityに限定し、Box・一般layout・IME/AXは含まない。実機profile未実行を他OSの成功から補完しない。
 
 ## 1. 目的・範囲
 
@@ -20,7 +20,7 @@
 
 ## 3. テスト対象と反例
 
-以下は実施予定。すべて未実行。実装PRで実際のコマンド・candidate SHA・profile・exit code・artifact・PASS/FAIL/未実行を記録する。
+portable adapter/App testsはJS/native/wasm/wasm-gcで実行する。Linux/Windowsは同一fixtureの実host click・completed frame・destroyを別workflowで検証し、macOSはbuild/portable testsのみ。各結果は実装PRのcandidate SHA・profile・exit code・artifactで記録する。
 
 1. 3 OSのビルド/portable testsと、実行したOSのvisible-window click/frame/teardownを分けて記録する。
 2. 同じButton IDでも別windowや古いmountからの操作を拒否する。
