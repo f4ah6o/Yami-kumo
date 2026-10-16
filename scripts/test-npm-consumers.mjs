@@ -280,13 +280,7 @@ try {
         assert.equal(await resetRequired.inputValue(), '');
         const resetRequiredState = await resetRequired.evaluate((el) => {
           const field = el.closest('.yk-kumo-input-field');
-          const names = [
-            'data-dirty',
-            'data-filled',
-            'data-touched',
-            'data-valid',
-            'data-invalid',
-          ];
+          const names = ['data-dirty', 'data-filled', 'data-touched', 'data-valid', 'data-invalid'];
           return Object.fromEntries(
             names.map((name) => [
               name,
