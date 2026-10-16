@@ -1,8 +1,9 @@
 # Linux native shared-UX conformance
 
-Status: open — partial Native Button exists; full platform UX, IME and external accessibility conformance unverified  
-Updated: 2026-10-16 (JST)  
-Parent: [Shared UX across Kumo and gpui.mbt](20261005-kumo-gpui-shared-ux.md)
+- Status: open — partial Native Button exists; full platform UX, IME and
+  external accessibility conformance unverified.
+- Updated: 2026-10-16 (JST)
+- Parent: [Shared UX across Kumo and gpui.mbt](20261005-kumo-gpui-shared-ux.md)
 
 ## Basis and shared dependencies
 
@@ -30,8 +31,9 @@ The gpui.mbt Linux field/IME foundations are bounded. Yami-kumo
 cases/48 phases for the enabled Primary Button subset, not complete native
 keyboard/IME, external AT-SPI or device-profile evidence. Its reusable palette
 [PR #41](https://github.com/gpui-mbt/gpui.mbt/pull/41) is merged, but does
-not by itself qualify complete Yami-kumo UX. Native AT-SPI and broader controls are separate
-framework prerequisites. Recheck reviewed pins when integration starts.
+not by itself qualify complete Yami-kumo UX. Native AT-SPI and broader
+controls are separate framework prerequisites. Recheck the pinned versions
+when integration starts.
 
 ## Acceptance
 

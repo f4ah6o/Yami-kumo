@@ -1,8 +1,9 @@
 # Windows native shared-UX conformance
 
-Status: open — partial Native Button exists; full platform UX, IME and external accessibility conformance unverified  
-Updated: 2026-10-16 (JST)  
-Parent: [Shared UX across Kumo and gpui.mbt](20261005-kumo-gpui-shared-ux.md)
+- Status: open — partial Native Button exists; full platform UX, IME and
+  external accessibility conformance unverified.
+- Updated: 2026-10-16 (JST)
+- Parent: [Shared UX across Kumo and gpui.mbt](20261005-kumo-gpui-shared-ux.md)
 
 ## Basis and shared dependencies
 
@@ -25,11 +26,13 @@ Own Windows mappings and native evidence for parent slices 3–5. This records t
 existing eventual Windows target; it does not schedule implementation or relax
 project priority/environment gates.
 
-gpui.mbt's experimental Win32/DirectWrite/D3D11 field foundation is merged through
-[PR #39](https://github.com/gpui-mbt/gpui.mbt/pull/39). Its real Japanese IME and UI Automation remain unqualified;
+gpui.mbt's experimental Win32/DirectWrite/D3D11 field foundation is merged
+through [PR #39](https://github.com/gpui-mbt/gpui.mbt/pull/39). Real Japanese
+IME and UI Automation remain unqualified. The merged
 [palette follow-up #42](https://github.com/gpui-mbt/gpui.mbt/pull/42)
-was merged as tracking documentation, not host acceptance. Existing renderer/startup passes do not qualify this shell.
-Recheck framework pins and capabilities before adopting the native path.
+is tracking documentation, not host acceptance. Existing renderer/startup
+passes do not qualify this shell. Recheck pins and capabilities before
+adopting the native path.
 
 ## Acceptance
 

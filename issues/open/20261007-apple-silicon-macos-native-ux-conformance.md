@@ -1,8 +1,9 @@
 # Apple Silicon macOS native shared-UX conformance
 
-Status: open — partial Native Button exists; full platform UX, IME and external accessibility conformance unverified  
-Updated: 2026-10-16 (JST)  
-Parent: [Shared UX across Kumo and gpui.mbt](20261005-kumo-gpui-shared-ux.md)
+- Status: open — partial Native Button exists; full platform UX, IME and
+  external accessibility conformance unverified.
+- Updated: 2026-10-16 (JST)
+- Parent: [Shared UX across Kumo and gpui.mbt](20261005-kumo-gpui-shared-ux.md)
 
 ## Basis and shared dependencies
 
@@ -26,8 +27,9 @@ evidence for parent slices 3–5 on a named macOS/AppKit/Metal/SDK/font profile.
 
 gpui.mbt's field [PR #40](https://github.com/gpui-mbt/gpui.mbt/pull/40)
 remains open/draft; [palette follow-up #42](https://github.com/gpui-mbt/gpui.mbt/pull/42)
-is merged as documentation, not proof of completed native UX. Resolve field/runner findings in their
-existing work; do not duplicate them here. Native AX remains a framework gate.
+is merged as documentation, not proof of completed native UX. Resolve
+field/runner findings in existing work; do not duplicate them here.
+Native AX remains a framework gate.
 
 ## Acceptance
 
