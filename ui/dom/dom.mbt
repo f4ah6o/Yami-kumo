@@ -56,11 +56,11 @@ extern "js" fn create_node(
   label : String,
 ) -> DomNode =
   #| (kind, key, label) => {
-  #|   if (kind === 0) return document.createTextNode(label);
-  #|   const node = document.createElement(kind === 1 ? "button" : "div");
+  #|   // One element per semantic child keeps adjacent Text views distinct flex items.
+  #|   const node = document.createElement(kind === 0 ? "span" : kind === 1 ? "button" : "div");
   #|   node.setAttribute("data-yk-key", key);
-  #|   if (kind === 1) {
-  #|     node.type = "button";
+  #|   if (kind === 0 || kind === 1) {
+  #|     if (kind === 1) node.type = "button";
   #|     node.textContent = label;
   #|   } else {
   #|     node.className = kind === 2 ? "yk-ui-column" : "yk-ui-row";
@@ -77,7 +77,7 @@ extern "js" fn update_node(
   loading : Bool,
 ) -> Unit =
   #| (node, kind, label, disabled, loading) => {
-  #|   if (kind === 0) { if (node.data !== label) node.data = label; return; }
+  #|   if (kind === 0) { if (node.textContent !== label) node.textContent = label; return; }
   #|   if (kind !== 1) return;
   #|   if (node.textContent !== label) node.textContent = label;
   #|   if (node.disabled !== disabled) node.disabled = disabled;

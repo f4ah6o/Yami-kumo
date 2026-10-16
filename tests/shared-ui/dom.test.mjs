@@ -120,6 +120,52 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     assert.equal(await page.evaluate(() => window.ownedClickListeners), 2);
     assert.equal(await page.locator('#unrelated').textContent(), 'Unrelated host');
     observe('mount-isolated-roots', { countA: 0, countB: 0 });
+    // Adjacent Text views must be separate flex items, not one anonymous text run.
+    const textLayout = () =>
+      page.evaluate(() => {
+        const heading = document.querySelector('#root-a [data-yk-key="heading"]');
+        const value = document.querySelector('#root-a [data-yk-key="value"]');
+        const a = heading.getBoundingClientRect();
+        const b = value.getBoundingClientRect();
+        return {
+          heading: { x: a.x, y: a.y, width: a.width, height: a.height },
+          value: { x: b.x, y: b.y, width: b.width, height: b.height },
+          literalText: [heading.textContent, value.textContent],
+          distinctElements:
+            heading !== value && heading.tagName === 'SPAN' && value.tagName === 'SPAN',
+        };
+      });
+    const columnText = await textLayout();
+    assert.equal(columnText.distinctElements, true);
+    assert.deepEqual(columnText.literalText, ['Shared counter', 'Count: 0']);
+    assert.ok(columnText.heading.height > 0);
+    assert.ok(columnText.value.y >= columnText.heading.y + columnText.heading.height);
+    await page.evaluate(() => {
+      window.retainedHeading = document.querySelector('#root-a [data-yk-key="heading"]');
+      window.retainedValue = document.querySelector('#root-a [data-yk-key="value"]');
+    });
+    assert.equal(
+      await page.evaluate(() => api.updateCounter('root-a', 'row', 'Increment')),
+      'updated',
+    );
+    const rowText = await textLayout();
+    assert.equal(rowText.distinctElements, true);
+    assert.ok(rowText.heading.width > 0);
+    assert.ok(rowText.value.x >= rowText.heading.x + rowText.heading.width);
+    assert.equal(rowText.value.y, rowText.heading.y);
+    assert.equal(
+      await page.evaluate(() => api.updateCounter('root-a', 'normal', 'Increment')),
+      'updated',
+    );
+    assert.equal(
+      await page.evaluate(
+        () =>
+          window.retainedHeading === document.querySelector('#root-a [data-yk-key="heading"]') &&
+          window.retainedValue === document.querySelector('#root-a [data-yk-key="value"]'),
+      ),
+      true,
+    );
+    observe('adjacent-text-layout', { column: columnText, row: rowText, retained: true });
     const count = (id) => page.evaluate((rootId) => api.counterValue(rootId), id);
     const expectCount = (id, value) =>
       page.waitForFunction(
@@ -280,11 +326,29 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       await page.evaluate(() => retained !== document.querySelector('#root-a button')),
       true,
     );
-    await page.evaluate(() => {
+    await page.evaluate((label) => {
       window.replaced = document.querySelector('#root-a button');
-      api.updateCounter('root-a', 'text', 'Now text');
-    });
+      api.updateCounter('root-a', 'text', label);
+      window.retainedText = document.querySelector('#root-a [data-yk-key="increment"]');
+    }, hostile);
     assert.equal(await page.locator('#root-a button').count(), 0);
+    const textReplacement = page.locator('#root-a [data-yk-key="increment"]');
+    assert.equal(await textReplacement.textContent(), hostile);
+    assert.equal(await textReplacement.locator('*').count(), 0);
+    await page.evaluate(
+      (label) => api.updateCounter('root-a', 'text', label),
+      hostile + ' updated',
+    );
+    assert.equal(await textReplacement.textContent(), hostile + ' updated');
+    assert.equal(await textReplacement.locator('*').count(), 0);
+    assert.equal(await page.evaluate(() => window.injected), undefined);
+    assert.equal(
+      await page.evaluate(
+        () => retainedText === document.querySelector('#root-a [data-yk-key="increment"]'),
+      ),
+      true,
+    );
+    observe('literal-text-create-update', { retained: true, parsedElements: 0 });
     await page.evaluate(() => {
       api.updateCounter('root-a', 'normal', 'Replacement');
       replaced.click();

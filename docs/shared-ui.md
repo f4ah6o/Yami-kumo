@@ -13,7 +13,7 @@ inherited from the legacy Kumo API and what remains a separate contract.
   observed focus results and idempotent disposal.
 - `examples/shared_counter`: one pure model/view/update, imported unchanged by
   standalone JS/native source consumers and the DOM bootstrap.
-- `ui/dom`: explicit mount into an empty element, text nodes and native buttons,
+- `ui/dom`: explicit mount into an empty element, keyed text spans and native buttons,
   keyed updates, root overlap rejection, retained focus and owned cleanup.
 - `styles/shared-ui.css`: optional layout-only row/column rules, without Kumo.
 
@@ -39,6 +39,8 @@ its additional mode/label exports are bounded regression-test controls.
 
 A key is unique across the whole root, including nested containers. Empty and
 duplicate keys reject the entire update before the current View changes.
+Each Text owns a span containing literal text, so adjacent Text children remain
+separate flex items in Row and Column. No HTML is parsed from labels.
 Same-key/same-kind updates preserve the mounted node and callback. Removal or a
 kind change revokes its old token; recreating the same key does not revive it.
 Queued actions are rechecked when drained. Even an enabled → loading → enabled
@@ -83,7 +85,7 @@ the browser output directory. `SHARED_UI_CHROMIUM_EXECUTABLE` may select an
 already installed test browser; its actual version is recorded.
 
 The browser cases include native pointer/Enter/Space activation, literal hostile
-labels, keyed identity/focus, loading/disabled gates, atomic rejection, queued
+labels, distinct adjacent text layout, keyed identity/focus, loading/disabled gates, atomic rejection, queued
 staleness, removed/retyped nodes, root isolation/overlap, 100 mount/dispose cycles,
 external DOM moves and actual owned-listener cleanup. That repeated test is not
 a proof that no application can ever leak memory.

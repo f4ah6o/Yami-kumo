@@ -53,6 +53,8 @@ fn Counter::view(self : Counter) -> @core.View {
     @core.column(@core.NodeKey::new("ancestor-b"), [
       @core.column(@core.NodeKey::new("ancestor-a"), [view]),
     ])
+  } else if self.mode == "row" {
+    @core.row(view.key(), view.children())
   } else if self.mode == "duplicate" {
     @core.column(@core.NodeKey::new("counter"), [view])
   } else {
