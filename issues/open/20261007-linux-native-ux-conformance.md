@@ -38,18 +38,18 @@ when integration starts.
 ## Acceptance
 
 - [ ] One real native shell completes the parent's declared starter task and
-  shared navigation/tab/context/modal/state scenarios through maintained adapters.
+      shared navigation/tab/context/modal/state scenarios through maintained adapters.
 - [ ] Publish Linux shortcut mappings and verify focus containment/restoration,
-  disabled controls, cancellation, one-shot activation and safe resize/scale edits.
+      disabled controls, cancellation, one-shot activation and safe resize/scale edits.
 - [ ] Actual native keyboard/pointer and the named Japanese IME exercise
-  composition/commit/cancel, blur/reopen and no confirmation/dismissal leak.
+      composition/commit/cancel, blur/reopen and no confirmation/dismissal leak.
 - [ ] Retained pixels and actual AT-SPI role/name/value/state/focus/action evidence
-  agree with observable behavior. Portable semantics alone cannot pass this gate.
+      agree with observable behavior. Portable semantics alone cannot pass this gate.
 - [ ] Record exact web/Kumo/gpui/generator/tool/runtime/font pins and scenario IDs,
-  commands and evidence levels. Keep X11/Wayland/scale coverage and
-  PASS/FAIL/UNRUN/BLOCKED/UNSUPPORTED distinct.
+      commands and evidence levels. Keep X11/Wayland/scale coverage and
+      PASS/FAIL/UNRUN/BLOCKED/UNSUPPORTED distinct.
 - [ ] Web checks and the main/demo boundary remain intact; ordinary template
-  development does not require native setup.
+      development does not require native setup.
 
 No Linux, framework or full-UX support claim follows from compilation or the
 standalone palette alone. Close only for the declared native profile.

@@ -34,20 +34,20 @@ Native AX remains a framework gate.
 ## Acceptance
 
 - [ ] An arm64 native shell completes the parent's starter task and shared
-  navigation/tab/context/modal/state scenarios using maintained adapters.
+      navigation/tab/context/modal/state scenarios using maintained adapters.
 - [ ] Publish macOS primary-shortcut mappings and verify focus containment/
-  restoration, disabled controls, cancellation and one-shot actions without
-  losing ordinary native text-editing behavior.
+      restoration, disabled controls, cancellation and one-shot actions without
+      losing ordinary native text-editing behavior.
 - [ ] An unlocked logged-in host exercises actual AppKit/Kotoeri
-  composition/commit/cancel, blur/reopen and no IME confirmation/dismissal leak.
-  Restore any app-owned input-source change and retain cleanup evidence.
+      composition/commit/cancel, blur/reopen and no IME confirmation/dismissal leak.
+      Restore any app-owned input-source change and retain cleanup evidence.
 - [ ] Native presentation/pixels and actual AX role/name/value/state/focus/action
-  observations agree. Verify Retina logical/backing-pixel mapping; unrun display
-  profiles remain unqualified.
+      observations agree. Verify Retina logical/backing-pixel mapping; unrun display
+      profiles remain unqualified.
 - [ ] Record exact web/Kumo/gpui/generator, arm64/macOS/SDK/tool/font/app pins,
-  scenario IDs and separate model/input/pixel/native-semantic results.
+      scenario IDs and separate model/input/pixel/native-semantic results.
 - [ ] Web checks and main/demo separation remain intact with no native setup
-  dependency for ordinary template use.
+      dependency for ordinary template use.
 
 An arm64 run does not qualify every macOS version or another OS. Missing AX or
 other required UX capability cannot be substituted by a synthetic passing tree.

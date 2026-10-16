@@ -37,18 +37,18 @@ adopting the native path.
 ## Acceptance
 
 - [ ] One native shell completes the parent's starter task and shared
-  navigation/tab/context/modal/state scenarios through maintained adapters.
+      navigation/tab/context/modal/state scenarios through maintained adapters.
 - [ ] Publish Windows shortcut/focus mappings; verify disabled controls,
-  cancellation, contained modal focus/restoration and one-shot actions.
+      cancellation, contained modal focus/restoration and one-shot actions.
 - [ ] Actual Win32 keyboard/pointer and the declared Japanese IME exercise
-  composition/commit/cancel and blur/reopen without background leak-through.
+      composition/commit/cancel and blur/reopen without background leak-through.
 - [ ] Native frames/pixels and actual UI Automation role/name/value/state/focus/
-  action evidence agree. Declare and test logical/physical coordinates at the
-  claimed DPI; unrun display/GPU/version profiles remain unqualified.
+      action evidence agree. Declare and test logical/physical coordinates at the
+      claimed DPI; unrun display/GPU/version profiles remain unqualified.
 - [ ] Record exact web/Kumo/gpui/generator/tool/font/app and Windows/SDK/DPI/GPU
-  pins, scenario IDs and separate model/input/pixel/native-semantic results.
+      pins, scenario IDs and separate model/input/pixel/native-semantic results.
 - [ ] Keep web checks and main/demo separation intact; template users require
-  no Windows-native setup for ordinary web development.
+      no Windows-native setup for ordinary web development.
 
 Compilation, synthetic state and a successful standalone field are insufficient.
 Close only for a declared Windows profile with the required framework gates.
