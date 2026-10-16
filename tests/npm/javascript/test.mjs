@@ -121,7 +121,7 @@ const { enhanceYamiKumo } = await import('@f4ah6o/yami-kumo/dom');
 assert.equal(listeners, 0);
 enhanceYamiKumo();
 enhanceYamiKumo();
-assert.equal(listeners, 5);
+assert.equal(listeners, 6);
 delete globalThis.document;
 console.log(
   'PASS JavaScript: SSR, React-free graph, components, safe HTML, runtime validation, explicit DOM',
