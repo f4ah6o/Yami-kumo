@@ -1,0 +1,13 @@
+import {
+  "moonbitlang/core/env",
+  "moonbitlang/core/json",
+  "f4ah6o/gpui/diagnostics",
+  "f4ah6o/gpui/primitives",
+  "f4ah6o/gpui/text",
+  "f4ah6o/gpui/text_layout",
+  "f4ah6o/yami_kumo_native/sample",
+}
+
+supported_targets = "native"
+
+pkgtype(kind: "executable")

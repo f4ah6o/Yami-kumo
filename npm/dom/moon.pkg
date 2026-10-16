@@ -1,0 +1,11 @@
+import {
+  "f4ah6o/yami_kumo/dom" @behavior,
+}
+
+supported_targets = "js"
+
+pkgtype(kind: "foreign_library")
+
+options(
+  link: { "js": { "format": "esm" } },
+)

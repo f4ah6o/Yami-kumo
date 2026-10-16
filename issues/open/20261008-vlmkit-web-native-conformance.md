@@ -23,8 +23,11 @@ primitives or conversion rules instead of patching generated output alone.
 These are source observations, not newly executed tests or qualified dependency
 pins. Reinspect the relevant revisions before implementation.
 
-1. [vlmkit PR #2](https://github.com/f4ah6o/vlmkit/pull/2) is open and draft at
-   `5583afe207456ca0d0a74ab0a85ac2c8a3fc6a96`. Its scope already includes native
+1. At the original snapshot, [vlmkit PR #2](https://github.com/f4ah6o/vlmkit/pull/2)
+   was draft at `5583afe207456ca0d0a74ab0a85ac2c8a3fc6a96`. On 2026-10-16,
+   it remains open/draft but its HEAD has moved to
+   `8a6ada8e0609a36b189032e6ca3b222a1fd4f187`. Reinspect that HEAD before
+   adopting it. The historical scope included native
    interaction sessions, grounding, interactions, snapshots, portable flows and
    a black-box GPUI/gpui.mbt acceptance runner. Reuse and complete this work; do
    not build a competing native driver.

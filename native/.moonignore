@@ -1,0 +1,12 @@
+# Publish the native module sources, native examples, and module documentation.
+*
+!/.moonignore
+!/moon.mod
+!/README.md
+!/LICENSE
+!/components/
+!/components/**
+!/sample/
+!/sample/**
+!/examples/
+!/examples/**

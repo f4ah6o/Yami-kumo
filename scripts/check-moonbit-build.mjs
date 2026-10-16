@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
 
 const root = new URL('../', import.meta.url);
 const build = spawnSync('moon', ['build', 'browser', '--target', 'js', '--release'], {
@@ -28,7 +27,7 @@ assert.doesNotMatch(
   'compiled MoonBit output must not import the React Kumo package',
 );
 
-const { enhanceYamiKumo, renderParityCase } = await import(pathToFileURL(outputUrl.pathname).href);
+const { enhanceYamiKumo, renderParityCase } = await import(outputUrl.href);
 assert.equal(typeof enhanceYamiKumo, 'function', 'compiled component behavior export is missing');
 const button = renderParityCase(
   JSON.stringify({

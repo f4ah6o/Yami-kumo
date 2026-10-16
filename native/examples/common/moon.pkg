@@ -8,6 +8,11 @@ import {
   "moonbitlang/core/env",
 }
 
+import {
+  "f4ah6o/gpui/text",
+  "f4ah6o/gpui/text_layout",
+} for "wbtest"
+
 supported_targets = "native"
 
 options(

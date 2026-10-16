@@ -1,11 +1,14 @@
 import {
+  "f4ah6o/gpui/accessibility",
   "f4ah6o/gpui/diagnostics",
   "f4ah6o/gpui/platform/testing",
   "f4ah6o/gpui/platform/windows_text",
+  "f4ah6o/gpui/primitives",
   "f4ah6o/gpui/text",
   "f4ah6o/gpui/text_layout",
   "f4ah6o/gpui/windows" @windows_host,
   "f4ah6o/yami_kumo_native/examples/common",
+  "f4ah6o/yami_kumo_native/sample" @sample,
 }
 
 supported_targets = "native"

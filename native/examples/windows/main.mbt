@@ -37,16 +37,16 @@ fn main {
   let capture : @common.NativeFrameCapture = fn(window) {
     @testing.capture_frame(host, window)
   }
-  let no_click : @common.NativeTestClick = fn(_window, _point) { Ok(()) }
-  let no_escape : @common.NativeTestEscape = fn(_window) { Ok(()) }
+  let accessibility_session = WindowsButtonAccessibilitySession::new()
+  let accessibility_port = accessibility_session.port()
   let result = @common.run_native_sample(
     host,
     @common.Windows,
     windows_measure,
     capture,
-    no_click,
-    no_escape,
+    accessibility_port=Some(accessibility_port),
   )
+  accessibility_session.close()
   let stopped = host.stop()
   match result {
     Err(error) => abort(@common.format_framework_error(error))
