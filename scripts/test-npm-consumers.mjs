@@ -240,6 +240,62 @@ try {
         await other.evaluate((el) => el.setAttribute('aria-invalid', 'grammar'));
         await other.fill('valid-again@example.com');
         assert.equal(await other.getAttribute('aria-invalid'), 'grammar');
+        const resetEmail = page.locator('#reset-email');
+        const resetRequired = page.locator('#reset-required');
+        const resetButton = page.locator('#reset-button');
+        assert.equal(await resetEmail.getAttribute('aria-invalid'), 'false');
+        await resetEmail.fill('invalid-email');
+        await resetEmail.press('Enter');
+        assert.equal(await resetEmail.getAttribute('aria-invalid'), 'true');
+        assert.equal(await resetEmail.getAttribute('data-invalid'), '');
+        await resetRequired.fill('dirty');
+        assert.equal(await resetRequired.getAttribute('data-dirty'), '');
+        await page.locator('#reset-form').evaluate((form) => {
+          form.addEventListener('reset', (event) => event.preventDefault(), { once: true });
+        });
+        await resetButton.click();
+        assert.equal(await resetEmail.inputValue(), 'invalid-email');
+        assert.equal(await resetEmail.getAttribute('aria-invalid'), 'true');
+        await resetButton.click();
+        await page.waitForFunction(
+          () =>
+            document.querySelector('#reset-required').value === '' &&
+            !document.querySelector('#reset-required').hasAttribute('data-filled'),
+        );
+        assert.equal(await resetEmail.inputValue(), 'initial@example.com');
+        assert.equal(await resetEmail.getAttribute('aria-invalid'), 'false');
+        assert.equal(
+          await resetEmail.evaluate((el) => {
+            const field = el.closest('.yk-kumo-input-field');
+            return (
+              ['data-dirty', 'data-touched', 'data-valid', 'data-invalid'].every(
+                (name) => !el.hasAttribute(name) && !field.hasAttribute(name),
+              ) &&
+              el.hasAttribute('data-filled') &&
+              field.hasAttribute('data-filled')
+            );
+          }),
+          true,
+        );
+        assert.equal(await resetRequired.inputValue(), '');
+        const resetRequiredState = await resetRequired.evaluate((el) => {
+          const field = el.closest('.yk-kumo-input-field');
+          const names = ['data-dirty', 'data-filled', 'data-touched', 'data-valid', 'data-invalid'];
+          return Object.fromEntries(
+            names.map((name) => [
+              name,
+              { input: el.hasAttribute(name), field: field.hasAttribute(name) },
+            ]),
+          );
+        });
+        assert.deepEqual(
+          resetRequiredState,
+          Object.fromEntries(
+            ['data-dirty', 'data-filled', 'data-touched', 'data-valid', 'data-invalid'].map(
+              (name) => [name, { input: false, field: false }],
+            ),
+          ),
+        );
         const primary = page.locator('[data-variant="primary"]');
         await primary.focus();
         await page.keyboard.down('Enter');

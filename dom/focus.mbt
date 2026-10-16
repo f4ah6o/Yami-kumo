@@ -15,6 +15,10 @@ priv type BrowserWeakSet
 priv type BrowserWeakMap
 
 ///|
+#external
+priv type BrowserNodeList
+
+///|
 extern "js" fn document_is_available() -> Bool =
   #| () => typeof document !== "undefined" && typeof document.addEventListener === "function"
 
@@ -44,6 +48,29 @@ extern "js" fn event_key(event : BrowserEvent) -> String =
 ///|
 extern "js" fn is_input_element(element : BrowserElement) -> Bool =
   #| (element) => element?.tagName === "INPUT"
+
+///|
+extern "js" fn is_form_element(element : BrowserElement) -> Bool =
+  #| (element) => element?.tagName === "FORM"
+
+///|
+extern "js" fn event_default_prevented(event : BrowserEvent) -> Bool =
+  #| (event) => event?.defaultPrevented === true
+
+///|
+extern "js" fn form_inputs(form : BrowserElement) -> BrowserNodeList =
+  #| (form) => form?.querySelectorAll?.("input") ?? []
+
+///|
+extern "js" fn node_list_count(nodes : BrowserNodeList) -> Int =
+  #| (nodes) => nodes?.length ?? 0
+
+///|
+extern "js" fn node_list_at(
+  nodes : BrowserNodeList,
+  index : Int,
+) -> BrowserElement =
+  #| (nodes, index) => nodes?.[index] ?? null
 
 ///|
 extern "js" fn is_present(element : BrowserElement) -> Bool =
@@ -129,6 +156,13 @@ extern "js" fn weak_set_add(
   #| (set, element) => set?.add?.(element)
 
 ///|
+extern "js" fn weak_set_delete(
+  set : BrowserWeakSet,
+  element : BrowserElement,
+) -> Unit =
+  #| (set, element) => { set?.delete?.(element); }
+
+///|
 extern "js" fn weak_map_new() -> BrowserWeakMap =
   #| () => new WeakMap()
 
@@ -158,6 +192,10 @@ extern "js" fn restore_aria_invalid(
   #|   }
   #|   originals.delete(element);
   #| }
+
+///|
+extern "js" fn after_native_form_reset(callback : () -> Unit) -> Unit =
+  #| (callback) => { setTimeout(callback, 0); }
 
 ///|
 extern "js" fn queue_microtask(callback : () -> Unit) -> Unit =
@@ -193,6 +231,9 @@ pub fn enhance() -> Unit {
       update_touched_from_key_event(
         event, marked_dirty_inputs, aria_invalid_originals,
       )
+    })
+    document_add_event_listener("reset", fn(event) {
+      update_from_reset_event(event, marked_dirty_inputs, aria_invalid_originals)
     })
     set_global_flag(INSTALLATION_FLAG, true)
   }
@@ -265,6 +306,36 @@ fn update_touched_from_key_event(
         field, target, marked_dirty_inputs, aria_invalid_originals,
       )
     }
+  }
+}
+
+///|
+fn update_from_reset_event(
+  event : BrowserEvent,
+  marked_dirty_inputs : BrowserWeakSet,
+  aria_invalid_originals : BrowserWeakMap,
+) -> Unit {
+  let form = event_target(event)
+  if is_present(form) && is_form_element(form) {
+    // Do not run in a microtask: the browser may still be applying the native reset.
+    after_native_form_reset(fn() {
+      if !event_default_prevented(event) {
+        let inputs = form_inputs(form)
+        for index in 0..<node_list_count(inputs) {
+          let input = node_list_at(inputs, index)
+          let field = closest(input, ".yk-kumo-input-field")
+          if is_present(field) {
+            weak_set_delete(marked_dirty_inputs, input)
+            restore_aria_invalid(aria_invalid_originals, input)
+            set_field_attribute_state(field, "data-dirty", false)
+            set_field_attribute_state(field, "data-touched", false)
+            set_field_attribute_state(field, "data-valid", false)
+            set_field_attribute_state(field, "data-invalid", false)
+            set_field_attribute_state(field, "data-filled", input_value(input) != "")
+          }
+        }
+      }
+    })
   }
 }
 
