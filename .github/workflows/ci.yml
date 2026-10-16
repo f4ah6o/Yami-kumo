@@ -11,6 +11,48 @@ permissions:
   contents: read
 
 jobs:
+  shared-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.16.1
+        with:
+          node-version: 'lts'
+          run-install: true
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.14+7d59c7ec9
+          setup-core: true
+          core-version: 0.10.14+7d59c7ec9
+      - name: Check shared pure packages on every compiler target
+        run: |
+          moon check --target all --deny-warn
+          moon test ui/core ui/runtime examples/shared_counter --target all --deny-warn
+      - name: Verify independent JS and native source consumers
+        run: node scripts/check-shared-ui-consumers.mjs _build/shared-ui-consumers
+      - name: Install the test browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build and test the keyed DOM adapter
+        env:
+          SHARED_UI_EVIDENCE_DIR: _build/shared-ui-dom
+        run: |
+          pnpm run build:shared-ui
+          node --test tests/shared-ui/*.test.mjs
+      - name: Retain shared UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-ui-evidence
+          path: |
+            _build/shared-ui-consumers
+            _build/shared-ui-dom
+          if-no-files-found: error
+
   npm-package:
     runs-on: ubuntu-latest
     timeout-minutes: 20

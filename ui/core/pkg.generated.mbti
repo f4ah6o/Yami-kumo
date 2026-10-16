@@ -1,0 +1,70 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "f4ah6o/yami_kumo/ui/core"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn button(NodeKey, String, disabled? : Bool, loading? : Bool) -> View
+
+pub fn column(NodeKey, Array[View]) -> View
+
+pub fn row(NodeKey, Array[View]) -> View
+
+pub fn text(NodeKey, String) -> View
+
+// Errors
+
+// Types and methods
+pub(all) enum FocusOutcome {
+  Focused
+  Rejected
+  Unsupported
+} derive(Eq, @debug.Debug)
+pub fn FocusOutcome::equal(Self, Self) -> Bool
+pub fn FocusOutcome::not_equal(Self, Self) -> Bool
+pub fn FocusOutcome::to_repr(Self) -> @debug.Repr
+
+pub struct NodeKey {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn NodeKey::equal(Self, Self) -> Bool
+pub fn NodeKey::new(String) -> Self
+pub fn NodeKey::not_equal(Self, Self) -> Bool
+pub fn NodeKey::to_repr(Self) -> @debug.Repr
+pub fn NodeKey::value(Self) -> String
+
+pub(all) enum NodeKind {
+  Text
+  Button
+  Column
+  Row
+} derive(Eq, @debug.Debug)
+pub fn NodeKind::equal(Self, Self) -> Bool
+pub fn NodeKind::not_equal(Self, Self) -> Bool
+pub fn NodeKind::to_repr(Self) -> @debug.Repr
+
+pub(all) enum SemanticAction {
+  Activate(NodeKey)
+} derive(Eq, @debug.Debug)
+pub fn SemanticAction::equal(Self, Self) -> Bool
+pub fn SemanticAction::not_equal(Self, Self) -> Bool
+pub fn SemanticAction::to_repr(Self) -> @debug.Repr
+
+pub struct View {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn View::children(Self) -> Array[Self]
+pub fn View::disabled(Self) -> Bool
+pub fn View::equal(Self, Self) -> Bool
+pub fn View::key(Self) -> NodeKey
+pub fn View::kind(Self) -> NodeKind
+pub fn View::label(Self) -> String
+pub fn View::loading(Self) -> Bool
+pub fn View::not_equal(Self, Self) -> Bool
+pub fn View::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

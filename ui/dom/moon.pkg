@@ -1,0 +1,7 @@
+import {
+  "moonbitlang/core/debug",
+  "f4ah6o/yami_kumo/ui/core",
+  "f4ah6o/yami_kumo/ui/runtime",
+}
+
+supported_targets = "js"

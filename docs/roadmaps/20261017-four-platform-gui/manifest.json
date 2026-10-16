@@ -36,9 +36,7 @@
       "stage": "M1",
       "title": "共通View・安定ID・寿命管理と独立consumerの最小骨格",
       "path": "../../../issues/open/20261017-ui4-yk-01-neutral-runtime.md",
-      "dependencies": [
-        "YK-00"
-      ],
+      "dependencies": ["YK-00"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -49,9 +47,7 @@
       "stage": "M1",
       "title": "root単位のDOMバックエンドとkeyed更新",
       "path": "../../../issues/open/20261017-ui4-yk-02-dom-backend.md",
-      "dependencies": [
-        "YK-01"
-      ],
+      "dependencies": ["YK-01"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -62,10 +58,7 @@
       "stage": "M1",
       "title": "共通ViewのGPUI adapterと3 OS bootstrap",
       "path": "../../../issues/open/20261017-ui4-yk-03-gpui-adapter.md",
-      "dependencies": [
-        "YK-01",
-        "GP-00"
-      ],
+      "dependencies": ["YK-01", "GP-00"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -76,10 +69,7 @@
       "stage": "M2",
       "title": "Button/Text/Cardの共通部品契約と全状態",
       "path": "../../../issues/open/20261017-ui4-yk-04-baseline-controls.md",
-      "dependencies": [
-        "YK-02",
-        "YK-03"
-      ],
+      "dependencies": ["YK-02", "YK-03"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -90,9 +80,7 @@
       "stage": "M2",
       "title": "制限付き共通layout・標準theme・AppShell",
       "path": "../../../issues/open/20261017-ui4-yk-05-layout-theme-shell.md",
-      "dependencies": [
-        "YK-04"
-      ],
+      "dependencies": ["YK-04"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -103,10 +91,7 @@
       "stage": "M3",
       "title": "TextField向けの公開編集session・IME host契約",
       "path": "repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-01-text-host-contract.md",
-      "dependencies": [
-        "GP-00",
-        "YK-01"
-      ],
+      "dependencies": ["GP-00", "YK-01"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -117,9 +102,7 @@
       "stage": "M3",
       "title": "Linux/WaylandのTextField・日本語IME host接続",
       "path": "repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-l-linux-text-ime.md",
-      "dependencies": [
-        "GP-01"
-      ],
+      "dependencies": ["GP-01"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -130,9 +113,7 @@
       "stage": "M3",
       "title": "WindowsのTextField・日本語IME host接続",
       "path": "repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-w-windows-text-ime.md",
-      "dependencies": [
-        "GP-01"
-      ],
+      "dependencies": ["GP-01"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -143,9 +124,7 @@
       "stage": "M3",
       "title": "macOS Apple SiliconのTextField・日本語IME host接続",
       "path": "repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-02-m-macos-text-ime.md",
-      "dependencies": [
-        "GP-01"
-      ],
+      "dependencies": ["GP-01"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -156,11 +135,7 @@
       "stage": "M3",
       "title": "共通TextFieldとDOM編集・GPUI接続",
       "path": "../../../issues/open/20261017-ui4-yk-06-textfield.md",
-      "dependencies": [
-        "YK-02",
-        "YK-03",
-        "GP-01"
-      ],
+      "dependencies": ["YK-02", "YK-03", "GP-01"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -171,10 +146,7 @@
       "stage": "M3",
       "title": "Dialog/TextFieldに必要なfocus scopeと外部semantic action",
       "path": "repos/gpui-mbt/gpui.mbt/issues/open/20261017-ui4-gp-03-focus-accessibility.md",
-      "dependencies": [
-        "GP-00",
-        "YK-01"
-      ],
+      "dependencies": ["GP-00", "YK-01"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -185,11 +157,7 @@
       "stage": "M3",
       "title": "共通Dialogと開閉・focusの往復",
       "path": "../../../issues/open/20261017-ui4-yk-07-dialog.md",
-      "dependencies": [
-        "YK-05",
-        "YK-06",
-        "GP-03"
-      ],
+      "dependencies": ["YK-05", "YK-06", "GP-03"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"
@@ -220,9 +188,7 @@
       "stage": "M5",
       "title": "独立MoonBit/JS/TS consumerと配布・段階移行",
       "path": "../../../issues/open/20261017-ui4-yk-09-distribution.md",
-      "dependencies": [
-        "YK-08"
-      ],
+      "dependencies": ["YK-08"],
       "status": "proposed",
       "implementation": "not_started",
       "test_status": "not_run"

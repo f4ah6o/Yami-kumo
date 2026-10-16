@@ -1,0 +1,13 @@
+/* Optional layout-only styles for the additive shared UI source-workspace API. */
+.yk-ui-column,
+.yk-ui-row {
+  display: flex;
+}
+
+.yk-ui-column {
+  flex-direction: column;
+}
+
+.yk-ui-row {
+  flex-direction: row;
+}

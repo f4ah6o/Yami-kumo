@@ -1,0 +1,70 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "f4ah6o/yami_kumo/ui/runtime"
+
+import {
+  "f4ah6o/yami_kumo/ui/core",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum CommitError {
+  EmptyKey
+  DuplicateKey(@core.NodeKey)
+  Disposed
+} derive(Eq, @debug.Debug)
+pub fn CommitError::equal(Self, Self) -> Bool
+pub fn CommitError::not_equal(Self, Self) -> Bool
+pub fn CommitError::to_repr(Self) -> @debug.Repr
+
+pub struct FocusRequest {
+  // private fields
+}
+pub fn FocusRequest::target(Self) -> InstanceToken
+
+pub struct FocusResult {
+  // private fields
+}
+pub fn FocusResult::key(Self) -> @core.NodeKey
+pub fn FocusResult::outcome(Self) -> @core.FocusOutcome
+
+pub struct InstanceToken {
+  // private fields
+}
+pub fn InstanceToken::equal(Self, Self) -> Bool
+pub fn InstanceToken::key(Self) -> @core.NodeKey
+pub fn InstanceToken::not_equal(Self, Self) -> Bool
+pub impl Eq for InstanceToken
+
+pub(all) enum RequestError {
+  Disposed
+  StaleToken
+  NotFocusable
+  Unavailable
+} derive(Eq, @debug.Debug)
+pub fn RequestError::equal(Self, Self) -> Bool
+pub fn RequestError::not_equal(Self, Self) -> Bool
+pub fn RequestError::to_repr(Self) -> @debug.Repr
+
+pub struct Runtime {
+  // private fields
+}
+pub fn Runtime::commit(Self, @core.View) -> Result[Unit, CommitError]
+pub fn Runtime::complete_focus(Self, FocusRequest, @core.FocusOutcome) -> Bool
+pub fn Runtime::dispose(Self) -> Unit
+pub fn Runtime::enqueue_activate(Self, InstanceToken) -> Bool
+pub fn Runtime::is_current(Self, InstanceToken) -> Bool
+pub fn Runtime::is_disposed(Self) -> Bool
+pub fn Runtime::new() -> Self
+pub fn Runtime::next_action(Self) -> @core.SemanticAction?
+pub fn Runtime::next_focus_result(Self) -> FocusResult?
+pub fn Runtime::request_focus(Self, InstanceToken) -> Result[FocusRequest, RequestError]
+pub fn Runtime::token(Self, @core.NodeKey) -> InstanceToken?
+pub fn Runtime::view(Self) -> @core.View?
+
+// Type aliases
+
+// Traits

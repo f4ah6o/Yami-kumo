@@ -1,0 +1,42 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "f4ah6o/yami_kumo/ui/dom"
+
+import {
+  "f4ah6o/yami_kumo/ui/core",
+  "f4ah6o/yami_kumo/ui/runtime",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn mount(String, @core.View, () -> Unit) -> Result[DomRoot, DomError]
+
+// Errors
+
+// Types and methods
+pub(all) enum DomError {
+  MissingDocument
+  MissingRoot
+  RootAlreadyMounted
+  OverlappingRoot
+  RootNotEmpty
+  Disposed
+  HostTreeChanged
+  InvalidView(@runtime.CommitError)
+} derive(Eq, @debug.Debug)
+pub fn DomError::equal(Self, Self) -> Bool
+pub fn DomError::not_equal(Self, Self) -> Bool
+pub fn DomError::to_repr(Self) -> @debug.Repr
+
+pub struct DomRoot {
+  // private fields
+}
+pub fn DomRoot::dispose(Self) -> Unit
+pub fn DomRoot::focus(Self, @core.NodeKey) -> Bool
+pub fn DomRoot::is_disposed(Self) -> Bool
+pub fn DomRoot::next_action(Self) -> @core.SemanticAction?
+pub fn DomRoot::next_focus_result(Self) -> @runtime.FocusResult?
+pub fn DomRoot::update(Self, @core.View) -> Result[Unit, DomError]
+
+// Type aliases
+
+// Traits

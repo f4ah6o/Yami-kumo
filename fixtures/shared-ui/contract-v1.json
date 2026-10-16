@@ -1,0 +1,16 @@
+{
+  "version": "shared-ui-contract/v1",
+  "profileDifferences": [],
+  "fixtures": [
+    {
+      "id": "counter-two-activations",
+      "description": "A single common model increments once per accepted semantic Activate.",
+      "expected": { "counts": [0, 1, 2] }
+    },
+    {
+      "id": "counter-disabled-loading",
+      "description": "Disabled or loading Button events do not change the shared model.",
+      "expected": { "counts": [0, 0, 0, 1] }
+    }
+  ]
+}
