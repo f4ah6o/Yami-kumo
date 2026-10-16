@@ -76,6 +76,13 @@ extern "js" fn set_attribute(
   #| (element, name, value) => element?.setAttribute(name, value)
 
 ///|
+extern "js" fn remove_attribute(
+  element : BrowserElement,
+  name : String,
+) -> Unit =
+  #| (element, name) => element?.removeAttribute(name)
+
+///|
 extern "js" fn has_attribute(element : BrowserElement, name : String) -> Bool =
   #| (element, name) => element?.hasAttribute?.(name) === true
 
