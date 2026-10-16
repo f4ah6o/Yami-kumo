@@ -72,6 +72,23 @@ jobs:
           YAMI_NATIVE_UI_EVIDENCE_DIR: ${{ github.workspace }}/Yami-kumo/_build/native-ui/ubuntu
         run: sh Yami-kumo/scripts/native_ui_linux.sh
 
+      - name: Setup Vite+ for the shared Web and Native Button contract
+        uses: voidzero-dev/setup-vp@v1.16.1
+        with:
+          node-version: 'lts'
+          run-install: false
+
+      - name: Compare the same Button fixtures with real Kumo and Native host evidence
+        working-directory: Yami-kumo
+        env:
+          GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
+          YAMI_BUTTON_NATIVE_HOST_REPORT: ${{ github.workspace }}/Yami-kumo/_build/native-ui/ubuntu/button-contract-host/report.json
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+          node --test tests/button-contract/comparison.test.mjs
+          node scripts/run-button-contract.mjs _build/native-ui/ubuntu/button-contract-comparison
+
       - name: Upload native Linux frames and logs
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

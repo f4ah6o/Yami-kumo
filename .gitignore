@@ -5,3 +5,4 @@ dist
 .vite
 .DS_Store
 *.local
+__pycache__/

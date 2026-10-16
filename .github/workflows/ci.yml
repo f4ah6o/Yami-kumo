@@ -27,6 +27,10 @@ jobs:
           version: 0.10.14+7d59c7ec9
           setup-core: true
           core-version: 0.10.14+7d59c7ec9
+      - name: Check regenerated pnpm lockfile
+        run: |
+          pnpm install --lockfile-only --no-frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
       - name: Install consumer browser
         run: pnpm exec playwright install --with-deps chromium
       - name: Pack and verify isolated consumers
@@ -64,6 +68,8 @@ jobs:
           node --check tests/button-phase/evidence-storage.test.mjs
           node tests/button-phase/evidence-storage.test.mjs
           python -B tests/button-phase/test_supervisor_inert.py
+          node --test tests/button-contract/comparison.test.mjs
+          python -B tests/button-contract/test_driver.py
 
       - name: Setup MoonBit
         uses: hustcer/setup-moonbit@v1.23

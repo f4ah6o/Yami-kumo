@@ -146,6 +146,159 @@ fn pointer_event(
 }
 
 ///|
+fn button_surface(frame : @sample.SampleFrame) -> String raise {
+  let items = frame
+    .snapshot()
+    .items()
+    .filter(item => {
+      let id = match item {
+        @scene.QuadItem(id~, ..)
+        | @scene.TextItem(id~, ..)
+        | @scene.TextRunItem(id~, ..) => id
+      }
+      id >= 40 && id <= 45
+    })
+  match @scene.SceneSnapshot::new(frame.root_bounds(), 1.0, [], [], items) {
+    Ok(value) => value.canonical_json()
+    Err(_) => fail("Button surface should be a valid isolated scene")
+  }
+}
+
+///|
+test "hover and keyboard focus paint feedback while press and release preserve the Web surface" {
+  let sample = new_sample()
+  let initial = render_sample(sample)
+  let point = button_center(initial)
+  assert_true(
+    sample.handle_input(@primitives.PointerMoved(position=point)) is Ok(false),
+  )
+  let hover = render_sample(sample)
+  assert_true(hover.button_hovered())
+  assert_true(button_surface(hover) != button_surface(initial))
+  assert_true(sample.handle_input(pointer_event(true, point)) is Ok(false))
+  let down = render_sample(sample)
+  assert_true(down.button_pressed())
+  assert_eq(button_surface(down), button_surface(hover))
+  assert_eq(button_surface(render_sample(sample)), button_surface(down))
+  assert_true(sample.handle_input(pointer_event(false, point)) is Ok(true))
+  let released = render_sample(sample)
+  assert_true(!released.button_pressed())
+  assert_eq(button_surface(released), button_surface(hover))
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyPressed(
+        key=@primitives.Space,
+        modifiers=@primitives.Modifiers::none(),
+        repeat=false,
+      ),
+    )
+    is Ok(false),
+  )
+  let space = render_sample(sample)
+  assert_true(space.button_focus_visible())
+  assert_true(space.button_pressed())
+  assert_true(button_surface(space) != button_surface(released))
+  assert_eq(button_surface(render_sample(sample)), button_surface(space))
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyReleased(
+        key=@primitives.Space,
+        modifiers=@primitives.Modifiers::none(),
+      ),
+    )
+    is Ok(true),
+  )
+  assert_eq(button_surface(render_sample(sample)), button_surface(space))
+  sample.focus_changed(false)
+  let lost = render_sample(sample)
+  assert_true(!lost.button_focus_visible())
+  assert_eq(button_surface(lost), button_surface(hover))
+  assert_true(
+    sample.handle_input(
+      @primitives.PointerMoved(position=sample_test_point(790.0, 590.0)),
+    )
+    is Ok(false),
+  )
+  assert_eq(button_surface(render_sample(sample)), button_surface(initial))
+}
+
+///|
+test "cancel outside removes hover without an activation or stale focus ring" {
+  let sample = new_sample()
+  let initial = render_sample(sample)
+  assert_true(
+    sample.handle_input(pointer_event(true, button_center(initial)))
+    is Ok(false),
+  )
+  assert_true(render_sample(sample).button_pressed())
+  assert_true(
+    sample.handle_input(pointer_event(false, sample_test_point(790.0, 590.0)))
+    is Ok(false),
+  )
+  let cancelled = render_sample(sample)
+  assert_true(!cancelled.button_pressed())
+  assert_true(!cancelled.button_hovered())
+  assert_eq(button_surface(cancelled), button_surface(initial))
+  assert_sample_count(sample, 0)
+}
+
+///|
+test "modified keys preserve focus modality and reclick retains an existing keyboard ring" {
+  let sample = new_sample()
+  let initial = render_sample(sample)
+  let point = button_center(initial)
+  assert_true(sample.handle_input(pointer_event(true, point)) is Ok(false))
+  assert_true(sample.handle_input(pointer_event(false, point)) is Ok(true))
+  let modifiers = [
+    @primitives.Modifiers::new(shift=false, control=true, alt=false, meta=false),
+    @primitives.Modifiers::new(shift=false, control=false, alt=true, meta=false),
+    @primitives.Modifiers::new(shift=false, control=false, alt=false, meta=true),
+  ]
+  for modifier in modifiers {
+    assert_true(
+      sample.handle_input(
+        @primitives.KeyPressed(
+          key=@primitives.Character("c"),
+          modifiers=modifier,
+          repeat=false,
+        ),
+      )
+      is Ok(false),
+    )
+    assert_true(!render_sample(sample).button_focus_visible())
+  }
+  assert_true(
+    sample.handle_input(
+      @primitives.KeyPressed(
+        key=@primitives.ArrowLeft,
+        modifiers=@primitives.Modifiers::none(),
+        repeat=false,
+      ),
+    )
+    is Ok(false),
+  )
+  let keyboard = render_sample(sample)
+  assert_true(keyboard.button_focus_visible())
+  for modifier in modifiers {
+    assert_true(
+      sample.handle_input(
+        @primitives.KeyPressed(
+          key=@primitives.Character("c"),
+          modifiers=modifier,
+          repeat=false,
+        ),
+      )
+      is Ok(false),
+    )
+    assert_eq(button_surface(render_sample(sample)), button_surface(keyboard))
+  }
+  assert_true(sample.handle_input(pointer_event(true, point)) is Ok(false))
+  assert_eq(button_surface(render_sample(sample)), button_surface(keyboard))
+  assert_true(sample.handle_input(pointer_event(false, point)) is Ok(true))
+  assert_eq(button_surface(render_sample(sample)), button_surface(keyboard))
+}
+
+///|
 test "shared sample uses Flex layout and App Entity state to rerender Text after a matching click" {
   let sample = new_sample()
   let initial = render_sample(sample)

@@ -12,6 +12,7 @@ import {
 import {
   "f4ah6o/gpui/diagnostics",
   "f4ah6o/gpui/primitives",
+  "f4ah6o/gpui/scene",
   "f4ah6o/yami_kumo_native/components",
   "f4ah6o/gpui/text",
   "f4ah6o/gpui/text_layout",
