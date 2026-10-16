@@ -94,3 +94,19 @@ The shell should own responsive layout behavior and semantic slots. Product code
 - product-specific state
 
 This keeps Yami-kumo reusable without making products feel identical.
+
+## 8. Shared UX across Web and Native
+
+The [shared UX plan](../issues/open/20261005-kumo-gpui-shared-ux.md)
+defines task outcomes, component state, focus, dismissal and accessibility
+semantics common to Kumo/React and gpui.mbt. Platform layout, shortcuts and
+rasterization can vary through explicit, tested mappings.
+
+Native Text, Button, Card and semantic AppShell previews exist. The enabled
+Primary Button interaction and hover/keyboard-focus behavior have passing
+Web/native and Linux-host evidence from
+[PR #24](https://github.com/f4ah6o/Yami-kumo/pull/24).
+This is only a partial milestone: disabled styling, Native loading, native
+Input/IME, physical-input and external accessibility qualification, and
+other platform profiles still need evidence. A matching screenshot alone
+cannot establish shared UX.
