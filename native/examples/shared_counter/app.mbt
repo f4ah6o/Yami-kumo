@@ -282,7 +282,13 @@ fn NativeCounter::apply_action(
     Ok(_) => ()
   }
   self.actions.push(action)
-  Ok(true)
+  // Context.notify queues a Changed notification even without listeners. Pump
+  // only after publishing, so observers can never see a new model paired with
+  // the previous accepted native geometry.
+  match self.drain_app_work() {
+    Err(error) => Err(error)
+    Ok(_) => Ok(true)
+  }
 }
 
 ///|
@@ -330,6 +336,9 @@ pub fn NativeCounter::dispose(self : NativeCounter) -> Unit {
   self.mount.dispose()
   ignore(self.app.destroy_entity(self.state))
   ignore(self.app.request_stop())
+  // Released delivery clears the retained Entity value and lets Stopping reach
+  // Stopped. The App and Entity are private; no external callbacks are installed.
+  ignore(self.drain_app_work())
 }
 
 ///|
@@ -338,4 +347,28 @@ pub fn NativeCounter::dispose(self : NativeCounter) -> Unit {
 /// input; a release received while unavailable can never replay afterward.
 pub fn NativeCounter::invalidate_layout(self : NativeCounter) -> Unit {
   self.mount.invalidate_layout()
+}
+
+///|
+fn NativeCounter::drain_app_work(
+  self : NativeCounter,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  // A snapshot-sized budget is finite and drains all work owned by this
+  // bootstrap: one Entity's Changed/Released notifications, with no timers,
+  // subscriptions or recursive tasks. Do not spin an unbounded executor loop.
+  let budget = self.app.pending_work()
+  if budget == 0 {
+    return Ok(())
+  }
+  match self.app.run_ready(budget) {
+    Err(error) => Err(error)
+    Ok(_) =>
+      if self.app.pending_work() == 0 {
+        Ok(())
+      } else {
+        Err(
+          counter_error("unexpected work after private App notification drain"),
+        )
+      }
+  }
 }

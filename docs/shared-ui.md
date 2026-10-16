@@ -112,8 +112,10 @@ The native adapter imports the same `ui/core`, `ui/runtime`, and
 `handle_event` only routes the owned window's monotonically sequenced events and
 queues semantic actions. After dispatch returns, `drain_one` stages the next
 layout and scene, updates the Entity through `App.update`/`Context.set`/`notify`,
-and publishes the next view before another action drains. Measurement failure
-leaves the model and accepted scene unchanged.
+and publishes the next view before another action drains. App notifications are
+pumped only after that publication; disposal also drains Entity release work
+so shutdown reaches Stopped. Measurement failure leaves the model and accepted
+scene unchanged.
 
 `native/ui.Mounted` maps root-wide keys to private, nonzero native IDs and common
 runtime incarnation tokens. Same-key/same-kind updates preserve identity.

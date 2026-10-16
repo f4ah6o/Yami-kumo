@@ -17,3 +17,8 @@ import {
   "f4ah6o/gpui/text",
   "f4ah6o/gpui/text_layout",
 } for "test"
+
+import {
+  "f4ah6o/gpui/text",
+  "f4ah6o/gpui/text_layout",
+} for "wbtest"
