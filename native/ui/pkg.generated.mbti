@@ -1,0 +1,59 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "f4ah6o/yami_kumo_native/ui"
+
+import {
+  "f4ah6o/gpui/diagnostics",
+  "f4ah6o/gpui/platform",
+  "f4ah6o/gpui/primitives",
+  "f4ah6o/gpui/scene",
+  "f4ah6o/gpui/text_layout",
+  "f4ah6o/yami_kumo/ui/core",
+  "f4ah6o/yami_kumo/ui/runtime",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct Activation {
+  // private fields
+}
+
+pub struct Frame {
+  // private fields
+}
+pub fn Frame::bounds(Self, @core.NodeKey) -> @primitives.Rect?
+pub fn Frame::focused(Self, @core.NodeKey) -> Bool
+pub fn Frame::label_bounds(Self, @core.NodeKey) -> @primitives.Rect?
+pub fn Frame::pressed(Self, @core.NodeKey) -> Bool
+pub fn Frame::revision(Self) -> UInt64
+pub fn Frame::root_bounds(Self) -> @primitives.Rect
+pub fn Frame::snapshot(Self) -> @scene.SceneSnapshot
+
+pub struct Mounted {
+  // private fields
+}
+pub fn Mounted::activate(Self, Activation) -> Bool
+pub fn Mounted::callback(Self, @core.NodeKey) -> Activation?
+pub fn Mounted::commit(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Frame, @diagnostics.FrameworkError]
+pub fn Mounted::dispose(Self) -> Unit
+pub fn Mounted::focus(Self, @core.NodeKey) -> Bool
+pub fn Mounted::frame(Self) -> Frame?
+pub fn Mounted::handle_event(Self, @platform.Event) -> Result[Bool, @diagnostics.FrameworkError]
+pub fn Mounted::invalidate_layout(Self) -> Unit
+pub fn Mounted::is_disposed(Self) -> Bool
+pub fn Mounted::new(@platform.WindowId) -> Self
+pub fn Mounted::next_action(Self) -> @core.SemanticAction?
+pub fn Mounted::next_focus_result(Self) -> @runtime.FocusResult?
+pub fn Mounted::publish(Self, Prepared) -> Result[Frame, @diagnostics.FrameworkError]
+pub fn Mounted::stage(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Prepared, @diagnostics.FrameworkError]
+pub fn Mounted::view(Self) -> @core.View?
+
+pub struct Prepared {
+  // private fields
+}
+
+// Type aliases
+
+// Traits

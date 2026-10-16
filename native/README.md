@@ -225,3 +225,13 @@ scripts build and run `examples/{macos,ubuntu,windows}`; they save native PPM
 captures and logs in `_build/native-ui/<platform>` by default. The Linux run
 requires Xvfb, Weston, XTest/`xdotool`, and the GPUI Wayland dependencies;
 macOS requires Xcode command-line tools.
+
+## Shared UI source-workspace counter
+
+The additive `ui` and `examples/shared_counter` development packages adapt the
+unchanged common `ui/core`, `ui/runtime`, and `examples/shared_counter` sources
+to public GPUI APIs. They are not included in the published native module.
+See [the shared UI guide](../docs/shared-ui.md#native-appentity-host) for the
+single App Entity, controller reuse, lifetime bounds, fixture commands and
+exact-source evidence policy. The separate shared-native CI profile preserves
+legacy pins and default runners. macOS runtime/AX are explicitly not run by CI.

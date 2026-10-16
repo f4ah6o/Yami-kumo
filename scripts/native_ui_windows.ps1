@@ -2,7 +2,8 @@ param(
   [string]$GpuiSource = $env:GPUI_SOURCE,
   [string]$EvidenceDirectory = $env:YAMI_NATIVE_UI_EVIDENCE_DIR,
   [string]$GitBashPath = $env:YAMI_GIT_BASH,
-  [switch]$TestsOnly
+  [switch]$TestsOnly,
+  [switch]$SharedCounter
 )
 
 $ErrorActionPreference = "Stop"
@@ -91,6 +92,15 @@ $workspaceScript = "$bashYamiRoot/scripts/native_ui_workspace.sh"
 $driverScript = "$bashYamiRoot/tests/native-ui/drive_native_ui.py"
 $testsScript = "$bashYamiRoot/scripts/native_ui_tests.sh"
 $examplePackage = "$bashYamiRoot/native/examples/windows"
+if ($SharedCounter) {
+  if ($env:YAMI_SHARED_UI_CANDIDATE_SHA -cnotmatch '^[0-9a-f]{40}$') {
+    throw "YAMI_SHARED_UI_CANDIDATE_SHA must bind the exact shared UI source commit."
+  }
+  $driverScript = "$bashYamiRoot/tests/shared-ui/native_driver.py"
+  $testsScript = "$bashYamiRoot/scripts/shared_native_ui_tests.sh"
+  $examplePackage = "$bashYamiRoot/native/examples/shared_counter/windows"
+}
+
 
 $clCompiler = Get-Command cl.exe -ErrorAction SilentlyContinue
 if ($null -eq $clCompiler) {
@@ -176,16 +186,16 @@ try {
     Write-Output 'Tests-only mode passed; skipping the visible Windows sample E2E.'
     return
   }
-  Invoke-BashChecked @(
-    $workspaceScript,
-    $bashPython,
-    $driverScript,
-    "--platform", "windows",
-    "--evidence-dir", $bashEvidence,
-    "--log", "$bashEvidence/native-ui.log",
-    "--",
-    "moon", "run", $examplePackage, "--target", "native"
+  $driverArguments = @(
+    $workspaceScript, $bashPython, $driverScript,
+    "--platform", "windows", "--evidence-dir", $bashEvidence,
+    "--log", "$bashEvidence/native-ui.log"
   )
+  if ($SharedCounter) {
+    $driverArguments += @("--candidate-sha", $env:YAMI_SHARED_UI_CANDIDATE_SHA)
+  }
+  $driverArguments += @("--", "moon", "run", $examplePackage, "--target", "native")
+  Invoke-BashChecked $driverArguments
 } finally {
   $env:PATH = $originalPath
   $resolvedShimDirectory = [IO.Path]::GetFullPath($pythonShimDirectory)
