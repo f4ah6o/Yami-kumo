@@ -276,11 +276,13 @@ try {
         assert.equal(
           await resetRequired.evaluate((el) => {
             const field = el.closest('.yk-kumo-input-field');
-            return (
-              ['data-dirty', 'data-filled', 'data-touched', 'data-valid', 'data-invalid'].every(
-                (name) => !el.hasAttribute(name) && !field.hasAttribute(name),
-              )
-            );
+            return [
+              'data-dirty',
+              'data-filled',
+              'data-touched',
+              'data-valid',
+              'data-invalid',
+            ].every((name) => !el.hasAttribute(name) && !field.hasAttribute(name));
           }),
           true,
         );
