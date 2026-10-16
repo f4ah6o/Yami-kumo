@@ -272,7 +272,7 @@ const generated = [
 
 function formatMoonBit(source) {
   const projectRoot = fileURLToPath(new URL('../', import.meta.url));
-  const directory = mkdtempSync(join(projectRoot, 'scripts/.kumo-contract-format-'));
+  const directory = mkdtempSync(join(projectRoot, 'scripts/kumo-contract-format-'));
   const path = join(directory, 'contract.mbt');
   try {
     writeFileSync(join(directory, 'moon.pkg'), '');

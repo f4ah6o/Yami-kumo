@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "component": "Button",
+  "cases": [
+    {
+      "id": "enter-repeat",
+      "disabled": false,
+      "loading": false,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "enter-down",
+        "enter-repeat",
+        "repaint",
+        "enter-up"
+      ]
+    },
+    {
+      "id": "space-repeat",
+      "disabled": false,
+      "loading": false,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "space-down",
+        "space-repeat",
+        "repaint",
+        "space-up",
+        "space-up"
+      ]
+    },
+    {
+      "id": "focus-loss",
+      "disabled": false,
+      "loading": false,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "space-down",
+        "focus-loss",
+        "space-up",
+        "enter-down",
+        "enter-up"
+      ]
+    },
+    {
+      "id": "cancel",
+      "disabled": false,
+      "loading": false,
+      "steps": ["pointer-hover", "pointer-down", "repaint", "pointer-up-outside", "pointer-up"]
+    },
+    {
+      "id": "unfocused",
+      "disabled": false,
+      "loading": false,
+      "steps": ["enter-down", "enter-repeat", "enter-up", "space-down", "space-up"]
+    },
+    {
+      "id": "disabled",
+      "disabled": true,
+      "loading": false,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "enter-down",
+        "enter-repeat",
+        "enter-up",
+        "space-down",
+        "space-up"
+      ]
+    },
+    {
+      "id": "loading",
+      "disabled": false,
+      "loading": true,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "enter-down",
+        "enter-repeat",
+        "enter-up",
+        "space-down",
+        "space-up"
+      ]
+    },
+    {
+      "id": "enter",
+      "disabled": false,
+      "loading": false,
+      "host": true,
+      "steps": ["pointer-hover", "pointer-down", "pointer-up", "enter-down", "enter-up"]
+    },
+    {
+      "id": "space",
+      "disabled": false,
+      "loading": false,
+      "host": true,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "keyboard-focus",
+        "space-down",
+        "repaint",
+        "space-up"
+      ]
+    },
+    {
+      "id": "pointer-cancel",
+      "disabled": false,
+      "loading": false,
+      "host": true,
+      "steps": ["pointer-hover", "pointer-down", "repaint", "pointer-up-outside"]
+    },
+    {
+      "id": "disabled-host",
+      "disabled": true,
+      "loading": false,
+      "host": true,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "enter-down",
+        "enter-up",
+        "space-down",
+        "space-up"
+      ]
+    },
+    {
+      "id": "hover-focus-loss",
+      "disabled": false,
+      "loading": false,
+      "host": true,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "keyboard-focus",
+        "space-down",
+        "repaint",
+        "focus-loss",
+        "space-up",
+        "pointer-away"
+      ]
+    },
+    {
+      "id": "modifier-focus",
+      "disabled": false,
+      "loading": false,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "control-key",
+        "alt-key",
+        "meta-key",
+        "repaint",
+        "keyboard-focus",
+        "control-key",
+        "alt-key",
+        "meta-key",
+        "space-down",
+        "space-up"
+      ]
+    },
+    {
+      "id": "focus-retained-click",
+      "disabled": false,
+      "loading": false,
+      "host": true,
+      "steps": [
+        "pointer-hover",
+        "pointer-down",
+        "pointer-up",
+        "keyboard-focus",
+        "pointer-down",
+        "repaint",
+        "pointer-up",
+        "space-down",
+        "space-up",
+        "pointer-away"
+      ]
+    }
+  ]
+}

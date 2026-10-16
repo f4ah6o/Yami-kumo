@@ -6,12 +6,18 @@ if [ -z "${YAMI_NATIVE_MODULE_ROOT:-}" ]; then
   exit 2
 fi
 
-if command -v python3 >/dev/null 2>&1; then
-  python_bin=python3
-elif command -v python >/dev/null 2>&1; then
-  python_bin=python
-else
-  echo "Python 3 is required for native frame verifier tests" >&2
+python_bin=${YAMI_PYTHON_BIN:-}
+if [ -z "$python_bin" ]; then
+  for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 &&
+      "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
+      python_bin=$candidate
+      break
+    fi
+  done
+fi
+if [ -z "$python_bin" ]; then
+  echo "Python 3.11 or newer is required for native frame verifier tests" >&2
   exit 2
 fi
 
@@ -23,3 +29,9 @@ moon test "$YAMI_NATIVE_MODULE_ROOT/sample" \
   --target native --deny-warn --no-parallelize
 moon test "$YAMI_NATIVE_MODULE_ROOT/examples/common" \
   --target native --deny-warn --no-parallelize
+case "$(uname -s)" in
+  MINGW*|MSYS*|CYGWIN*)
+    moon test "$YAMI_NATIVE_MODULE_ROOT/examples/windows" \
+      --target native --deny-warn --no-parallelize
+    ;;
+esac

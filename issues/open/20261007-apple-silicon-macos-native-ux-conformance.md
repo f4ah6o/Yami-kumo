@@ -1,15 +1,17 @@
 # Apple Silicon macOS native shared-UX conformance
 
-Status: open — native adapters and UX conformance not implemented  
+Status: open — partial Native Button exists; full platform UX, IME and external accessibility conformance unverified  
 Updated: 2026-10-07 (JST)  
 Parent: [Shared UX across Kumo and gpui.mbt](20261005-kumo-gpui-shared-ux.md)
 
 ## Basis and shared dependencies
 
-Parent [PR #3](https://github.com/f4ah6o/Yami-kumo/pull/3), inspected head
-`b78a32ed9e129dfc4d2d1a6433fadddc6cb953d8`, remains an unmerged design.
-Its passing checks/tests/build do not establish the parent's rendered web
-reference or native scenarios. Generation and native adapters remain unimplemented.
+The original parent [PR #3](https://github.com/f4ah6o/Yami-kumo/pull/3)
+snapshot `b78a32ed9e129dfc4d2d1a6433fadddc6cb953d8` predates merged
+Button [PR #24](https://github.com/f4ah6o/Yami-kumo/pull/24).
+The parent's current evidence checkpoint records only a partial Button slice.
+Full shared UX acceptance, the generator and platform Input/IME/AX support
+remain open; passing builds cannot substitute for native interaction evidence.
 
 Complete the parent's common pins, web reference and maintained adapter/scenario
 contracts before qualifying this OS. Keep Kumo extraction, generated definitions
@@ -22,9 +24,9 @@ or UNSUPPORTED, not a passing placeholder.
 **Apple Silicon / arm64 only; Intel is excluded.** Own native host mappings and
 evidence for parent slices 3–5 on a named macOS/AppKit/Metal/SDK/font profile.
 
-gpui.mbt's field [PR #40](https://github.com/gpui-mbt/gpui.mbt/pull/40) and
-[palette follow-up](https://github.com/gpui-mbt/gpui.mbt/pull/42) remain open
-dependencies, not completed native UX. Resolve field/runner findings in their
+gpui.mbt's field [PR #40](https://github.com/gpui-mbt/gpui.mbt/pull/40)
+remains open/draft; [palette follow-up #42](https://github.com/gpui-mbt/gpui.mbt/pull/42)
+is merged as documentation, not proof of completed native UX. Resolve field/runner findings in their
 existing work; do not duplicate them here. Native AX remains a framework gate.
 
 ## Acceptance

@@ -24,6 +24,9 @@ pub const SAMPLE_BUTTON_ID : UInt64 = 40
 pub const SAMPLE_BUTTON_LABEL_ID : UInt64 = 41
 
 ///|
+const SAMPLE_BUTTON_NAME : String = "Click me"
+
+///|
 const SAMPLE_CARD_WIDTH : Double = 416.0
 
 ///|
@@ -46,10 +49,91 @@ struct SampleState {
 pub struct NativeSample {
   app : @core.App
   state : @core.Entity[SampleState]
+  state_id : @core.EntityId
   theme : @components.Theme
   disabled : Bool
+  mut hovered : Bool
+  mut focus_visible : Bool
   mut interaction : @components.ButtonInteraction?
   mut tree : @element.ElementTree?
+  mut button_bounds : @primitives.Rect?
+  mut layout_generation : UInt64
+  mut snapshot_generation_exhausted : Bool
+}
+
+///|
+/// Current native accessibility state for the sample's one Button.
+/// The activation count is read from the sample's App Entity, so assistive
+/// actions share the same owner as pointer and keyboard activation.
+pub struct NativeButtonAccessibilitySnapshot {
+  id : UInt64
+  name : String
+  bounds : @primitives.Rect
+  enabled : Bool
+  loading : Bool
+  focused : Bool
+  activations : Int
+  priv owner : @core.EntityId
+  priv layout_generation : UInt64
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::id(
+  self : NativeButtonAccessibilitySnapshot,
+) -> UInt64 {
+  self.id
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::name(
+  self : NativeButtonAccessibilitySnapshot,
+) -> String {
+  self.name
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::bounds(
+  self : NativeButtonAccessibilitySnapshot,
+) -> @primitives.Rect {
+  self.bounds
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::enabled(
+  self : NativeButtonAccessibilitySnapshot,
+) -> Bool {
+  self.enabled
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::loading(
+  self : NativeButtonAccessibilitySnapshot,
+) -> Bool {
+  self.loading
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::focused(
+  self : NativeButtonAccessibilitySnapshot,
+) -> Bool {
+  self.focused
+}
+
+///|
+pub fn NativeButtonAccessibilitySnapshot::activations(
+  self : NativeButtonAccessibilitySnapshot,
+) -> Int {
+  self.activations
+}
+
+///|
+/// Return whether two snapshots refer to the same sample and committed layout.
+/// The owner identity and generation remain opaque to native host adapters.
+pub fn NativeButtonAccessibilitySnapshot::same_revision(
+  self : NativeButtonAccessibilitySnapshot,
+  other : NativeButtonAccessibilitySnapshot,
+) -> Bool {
+  self.owner == other.owner && self.layout_generation == other.layout_generation
 }
 
 ///|
@@ -58,6 +142,10 @@ pub struct SampleFrame {
   snapshot : @scene.SceneSnapshot
   count : Int
   counter_text : String
+  button_pressed : Bool
+  button_focused : Bool
+  button_hovered : Bool
+  button_focus_visible : Bool
   button_bounds : @primitives.Rect
   button_label_bounds : @primitives.Rect
   counter_bounds : @primitives.Rect
@@ -80,6 +168,27 @@ pub fn SampleFrame::count(self : SampleFrame) -> Int {
 ///|
 pub fn SampleFrame::counter_text(self : SampleFrame) -> String {
   self.counter_text
+}
+
+///|
+/// Whether the rendered Button frame represents an armed pointer or key press.
+pub fn SampleFrame::button_pressed(self : SampleFrame) -> Bool {
+  self.button_pressed
+}
+
+///|
+pub fn SampleFrame::button_focused(self : SampleFrame) -> Bool {
+  self.button_focused
+}
+
+///|
+pub fn SampleFrame::button_hovered(self : SampleFrame) -> Bool {
+  self.button_hovered
+}
+
+///|
+pub fn SampleFrame::button_focus_visible(self : SampleFrame) -> Bool {
+  self.button_focus_visible
 }
 
 ///|
@@ -135,7 +244,20 @@ pub fn NativeSample::new(
           match app.create_entity(SampleState::{ count: 0, }) {
             Err(error) => Err(error)
             Ok(state) =>
-              Ok({ app, state, theme, disabled, interaction: None, tree: None, })
+              Ok({
+                app,
+                state,
+                state_id: state.id(),
+                theme,
+                disabled,
+                hovered: false,
+                focus_visible: false,
+                interaction: None,
+                tree: None,
+                button_bounds: None,
+                layout_generation: 0,
+                snapshot_generation_exhausted: false,
+              })
           }
       }
   }
@@ -149,6 +271,67 @@ pub fn NativeSample::count(
 }
 
 ///|
+/// Return the current, committed Button snapshot when the sample has a live
+/// layout. A resize or invalidation removes the snapshot until the next render.
+pub fn NativeSample::button_accessibility_snapshot(
+  self : NativeSample,
+) -> Result[NativeButtonAccessibilitySnapshot?, @diagnostics.FrameworkError] {
+  match (self.tree, self.button_bounds) {
+    (Some(tree), Some(bounds)) if !self.snapshot_generation_exhausted =>
+      match self.count() {
+        Err(error) => Err(error)
+        Ok(activations) =>
+          Ok(
+            Some({
+              id: SAMPLE_BUTTON_ID,
+              name: SAMPLE_BUTTON_NAME,
+              bounds,
+              enabled: !self.disabled,
+              loading: false,
+              focused: tree.focused() == Some(SAMPLE_BUTTON_ID),
+              activations,
+              owner: self.state_id,
+              layout_generation: self.layout_generation,
+            }),
+          )
+      }
+    _ => Ok(None)
+  }
+}
+
+///|
+/// Activate only if the native request still names the exact live Button
+/// snapshot. Accepted requests use the same App Entity counter as all other
+/// sample activation paths.
+pub fn NativeSample::activate_accessibility_button(
+  self : NativeSample,
+  expected : NativeButtonAccessibilitySnapshot,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  if !expected.enabled {
+    return Ok(false)
+  }
+  let current = match self.button_accessibility_snapshot() {
+    Err(error) => return Err(error)
+    Ok(None) => return Ok(false)
+    Ok(Some(value)) => value
+  }
+  if current.id != expected.id ||
+    current.name != expected.name ||
+    current.bounds != expected.bounds ||
+    current.enabled != expected.enabled ||
+    current.loading != expected.loading ||
+    current.focused != expected.focused ||
+    current.activations != expected.activations ||
+    !current.same_revision(expected) {
+    return Ok(false)
+  }
+  match self.increment() {
+    Err(error) => Err(error)
+    Ok(_) => Ok(true)
+  }
+}
+
+///|
 /// Regenerate the view at the latest window size and measurement provider.
 /// This clears old gesture ownership so a resize cannot complete a stale
 /// press against newly laid out geometry.
@@ -159,13 +342,36 @@ pub fn NativeSample::render(
   scale : Double,
   measure : @components.TextMeasure,
 ) -> Result[SampleFrame, @diagnostics.FrameworkError] {
+  match self.render_inner(width, height, scale, measure) {
+    Err(error) => {
+      self.cancel_gesture()
+      self.hovered = false
+      self.focus_visible = false
+      self.interaction = None
+      self.tree = None
+      self.button_bounds = None
+      self.advance_layout_generation()
+      Err(error)
+    }
+    Ok(frame) => Ok(frame)
+  }
+}
+
+///|
+fn NativeSample::render_inner(
+  self : NativeSample,
+  width : Double,
+  height : Double,
+  scale : Double,
+  measure : @components.TextMeasure,
+) -> Result[SampleFrame, @diagnostics.FrameworkError] {
+  let previous_button_bounds = self.button_bounds
   let restore_button_focus = match self.tree {
     None => false
     Some(tree) => tree.focused() == Some(SAMPLE_BUTTON_ID)
   }
-  self.cancel_gesture()
   self.tree = None
-  self.interaction = None
+  self.button_bounds = None
   if !finite(width) || !finite(height) || width <= 0.0 || height <= 0.0 {
     return Err(
       sample_error(
@@ -438,6 +644,19 @@ pub fn NativeSample::render(
       )
     Some(value) => value
   }
+  match previous_button_bounds {
+    Some(previous) if previous != button_bounds =>
+      self.advance_layout_generation()
+    _ => ()
+  }
+  let interaction = match (previous_button_bounds, self.interaction) {
+    (Some(previous), Some(current)) if previous == button_bounds => current
+    (_, Some(current)) => {
+      current.cancel()
+      button.interaction()
+    }
+    (_, None) => button.interaction()
+  }
   let button_label_bounds = match button.label_bounds(button_bounds) {
     Err(error) => return Err(error)
     Ok(value) => value
@@ -467,7 +686,12 @@ pub fn NativeSample::render(
     Err(error) => return Err(error)
     Ok(item) => items.push(item)
   }
-  match button.scene_items(button_bounds) {
+  match
+    button.scene_items(
+      button_bounds,
+      hovered=self.hovered,
+      focus_visible=self.focus_visible,
+    ) {
     Err(error) => return Err(error)
     Ok(button_items) =>
       for item in button_items {
@@ -542,17 +766,22 @@ pub fn NativeSample::render(
     tree
   }
   self.tree = Some(tree)
-  self.interaction = Some(button.interaction())
+  self.interaction = Some(interaction)
+  self.button_bounds = Some(button_bounds)
   Ok({
     snapshot,
     count,
     counter_text,
+    button_pressed: interaction.is_pressed(),
+    button_focused: tree.focused() == Some(SAMPLE_BUTTON_ID),
+    button_hovered: self.hovered,
+    button_focus_visible: self.focus_visible,
     button_bounds,
     button_label_bounds,
     counter_bounds,
     counter_background: self.theme.elevated(),
     button_background: self.theme
-    .button_colors(@yami_kumo.Primary, self.disabled)
+    .button_colors(@yami_kumo.Primary, self.disabled, hovered=self.hovered)
     .background(),
     root_bounds: viewport,
     tree,
@@ -597,7 +826,19 @@ pub fn NativeSample::handle_input(
   }
   let target = outcome.target()
   match event {
-    @primitives.PointerButtonPressed(button~, ..) =>
+    @primitives.PointerMoved(position~)
+    | @primitives.PointerButtonPressed(position~, ..)
+    | @primitives.PointerButtonReleased(position~, ..) =>
+      self.hovered = self.button_bounds is Some(bounds) &&
+        bounds.contains(position)
+    _ => ()
+  }
+  match event {
+    @primitives.PointerButtonPressed(button~, ..) => {
+      if tree.focused() != Some(SAMPLE_BUTTON_ID) ||
+        target != Some(SAMPLE_BUTTON_ID) {
+        self.focus_visible = false
+      }
       if interaction.pointer_down(target, button) {
         match tree.with_focus(SAMPLE_BUTTON_ID) {
           Ok(focused) => self.tree = Some(focused)
@@ -609,6 +850,7 @@ pub fn NativeSample::handle_input(
             )
         }
       }
+    }
     @primitives.PointerButtonReleased(button~, ..) =>
       if interaction.pointer_up(target, button) {
         match self.increment() {
@@ -616,7 +858,21 @@ pub fn NativeSample::handle_input(
           Ok(_) => return Ok(true)
         }
       }
-    @primitives.KeyPressed(key~, ..) => interaction.key_down(target, key)
+    @primitives.KeyPressed(key~, modifiers~, ..) => {
+      if tree.focused() == Some(SAMPLE_BUTTON_ID) &&
+        !self.disabled &&
+        !modifiers.control() &&
+        !modifiers.alt() &&
+        !modifiers.meta() {
+        self.focus_visible = true
+      }
+      if interaction.key_down(target, key) {
+        match self.increment() {
+          Err(error) => return Err(error)
+          Ok(_) => return Ok(true)
+        }
+      }
+    }
     @primitives.KeyReleased(key~, ..) =>
       if interaction.key_up(target, key) {
         match self.increment() {
@@ -635,6 +891,7 @@ pub fn NativeSample::focus_changed(self : NativeSample, focused : Bool) -> Unit 
   if !focused {
     self.cancel_gesture()
     self.tree = self.tree.map(tree => tree.clear_focus())
+    self.focus_visible = false
   }
 }
 
@@ -642,7 +899,22 @@ pub fn NativeSample::focus_changed(self : NativeSample, focused : Bool) -> Unit 
 /// Invalidate active gestures before rebuilding after a resize or scale change.
 pub fn NativeSample::invalidate_layout(self : NativeSample) -> Unit {
   self.cancel_gesture()
+  self.hovered = false
+  self.focus_visible = false
   self.tree = None
+  self.interaction = None
+  self.button_bounds = None
+  self.advance_layout_generation()
+}
+
+///|
+fn NativeSample::advance_layout_generation(self : NativeSample) -> Unit {
+  let max_uint64 : UInt64 = 0xffff_ffff_ffff_ffff
+  if self.layout_generation == max_uint64 {
+    self.snapshot_generation_exhausted = true
+  } else {
+    self.layout_generation += 1
+  }
 }
 
 ///|

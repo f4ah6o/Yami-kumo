@@ -1,15 +1,17 @@
 # Linux native shared-UX conformance
 
-Status: open — native adapters and UX conformance not implemented  
+Status: open — partial Native Button exists; full platform UX, IME and external accessibility conformance unverified  
 Updated: 2026-10-07 (JST)  
 Parent: [Shared UX across Kumo and gpui.mbt](20261005-kumo-gpui-shared-ux.md)
 
 ## Basis and shared dependencies
 
-Parent [PR #3](https://github.com/f4ah6o/Yami-kumo/pull/3), inspected head
-`b78a32ed9e129dfc4d2d1a6433fadddc6cb953d8`, remains an unmerged design.
-Its passing checks/tests/build do not establish the parent's rendered web
-reference or native scenarios. Generation and native adapters remain unimplemented.
+The original parent [PR #3](https://github.com/f4ah6o/Yami-kumo/pull/3)
+snapshot `b78a32ed9e129dfc4d2d1a6433fadddc6cb953d8` predates merged
+Button [PR #24](https://github.com/f4ah6o/Yami-kumo/pull/24).
+The parent's current evidence checkpoint records only a partial Button slice.
+Full shared UX acceptance, the generator and platform Input/IME/AX support
+remain open; passing builds cannot substitute for native interaction evidence.
 
 Complete the parent's common pins, web reference and maintained adapter/scenario
 contracts before qualifying this OS. Keep Kumo extraction, generated definitions
@@ -23,9 +25,12 @@ Own the Linux implementation/evidence for parent slices 3–5. Name the actual
 compositor, protocol/input method, renderer, toolkit/font and scale profile;
 X11, XWayland and Wayland results are separate.
 
-The gpui.mbt Linux field/IME foundations are bounded. Its reusable palette
-[PR #41](https://github.com/gpui-mbt/gpui.mbt/pull/41) remains a candidate, not
-an accepted dependency. Native AT-SPI and broader controls are separate
+The gpui.mbt Linux field/IME foundations are bounded. Yami-kumo
+[PR #24](https://github.com/f4ah6o/Yami-kumo/pull/24) produced 6 Linux-host
+cases/48 phases for the enabled Primary Button subset, not complete native
+keyboard/IME, external AT-SPI or device-profile evidence. Its reusable palette
+[PR #41](https://github.com/gpui-mbt/gpui.mbt/pull/41) is merged, but does
+not by itself qualify complete Yami-kumo UX. Native AT-SPI and broader controls are separate
 framework prerequisites. Recheck reviewed pins when integration starts.
 
 ## Acceptance

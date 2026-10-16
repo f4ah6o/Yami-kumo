@@ -1,8 +1,29 @@
 # Shared UX across Kumo and gpui.mbt
 
-Status: open — design and implementation plan; generation and native UX conformance are not implemented
-Updated: 2026-10-05
+Status: open — partial Native Button and distribution evidence exists; full UX conformance and the Kumo-to-native generator remain incomplete
+Updated: 2026-10-16 (historical source baseline retained below)
 Related: [Familiarity-first design workflow](20261003-familiarity-first-design-workflow.md), [UX guide](../../docs/UX.md)
+
+## Current implementation checkpoint (2026-10-16)
+
+- [PR #20](https://github.com/f4ah6o/Yami-kumo/pull/20) merged the
+  ecosystem-level Web/Native UX contract and separate observation layers.
+- [PR #24](https://github.com/f4ah6o/Yami-kumo/pull/24) merged the shared
+  Button slice, with 14 Web cases/118 phases, 13 Native-consumer
+  cases/109 phases and 6 Linux host cases/48 phases. Enabled Primary
+  interaction and hover/keyboard-focus feedback passed on the tested
+  profiles. Disabled active/hover differences and Native loading remain
+  diverged or unsupported; full pixel parity, physical-input evidence,
+  external AX and additional OS/device profiles are not proven.
+- [PR #23](https://github.com/f4ah6o/Yami-kumo/pull/23) merged the
+  installable JS/TS npm preview tarball. Registry publication has
+  not been verified and does not qualify native UX.
+- The existing GPUI native Text/Button/Card/AppShell preview is not a
+  completed cross-platform UX adapter. Native Input/IME, broader
+  accessibility and the deterministic upstream-to-native generation/update
+  loop remain separate implementation and evidence tasks.
+- The checkboxes below are end-to-end acceptance gates. Passing an
+  intermediate Button or packaging slice does not close them.
 
 ## OS child packets — 2026-10-07 (JST)
 
@@ -18,11 +39,11 @@ Children own OS mappings, framework prerequisites and actual native evidence;
 one passing OS cannot complete another. macOS execution is Apple Silicon/arm64
 only; Intel qualification is excluded.
 
-This parent is still proposed in [PR #3](https://github.com/f4ah6o/Yami-kumo/pull/3).
-The split is a documentation-only stacked change against that PR's branch, not
-adoption of its unmerged plan into main. The inspected baselines and open
-implementation checkboxes below are preserved. Web CI success is not rendered
-shared-scenario or native conformance evidence.
+These child packets originated as a stacked documentation change against
+[PR #3](https://github.com/f4ah6o/Yami-kumo/pull/3). Their requirements are
+independent of the parent PR's merge timing. The parent's updated checkpoint
+records partial Button evidence without closing native UX acceptance. Passing
+Web CI alone does not qualify shared-scenario or native conformance.
 
 ## 1. Outcome
 
@@ -60,13 +81,13 @@ results. Recheck them when implementation starts.
 | cloudflare/kumo   | `3d9331280781bf9ea67bb6c38321a7c6b98b0cee` | Source package version `2.14.0`; theme config, component registry generation and exported variant/default definitions |
 | gpui-mbt/gpui.mbt | `bf965aebbeb1dfdfed26373d4a7a58bb51a5ad01` | Headless elements, flex, focus/events and quad scenes; text/IME/accessibility and broader rendering remain incomplete |
 
-Yami-kumo currently declares `@cloudflare/kumo: "latest"` and has no committed
+At the inspected revision, Yami-kumo declared `@cloudflare/kumo: "latest"` and had no committed
 package-manager lockfile at this revision. The inspected Kumo source version
 does not identify what a previous Yami-kumo installation resolved.
 
 The existing shell is a starting point, not a completed interaction oracle.
 `AppShell.tsx` exposes content slots and dismissal callbacks; it does not own a
-complete drawer focus/inertness/keyboard lifecycle. `layout.test.ts` currently
+complete drawer focus/inertness/keyboard lifecycle. `layout.test.ts` at that revision
 checks a region list, not rendered UI behavior. The web reference must be
 qualified against the shared contract before it can qualify native output.
 
@@ -278,4 +299,4 @@ Use several complementary checks:
 - [ ] `main` remains copy-ready, ordinary web development stays independent of native setup, and showcase changes stay on `demo`.
 - [ ] Existing web checks/tests/build pass; native checks identify the commands and platforms actually exercised.
 
-All implementation checkboxes are intentionally open in this planning change.
+The remaining acceptance checkboxes are intentionally open until the declared end-to-end evidence exists. Intermediate Button and npm-preview progress is recorded above.

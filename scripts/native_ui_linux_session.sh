@@ -27,6 +27,7 @@ trap 'exit 143' TERM
 export XDG_RUNTIME_DIR="$runtime"
 export XDG_SESSION_TYPE=wayland
 export WAYLAND_DISPLAY=yami-native-ui
+export YAMI_NATIVE_UI_ISOLATED=1
 export LIBGL_ALWAYS_SOFTWARE=1
 export GALLIUM_DRIVER=llvmpipe
 export GPUI_SOURCE="$gpui_root"
@@ -89,3 +90,6 @@ sh "$yami_root/scripts/native_ui_workspace.sh" \
     --linux-origin-x 0 \
     --linux-origin-y 0 \
     -- moon run "$yami_root/native/examples/ubuntu" --target native
+
+sh "$yami_root/scripts/native_ui_workspace.sh" \
+  python3 "$yami_root/tests/button-contract/drive_linux.py"

@@ -13,20 +13,57 @@ pub type NativeFrameCapture = (@platform.WindowId) -> Result[
 ]
 
 ///|
-pub type NativeTestClick = (@platform.WindowId, @primitives.Point) -> Result[
+
+///|
+pub type NativeButtonAXPublish = (
+  @platform.WindowId,
+  Int64,
+  @sample.NativeButtonAccessibilitySnapshot,
+) -> Result[Int64, @diagnostics.FrameworkError]
+
+///|
+pub type NativeButtonAXRevoke = (@platform.WindowId, Int64) -> Result[
   Unit,
   @diagnostics.FrameworkError,
 ]
 
 ///|
-pub type NativeTestEscape = (@platform.WindowId) -> Result[
-  Unit,
+pub type NativeButtonAXTakeRequest = (@platform.WindowId) -> Result[
+  Int64?,
   @diagnostics.FrameworkError,
 ]
+
+///|
+/// Optional native accessibility transport for the sample's existing Button.
+/// The shared runner retains the current sample snapshot and validates actions;
+/// a platform adapter only publishes, revokes, and returns opaque tokens.
+pub struct NativeButtonAXPort {
+  publish : NativeButtonAXPublish
+  revoke : NativeButtonAXRevoke
+  take_request : NativeButtonAXTakeRequest
+}
+
+///|
+pub fn NativeButtonAXPort::new(
+  publish : NativeButtonAXPublish,
+  revoke : NativeButtonAXRevoke,
+  take_request : NativeButtonAXTakeRequest,
+) -> NativeButtonAXPort {
+  { publish, revoke, take_request, }
+}
+
+///|
+priv struct NativeButtonAXBinding {
+  snapshot : @sample.NativeButtonAccessibilitySnapshot
+  transport_token : Int64
+}
 
 ///|
 priv struct FrameEvidence {
   mut initial : @testing.FrameCapture?
+  contract : Bool
+  mut frame_index : Int
+  mut input_sequence : Int64
 }
 
 ///|
@@ -91,28 +128,40 @@ fn PresentationGate::completed_frame_is_current(
 ///|
 /// Run the same common sample and event controller on each native backend.
 /// Platform mains only start a Host, adapt its text-measurement provider and
-/// supply E2E-scoped native input/readback callbacks.
+/// supply E2E-scoped native frame readback. The platform driver supplies input.
 pub fn run_native_sample(
   host : &@platform.Backend,
   platform : NativeSamplePlatform,
   measure : @components.TextMeasure,
   capture : NativeFrameCapture,
-  test_click : NativeTestClick,
-  test_escape : NativeTestEscape,
+  accessibility_port? : NativeButtonAXPort? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let args = @env.args()
   let e2e = args.contains("--e2e") ||
     @env.get_env_var("YAMI_NATIVE_UI_E2E") == Some("1")
   let smoke = args.contains("--smoke") ||
     @env.get_env_var("YAMI_NATIVE_UI_SMOKE") == Some("1")
-  if e2e && smoke {
+  let ax_e2e = args.contains("--ax-e2e") ||
+    @env.get_env_var("YAMI_NATIVE_UI_AX_E2E") == Some("1")
+  let contract = @env.get_env_var("YAMI_NATIVE_UI_BUTTON_CONTRACT") == Some("1")
+  if (e2e && smoke) ||
+    (e2e && ax_e2e) ||
+    (smoke && ax_e2e) ||
+    (contract && (e2e || smoke || ax_e2e)) {
     return Err(
       runner_error(
-        "run_native_sample", "--e2e and --smoke cannot be used together",
+        "run_native_sample", "native UI proof modes cannot be combined",
       ),
     )
   }
-  if e2e && @env.get_env_var("GPUI_NATIVE_E2E") != Some("1") {
+  if ax_e2e && (!(platform is Macos) || accessibility_port is None) {
+    return Err(
+      runner_error(
+        "run_native_sample", "AX E2E requires the macOS Button accessibility adapter",
+      ),
+    )
+  }
+  if (e2e || contract) && @env.get_env_var("GPUI_NATIVE_E2E") != Some("1") {
     return Err(
       runner_error(
         "run_native_sample", "E2E frame readback requires GPUI_NATIVE_E2E=1",
@@ -120,7 +169,7 @@ pub fn run_native_sample(
     )
   }
   let evidence_dir = @env.get_env_var("YAMI_NATIVE_UI_EVIDENCE_DIR")
-  if e2e && (evidence_dir is None || evidence_dir == Some("")) {
+  if (e2e || contract) && (evidence_dir is None || evidence_dir == Some("")) {
     return Err(
       runner_error(
         "run_native_sample", "E2E mode requires YAMI_NATIVE_UI_EVIDENCE_DIR",
@@ -148,14 +197,17 @@ pub fn run_native_sample(
     Ok(value) => value
   }
   let sample = match
-    @sample.NativeSample::new(theme=@components.Theme::light()) {
+    @sample.NativeSample::new(
+      theme=@components.Theme::light(),
+      disabled=@env.get_env_var("YAMI_NATIVE_UI_DISABLED") == Some("1"),
+    ) {
     Err(error) => return Err(error)
     Ok(value) => value
   }
-  let evidence = { initial: None, }
+  let evidence = { initial: None, contract, frame_index: 0, input_sequence: 0, }
   let result = run_native_loop(
-    host, window, sample, platform, measure, capture, test_click, test_escape, e2e,
-    smoke, evidence_dir, evidence,
+    host, window, sample, platform, measure, capture, e2e, smoke, ax_e2e, accessibility_port,
+    evidence_dir, evidence,
   )
   let stopped = sample.shutdown()
   match result {
@@ -172,10 +224,10 @@ fn run_native_loop(
   platform : NativeSamplePlatform,
   measure : @components.TextMeasure,
   capture : NativeFrameCapture,
-  test_click : NativeTestClick,
-  test_escape : NativeTestEscape,
   e2e : Bool,
   smoke : Bool,
+  ax_e2e : Bool,
+  accessibility_port : NativeButtonAXPort?,
   evidence_dir : String?,
   evidence : FrameEvidence,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
@@ -188,7 +240,9 @@ fn run_native_loop(
   let mut presented_frames = 0
   let mut sequence : Int64 = 0
   let mut final_count = 0
-  while !destroyed && ((!e2e && !smoke) || ticks < 2000) {
+  let mut accessibility_binding : NativeButtonAXBinding? = None
+  while !destroyed &&
+        ((!e2e && !smoke && !ax_e2e && !evidence.contract) || ticks < 2000) {
     ticks += 1
     let event = match host.next_event(timeout_ms=16) {
       Err(error) => return Err(error)
@@ -212,16 +266,30 @@ fn run_native_loop(
             gate.invalidate_layout(pending is Some(_))
             dirty = true
           }
-          @platform.FocusChanged(focused) => sample.focus_changed(focused)
+          @platform.FocusChanged(focused) => {
+            sample.focus_changed(focused)
+            if evidence.contract {
+              emit_native_marker(
+                "YAMI_NATIVE_UI_FOCUS {\"sequence\":\{sequence},\"focused\":\{focused}}",
+              )
+            }
+            dirty = true
+          }
           @platform.VisibilityChanged(visible) => if visible { dirty = true }
-          @platform.Input(input) =>
+          @platform.Input(input) => {
+            if evidence.contract {
+              emit_native_marker(
+                "YAMI_NATIVE_UI_INPUT {\"sequence\":\{sequence},\"phase\":\"\{button_input_phase(input)}\",\"delivered\":\{gate.input_ready()}}",
+              )
+            }
             match input {
               @primitives.KeyPressed(key=@primitives.Escape, ..) =>
                 match host.request_close(window) {
                   Err(error) => return Err(error)
                   Ok(_) => ()
                 }
-              _ if gate.input_ready() =>
+              _ if gate.input_ready() => {
+                dirty = true
                 match sample.handle_input(input) {
                   Err(error) => return Err(error)
                   Ok(true) => {
@@ -236,8 +304,10 @@ fn run_native_loop(
                   }
                   Ok(false) => ()
                 }
+              }
               _ => ()
             }
+          }
           @platform.FrameCompleted =>
             match pending {
               None => ()
@@ -247,8 +317,7 @@ fn run_native_loop(
                   presented_frames += 1
                   match
                     publish_frame(
-                      host, window, frame, platform, e2e, evidence_dir, capture,
-                      test_click, test_escape, evidence,
+                      host, window, frame, e2e, evidence_dir, capture, evidence,
                     ) {
                     Err(error) => return Err(error)
                     Ok(_) => ()
@@ -264,6 +333,17 @@ fn run_native_loop(
             }
           @platform.CloseRequested => {
             requested_close = true
+            accessibility_binding = match accessibility_port {
+              None => accessibility_binding
+              Some(port) =>
+                match
+                  revoke_native_button_accessibility(
+                    port, window, accessibility_binding,
+                  ) {
+                  Err(error) => return Err(error)
+                  Ok(value) => value
+                }
+            }
             match host.destroy_window(window) {
               Err(error) => return Err(error)
               Ok(_) => ()
@@ -272,6 +352,17 @@ fn run_native_loop(
           @platform.Destroyed => destroyed = true
           @platform.ExitRequested => {
             requested_close = true
+            accessibility_binding = match accessibility_port {
+              None => accessibility_binding
+              Some(port) =>
+                match
+                  revoke_native_button_accessibility(
+                    port, window, accessibility_binding,
+                  ) {
+                  Err(error) => return Err(error)
+                  Ok(value) => value
+                }
+            }
             match host.destroy_window(window) {
               Err(error) => return Err(error)
               Ok(_) => ()
@@ -282,6 +373,31 @@ fn run_native_loop(
       }
       Some(_) => ()
     }
+    if !requested_close && !destroyed {
+      match accessibility_port {
+        None => ()
+        Some(port) =>
+          match
+            take_native_button_accessibility_actions(
+              port, window, sample, accessibility_binding,
+            ) {
+            Err(error) => return Err(error)
+            Ok((next_binding, activated)) => {
+              accessibility_binding = next_binding
+              if activated {
+                final_count = match sample.count() {
+                  Err(error) => return Err(error)
+                  Ok(value) => value
+                }
+                emit_native_marker(
+                  "YAMI_NATIVE_UI_CLICK {\"count\":\{final_count},\"value\":\{final_count},\"buttonId\":40,\"source\":\"accessibility\"}",
+                )
+                dirty = true
+              }
+            }
+          }
+      }
+    }
     if dirty && pending is None && !requested_close && !destroyed {
       let (width, height, scale) = match host.window_metrics(window) {
         Err(error) => return Err(error)
@@ -291,6 +407,7 @@ fn run_native_loop(
         Err(error) => return Err(error)
         Ok(value) => value
       }
+      evidence.input_sequence = sequence
       match host.present(window, frame.snapshot()) {
         Err(error) => return Err(error)
         Ok(_) => ()
@@ -301,10 +418,26 @@ fn run_native_loop(
         // Mac's Host.present waits for its Metal command buffer to complete.
         // Linux and Windows report FrameCompleted through their event queues.
         presented_frames += 1
+        accessibility_binding = match accessibility_port {
+          None => accessibility_binding
+          Some(port) =>
+            match
+              sync_native_button_accessibility(
+                port, window, sample, accessibility_binding,
+              ) {
+              Err(error) => return Err(error)
+              Ok(value) => value
+            }
+        }
+        if ax_e2e && presented_frames == 1 {
+          let title = json_escape(window_title())
+          emit_native_marker(
+            "YAMI_NATIVE_UI_AX_READY {\"windowId\":\{window.value()},\"title\":\"\{title}\",\"buttonId\":40}",
+          )
+        }
         match
           publish_frame(
-            host, window, frame, platform, e2e, evidence_dir, capture, test_click,
-            test_escape, evidence,
+            host, window, frame, e2e, evidence_dir, capture, evidence,
           ) {
           Err(error) => return Err(error)
           Ok(_) => ()
@@ -322,6 +455,17 @@ fn run_native_loop(
   }
   if !destroyed {
     // Bound test runs even when the host never presents or receives a close.
+    accessibility_binding = match accessibility_port {
+      None => accessibility_binding
+      Some(port) =>
+        match
+          revoke_native_button_accessibility(
+            port, window, accessibility_binding,
+          ) {
+          Err(error) => return Err(error)
+          Ok(value) => value
+        }
+    }
     let _ = host.request_close(window)
     let _ = host.destroy_window(window)
     return Err(
@@ -345,6 +489,17 @@ fn run_native_loop(
     emit_native_marker(
       "YAMI_NATIVE_UI_COMPLETE {\"count\":\{final_count},\"value\":\{final_count},\"destroyed\":true,\"windowId\":\{window.value()}}",
     )
+  } else if ax_e2e {
+    if final_count != 1 || presented_frames < 2 {
+      return Err(
+        runner_error(
+          "run_native_loop", "native AX E2E closed before one accepted action was presented",
+        ),
+      )
+    }
+    emit_native_marker(
+      "YAMI_NATIVE_UI_AX_COMPLETE {\"count\":\{final_count},\"value\":\{final_count},\"destroyed\":true,\"windowId\":\{window.value()}}",
+    )
   } else if smoke {
     if presented_frames == 0 {
       return Err(
@@ -361,19 +516,206 @@ fn run_native_loop(
 }
 
 ///|
+fn button_input_phase(input : @primitives.InputEvent) -> String {
+  match input {
+    @primitives.KeyPressed(key=@primitives.Enter, repeat~, ..) =>
+      if repeat {
+        "enter-repeat"
+      } else {
+        "enter-down"
+      }
+    @primitives.KeyPressed(key=@primitives.Space, repeat~, ..) =>
+      if repeat {
+        "space-repeat"
+      } else {
+        "space-down"
+      }
+    @primitives.KeyReleased(key=@primitives.Enter, ..) => "enter-up"
+    @primitives.KeyReleased(key=@primitives.Space, ..) => "space-up"
+    @primitives.KeyPressed(key=@primitives.ArrowLeft, ..) => "focus-key-down"
+    @primitives.KeyReleased(key=@primitives.ArrowLeft, ..) => "focus-key-up"
+    @primitives.PointerButtonPressed(..) => "pointer-down"
+    @primitives.PointerButtonReleased(..) => "pointer-up"
+    @primitives.PointerMoved(..) => "pointer-move"
+    _ => "other"
+  }
+}
+
+///|
+fn native_button_ax_snapshot_matches(
+  left : @sample.NativeButtonAccessibilitySnapshot,
+  right : @sample.NativeButtonAccessibilitySnapshot,
+) -> Bool {
+  left.id() == right.id() &&
+  left.name() == right.name() &&
+  left.bounds() == right.bounds() &&
+  left.enabled() == right.enabled() &&
+  left.loading() == right.loading() &&
+  left.focused() == right.focused() &&
+  left.activations() == right.activations() &&
+  left.same_revision(right)
+}
+
+///|
+fn native_button_ax_requires_new_binding(
+  previous : @sample.NativeButtonAccessibilitySnapshot,
+  current : @sample.NativeButtonAccessibilitySnapshot,
+) -> Bool {
+  !previous.same_revision(current) ||
+  previous.id() != current.id() ||
+  previous.name() != current.name() ||
+  previous.bounds() != current.bounds() ||
+  previous.enabled() != current.enabled() ||
+  previous.loading() != current.loading()
+}
+
+///|
+fn sync_native_button_accessibility(
+  port : NativeButtonAXPort,
+  window : @platform.WindowId,
+  sample : @sample.NativeSample,
+  binding : NativeButtonAXBinding?,
+) -> Result[NativeButtonAXBinding?, @diagnostics.FrameworkError] {
+  let current = match sample.button_accessibility_snapshot() {
+    Err(error) => return Err(error)
+    Ok(value) => value
+  }
+  match (binding, current) {
+    (None, None) => Ok(None)
+    (Some(previous), None) =>
+      match (port.revoke)(window, previous.transport_token) {
+        Err(error) => Err(error)
+        Ok(_) => Ok(None)
+      }
+    (None, Some(snapshot)) =>
+      match (port.publish)(window, 0, snapshot) {
+        Err(error) => Err(error)
+        Ok(token) => Ok(Some({ snapshot, transport_token: token, }))
+      }
+    (Some(previous), Some(snapshot)) => {
+      if native_button_ax_snapshot_matches(previous.snapshot, snapshot) {
+        return Ok(Some(previous))
+      }
+      let existing_token = if native_button_ax_requires_new_binding(
+          previous.snapshot,
+          snapshot,
+        ) {
+        match (port.revoke)(window, previous.transport_token) {
+          Err(error) => return Err(error)
+          Ok(_) => Int64::from_int(0)
+        }
+      } else {
+        previous.transport_token
+      }
+      match (port.publish)(window, existing_token, snapshot) {
+        Err(error) => Err(error)
+        Ok(token) => Ok(Some({ snapshot, transport_token: token, }))
+      }
+    }
+  }
+}
+
+///|
+/// Drain the bounded host request queue. A token is only actionable while it
+/// names the current Yami snapshot; accepted actions immediately refresh the
+/// same owner state before another queued request is considered.
+fn take_native_button_accessibility_actions(
+  port : NativeButtonAXPort,
+  window : @platform.WindowId,
+  sample : @sample.NativeSample,
+  binding : NativeButtonAXBinding?,
+) -> Result[(NativeButtonAXBinding?, Bool), @diagnostics.FrameworkError] {
+  let mut current_binding = match
+    sync_native_button_accessibility(port, window, sample, binding) {
+    Err(error) => return Err(error)
+    Ok(value) => value
+  }
+  let mut accepted = false
+  let mut drained = false
+  let mut consumed = 0
+  while consumed < 64 && !drained {
+    match (port.take_request)(window) {
+      Err(error) => return Err(error)
+      Ok(None) => drained = true
+      Ok(Some(token)) => {
+        consumed += 1
+        match current_binding {
+          Some(binding) if binding.transport_token == token =>
+            match sample.activate_accessibility_button(binding.snapshot) {
+              Err(error) => return Err(error)
+              Ok(false) => ()
+              Ok(true) => {
+                accepted = true
+                current_binding = match
+                  sync_native_button_accessibility(
+                    port, window, sample, current_binding,
+                  ) {
+                  Err(error) => return Err(error)
+                  Ok(value) => value
+                }
+              }
+            }
+          _ => ()
+        }
+      }
+    }
+  }
+  Ok((current_binding, accepted))
+}
+
+///|
+fn revoke_native_button_accessibility(
+  port : NativeButtonAXPort,
+  window : @platform.WindowId,
+  binding : NativeButtonAXBinding?,
+) -> Result[NativeButtonAXBinding?, @diagnostics.FrameworkError] {
+  match binding {
+    None => Ok(None)
+    Some(value) =>
+      match (port.revoke)(window, value.transport_token) {
+        Err(error) => Err(error)
+        Ok(_) => Ok(None)
+      }
+  }
+}
+
+///|
 fn publish_frame(
   _host : &@platform.Backend,
   window : @platform.WindowId,
   frame : @sample.SampleFrame,
-  platform : NativeSamplePlatform,
   e2e : Bool,
   evidence_dir : String?,
   capture : NativeFrameCapture,
-  test_click : NativeTestClick,
-  test_escape : NativeTestEscape,
   evidence : FrameEvidence,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !e2e {
+  if !e2e && !evidence.contract {
+    return Ok(())
+  }
+  if evidence.contract {
+    let captured = match capture(window) {
+      Err(error) => return Err(error)
+      Ok(value) => value
+    }
+    let directory = match evidence_dir {
+      Some(value) => value
+      None =>
+        return Err(
+          runner_error(
+            "publish_frame", "Button contract evidence directory is missing",
+          ),
+        )
+    }
+    let index = evidence.frame_index
+    evidence.frame_index += 1
+    let path = directory + "/frame-\{index}.ppm"
+    match captured.write_ppm(path) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+    emit_native_marker(
+      "YAMI_NATIVE_UI_CONTRACT {\"index\":\{index},\"sequence\":\{evidence.input_sequence},\"count\":\{frame.count()},\"focused\":\{frame.button_focused()},\"pressed\":\{frame.button_pressed()},\"hovered\":\{frame.button_hovered()},\"focus_visible\":\{frame.button_focus_visible()},\"button\":\{rect_json(frame.button_bounds())},\"scene\":\{frame.canonical_scene()},\"frame\":{\"path\":\"\{json_escape(path)}\",\"width\":\{captured.width()},\"height\":\{captured.height()},\"scale\":\{captured.scale()}}}",
+    )
     return Ok(())
   }
   let count = frame.count()
@@ -490,27 +832,6 @@ fn publish_frame(
     emit_native_marker(
       "YAMI_NATIVE_UI_READY {\"windowId\":\{window.value()},\"title\":\"\{title}\",\"buttonId\":40,\"scale\":\{captured.scale()},\"button\":\{rect_json(frame.button_bounds())},\"buttonLabel\":\{rect_json(frame.button_label_bounds())},\"counter\":\{rect_json(frame.counter_bounds())}}",
     )
-    if platform is Macos {
-      let button = frame.button_bounds()
-      let center = match
-        @primitives.Point::new(
-          button.left() + button.size().width() / 2.0,
-          button.top() + button.size().height() / 2.0,
-        ) {
-        Err(_) =>
-          return Err(runner_error("publish_frame", "Button center is invalid"))
-        Ok(value) => value
-      }
-      match test_click(window, center) {
-        Err(error) => return Err(error)
-        Ok(_) => ()
-      }
-    }
-  } else if platform is Macos {
-    match test_escape(window) {
-      Err(error) => return Err(error)
-      Ok(_) => ()
-    }
   }
   Ok(())
 }

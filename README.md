@@ -89,16 +89,20 @@ On phones, durable navigation becomes a left drawer. Contextual support becomes 
 
 See [docs/UX.md](./docs/UX.md) for the full composition guidance.
 
-## Planned gpui.mbt support
+## Shared UX across Web and Native
 
-Yami-kumo is planning shared UX across React/Kumo and
-[gpui.mbt](https://github.com/gpui-mbt/gpui.mbt): familiar shell roles,
-interaction rules, focus behavior and state feedback, with Kumo update
-extraction, native definition generation and cross-target verification owned
-here. The generator and native adapter are not implemented yet.
+The [shared UX plan](./issues/open/20261005-kumo-gpui-shared-ux.md)
+tracks behavior, semantic state, focus and shell composition across Kumo/React
+and gpui.mbt. It complements the
+[ecosystem contract](./issues/open/20261015-ecosystem-web-native-ux-integration.md).
 
-See the [shared UX implementation plan](./issues/open/20261005-kumo-gpui-shared-ux.md)
-for the inspected baseline, framework dependencies and acceptance scenarios.
+A native Text/Button/Card/AppShell preview already exists. The
+[Button vertical slice](https://github.com/f4ah6o/Yami-kumo/pull/24)
+has passing enabled Primary interaction and hover/focus evidence on a named
+Linux host profile. Disabled styling, Native loading, Input/IME, external
+accessibility, broader OS profiles and full shared UX qualification remain
+partial or unverified. The planned generator and end-to-end
+Kumo-to-native update loop are not implemented.
 
 ## Branches
 
@@ -201,3 +205,10 @@ The shell structure was inspired by the UI layout references shared in these pos
 - https://x.com/lawrluk/status/2105711205172273621?s=46
 
 See [ACKNOWLEDGEMENTS.md](./ACKNOWLEDGEMENTS.md) for details.
+
+## npm preview package
+
+An installable JavaScript/TypeScript preview is built separately from this
+private starter. See [npm/README.md](npm/README.md) for supported components,
+optional React imports, styles and the tarball workflow. Registry publication
+is a separate release decision.

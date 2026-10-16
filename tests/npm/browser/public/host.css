@@ -1,0 +1,11 @@
+body {
+  margin: 23px;
+  background: rgb(12, 34, 56);
+  display: block;
+  font-family: serif;
+}
+#root {
+  width: 211px;
+  min-height: 37px;
+  padding: 7px;
+}
