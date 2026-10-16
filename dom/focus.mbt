@@ -11,6 +11,10 @@ priv type BrowserEvent
 priv type BrowserWeakSet
 
 ///|
+#external
+priv type BrowserWeakMap
+
+///|
 extern "js" fn document_is_available() -> Bool =
   #| () => typeof document !== "undefined" && typeof document.addEventListener === "function"
 
@@ -125,6 +129,37 @@ extern "js" fn weak_set_add(
   #| (set, element) => set?.add?.(element)
 
 ///|
+extern "js" fn weak_map_new() -> BrowserWeakMap =
+  #| () => new WeakMap()
+
+///|
+extern "js" fn remember_aria_invalid(
+  originals : BrowserWeakMap,
+  element : BrowserElement,
+) -> Unit =
+  #| (originals, element) => {
+  #|   if (!originals.has(element)) {
+  #|     originals.set(element, element.getAttribute("aria-invalid"));
+  #|   }
+  #| }
+
+///|
+extern "js" fn restore_aria_invalid(
+  originals : BrowserWeakMap,
+  element : BrowserElement,
+) -> Unit =
+  #| (originals, element) => {
+  #|   if (!originals.has(element)) return;
+  #|   const original = originals.get(element);
+  #|   // Do not overwrite a caller's newer ARIA state while validation was active.
+  #|   if (element.getAttribute("aria-invalid") === "true") {
+  #|     if (original === null) element.removeAttribute("aria-invalid");
+  #|     else element.setAttribute("aria-invalid", original);
+  #|   }
+  #|   originals.delete(element);
+  #| }
+
+///|
 extern "js" fn queue_microtask(callback : () -> Unit) -> Unit =
   #| (callback) => typeof queueMicrotask === "function" ? queueMicrotask(callback) : Promise.resolve().then(callback)
 
@@ -137,7 +172,7 @@ const INSTALLATION_FLAG = "__yamiKumoInputFocusBehaviorInstalled"
 pub fn enhance() -> Unit {
   if document_is_available() && !global_flag(INSTALLATION_FLAG) {
     let marked_dirty_inputs = weak_set_new()
-    let managed_aria_invalid_inputs = weak_set_new()
+    let aria_invalid_originals = weak_map_new()
     document_add_event_listener("focusin", fn(event) {
       update_from_event(event, true)
     })
@@ -146,17 +181,17 @@ pub fn enhance() -> Unit {
     })
     document_add_event_listener("input", fn(event) {
       update_value_from_event(
-        event, marked_dirty_inputs, managed_aria_invalid_inputs,
+        event, marked_dirty_inputs, aria_invalid_originals,
       )
     })
     document_add_event_listener("change", fn(event) {
       update_value_from_event(
-        event, marked_dirty_inputs, managed_aria_invalid_inputs,
+        event, marked_dirty_inputs, aria_invalid_originals,
       )
     })
     document_add_event_listener("keydown", fn(event) {
       update_touched_from_key_event(
-        event, marked_dirty_inputs, managed_aria_invalid_inputs,
+        event, marked_dirty_inputs, aria_invalid_originals,
       )
     })
     set_global_flag(INSTALLATION_FLAG, true)
@@ -187,7 +222,7 @@ fn update_from_event(event : BrowserEvent, focused : Bool) -> Unit {
 fn update_value_from_event(
   event : BrowserEvent,
   marked_dirty_inputs : BrowserWeakSet,
-  managed_aria_invalid_inputs : BrowserWeakSet,
+  aria_invalid_originals : BrowserWeakMap,
 ) -> Unit {
   let target = event_target(event)
   if is_present(target) && is_input_element(target) {
@@ -206,7 +241,7 @@ fn update_value_from_event(
       // Enter attempt evaluates validity again.
       if has_attribute(field, "data-invalid") {
         update_field_validity(
-          field, target, marked_dirty_inputs, managed_aria_invalid_inputs,
+          field, target, marked_dirty_inputs, aria_invalid_originals,
         )
       }
     }
@@ -217,7 +252,7 @@ fn update_value_from_event(
 fn update_touched_from_key_event(
   event : BrowserEvent,
   marked_dirty_inputs : BrowserWeakSet,
-  managed_aria_invalid_inputs : BrowserWeakSet,
+  aria_invalid_originals : BrowserWeakMap,
 ) -> Unit {
   let target = event_target(event)
   if is_present(target) &&
@@ -227,7 +262,7 @@ fn update_touched_from_key_event(
     if is_present(field) {
       set_field_attribute_state(field, "data-touched", true)
       update_field_validity(
-        field, target, marked_dirty_inputs, managed_aria_invalid_inputs,
+        field, target, marked_dirty_inputs, aria_invalid_originals,
       )
     }
   }
@@ -238,7 +273,7 @@ fn update_field_validity(
   field : BrowserElement,
   input : BrowserElement,
   marked_dirty_inputs : BrowserWeakSet,
-  managed_aria_invalid_inputs : BrowserWeakSet,
+  aria_invalid_originals : BrowserWeakMap,
 ) -> Unit {
   let valid = if !input_will_validate(input) || input_validity_is_valid(input) {
     true
@@ -248,13 +283,9 @@ fn update_field_validity(
   set_field_attribute_state(field, "data-valid", valid)
   set_field_attribute_state(field, "data-invalid", !valid)
   if valid {
-    if weak_set_has(managed_aria_invalid_inputs, input) {
-      remove_attribute(input, "aria-invalid")
-    }
+    restore_aria_invalid(aria_invalid_originals, input)
   } else {
-    if !has_attribute(input, "aria-invalid") {
-      weak_set_add(managed_aria_invalid_inputs, input)
-    }
+    remember_aria_invalid(aria_invalid_originals, input)
     set_attribute(input, "aria-invalid", "true")
   }
 }

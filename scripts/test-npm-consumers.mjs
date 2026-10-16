@@ -222,11 +222,24 @@ try {
           ),
           true,
         );
-        await page.locator('#other').focus();
+        const other = page.locator('#other');
+        assert.equal(await other.getAttribute('aria-invalid'), 'false');
+        await other.focus();
         await page.waitForFunction(
           () => !document.querySelector('#email').hasAttribute('data-focused'),
         );
-        assert.equal(await page.locator('#other').getAttribute('aria-describedby'), 'other-error');
+        assert.equal(await other.getAttribute('aria-describedby'), 'other-error');
+        await other.fill('not-an-email');
+        await other.press('Enter');
+        assert.equal(await other.getAttribute('aria-invalid'), 'true');
+        await other.fill('valid@example.com');
+        assert.equal(await other.getAttribute('aria-invalid'), 'false');
+        assert.equal(await other.getAttribute('data-valid'), '');
+        await other.fill('not-an-email');
+        await other.press('Enter');
+        await other.evaluate((el) => el.setAttribute('aria-invalid', 'grammar'));
+        await other.fill('valid-again@example.com');
+        assert.equal(await other.getAttribute('aria-invalid'), 'grammar');
         const primary = page.locator('[data-variant="primary"]');
         await primary.focus();
         await page.keyboard.down('Enter');
