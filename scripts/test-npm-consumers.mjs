@@ -273,18 +273,29 @@ try {
           true,
         );
         assert.equal(await resetRequired.inputValue(), '');
-        assert.equal(
-          await resetRequired.evaluate((el) => {
-            const field = el.closest('.yk-kumo-input-field');
-            return [
-              'data-dirty',
-              'data-filled',
-              'data-touched',
-              'data-valid',
-              'data-invalid',
-            ].every((name) => !el.hasAttribute(name) && !field.hasAttribute(name));
-          }),
-          true,
+        const resetRequiredState = await resetRequired.evaluate((el) => {
+          const field = el.closest('.yk-kumo-input-field');
+          const names = [
+            'data-dirty',
+            'data-filled',
+            'data-touched',
+            'data-valid',
+            'data-invalid',
+          ];
+          return Object.fromEntries(
+            names.map((name) => [
+              name,
+              { input: el.hasAttribute(name), field: field.hasAttribute(name) },
+            ]),
+          );
+        });
+        assert.deepEqual(
+          resetRequiredState,
+          Object.fromEntries(
+            ['data-dirty', 'data-filled', 'data-touched', 'data-valid', 'data-invalid'].map(
+              (name) => [name, { input: false, field: false }],
+            ),
+          ),
         );
         const primary = page.locator('[data-variant="primary"]');
         await primary.focus();
