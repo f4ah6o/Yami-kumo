@@ -1,7 +1,7 @@
 # Windows native shared-UX conformance
 
 Status: open — partial Native Button exists; full platform UX, IME and external accessibility conformance unverified  
-Updated: 2026-10-07 (JST)  
+Updated: 2026-10-16 (JST)  
 Parent: [Shared UX across Kumo and gpui.mbt](20261005-kumo-gpui-shared-ux.md)
 
 ## Basis and shared dependencies

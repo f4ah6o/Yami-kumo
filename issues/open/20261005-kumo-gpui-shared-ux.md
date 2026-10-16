@@ -40,8 +40,8 @@ one passing OS cannot complete another. macOS execution is Apple Silicon/arm64
 only; Intel qualification is excluded.
 
 These child packets originated as a stacked documentation change against
-[PR #3](https://github.com/f4ah6o/Yami-kumo/pull/3). Their requirements are
-independent of the parent PR's merge timing. The parent's updated checkpoint
+[PR #3](https://github.com/f4ah6o/Yami-kumo/pull/3), which has now merged into
+`main`. Their acceptance criteria remain separate platform gates. The parent's updated checkpoint
 records partial Button evidence without closing native UX acceptance. Passing
 Web CI alone does not qualify shared-scenario or native conformance.
 
