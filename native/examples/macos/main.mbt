@@ -36,12 +36,6 @@ fn main {
   let capture : @common.NativeFrameCapture = fn(window) {
     @testing.capture_frame(host, window)
   }
-  let click : @common.NativeTestClick = fn(window, point) {
-    host.post_test_click(window, point)
-  }
-  let escape : @common.NativeTestEscape = fn(window) {
-    host.post_test_escape(window)
-  }
   let publish_accessibility_button : @common.NativeButtonAXPublish = fn(
     window,
     existing_binding,
@@ -79,8 +73,6 @@ fn main {
     @common.Macos,
     macos_measure,
     capture,
-    click,
-    escape,
     accessibility_port=Some(accessibility_port),
   )
   let stopped = host.stop()

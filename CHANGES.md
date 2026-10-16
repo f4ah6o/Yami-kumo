@@ -1,5 +1,17 @@
 # Changes
 
+## 0.1.1 - 2026-10-13
+
+### Added
+
+- Added bounded property-based tests for text and title-attribute HTML escaping.
+
+### Fixed
+
+- Resolve the compiled renderer URL directly so the Windows smoke handles drive-letter paths.
+- Keep generated Kumo contract code in MoonBit's canonical formatted layout.
+- Format the package README example as valid MoonBit code blocks.
+
 ## Unreleased
 
 ### Added
@@ -14,8 +26,14 @@
 ### Changed
 
 - Pinned `@cloudflare/kumo` to `2.14.0` so generated class and stylesheet contracts remain reproducible.
+- Bumped the native module to `0.2.5` against GPUI `0.7.2` and pure MoonBit module `0.1.1`; its macOS sample runner revalidates the target before each event, bounds AX/helper lifetimes, and uses zero-modifier input. The external input route remains runtime-unqualified.
+- Made the macOS native UI runner fail closed on locked or unknown console sessions and record blocked preflight evidence before launching the sample.
+- Expose the native Button's pressed phase on sample frames and keep held pointer/key state through same-bounds repaint; focus loss and layout changes still cancel.
+- Align native Button keyboard phases with pinned Kumo: focused enabled Enter activates on every key-down, including repeats, while Space stays pressed through repaint and activates on matching key-up.
 
 ### Fixed
+
+- Make guarded macOS input cleanup preserve pending event ownership and report teardown failures instead of passing qualification after an incomplete release.
 
 ### Deprecated
 
@@ -24,8 +42,17 @@
 ### Security
 
 - Escaped text and attribute values, restricted element and attribute names, and removed inline styles from generated button markup for strict Content Security Policy compatibility.
+- Revalidate the full macOS target snapshot before every global input post, bound AX queries and helper lifetime, and clear inherited modifier flags in the native UI sample helper.
 
 ### Migration
+
+- Native `ButtonInteraction::key_down` now returns `Bool`; callers must handle `true` as an immediate Enter activation. `NativeSample::handle_input` and Web APIs are unchanged.
+
+## native-0.2.4 - 2026-10-13
+
+### Changed
+
+- Bumped `f4ah6o/yami_kumo_native` to `0.2.4` against GPUI `0.7.1` and pure MoonBit module `f4ah6o/yami_kumo` `0.1.1`; native APIs and platform proof scope are unchanged.
 
 ## native-0.2.3 - 2026-10-11
 

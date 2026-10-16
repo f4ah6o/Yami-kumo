@@ -36,15 +36,11 @@ fn main {
   let capture : @common.NativeFrameCapture = fn(window) {
     @testing.capture_frame(host, window)
   }
-  let no_click : @common.NativeTestClick = fn(_window, _point) { Ok(()) }
-  let no_escape : @common.NativeTestEscape = fn(_window) { Ok(()) }
   let result = @common.run_native_sample(
     host,
     @common.Linux,
     ubuntu_measure,
     capture,
-    no_click,
-    no_escape,
   )
   let stopped = host.stop()
   match result {

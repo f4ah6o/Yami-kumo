@@ -164,21 +164,46 @@ pub fn Theme::inverse_text(_self : Theme) -> @primitives.Color {
 }
 
 ///|
-/// Construct the flat native Button palette corresponding to a root Kumo
-/// ButtonVariant. A CSS gradient or border radius is intentionally not implied.
+/// Resolve the flat Button subset. Emphasis fills sample the midpoint of
+/// Kumo 2.14's OKLCH gradient; hover changes its start from 15% to 30% white.
+/// Pressed has no independent palette in that pinned Web component.
 pub fn Theme::button_colors(
   self : Theme,
   variant : @yami_kumo.ButtonVariant,
   disabled : Bool,
+  hovered? : Bool = false,
 ) -> ButtonColors {
   let neutral = self.default_text()
   let base = self.base()
   let subtle = self.subtle_text()
   let line = self.line()
   let (background, foreground, border) = match variant {
-    @yami_kumo.Primary => (self.brand(), self.inverse_text(), self.brand())
-    @yami_kumo.Destructive =>
-      (self.danger(), self.inverse_text(), self.danger())
+    @yami_kumo.Primary => {
+      let fill = match (self.mode, hovered && !disabled) {
+        (Light, false) => rgb(39, 122, 255)
+        (Light, true) => rgb(60, 134, 255)
+        (Dark, false) => rgb(17, 105, 238)
+        (Dark, true) => rgb(44, 119, 240)
+      }
+      let ring = match self.mode {
+        Light => rgb(4, 94, 222)
+        Dark => rgb(0, 77, 204)
+      }
+      (fill, self.inverse_text(), ring)
+    }
+    @yami_kumo.Destructive => {
+      let fill = match (self.mode, hovered && !disabled) {
+        (Light, false) => rgb(254, 71, 71)
+        (Light, true) => rgb(255, 91, 87)
+        (Dark, false) => rgb(236, 42, 42)
+        (Dark, true) => rgb(240, 70, 62)
+      }
+      let ring = match self.mode {
+        Light => rgb(218, 37, 46)
+        Dark => rgb(201, 0, 8)
+      }
+      (fill, self.inverse_text(), ring)
+    }
     @yami_kumo.Secondary => (base, neutral, line)
     @yami_kumo.SecondaryDestructive => (base, self.danger_text(), line)
     @yami_kumo.Ghost => (transparent(), neutral, transparent())

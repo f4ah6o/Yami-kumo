@@ -22,9 +22,17 @@ import uuid
 
 
 MARKER = re.compile(r"^(YAMI_NATIVE_UI_[A-Z_]+) (\{.*\})$")
+MACOS_HELPER_TIMEOUT_SECONDS = 30.0
+MACOS_HELPER_TERM_SECONDS = 5.0
+MACOS_HELPER_KILL_SECONDS = 5.0
+MACOS_PREFLIGHT_TIMEOUT_SECONDS = 5.0
 
 
 class E2EError(RuntimeError):
+    pass
+
+
+class E2EBlocked(E2EError):
     pass
 
 
@@ -306,6 +314,70 @@ class ProcessOutput:
         self.log.flush()
 
 
+def _write_json_evidence(path: Path, value: dict[str, Any]) -> None:
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    temporary.replace(path)
+
+
+def _stop_owned_sample(process: subprocess.Popen[str]) -> dict[str, Any]:
+    result: dict[str, Any] = {"state": "already-exited", "reaped": False}
+    try:
+        status = process.poll()
+    except OSError as error:
+        return {"state": "poll-failed", "reaped": False, "error": str(error)}
+    if status is not None:
+        return {"state": "already-exited", "reaped": True, "returnCode": status}
+
+    result["state"] = "terminate-requested"
+    try:
+        process.terminate()
+        result["terminate"] = "sent"
+    except ProcessLookupError:
+        result["terminate"] = "already-exited"
+    except OSError as error:
+        result["terminate"] = f"failed: {error}"
+
+    try:
+        status = process.wait(timeout=5)
+        result.update({"state": "terminated", "reaped": True, "returnCode": status})
+        return result
+    except subprocess.TimeoutExpired:
+        result["state"] = "terminate-timeout"
+    except OSError as error:
+        result["wait"] = f"failed: {error}"
+        try:
+            status = process.poll()
+        except OSError as poll_error:
+            result["state"] = "wait-failed"
+            result["error"] = str(poll_error)
+            return result
+        if status is not None:
+            result.update({"state": "already-exited", "reaped": True, "returnCode": status})
+            return result
+
+    try:
+        process.kill()
+        result["kill"] = "sent"
+    except ProcessLookupError:
+        result["kill"] = "already-exited"
+    except OSError as error:
+        result["kill"] = f"failed: {error}"
+    try:
+        status = process.wait(timeout=5)
+        result.update({"state": "killed", "reaped": True, "returnCode": status})
+    except subprocess.TimeoutExpired:
+        result["state"] = "kill-timeout"
+        result["reaped"] = False
+    except OSError as error:
+        result["state"] = "kill-failed"
+        result["reaped"] = False
+        result["error"] = str(error)
+    return result
+
+
 def _linux_click(ready: dict[str, Any], origin_x: int, origin_y: int) -> None:
     rect = _rect(ready.get("button"), "button")
     scale = float(ready.get("scale", 1.0))
@@ -498,10 +570,17 @@ def _send_click(platform: str, ready: dict[str, Any], args: argparse.Namespace) 
     elif platform == "windows":
         _windows_click(ready, args.window_title)
     else:
-        print(
-            "macOS E2E: waiting for the GPUI testing-only NSEvent to traverse "
-            "the owned NSWindow host event path.",
-            flush=True,
+        _run_macos_input_helper(
+            args,
+            [
+                "--click",
+                str(args.sample_pid),
+                args.window_title,
+                "Click me",
+                str(_rect(ready.get("button"), "button")[2]),
+                str(_rect(ready.get("button"), "button")[3]),
+            ],
+            "CGEventPost(kCGHIDEventTap) left click",
         )
 
 
@@ -511,11 +590,224 @@ def _send_escape(platform: str, args: argparse.Namespace) -> None:
     elif platform == "windows":
         _windows_escape(args.window_title)
     else:
-        print(
-            "macOS E2E: the GPUI testing-only Escape event will traverse the "
-            "owned NSWindow host event path.",
-            flush=True,
+        _run_macos_input_helper(
+            args,
+            ["--escape", str(args.sample_pid), args.window_title],
+            "CGEventPost(kCGHIDEventTap) Escape",
         )
+
+
+def _compile_macos_input_helper(evidence_dir: Path) -> Path:
+    helper = evidence_dir / "macos_host_input"
+    result = subprocess.run(
+        [
+            "/usr/bin/clang",
+            "-fobjc-arc",
+            "-Wall",
+            "-Wextra",
+            "-Werror",
+            str(Path(__file__).with_name("macos_ax_client.m")),
+            "-framework",
+            "AppKit",
+            "-framework",
+            "ApplicationServices",
+            "-framework",
+            "CoreFoundation",
+            "-framework",
+            "CoreGraphics",
+            "-o",
+            str(helper),
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+        timeout=45.0,
+    )
+    (evidence_dir / "macos-host-input-helper-build.log").write_text(
+        result.stdout, encoding="utf-8"
+    )
+    if result.returncode != 0:
+        raise E2EError(
+            "macOS host-input helper compilation failed; log: "
+            f"{evidence_dir / 'macos-host-input-helper-build.log'}"
+        )
+    fixtures = subprocess.run(
+        [str(helper), "--guard-fixtures"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+        timeout=5.0,
+    )
+    (evidence_dir / "macos-host-input-guard-fixtures.log").write_text(
+        fixtures.stdout, encoding="utf-8"
+    )
+    if fixtures.returncode != 0:
+        raise E2EError(
+            "macOS host-input guard fixtures failed; log: "
+            f"{evidence_dir / 'macos-host-input-guard-fixtures.log'}"
+        )
+    return helper
+
+
+def _run_macos_input_helper(
+    args: argparse.Namespace, command: list[str], expected_action: str
+) -> dict[str, Any]:
+    helper = getattr(args, "macos_helper", None)
+    pid = getattr(args, "sample_pid", None)
+    if helper is None or not isinstance(pid, int) or pid <= 0:
+        raise E2EError("macOS host input requires a compiled helper and launched sample PID")
+    process = subprocess.Popen(
+        [str(helper), *command],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=MACOS_HELPER_TIMEOUT_SECONDS)
+    except (OSError, subprocess.SubprocessError) as communication_error:
+        cleanup = {"terminate": "not-attempted", "reaped": False}
+        # SIGTERM asks the helper to cancel and release any owned down event.
+        try:
+            process.terminate()
+            cleanup["terminate"] = "sent"
+        except ProcessLookupError:
+            cleanup["terminate"] = "already-exited"
+        except (OSError, subprocess.SubprocessError) as error:
+            cleanup["terminate"] = f"failed: {error}"
+        try:
+            stdout, stderr = process.communicate(timeout=MACOS_HELPER_TERM_SECONDS)
+            cleanup["reaped"] = True
+        except subprocess.TimeoutExpired:
+            stdout, stderr = "", ""
+            cleanup["terminateWait"] = "timed-out"
+        except (OSError, subprocess.SubprocessError) as error:
+            stdout, stderr = "", ""
+            cleanup["terminateWait"] = f"failed: {error}"
+        if not cleanup["reaped"]:
+            try:
+                process.kill()
+                cleanup["kill"] = "sent"
+            except ProcessLookupError:
+                cleanup["kill"] = "already-exited"
+            except (OSError, subprocess.SubprocessError) as error:
+                cleanup["kill"] = f"failed: {error}"
+            try:
+                stdout, stderr = process.communicate(timeout=MACOS_HELPER_KILL_SECONDS)
+                cleanup["reaped"] = True
+            except subprocess.TimeoutExpired:
+                stdout, stderr = "", ""
+                cleanup["reaped"] = False
+                cleanup["killWait"] = "timed-out"
+            except (OSError, subprocess.SubprocessError) as error:
+                stdout, stderr = "", ""
+                cleanup["reaped"] = False
+                cleanup["killWait"] = f"failed: {error}"
+        if isinstance(communication_error, subprocess.TimeoutExpired):
+            failure = "macOS host-input helper exceeded its execution deadline"
+        else:
+            failure = "macOS host-input helper communication failed"
+        details = [f"initial communication error: {communication_error}"]
+        if (stdout or "").strip():
+            details.append(f"cleanup stdout: {stdout.strip()}")
+        if (stderr or "").strip():
+            details.append(f"cleanup stderr: {stderr.strip()}")
+        raise E2EError(
+            f"{failure}; helper cleanup={cleanup}; detail={' | '.join(details)}"
+        ) from communication_error
+    if process.returncode != 0:
+        detail = stderr.strip() or stdout.strip() or f"status {process.returncode}"
+        raise E2EError(f"macOS host-input helper refused the event: {detail}")
+    try:
+        report = json.loads(stdout)
+    except json.JSONDecodeError as error:
+        raise E2EError(f"macOS host-input helper returned invalid JSON: {stdout!r}") from error
+    if not isinstance(report, dict) or report.get("pid") != pid:
+        raise E2EError(f"macOS host-input report does not identify the launched PID: {report!r}")
+    if report.get("windowTitle") != args.window_title or report.get("action") != expected_action:
+        raise E2EError(f"macOS host-input report does not match the requested window/action: {report!r}")
+    if report.get("downPostedGlobally") is not True:
+        raise E2EError(f"macOS host-input report does not confirm the guarded global down post: {report!r}")
+    flags = report.get("eventFlags")
+    if not isinstance(flags, dict):
+        raise E2EError(f"macOS host-input report lacks modifier-flag evidence: {report!r}")
+    for key in ("downBeforePost", "upBeforePost"):
+        if type(flags.get(key)) is not int or flags[key] != 0:
+            raise E2EError(f"macOS host-input report has nonzero {key}: {report!r}")
+    if expected_action.endswith("left click"):
+        if report.get("upPostedGlobally") is not True or report.get("releaseOutcome") != "global":
+            raise E2EError(f"macOS click did not complete a guarded global event pair: {report!r}")
+    elif report.get("upPostedGlobally") is not True:
+        outcome = report.get("releaseOutcome")
+        cleanup_flags = flags.get("cleanupBeforePost")
+        terminal_window = report.get("originalWindowGone") is True
+        terminal_process = outcome == "target-exited"
+        if outcome == "target-pid" and type(cleanup_flags) is int and cleanup_flags == 0:
+            if not terminal_window:
+                raise E2EError(f"macOS Escape release was PID-targeted without a terminal window: {report!r}")
+        elif not terminal_process:
+            raise E2EError(f"macOS Escape release lacks guarded terminal cleanup: {report!r}")
+    if expected_action.endswith("left click"):
+        point = report.get("point")
+        try:
+            point_is_finite = isinstance(point, dict) and all(
+                math.isfinite(float(point.get(axis, math.nan))) for axis in ("x", "y")
+            )
+        except (TypeError, ValueError):
+            point_is_finite = False
+        if (
+            report.get("button") != command[3]
+            or report.get("axHitWithinButton") is not True
+            or type(report.get("windowNumber")) is not int
+            or not point_is_finite
+        ):
+            raise E2EError(f"macOS click report lacks exact AX Button/window ownership: {report!r}")
+    return report
+
+
+def _macos_input_preflight(
+    helper: Path, evidence_dir: Path | None = None
+) -> dict[str, Any]:
+    try:
+        result = subprocess.run(
+            [str(helper), "--preflight"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+            timeout=MACOS_PREFLIGHT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise E2EError("macOS host-input preflight exceeded its bounded deadline") from error
+    try:
+        status = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        detail = result.stderr.strip() or result.stdout.strip() or f"status {result.returncode}"
+        raise E2EError(f"macOS host-input preflight returned invalid output: {detail}") from error
+    if evidence_dir is not None:
+        (evidence_dir / "macos-host-input-preflight.json").write_text(
+            json.dumps(status, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+    if not isinstance(status, dict):
+        raise E2EError(f"macOS host-input preflight returned an invalid status: {status!r}")
+    if (
+        status.get("accessibility") is not True
+        or status.get("on_console") is not True
+        or status.get("session_locked") is not False
+    ):
+        raise E2EBlocked(f"macOS host-input preflight refused UI input: {status!r}")
+    if result.returncode != 0:
+        raise E2EError(f"macOS host-input preflight refused UI input: {status!r}")
+    return status
 
 
 def _assert_frames(
@@ -701,6 +993,9 @@ def drive(args: argparse.Namespace) -> int:
     process: subprocess.Popen[str] | None = None
     output: ProcessOutput | None = None
     try:
+        if args.platform == "macos":
+            args.macos_helper = _compile_macos_input_helper(evidence_dir)
+            _macos_input_preflight(args.macos_helper, evidence_dir)
         run_command, runtime_target = _build_native_sample(
             args.command,
             args.platform,
@@ -724,6 +1019,9 @@ def drive(args: argparse.Namespace) -> int:
             errors="replace",
             bufsize=1,
         )
+        click_args = argparse.Namespace(**vars(args))
+        click_args.window_title = run_title
+        click_args.sample_pid = process.pid
         output = ProcessOutput(process, log_path)
         ready = output.wait_marker("YAMI_NATIVE_UI_READY", timeout=args.startup_timeout)
         button = _rect(ready.get("button"), "button")
@@ -735,8 +1033,6 @@ def drive(args: argparse.Namespace) -> int:
             timeout=args.marker_timeout,
         )
         _marker_state(before, 0)
-        click_args = argparse.Namespace(**vars(args))
-        click_args.window_title = run_title
         _send_click(args.platform, ready, click_args)
         click = output.wait_marker("YAMI_NATIVE_UI_CLICK", timeout=args.marker_timeout)
         if click.get("count") != 1 or click.get("value") != 1:
@@ -756,10 +1052,11 @@ def drive(args: argparse.Namespace) -> int:
             raise E2EError(f"native sample exited with status {return_code}")
         report = {
             "platform": args.platform,
+            "status": "passed",
             "inputDelivery": {
                 "linux": "XTest pointer input through Xvfb -> Weston X11 backend -> Wayland client",
                 "windows": "Win32 SendInput to the visible native HWND",
-                "macos": "synthetic NSEvent through the owned NSWindow sendEvent path; not physical hardware",
+                "macos": "global CGEventPost synthetic mouse/keyboard input guarded by the unlocked session, exact frontmost PID/title, visible window and AX Button hit target; not physical hardware",
             }[args.platform],
             "windowTitle": run_title,
             "buttonBounds": ready["button"],
@@ -778,13 +1075,40 @@ def drive(args: argparse.Namespace) -> int:
         return 0
     except (E2EError, OSError, subprocess.SubprocessError, KeyError, ValueError) as error:
         print(f"Native UI E2E failed: {error}", file=sys.stderr, flush=True)
-        if process is not None and process.poll() is None:
-            process.terminate()
+        report: dict[str, Any] | None = None
+        report_path: Path | None = None
+        if args.platform == "macos":
+            report = {
+                "platform": "macos",
+                "status": "blocked" if isinstance(error, E2EBlocked) else "failed",
+                "windowTitle": run_title,
+                "sampleLaunched": process is not None,
+                "error": str(error),
+                "sampleCleanup": {"state": "not-launched", "reaped": True},
+            }
+            preflight_path = evidence_dir / "macos-host-input-preflight.json"
+            if preflight_path.is_file():
+                try:
+                    report["preflight"] = json.loads(
+                        preflight_path.read_text(encoding="utf-8")
+                    )
+                except (OSError, json.JSONDecodeError) as preflight_error:
+                    report["preflightReadError"] = str(preflight_error)
+            report_path = evidence_dir / "native-ui-report.json"
             try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
-                process.wait(timeout=5)
+                _write_json_evidence(report_path, report)
+            except OSError as report_error:
+                print(f"Could not persist initial macOS failure report: {report_error}",
+                      file=sys.stderr, flush=True)
+        if process is not None:
+            cleanup = _stop_owned_sample(process)
+            if report is not None and report_path is not None:
+                report["sampleCleanup"] = cleanup
+                try:
+                    _write_json_evidence(report_path, report)
+                except OSError as report_error:
+                    print(f"Could not persist final macOS cleanup report: {report_error}",
+                          file=sys.stderr, flush=True)
         if output is not None:
             output.drain()
             output.log.flush()

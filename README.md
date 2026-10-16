@@ -190,3 +190,10 @@ The shell structure was inspired by the UI layout references shared in these pos
 - https://x.com/lawrluk/status/2105711205172273621?s=46
 
 See [ACKNOWLEDGEMENTS.md](./ACKNOWLEDGEMENTS.md) for details.
+
+## npm preview package
+
+An installable JavaScript/TypeScript preview is built separately from this
+private starter. See [npm/README.md](npm/README.md) for supported components,
+optional React imports, styles and the tarball workflow. Registry publication
+is a separate release decision.

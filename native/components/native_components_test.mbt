@@ -139,8 +139,8 @@ test "NativeButton keeps Kumo size geometry and emits flat background border and
       assert_eq(items.length(), 6)
       match items[0] {
         @scene.QuadItem(color~, ..) => {
-          assert_eq(color.red(), 5)
-          assert_eq(color.green(), 109)
+          assert_eq(color.red(), 39)
+          assert_eq(color.green(), 122)
           assert_eq(color.blue(), 255)
         }
         _ => fail("first Button item should be its background quad")
@@ -259,9 +259,9 @@ test "Kumo 2.14 theme resolves light and dark system colors" {
   assert_eq(secondary_destructive.foreground().green(), 0)
   assert_eq(secondary_destructive.foreground().blue(), 7)
   let destructive = light.button_colors(@yami_kumo.Destructive, false)
-  assert_eq(destructive.background().red(), 251)
-  assert_eq(destructive.background().green(), 44)
-  assert_eq(destructive.background().blue(), 54)
+  assert_eq(destructive.background().red(), 254)
+  assert_eq(destructive.background().green(), 71)
+  assert_eq(destructive.background().blue(), 71)
   match dark.text_color(@yami_kumo.Error) {
     Err(_) =>
       fail("dark Error text should resolve from Kumo's danger text token")
@@ -287,6 +287,30 @@ test "disabled Button opacity preserves transparent fills and token line alpha" 
 }
 
 ///|
+test "emphasis hover uses the pinned gradient midpoint and disabled does not gain a hover palette" {
+  for theme in [@components.Theme::light(), @components.Theme::dark()] {
+    for variant in [@yami_kumo.Primary, @yami_kumo.Destructive] {
+      let rest = theme.button_colors(variant, false)
+      let hover = theme.button_colors(variant, false, hovered=true)
+      assert_true(rest.background() != hover.background())
+      assert_true(rest.border() == hover.border())
+      assert_true(
+        theme.button_colors(variant, true).background() ==
+        theme.button_colors(variant, true, hovered=true).background(),
+      )
+    }
+  }
+  let hover = @components.Theme::light().button_colors(
+    @yami_kumo.Primary,
+    false,
+    hovered=true,
+  )
+  assert_eq(hover.background().red(), 60)
+  assert_eq(hover.background().green(), 134)
+  assert_eq(hover.background().blue(), 255)
+}
+
+///|
 fn component_test_button_interaction(
   disabled? : Bool = false,
 ) -> @components.ButtonInteraction raise {
@@ -309,10 +333,13 @@ fn component_test_button_interaction(
 ///|
 test "Button interaction activates only a matching primary down and up once" {
   let interaction = component_test_button_interaction()
+  assert_true(!interaction.is_pressed())
   assert_true(interaction.pointer_down(Some(50), @primitives.Primary))
   assert_true(interaction.is_pointer_armed())
+  assert_true(interaction.is_pressed())
   assert_true(interaction.pointer_up(Some(50), @primitives.Primary))
   assert_true(!interaction.is_pointer_armed())
+  assert_true(!interaction.is_pressed())
   assert_true(!interaction.pointer_up(Some(50), @primitives.Primary))
 }
 
@@ -332,32 +359,74 @@ test "disabled Button interaction cannot arm pointer or keyboard activation" {
   let interaction = component_test_button_interaction(disabled=true)
   assert_true(!interaction.pointer_down(Some(50), @primitives.Primary))
   assert_true(!interaction.pointer_up(Some(50), @primitives.Primary))
-  interaction.key_down(Some(50), @primitives.Enter)
+  assert_true(!interaction.key_down(Some(50), @primitives.Enter))
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(!interaction.is_pressed())
   assert_true(!interaction.key_up(Some(50), @primitives.Enter))
-}
-
-///|
-test "keyboard activation needs a matching focused key release" {
-  let interaction = component_test_button_interaction()
-  interaction.key_down(Some(50), @primitives.Enter)
   assert_true(!interaction.key_up(Some(50), @primitives.Space))
-  assert_true(!interaction.key_up(Some(50), @primitives.Enter))
-  interaction.key_down(Some(50), @primitives.Space)
-  assert_true(!interaction.key_up(None, @primitives.Space))
-  interaction.key_down(Some(50), @primitives.Space)
-  assert_true(interaction.key_up(Some(50), @primitives.Space))
 }
 
 ///|
-test "focus or layout cancellation clears pending Button gestures" {
+test "Enter activates per focused key down while Space waits for matching release" {
   let interaction = component_test_button_interaction()
+  assert_true(interaction.key_down(Some(50), @primitives.Enter))
+  assert_true(!interaction.is_pressed())
+  assert_true(interaction.key_down(Some(50), @primitives.Enter))
+  assert_true(!interaction.is_pressed())
+  assert_true(!interaction.key_up(Some(50), @primitives.Enter))
+
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(interaction.is_pressed())
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(interaction.is_pressed())
+  assert_true(!interaction.key_up(Some(50), @primitives.Enter))
+  assert_true(!interaction.is_pressed())
+
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(interaction.is_pressed())
+  assert_true(!interaction.key_up(None, @primitives.Space))
+  assert_true(!interaction.is_pressed())
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(interaction.key_up(Some(50), @primitives.Space))
+  assert_true(!interaction.is_pressed())
+}
+
+///|
+test "unfocused activation keys do nothing and cancellation clears held Space" {
+  let interaction = component_test_button_interaction()
+  assert_true(!interaction.key_down(None, @primitives.Enter))
+  assert_true(!interaction.key_down(None, @primitives.Space))
+  assert_true(!interaction.is_pressed())
   assert_true(interaction.pointer_down(Some(50), @primitives.Primary))
   interaction.cancel()
   assert_true(!interaction.is_pointer_armed())
   assert_true(!interaction.pointer_up(Some(50), @primitives.Primary))
-  interaction.key_down(Some(50), @primitives.Enter)
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(interaction.is_pressed())
   interaction.cancel()
+  assert_true(!interaction.is_pressed())
+  assert_true(!interaction.key_up(Some(50), @primitives.Space))
+}
+
+///|
+test "Enter down cancels a previously held Space before either release" {
+  let interaction = component_test_button_interaction()
+  assert_true(!interaction.key_down(Some(50), @primitives.Space))
+  assert_true(interaction.is_pressed())
+  assert_true(interaction.key_down(Some(50), @primitives.Enter))
+  assert_true(!interaction.is_pressed())
+  assert_true(!interaction.key_up(Some(50), @primitives.Space))
   assert_true(!interaction.key_up(Some(50), @primitives.Enter))
+}
+
+///|
+test "Enter activation consumes an earlier pointer press" {
+  let interaction = component_test_button_interaction()
+  assert_true(interaction.pointer_down(Some(50), @primitives.Primary))
+  assert_true(interaction.key_down(Some(50), @primitives.Enter))
+  assert_true(!interaction.is_pointer_armed())
+  assert_true(!interaction.is_pressed())
+  assert_true(!interaction.pointer_up(Some(50), @primitives.Primary))
 }
 
 ///|

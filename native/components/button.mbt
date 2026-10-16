@@ -7,7 +7,7 @@ pub struct NativeButton {
   variant : @yami_kumo.ButtonVariant
   size : @yami_kumo.ControlSize
   disabled : Bool
-  colors : ButtonColors
+  theme : Theme
   bounds : @primitives.Rect
 }
 
@@ -61,7 +61,7 @@ pub fn NativeButton::new(
             variant,
             size,
             disabled,
-            colors,
+            theme,
             bounds,
           })
       }
@@ -140,21 +140,37 @@ pub fn ButtonInteraction::pointer_up(
 }
 
 ///|
-/// Arm Enter/Space activation after the focused Button receives a key press.
+/// Handle an activation-key down on the focused Button.
+/// Enter activates on every key down, including repeats. Space remains armed
+/// until its matching key release and reports no action on key down. The
+/// return value is true only for a focused, enabled Enter key down. Enter
+/// clears any older held gesture before activating.
 pub fn ButtonInteraction::key_down(
   self : ButtonInteraction,
   target : UInt64?,
   key : @primitives.Key,
-) -> Unit {
-  if !self.disabled && target == Some(self.id) && is_activation_key(key) {
-    self.pointer_armed = false
-    self.key_armed = Some(key)
+) -> Bool {
+  if self.disabled || target != Some(self.id) {
+    return false
+  }
+  match key {
+    @primitives.Enter => {
+      self.pointer_armed = false
+      self.key_armed = None
+      true
+    }
+    @primitives.Space => {
+      self.pointer_armed = false
+      self.key_armed = Some(@primitives.Space)
+      false
+    }
+    _ => false
   }
 }
 
 ///|
-/// Activate only when the same activation key is released while the Button
-/// still owns keyboard focus. A mismatched release cancels the key gesture.
+/// Activate only when Space is released while the Button still owns keyboard
+/// focus. A mismatched release cancels the held Space gesture.
 pub fn ButtonInteraction::key_up(
   self : ButtonInteraction,
   target : UInt64?,
@@ -181,8 +197,9 @@ pub fn ButtonInteraction::is_pointer_armed(self : ButtonInteraction) -> Bool {
 }
 
 ///|
-fn is_activation_key(key : @primitives.Key) -> Bool {
-  key is @primitives.Enter || key is @primitives.Space
+/// Whether a matching pointer or activation key is currently held.
+pub fn ButtonInteraction::is_pressed(self : ButtonInteraction) -> Bool {
+  self.pointer_armed || self.key_armed is Some(_)
 }
 
 ///|
@@ -236,18 +253,21 @@ pub fn NativeButton::element_node(
 }
 
 ///|
-/// Lower a flat background, one-pixel square border and centered label. The
+/// Lower a flat background, an outset square ring and centered label. The
 /// scene item IDs are stable offsets owned by this Button instance.
 pub fn NativeButton::scene_items(
   self : NativeButton,
   bounds : @primitives.Rect,
+  hovered? : Bool = false,
+  focus_visible? : Bool = false,
 ) -> Result[Array[@scene.SceneItem], @diagnostics.FrameworkError] {
+  let colors = self.theme.button_colors(self.variant, self.disabled, hovered~)
   let items : Array[@scene.SceneItem] = []
   match
     @scene.SceneItem::quad(
       self.id,
       bounds,
-      self.colors.background(),
+      colors.background(),
       @scene.AffineTransform::identity(),
       1.0,
       None,
@@ -260,20 +280,33 @@ pub fn NativeButton::scene_items(
       )
     Ok(item) => items.push(item)
   }
-  let border = self.colors.border()
+  let border = if focus_visible &&
+    !self.disabled &&
+    !(self.variant is @yami_kumo.Primary ||
+    self.variant is @yami_kumo.Destructive) {
+    self.theme.brand()
+  } else {
+    colors.border()
+  }
   if border.alpha() > 0 {
     let width = bounds.size().width()
     let height = bounds.size().height()
+    let ring_width = if focus_visible && !self.disabled { 2.0 } else { 1.0 }
     let strips = [
-      rect(bounds.left(), bounds.top(), width, 1.0),
-      rect(bounds.left(), bounds.bottom() - 1.0, width, 1.0),
-      rect(bounds.left(), bounds.top() + 1.0, 1.0, max(0.0, height - 2.0)),
       rect(
-        bounds.right() - 1.0,
-        bounds.top() + 1.0,
-        1.0,
-        max(0.0, height - 2.0),
+        bounds.left() - ring_width,
+        bounds.top() - ring_width,
+        width + 2.0 * ring_width,
+        ring_width,
       ),
+      rect(
+        bounds.left() - ring_width,
+        bounds.bottom(),
+        width + 2.0 * ring_width,
+        ring_width,
+      ),
+      rect(bounds.left() - ring_width, bounds.top(), ring_width, height),
+      rect(bounds.right(), bounds.top(), ring_width, height),
     ]
     let mut index = 0
     while index < strips.length() {
@@ -302,7 +335,7 @@ pub fn NativeButton::scene_items(
     Err(error) => return Err(error)
   }
   // Replace the label semantic color with the resolved Button foreground.
-  let label = self.label.recolored(self.id + 1, self.colors.foreground())
+  let label = self.label.recolored(self.id + 1, colors.foreground())
   match label.scene_item(label_container, Center) {
     Err(error) => Err(error)
     Ok(item) => {
