@@ -1,6 +1,7 @@
 import {
   appShell,
   button,
+  element,
   input,
   textComponent,
   layerCard,
@@ -42,6 +43,18 @@ document.querySelector('#app').innerHTML = renderHtml(
     ]),
   }),
 );
+const resetForm = element('form', { id: 'reset-form' }, [
+  input({
+    id: 'reset-email',
+    label: 'Reset email',
+    attrs: { type: 'email', value: 'initial@example.com', 'aria-invalid': 'false' },
+  }),
+  input({ id: 'reset-required', label: 'Reset required', required: true }),
+  button('Reset fields', { type: 'reset', attrs: { id: 'reset-button' } }),
+]);
+document.querySelector('#app').insertAdjacentHTML('beforeend', renderHtml(resetForm));
+document.querySelector('#reset-form').addEventListener('submit', (event) => event.preventDefault());
+
 let activations = 0;
 document.querySelector('[data-variant="primary"]').addEventListener('click', () => {
   document.body.dataset.activations = String(++activations);
