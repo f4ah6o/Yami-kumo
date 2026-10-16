@@ -11,6 +11,39 @@ permissions:
   contents: read
 
 jobs:
+  npm-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.16.1
+        with:
+          node-version: 'lts'
+          run-install: true
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.14+7d59c7ec9
+          setup-core: true
+          core-version: 0.10.14+7d59c7ec9
+      - name: Check regenerated pnpm lockfile
+        run: |
+          pnpm install --lockfile-only --no-frozen-lockfile
+          git diff --exit-code -- pnpm-lock.yaml
+      - name: Install consumer browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Pack and verify isolated consumers
+        run: pnpm run test:npm
+      - name: Upload packed artifact and consumer evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: yami-kumo-npm-preview
+          path: |
+            dist/*.tgz
+            dist/npm-consumers.json
+          if-no-files-found: error
+
   verify:
     runs-on: ubuntu-latest
     steps:
