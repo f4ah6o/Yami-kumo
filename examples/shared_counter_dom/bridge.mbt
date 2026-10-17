@@ -2,7 +2,7 @@
 /// A browser bootstrap and bounded test driver. The actual model/view/update
 /// come from the same portable package used by the independent native consumer.
 priv struct Counter {
-  mut model : @shared_counter.Model
+  mut model : @shared_counter.SpacingModel
   mut mounted : @dom.DomRoot?
   mut mode : String
   mut label : String
@@ -34,23 +34,34 @@ fn Counter::test_view(self : Counter, view : @core.View) -> @core.View {
       if view.is_card() {
         @core.card(view.key(), children)
       } else {
-        @core.column(view.key(), children)
+        match view.spacing() {
+          Some(spacing) =>
+            @core.column_with_spacing(view.key(), children, spacing)
+          None => @core.column(view.key(), children)
+        }
       }
     }
-    Row =>
-      @core.row(
-        view.key(),
-        view.children().map(fn(child) { self.test_view(child) }),
-      )
+    Row => {
+      let children = view.children().map(fn(child) { self.test_view(child) })
+      match view.spacing() {
+        Some(spacing) => @core.row_with_spacing(view.key(), children, spacing)
+        None => @core.row(view.key(), children)
+      }
+    }
   }
 }
 
 ///|
 fn Counter::view(self : Counter) -> @core.View {
-  let common = if self.mode == "card" || self.mode == "nested-card" {
-    self.model.card_view()
-  } else {
+  if self.mode == "fixed-spacing" {
+    return @shared_counter.spacing_geometry_view()
+  }
+  let common = if self.mode == "spacing" {
     self.model.view()
+  } else if self.mode == "card" || self.mode == "nested-card" {
+    self.model.counter().card_view()
+  } else {
+    self.model.counter().view()
   }
   let view = self.test_view(common)
   if self.mode == "nested-card" {
@@ -94,7 +105,7 @@ pub fn mount_counter(id : String) -> String {
     return "already-mounted"
   }
   let counter : Counter = {
-    model: @shared_counter.Model::new(),
+    model: @shared_counter.SpacingModel::new(),
     mounted: None,
     mode: "normal",
     label: "Increment",
@@ -104,7 +115,11 @@ pub fn mount_counter(id : String) -> String {
       None => ()
       Some(mounted) =>
         while mounted.next_action() is Some(action) {
-          counter.model = counter.model.update(action)
+          counter.model = if counter.mode == "spacing" {
+            counter.model.update(action)
+          } else {
+            counter.model.update_counter(action)
+          }
           // Publish each state transition before accepting the next queued action.
           mounted.update(counter.view()) |> ignore
         }

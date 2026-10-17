@@ -1,6 +1,8 @@
 # YK-05 — 制限付き共通layout・標準theme・AppShell
 
-状態：proposed／実装未着手／製品テスト未実行／Yami-kumo mainへ計画ドラフト登録。
+状態：部分実装候補／closed-token Row・Column gap/padding限定slice／theme・AppShell・一般layout・YK-05全体は未完了。
+限定契約と検証境界は [shared-stack-spacing.md](../../docs/shared-stack-spacing.md) を参照。
+この更新自体は実ブラウザ・Native windowの新candidate合格を意味しない。
 作成日：2026-10-17 JST。
 作業先：`f4ah6o/Yami-kumo`。段階：M2。依存：YK-04。
 

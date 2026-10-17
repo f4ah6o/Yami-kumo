@@ -218,6 +218,22 @@ fn main {
   }
   emit("card-counter-two-activations", card_counts)
   cards.dispose()
+  let spacing_runtime = @runtime.Runtime::new()
+  let mut spacing_model = @shared_counter.SpacingModel::new()
+  commit(spacing_runtime, spacing_model.view())
+  let spacing_counts = [spacing_model.value()]
+  let spacing_increment = spacing_runtime.token(@core.NodeKey::new("increment")).unwrap()
+  let spacing_toggle = spacing_runtime.token(@core.NodeKey::new("spacing-toggle")).unwrap()
+  for target in [spacing_increment, spacing_toggle, spacing_increment, spacing_toggle] {
+    ensure(spacing_runtime.enqueue_activate(target), "spacing Button rejected")
+    spacing_model = spacing_model.update(spacing_runtime.next_action().unwrap())
+    commit(spacing_runtime, spacing_model.view())
+    ensure(spacing_runtime.is_current(spacing_increment), "increment identity changed")
+    ensure(spacing_runtime.is_current(spacing_toggle), "toggle identity changed")
+    spacing_counts.push(spacing_model.value())
+  }
+  emit("spacing-count-and-toggle", spacing_counts)
+  spacing_runtime.dispose()
 }
 `;
 
@@ -340,7 +356,12 @@ try {
       .map((line) => JSON.parse(line));
     assert.deepEqual(
       observations.map((item) => item.fixtureId),
-      ['counter-two-activations', 'counter-disabled-loading', 'card-counter-two-activations'],
+      [
+        'counter-two-activations',
+        'counter-disabled-loading',
+        'card-counter-two-activations',
+        'spacing-count-and-toggle',
+      ],
     );
     for (const { fixtureId, ...observed } of observations) {
       assert.deepEqual(

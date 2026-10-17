@@ -43,6 +43,7 @@ priv struct Binding {
 
 ///|
 priv struct Observation {
+  binding_id : UInt64
   key : @view.NodeKey
   bounds : @primitives.Rect
   label_bounds : @primitives.Rect?
@@ -78,6 +79,17 @@ pub fn Frame::bounds(self : Frame, key : @view.NodeKey) -> @primitives.Rect? {
   for observation in self.observations {
     if observation.key == key {
       return Some(observation.bounds)
+    }
+  }
+  None
+}
+
+///|
+/// Read-only identity observation, not an activation or focus capability.
+pub fn Frame::binding_id(self : Frame, key : @view.NodeKey) -> UInt64? {
+  for observation in self.observations {
+    if observation.key == key {
+      return Some(observation.binding_id)
     }
   }
   None
@@ -276,7 +288,17 @@ fn make_element(
         @layout.Insets::all(1.0).unwrap(),
       )
     } else {
-      style(view.kind())
+      match view.spacing() {
+        Some(spacing) =>
+          style(view.kind())
+          .with_gap(spacing.gap().pixels())
+          .unwrap()
+          .with_insets(
+            @layout.Insets::all(spacing.padding().pixels()).unwrap(),
+            @layout.Insets::zero(),
+          )
+        None => style(view.kind())
+      }
     }
     element = element.with_children_style(children_style)
     for child in view.children() {
@@ -544,6 +566,7 @@ fn Mounted::prepare(
       ).unwrap()
     })
     observations.push({
+      binding_id: binding.id,
       key: binding.view.key(),
       bounds,
       label_bounds,

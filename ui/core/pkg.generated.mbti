@@ -12,7 +12,11 @@ pub fn card(NodeKey, Array[View]) -> View
 
 pub fn column(NodeKey, Array[View]) -> View
 
+pub fn column_with_spacing(NodeKey, Array[View], StackSpacing) -> View
+
 pub fn row(NodeKey, Array[View]) -> View
+
+pub fn row_with_spacing(NodeKey, Array[View], StackSpacing) -> View
 
 pub fn text(NodeKey, String) -> View
 
@@ -54,6 +58,29 @@ pub fn SemanticAction::equal(Self, Self) -> Bool
 pub fn SemanticAction::not_equal(Self, Self) -> Bool
 pub fn SemanticAction::to_repr(Self) -> @debug.Repr
 
+pub(all) enum SpacingToken {
+  Zero
+  Four
+  Eight
+  Twelve
+  Sixteen
+  TwentyFour
+} derive(Eq, @debug.Debug)
+pub fn SpacingToken::equal(Self, Self) -> Bool
+pub fn SpacingToken::not_equal(Self, Self) -> Bool
+pub fn SpacingToken::pixels(Self) -> Double
+pub fn SpacingToken::to_repr(Self) -> @debug.Repr
+
+pub struct StackSpacing {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn StackSpacing::equal(Self, Self) -> Bool
+pub fn StackSpacing::gap(Self) -> SpacingToken
+pub fn StackSpacing::new(SpacingToken, SpacingToken) -> Self
+pub fn StackSpacing::not_equal(Self, Self) -> Bool
+pub fn StackSpacing::padding(Self) -> SpacingToken
+pub fn StackSpacing::to_repr(Self) -> @debug.Repr
+
 pub struct View {
   // private fields
 } derive(Eq, @debug.Debug)
@@ -66,6 +93,7 @@ pub fn View::kind(Self) -> NodeKind
 pub fn View::label(Self) -> String
 pub fn View::loading(Self) -> Bool
 pub fn View::not_equal(Self, Self) -> Bool
+pub fn View::spacing(Self) -> StackSpacing?
 pub fn View::to_repr(Self) -> @debug.Repr
 
 // Type aliases

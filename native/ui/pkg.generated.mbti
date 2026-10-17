@@ -23,6 +23,7 @@ pub struct Activation {
 pub struct Frame {
   // private fields
 }
+pub fn Frame::binding_id(Self, @core.NodeKey) -> UInt64?
 pub fn Frame::bounds(Self, @core.NodeKey) -> @primitives.Rect?
 pub fn Frame::focused(Self, @core.NodeKey) -> Bool
 pub fn Frame::label_bounds(Self, @core.NodeKey) -> @primitives.Rect?

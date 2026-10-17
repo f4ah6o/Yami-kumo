@@ -782,3 +782,183 @@ test "Card insets gaps paint identity and noninteractive nesting" {
   assert_true(frame.focused(child))
   assert_true(frame.snapshot().items().length() > 4)
 }
+
+///|
+fn spacing_near(actual : Double, expected : Double) -> Unit raise {
+  assert_true((actual - expected).abs() <= 1.0)
+}
+
+///|
+fn check_spacing_box(
+  frame : @ui.Frame,
+  name : String,
+  names : Array[String],
+  gap : Double,
+  padding : Double,
+  row : Bool,
+) -> Unit raise {
+  let outer = frame.bounds(@view.NodeKey::new(name)).unwrap()
+  let children = names.map(name => {
+    frame.bounds(@view.NodeKey::new(name)).unwrap()
+  })
+  let mut left = children[0].left()
+  let mut top = children[0].top()
+  let mut right = children[0].right()
+  let mut bottom = children[0].bottom()
+  for child in children {
+    if child.left() < left {
+      left = child.left()
+    }
+    if child.top() < top {
+      top = child.top()
+    }
+    if child.right() > right {
+      right = child.right()
+    }
+    if child.bottom() > bottom {
+      bottom = child.bottom()
+    }
+  }
+  spacing_near(left - outer.left(), padding)
+  spacing_near(top - outer.top(), padding)
+  spacing_near(outer.right() - right, padding)
+  spacing_near(outer.bottom() - bottom, padding)
+  for i in 1..<children.length() {
+    spacing_near(
+      if row {
+        children[i].left() - children[i - 1].right()
+      } else {
+        children[i].top() - children[i - 1].bottom()
+      },
+      gap,
+    )
+  }
+}
+
+///|
+test "explicit stack fixed geometry uses no font metrics and measures all edges" {
+  let mounted = mount()
+  let frame = mounted
+    .commit(@model.spacing_geometry_view(), 640.0, 480.0, 1.0, failed_measure)
+    .unwrap()
+  check_spacing_box(
+    frame,
+    "fixed",
+    ["fixed-row", "fixed-card"],
+    8.0,
+    24.0,
+    false,
+  )
+  check_spacing_box(frame, "fixed-row", ["box-a", "box-b"], 12.0, 4.0, true)
+  check_spacing_box(frame, "fixed-card", ["box-c"], 12.0, 17.0, false)
+  assert_eq(
+    frame.bounds(@view.NodeKey::new("box-a")).unwrap().size().width(),
+    16.0,
+  )
+  assert_eq(
+    frame.bounds(@view.NodeKey::new("box-a")).unwrap().size().height(),
+    16.0,
+  )
+  assert_eq(
+    frame.bounds(@view.NodeKey::new("box-b")).unwrap().size().width(),
+    32.0,
+  )
+  assert_eq(
+    frame.bounds(@view.NodeKey::new("box-b")).unwrap().size().height(),
+    32.0,
+  )
+  assert_eq(
+    frame.bounds(@view.NodeKey::new("fixed-row")).unwrap().size().width(),
+    68.0,
+  )
+  assert_eq(
+    frame.bounds(@view.NodeKey::new("fixed")).unwrap().size().width(),
+    116.0,
+  )
+  assert_eq(
+    frame.bounds(@view.NodeKey::new("fixed")).unwrap().size().height(),
+    130.0,
+  )
+}
+
+///|
+test "same-key spacing keeps binding focus and unchanged held input but cancels moved bounds" {
+  let mounted = mount()
+  let initial = @model.SpacingModel::new()
+  let view = initial.view()
+  let increment = @view.NodeKey::new("increment")
+  let first = render(mounted, view~)
+  assert_true(mounted.focus(increment))
+  ignore(mounted.handle_event(event(1L, key_down(@primitives.Space))).unwrap())
+  let held = render(mounted, view~)
+  assert_true(held.pressed(increment))
+  assert_eq(held.binding_id(increment), first.binding_id(increment))
+  ignore(mounted.handle_event(event(2L, key_up(@primitives.Space))).unwrap())
+  assert_eq(mounted.next_action(), Some(@view.Activate(increment)))
+  ignore(mounted.handle_event(event(3L, key_down(@primitives.Space))).unwrap())
+  let expanded = initial.update(
+    @view.Activate(@view.NodeKey::new("spacing-toggle")),
+  )
+  let changed = render(mounted, view=expanded.view())
+  assert_eq(changed.binding_id(increment), first.binding_id(increment))
+  assert_eq(
+    changed.binding_id(@view.NodeKey::new("counter")),
+    first.binding_id(@view.NodeKey::new("counter")),
+  )
+  assert_true(changed.focused(increment))
+  assert_true(!changed.pressed(increment))
+  ignore(mounted.handle_event(event(4L, key_up(@primitives.Space))).unwrap())
+  assert_true(mounted.next_action() is None)
+  check_spacing_box(
+    changed,
+    "counter",
+    ["heading", "value", "actions", "preview"],
+    12.0,
+    16.0,
+    false,
+  )
+  check_spacing_box(
+    changed,
+    "actions",
+    ["increment", "spacing-toggle"],
+    16.0,
+    8.0,
+    true,
+  )
+  check_spacing_box(changed, "preview", ["card-label"], 12.0, 17.0, false)
+  ignore(mounted.handle_event(event(5L, key_down(@primitives.Space))).unwrap())
+  ignore(mounted.handle_event(event(6L, key_up(@primitives.Space))).unwrap())
+  assert_eq(mounted.next_action(), Some(@view.Activate(increment)))
+}
+
+///|
+test "all closed tokens and empty explicit Row Column have exact intrinsic padding" {
+  for
+    token in [
+      @view.Zero,
+      @view.Four,
+      @view.Eight,
+      @view.Twelve,
+      @view.Sixteen,
+      @view.TwentyFour,
+    ] {
+    let spacing = @view.StackSpacing::new(token, token)
+    let root = @view.NodeKey::new("empty-stack")
+    for
+      view in [
+        @view.row_with_spacing(root, [], spacing),
+        @view.column_with_spacing(root, [], spacing),
+      ] {
+      let mounted = mount()
+      let frame = mounted
+        .commit(view, 640.0, 480.0, 1.0, failed_measure)
+        .unwrap()
+      let bounds = frame.bounds(root).unwrap()
+      assert_eq(bounds.size().width(), 2.0 * token.pixels())
+      assert_eq(bounds.size().height(), 2.0 * token.pixels())
+      assert_true(!mounted.focus(root))
+      assert_true(frame.binding_id(root) is Some(_))
+      assert_eq(frame.binding_id(@view.NodeKey::new("absent")), None)
+    }
+  }
+}

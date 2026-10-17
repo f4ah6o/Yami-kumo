@@ -7,6 +7,7 @@ import {
 }
 
 // Values
+pub fn spacing_geometry_view() -> @core.View
 
 // Errors
 
@@ -22,6 +23,20 @@ pub fn Model::to_repr(Self) -> @debug.Repr
 pub fn Model::update(Self, @core.SemanticAction) -> Self
 pub fn Model::value(Self) -> Int
 pub fn Model::view(Self) -> @core.View
+
+pub struct SpacingModel {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn SpacingModel::counter(Self) -> Model
+pub fn SpacingModel::equal(Self, Self) -> Bool
+pub fn SpacingModel::expanded(Self) -> Bool
+pub fn SpacingModel::new() -> Self
+pub fn SpacingModel::not_equal(Self, Self) -> Bool
+pub fn SpacingModel::to_repr(Self) -> @debug.Repr
+pub fn SpacingModel::update(Self, @core.SemanticAction) -> Self
+pub fn SpacingModel::update_counter(Self, @core.SemanticAction) -> Self
+pub fn SpacingModel::value(Self) -> Int
+pub fn SpacingModel::view(Self) -> @core.View
 
 // Type aliases
 

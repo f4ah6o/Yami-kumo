@@ -18,5 +18,6 @@ import {
   "f4ah6o/gpui/scene",
   "f4ah6o/gpui/text",
   "f4ah6o/gpui/text_layout",
+  "f4ah6o/yami_kumo/examples/shared_counter" @model,
   "f4ah6o/yami_kumo/ui/core" @view,
 } for "test"

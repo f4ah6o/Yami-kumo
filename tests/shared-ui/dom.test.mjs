@@ -11,6 +11,7 @@ import { chromium } from 'playwright';
 import { validateResult, validateArtifacts, validateGate } from './evidence.mjs';
 import { exerciseButtonStates } from './button-states.mjs';
 import { exerciseCard } from './card.mjs';
+import { exerciseSpacing } from './spacing.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const bundle = resolve(
@@ -31,6 +32,7 @@ const sourcePaths = [
   'fixtures/shared-ui',
   'tests/shared-ui',
   'docs/shared-card.md',
+  'docs/shared-stack-spacing.md',
 ];
 async function sourceHashes() {
   const paths = git('ls-files', '-z', '--', ...sourcePaths)
@@ -70,6 +72,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
   await mkdir(output, { recursive: true });
   const compiled = await readFile(bundle);
   const css = await readFile(resolve(root, 'styles/shared-ui.css'));
+  const fixtureCss = await readFile(resolve(root, 'tests/shared-ui/spacing-fixture.css'));
   const boundSources = await sourceHashes();
   const server = createServer((request, response) => {
     const route = request.url;
@@ -83,10 +86,13 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     } else if (route === '/shared.css') {
       response.setHeader('Content-Type', 'text/css');
       response.end(css);
+    } else if (route === '/spacing-fixture.css') {
+      response.setHeader('Content-Type', 'text/css');
+      response.end(fixtureCss);
     } else if (route === '/') {
       response.setHeader('Content-Type', 'text/html');
       response.end(
-        '<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="/shared.css"><title>Shared UI counter proof</title></head><body><main id="root-a"></main><section id="root-b"></section><section id="occupied"><p>Existing content</p></section><aside id="unrelated">Unrelated host</aside></body></html>',
+        '<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="/shared.css"><link rel="stylesheet" href="/spacing-fixture.css"><title>Shared UI counter proof</title></head><body><main id="root-a"></main><section id="root-b"></section><section id="occupied"><p>Existing content</p></section><section id="spacing-root"></section><section id="fixed-spacing-root"></section><aside id="unrelated">Unrelated host</aside></body></html>',
       );
     } else {
       response.writeHead(404);
@@ -452,6 +458,9 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     await exerciseButtonStates(page, observe);
     assert.equal(await page.evaluate(() => window.ownedButtonListeners), beforeStateListeners);
     await exerciseCard(page, observe);
+    await exerciseSpacing(page, observe, (name) =>
+      page.screenshot({ path: resolve(output, name) }),
+    );
     assert.deepEqual(errors, []);
     await page.screenshot({ path: resolve(output, 'counter.png') });
     await page.evaluate(() => {
@@ -470,6 +479,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     const sourceDirty = git('status', '--porcelain').length > 0;
     assert.deepEqual(await sourceHashes(), boundSources, 'source changed during browser fixture');
     await writeFile(resolve(output, 'shared-ui.css'), css);
+    await writeFile(resolve(output, 'spacing-fixture.css'), fixtureCss);
     await writeFile(
       resolve(output, 'source-provenance.json'),
       JSON.stringify(
@@ -478,6 +488,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
           sourceDirty,
           sourceSha256: boundSources,
           servedCssSha256: hash(css),
+          servedFixtureCssSha256: hash(fixtureCss),
           compiledBridgeSha256: hash(compiled),
         },
         null,
@@ -485,7 +496,19 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       ) + '\n',
     );
     const artifacts = [];
-    for (const path of ['trace.json', 'counter.png', 'shared-ui.css', 'source-provenance.json'])
+    for (const path of [
+      'spacing-0.png',
+      'spacing-1.png',
+      'spacing-2.png',
+      'spacing-3.png',
+      'spacing-4.png',
+      'spacing-fixed.png',
+      'trace.json',
+      'counter.png',
+      'shared-ui.css',
+      'spacing-fixture.css',
+      'source-provenance.json',
+    ])
       artifacts.push({ path, sha256: hash(await readFile(resolve(output, path))) });
     const finishedAt = new Date().toISOString();
     const coreManifest = await readFile(
@@ -503,6 +526,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       'button-interrupted-loading',
       'button-interrupted-disabled',
       'card-counter-two-activations',
+      'spacing-count-and-toggle',
     ].map((fixtureId) => ({
       schemaVersion: 'shared-ui-result/v1',
       contractVersion: 'shared-ui-contract/v1',
@@ -514,6 +538,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       dependencies: [
         { name: 'compiled-bridge-sha256', revision: hash(compiled) },
         { name: 'served-stylesheet-sha256', revision: hash(css) },
+        { name: 'served-fixture-stylesheet-sha256', revision: hash(fixtureCss) },
         { name: 'moonbit-core-manifest-sha256', revision: coreHash },
       ],
       profile: {

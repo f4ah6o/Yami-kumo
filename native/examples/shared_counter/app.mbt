@@ -1,10 +1,12 @@
 ///|
-/// The bootstrap owns exactly one App Entity containing the unchanged shared
-/// Model. Native host state and bounded fixture props contain no counter copy.
+/// The bootstrap owns exactly one App Entity containing the common SpacingModel,
+/// which composes the unchanged shared counter Model. Native host state and
+/// bounded fixture props contain no counter or expanded-state copy.
 pub struct NativeCounter {
   priv app : @app.App
-  priv state : @app.Entity[@model.Model]
+  priv state : @app.Entity[@model.SpacingModel]
   priv mount : @ui.Mounted
+  priv spacing : Bool
   priv card : Bool
   priv mut disabled : Bool
   priv mut loading : Bool
@@ -17,6 +19,9 @@ pub struct NativeCounter {
 pub struct CounterFrame {
   priv frame : @ui.Frame
   priv count : Int32
+  priv spacing : Bool
+  priv expanded : Bool
+  priv action_keys : Array[String]
   priv disabled : Bool
   priv loading : Bool
 }
@@ -87,9 +92,13 @@ pub fn CounterFrame::button_loading(self : CounterFrame) -> Bool {
 pub fn NativeCounter::new(
   window : @platform.WindowId,
   card~ : Bool = false,
+  spacing~ : Bool = false,
   disabled~ : Bool = false,
   loading~ : Bool = false,
 ) -> Result[NativeCounter, @diagnostics.FrameworkError] {
+  if card && spacing {
+    return Err(counter_error("Card and spacing fixtures cannot be combined"))
+  }
   let app = match @app.App::new() {
     Err(error) => return Err(error)
     Ok(value) => value
@@ -98,7 +107,7 @@ pub fn NativeCounter::new(
     Err(error) => return Err(error)
     Ok(_) => ()
   }
-  let state = match app.create_entity(@model.Model::new()) {
+  let state = match app.create_entity(@model.SpacingModel::new()) {
     Err(error) => return Err(error)
     Ok(value) => value
   }
@@ -107,6 +116,7 @@ pub fn NativeCounter::new(
     state,
     mount: @ui.Mounted::new(window),
     card,
+    spacing,
     disabled,
     loading,
     draining: false,
@@ -141,11 +151,15 @@ pub fn NativeCounter::actions(
 fn mode_view(view : @view.View, disabled : Bool, loading : Bool) -> @view.View {
   match view.kind() {
     @view.Button => @view.button(view.key(), view.label(), disabled~, loading~)
-    @view.Row =>
-      @view.row(
-        view.key(),
-        view.children().map(child => mode_view(child, disabled, loading)),
-      )
+    @view.Row => {
+      let children = view
+        .children()
+        .map(child => mode_view(child, disabled, loading))
+      match view.spacing() {
+        Some(spacing) => @view.row_with_spacing(view.key(), children, spacing)
+        None => @view.row(view.key(), children)
+      }
+    }
     @view.Column => {
       let children = view
         .children()
@@ -153,7 +167,11 @@ fn mode_view(view : @view.View, disabled : Bool, loading : Bool) -> @view.View {
       if view.is_card() {
         @view.card(view.key(), children)
       } else {
-        @view.column(view.key(), children)
+        match view.spacing() {
+          Some(spacing) =>
+            @view.column_with_spacing(view.key(), children, spacing)
+          None => @view.column(view.key(), children)
+        }
       }
     }
     @view.Text => view
@@ -197,6 +215,13 @@ pub fn NativeCounter::render(
       Ok({
         frame,
         count: model.value(),
+        spacing: self.spacing,
+        expanded: model.expanded(),
+        action_keys: self.actions.map(action => {
+          match action {
+            @view.Activate(key) => key.value()
+          }
+        }),
         disabled: self.disabled,
         loading: self.loading,
       })
@@ -254,7 +279,14 @@ fn NativeCounter::apply_action(
   scale : Double,
   measure : @components.TextMeasure,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
-  let next = match self.app.read(self.state, model => model.update(action)) {
+  let next = match
+    self.app.read(self.state, model => {
+      if self.spacing {
+        model.update(action)
+      } else {
+        model.update_counter(action)
+      }
+    }) {
     Err(error) => return Err(error)
     Ok(value) => value
   }
@@ -384,21 +416,83 @@ fn NativeCounter::drain_app_work(
 ///|
 fn NativeCounter::common_view(
   self : NativeCounter,
-  model : @model.Model,
+  model : @model.SpacingModel,
 ) -> @view.View {
-  if self.card {
-    model.card_view()
-  } else {
+  if self.spacing {
     model.view()
+  } else if self.card {
+    model.counter().card_view()
+  } else {
+    model.counter().view()
   }
 }
 
 ///|
 pub fn CounterFrame::card_bounds(self : CounterFrame) -> @primitives.Rect {
-  self.frame.bounds(@view.NodeKey::new("counter")).unwrap()
+  self.frame
+  .bounds(@view.NodeKey::new(if self.spacing { "preview" } else { "counter" }))
+  .unwrap()
 }
 
 ///|
 pub fn CounterFrame::heading_bounds(self : CounterFrame) -> @primitives.Rect {
   self.frame.bounds(@view.NodeKey::new("heading")).unwrap()
+}
+
+///|
+/// Copied model and geometry observations; no host-owned spacing state.
+pub fn CounterFrame::expanded(self : CounterFrame) -> Bool {
+  self.expanded
+}
+
+///|
+pub fn CounterFrame::action_keys(self : CounterFrame) -> Array[String] {
+  self.action_keys.copy()
+}
+
+///|
+pub fn CounterFrame::stack_bounds(self : CounterFrame) -> @primitives.Rect {
+  self.frame.bounds(@view.NodeKey::new("counter")).unwrap()
+}
+
+///|
+pub fn CounterFrame::row_bounds(self : CounterFrame) -> @primitives.Rect {
+  self.frame.bounds(@view.NodeKey::new("actions")).unwrap()
+}
+
+///|
+pub fn CounterFrame::toggle_bounds(self : CounterFrame) -> @primitives.Rect {
+  self.frame.bounds(@view.NodeKey::new("spacing-toggle")).unwrap()
+}
+
+///|
+pub fn CounterFrame::toggle_label_bounds(
+  self : CounterFrame,
+) -> @primitives.Rect {
+  self.frame.label_bounds(@view.NodeKey::new("spacing-toggle")).unwrap()
+}
+
+///|
+pub fn CounterFrame::card_label_bounds(self : CounterFrame) -> @primitives.Rect {
+  self.frame.bounds(@view.NodeKey::new("card-label")).unwrap()
+}
+
+///|
+pub fn CounterFrame::toggle_pressed(self : CounterFrame) -> Bool {
+  self.frame.pressed(@view.NodeKey::new("spacing-toggle"))
+}
+
+///|
+pub fn CounterFrame::toggle_focused(self : CounterFrame) -> Bool {
+  self.frame.focused(@view.NodeKey::new("spacing-toggle"))
+}
+
+///|
+pub fn CounterFrame::button_binding_id(self : CounterFrame) -> UInt64 {
+  self.frame.binding_id(@view.NodeKey::new("increment")).unwrap()
+}
+
+///|
+pub fn CounterFrame::toggle_binding_id(self : CounterFrame) -> UInt64 {
+  self.frame.binding_id(@view.NodeKey::new("spacing-toggle")).unwrap()
 }

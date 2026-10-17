@@ -348,3 +348,46 @@ test "Button flags share activation gate while loading retains no new common foc
   }
   runtime.dispose()
 }
+
+///|
+test "spacing changes preserve tokens queued actions and eligible focus" {
+  let runtime = @runtime.Runtime::new()
+  let key = @core.NodeKey::new("spacing-root")
+  let button = @core.NodeKey::new("spacing-button")
+  let children = [@core.button(button, "Press")]
+  ignore(runtime.commit(@core.column(key, children)).unwrap())
+  let original = runtime.token(button).unwrap()
+  let root = runtime.token(key).unwrap()
+  assert_true(runtime.enqueue_activate(original))
+  ignore(
+    runtime
+    .commit(
+      @core.column_with_spacing(
+        key,
+        children,
+        @core.StackSpacing::new(@core.Zero, @core.Sixteen),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(runtime.is_current(original))
+  assert_true(runtime.is_current(root))
+  assert_eq(runtime.next_action(), Some(@core.Activate(button)))
+  assert_true(runtime.request_focus(original) is Ok(_))
+  ignore(
+    runtime
+    .commit(
+      @core.column_with_spacing(
+        key,
+        children,
+        @core.StackSpacing::new(@core.Twelve, @core.Four),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(runtime.is_current(original))
+  assert_true(runtime.is_current(root))
+  ignore(runtime.commit(@core.card(key, children)).unwrap())
+  assert_true(runtime.is_current(root))
+  assert_true(runtime.is_current(original))
+}

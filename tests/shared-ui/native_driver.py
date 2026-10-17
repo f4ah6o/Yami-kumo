@@ -29,10 +29,11 @@ ROOT = Path(__file__).resolve().parents[2]
 # Only these declared fixtures are driven with actual native host pointer input.
 # Additional Button contracts are validated below, but portable event tests must
 # never be presented as native-window/keyboard qualification.
-FIXTURES = {"counter": "counter-two-activations", "disabled-loading": "counter-disabled-loading", "card": "card-counter-two-activations"}
+FIXTURES = {"counter": "counter-two-activations", "disabled-loading": "counter-disabled-loading", "card": "card-counter-two-activations", "spacing": "spacing-count-and-toggle"}
 CONTRACT_PHASES = {
     "counter-two-activations": 3,
     "card-counter-two-activations": 3,
+    "spacing-count-and-toggle": 5,
     "counter-disabled-loading": 4,
     "button-interrupted-loading": 6,
     "button-interrupted-disabled": 6,
@@ -41,7 +42,7 @@ SHA = re.compile(r"[0-9a-f]{40}\Z")
 COMMON_PATHS = ("ui/core", "ui/runtime", "examples/shared_counter")
 BOUND_PATHS = (*COMMON_PATHS, "native/ui", "native/examples/shared_counter",
                "native/examples/shared_counter_host", "tests/shared-ui", "tests/native-ui/drive_native_ui.py",
-               "styles/shared-ui.css", "fixtures/shared-ui", "docs/shared-card.md")
+               "styles/shared-ui.css", "fixtures/shared-ui", "docs/shared-card.md", "docs/shared-stack-spacing.md")
 
 
 def _load_legacy() -> Any:
@@ -134,7 +135,7 @@ def validate_marker(marker: dict[str, Any], fixture: str, phase: int,
         raise E2EError("settled phase cannot have a pressed button")
     if type(marker.get("releases")) is not int or marker["releases"] != phase:
         raise E2EError("phase must follow exactly one actual primary release per click")
-    if marker.get("actions") != ["Activate"] * count:
+    if marker.get("actions") != ["Activate"] * (phase if fixture == "spacing" else count):
         raise E2EError("accepted action trace disagrees with the contract count")
     scale = _number(marker.get("scale"), "scale", positive=True)
     root = _bounds(marker.get("root"), "root")
@@ -148,12 +149,15 @@ def validate_marker(marker: dict[str, Any], fixture: str, phase: int,
         raise E2EError("marker must contain canonical scene object and items")
     texts = [item.get("text") for item in scene["items"] if isinstance(item, dict)
              and item.get("kind") in ("text", "text_run")]
-    if any(texts.count(text) != 1 for text in (f"Count: {count}", "Increment", "Shared counter")):
+    labels = (f"Count: {count}", "Increment", "Shared <stack>", "Spacing", "Fixed Card") if fixture == "spacing" else (f"Count: {count}", "Increment", "Shared counter")
+    if any(texts.count(text) != 1 for text in labels):
         raise E2EError("canonical scene is missing or duplicates shared counter text")
     if _bounds(scene.get("viewport"), "scene.viewport") != root:
         raise E2EError("scene viewport disagrees with root bounds")
     if _number(scene.get("scale"), "scene.scale", positive=True) != scale:
         raise E2EError("scene scale disagrees with native scale")
+    if fixture == "spacing":
+        validate_spacing_geometry(marker, phase)
     if fixture == "card":
         validate_card_geometry(marker)
         if phase > 0 and marker["focused"] is not True:
@@ -192,6 +196,14 @@ def validate_card_geometry(marker: dict[str, Any]) -> None:
     gaps = [b[1] - a[1] - a[3] for a, b in zip(children, children[1:])]
     if any(abs(gap - 12) > 1 for gap in gaps):
         raise E2EError("Card child gap must be 12 logical pixels")
+    validate_card_paint(marker, ("Shared counter", f"Count: {marker['count']}", "Increment"))
+
+
+def validate_card_paint(marker: dict[str, Any], child_texts: tuple[str, ...], *,
+                        allow_preceding_siblings: bool = False) -> None:
+    """Bind the fixed Card quads and order to their actual descendant text."""
+    card = _bounds(marker.get("card"), "card")
+    x, y, width, height = card
     items = marker["scene"]["items"]
     border = [i for i, item in enumerate(items) if item.get("kind") == "quad"
               and _bounds(item.get("bounds"), "quad") == card]
@@ -207,11 +219,100 @@ def validate_card_geometry(marker: dict[str, Any]) -> None:
         raise E2EError("Card interior color changed")
     if _bounds(inner.get("bounds"), "Card interior") != (x+1, y+1, width-2, height-2):
         raise E2EError("Card painted border must be exactly 1 logical pixel")
-    if any(item.get("kind") in ("text", "text_run") for item in items[:index + 2]):
+    if any(item.get("kind") in ("text", "text_run")
+           and (not allow_preceding_siblings or item.get("text") in child_texts)
+           for item in items[:index + 2]):
         raise E2EError("Card paint must precede its text descendants")
     ids = [item.get("id") for item in items]
-    if len(set(ids)) != len(ids):
-        raise E2EError("scene IDs must be unique")
+    if any(type(value) is not int or value <= 0 for value in ids) or len(set(ids)) != len(ids):
+        raise E2EError("scene IDs must be unique positive integers")
+
+
+SPACING_KEYS = {"expanded", "stack", "row", "cardLabel", "toggle", "toggleLabel",
+                "togglePressed", "toggleFocused", "buttonId", "toggleId", "actionKeys"}
+SPACING_ACTIONS = ["increment", "spacing-toggle", "increment", "spacing-toggle"]
+SPACING_EXPANDED = [False, False, True, True, False]
+GEOMETRY_TOLERANCE = 1.0  # Logical pixels; fixed before implementation and capture.
+
+
+def _stack_geometry(parent: tuple[float, ...], children: list[tuple[float, ...]],
+                    *, axis: int, gap: float, padding: float, label: str) -> None:
+    """Intrinsic fixtures measure all edges of the direct-child content union."""
+    x, y, width, height = parent
+    for child in children:
+        _inside(child, parent, label + " child")
+    insets = (min(child[0] for child in children) - x,
+              min(child[1] for child in children) - y,
+              x + width - max(child[0] + child[2] for child in children),
+              y + height - max(child[1] + child[3] for child in children))
+    if any(abs(value - padding) > GEOMETRY_TOLERANCE for value in insets):
+        raise E2EError(f"{label} content-union padding must be {padding} logical pixels")
+    if any(abs(b[axis] - a[axis] - a[axis + 2] - gap) > GEOMETRY_TOLERANCE
+           for a, b in zip(children, children[1:])):
+        raise E2EError(f"{label} ordered child gap must be {gap} logical pixels")
+
+
+def validate_spacing_geometry(marker: dict[str, Any], phase: int) -> None:
+    spacing = marker.get("spacing")
+    if not isinstance(spacing, dict) or set(spacing) != SPACING_KEYS:
+        raise E2EError("spacing observation schema is incomplete or unknown")
+    if type(spacing["expanded"]) is not bool or spacing["expanded"] != SPACING_EXPANDED[phase]:
+        raise E2EError("spacing model expanded state does not match the pointer phase")
+    if spacing["actionKeys"] != SPACING_ACTIONS[:phase]:
+        raise E2EError("spacing action targets do not match actual pointer sequence")
+    if any(type(spacing[key]) is not bool for key in ("toggleFocused", "togglePressed")):
+        raise E2EError("spacing focus/pressed observations must be booleans")
+    if spacing["togglePressed"]:
+        raise E2EError("spacing settled phase cannot have a pressed toggle")
+    if marker["focused"] != (phase in (1, 3)) or spacing["toggleFocused"] != (phase in (2, 4)):
+        raise E2EError("actual pointer focus was not preserved through spacing updates")
+    ids = (spacing["buttonId"], spacing["toggleId"])
+    if any(type(value) is not int or value <= 0 for value in ids) or ids[0] == ids[1]:
+        raise E2EError("spacing Button binding IDs must be distinct positive integers")
+    items = marker["scene"]["items"]
+    for text, binding_id in zip(("Increment", "Spacing"), ids):
+        labels = [item for item in items if item.get("kind") in ("text", "text_run") and item.get("text") == text]
+        if len(labels) != 1 or labels[0].get("id") != binding_id + 3:
+            raise E2EError("spacing binding ID does not identify the actual scene Button label")
+    stack = _bounds(spacing["stack"], "spacing.stack")
+    row = _bounds(spacing["row"], "spacing.row")
+    card = _bounds(marker.get("card"), "card")
+    heading = _bounds(marker.get("heading"), "heading")
+    counter = _bounds(marker.get("counter"), "counter")
+    button = _bounds(marker.get("button"), "button")
+    toggle = _bounds(spacing["toggle"], "spacing.toggle")
+    card_label = _bounds(spacing["cardLabel"], "spacing.cardLabel")
+    _inside(stack, _bounds(marker["root"], "root"), "spacing.stack")
+    _inside(_bounds(spacing["toggleLabel"], "spacing.toggleLabel"), toggle, "spacing.toggleLabel")
+    expanded = spacing["expanded"]
+    _stack_geometry(stack, [heading, counter, row, card], axis=1,
+                    gap=12 if expanded else 0, padding=16 if expanded else 4, label="outer stack")
+    _stack_geometry(row, [button, toggle], axis=0,
+                    gap=16 if expanded else 4, padding=8 if expanded else 0, label="inner row")
+    _stack_geometry(card, [card_label], axis=1, gap=12, padding=17, label="fixed Card")
+    validate_card_paint(marker, ("Fixed Card",), allow_preceding_siblings=True)
+
+
+def validate_spacing_sequence(markers: list[dict[str, Any]]) -> None:
+    if len(markers) != 5:
+        raise E2EError("spacing requires all five settled phases")
+    for phase, marker in enumerate(markers):
+        validate_spacing_geometry(marker, phase)
+        for field in ("buttonId", "toggleId"):
+            if marker["spacing"][field] != markers[0]["spacing"][field]:
+                raise E2EError("spacing update replaced a stable native Button binding ID")
+        for field in ("root", "scale"):
+            if marker[field] != markers[0][field]:
+                raise E2EError(f"spacing host {field} changed across settled phases")
+    # Fresh pointer activations must be delivered at moved geometry, then return
+    # to the original collapsed geometry after the second toggle.
+    for field in ("stack", "row", "toggle"):
+        if markers[2]["spacing"][field] == markers[1]["spacing"][field]:
+            raise E2EError(f"spacing {field} did not move/change after toggle")
+        if markers[4]["spacing"][field] != markers[0]["spacing"][field]:
+            raise E2EError(f"spacing {field} did not restore its collapsed geometry")
+    if markers[2]["button"] == markers[1]["button"]:
+        raise E2EError("spacing increment Button did not move before fresh activation")
 
 
 def inspect_card_pixels(image: Any, marker: dict[str, Any]) -> list[list[int]]:
@@ -242,14 +343,22 @@ def inspect_frame(marker: dict[str, Any], directory: Path) -> tuple[Any, dict[st
         raise E2EError("button label has no contrasting pixels inside its label bounds")
     if button_pixels <= 0:
         raise E2EError("button has no visible foreground pixels")
-    card_pixels = inspect_card_pixels(image, marker) if marker["fixture"] == "card" else None
-    return image, {"cardPixels": card_pixels, "path": str(path), "sha256": digest(path), "width": image.width,
+    card_pixels = inspect_card_pixels(image, marker) if marker["fixture"] in ("card", "spacing") else None
+    toggle_pixels = None
+    if marker["fixture"] == "spacing":
+        toggle_pixels = native._foreground_count(image, _bounds(marker["spacing"]["toggleLabel"], "toggleLabel"), scale)
+        if toggle_pixels <= 0:
+            raise E2EError("spacing toggle label has no contrasting pixels")
+    return image, {"toggleLabelPixels": toggle_pixels, "cardPixels": card_pixels, "path": str(path), "sha256": digest(path), "width": image.width,
                    "height": image.height, "scale": scale, "counterPixels": counter_pixels,
                    "buttonLabelPixels": label_pixels, "buttonPixels": button_pixels}
 
 
 def inspect_frame_sequence(markers: list[dict[str, Any]], directory: Path) -> dict[str, Any]:
     images, reports, paths = [], [], set()
+    spacing = bool(markers) and markers[0]["fixture"] == "spacing"
+    if spacing:
+        validate_spacing_sequence(markers)
     for marker in markers:
         image, report = inspect_frame(marker, directory)
         if report["path"] in paths:
@@ -257,7 +366,7 @@ def inspect_frame_sequence(markers: list[dict[str, Any]], directory: Path) -> di
         paths.add(report["path"])
         images.append(image)
         reports.append(report)
-        stable = ("root", "counter", "button", "buttonLabel", "scale")
+        stable = ("root", "scale") if spacing else ("root", "counter", "button", "buttonLabel", "scale")
         if marker["fixture"] == "card":
             stable += ("card", "heading")
         for key in stable:
@@ -269,7 +378,14 @@ def inspect_frame_sequence(markers: list[dict[str, Any]], directory: Path) -> di
         raise E2EError("final counter pixels did not change from the initial capture")
     # Disabled/loading transitions must preserve the actual visible count too.
     for index in range(1, len(markers)):
-        if markers[index]["count"] == markers[index - 1]["count"]:
+        if spacing:
+            previous = native._region_pixels(images[index - 1], _bounds(markers[index - 1]["counter"], "counter"), markers[index - 1]["scale"])
+            current = native._region_pixels(images[index], _bounds(markers[index]["counter"], "counter"), markers[index]["scale"])
+            if markers[index]["count"] == markers[index - 1]["count"] and previous != current:
+                raise E2EError("spacing-only update changed the translated counter pixels")
+            if markers[index]["count"] != markers[index - 1]["count"] and previous == current:
+                raise E2EError("spacing increment did not change the counter pixels")
+        elif markers[index]["count"] == markers[index - 1]["count"]:
             if native._changed_pixels(images[index - 1], images[index], counter, markers[index]["scale"]) != 0:
                 raise E2EError("gated click changed the counter pixels")
     return {"captures": reports, "changedCounterPixels": changed}
@@ -432,7 +548,11 @@ def run_fixture(args: argparse.Namespace, fixture: str, counts: list[int], execu
         click_args = argparse.Namespace(**vars(args))
         click_args.window_title, click_args.sample_pid = title, process.pid
         for phase in range(1, len(counts)):
-            native._send_click(args.platform, trace["presented"][-1], click_args)
+            previous = trace["presented"][-1]
+            target = previous
+            if fixture == "spacing" and SPACING_ACTIONS[phase - 1] == "spacing-toggle":
+                target = previous | {"button": previous["spacing"]["toggle"]}
+            native._send_click(args.platform, target, click_args)
             marker = stream.phase(fixture, phase, counts, args.marker_timeout)
             inspect_frame(marker, directory)
             trace["presented"].append(marker)

@@ -88,6 +88,7 @@ pub fn run(
     None => "counter"
     Some("counter") => "counter"
     Some("card") => "card"
+    Some("spacing") => "spacing"
     Some("disabled-loading") if e2e => "disabled-loading"
     _ => return Err(runner_error("invalid shared counter fixture"))
   }
@@ -129,6 +130,7 @@ pub fn run(
       window,
       disabled=fixture == "disabled-loading",
       card=fixture == "card",
+      spacing=fixture == "spacing",
     ) {
     Err(error) => {
       let _ = host.destroy_window(window)
@@ -253,7 +255,12 @@ fn run_loop(
                       ..
                     ),
                     Some(frame),
-                  ) => frame.button_bounds().contains(position)
+                  ) =>
+                    if fixture == "spacing" && proof.phase % 2 == 1 {
+                      frame.toggle_bounds().contains(position)
+                    } else {
+                      frame.button_bounds().contains(position)
+                    }
                   _ => false
                 }
                 if e2e && inside_release {
@@ -360,8 +367,20 @@ fn run_loop(
     return Err(runner_error("host window destruction timed out"))
   }
   if e2e {
-    let expected_phase = if fixture != "disabled-loading" { 2 } else { 3 }
-    let expected_actions = if fixture != "disabled-loading" { 2 } else { 1 }
+    let expected_phase = if fixture == "spacing" {
+      4
+    } else if fixture != "disabled-loading" {
+      2
+    } else {
+      3
+    }
+    let expected_actions = if fixture == "spacing" {
+      4
+    } else if fixture != "disabled-loading" {
+      2
+    } else {
+      1
+    }
     if proof.last_phase != expected_phase ||
       proof.actions != expected_actions ||
       proof.releases != expected_phase {
@@ -390,7 +409,9 @@ fn publish(
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   // Transient hover/press presentations are real frames, but are not fixture
   // observations. A phase is recorded once, after its button has settled.
-  if frame.button_pressed() || proof.phase == proof.last_phase {
+  if frame.button_pressed() ||
+    frame.toggle_pressed() ||
+    proof.phase == proof.last_phase {
     return Ok(())
   }
   let directory = match directory {
@@ -417,8 +438,14 @@ fn publish(
     actions.write_string("\"Activate\"")
   }
   actions.write_string("]")
+  let spacing_payload = if proof.fixture == "spacing" {
+    spacing_json(frame)
+  } else {
+    ""
+  }
   // Store a JSON object tail so completion can add destroyed without reparsing.
-  let payload = "\"fixture\":\"\{proof.fixture}\",\"phase\":\{proof.phase},\"count\":\{frame.count()},\"value\":\{frame.count()},\"enabled\":\{frame.button_enabled()},\"loading\":\{frame.button_loading()},\"pressed\":\{frame.button_pressed()},\"focused\":\{frame.button_focused()},\"releases\":\{proof.releases},\"actions\":\{actions.to_string()},\"windowId\":\{window.value()},\"title\":\"\{escape_json(title)}\",\"button\":\{rect_json(frame.button_bounds())},\"buttonLabel\":\{rect_json(frame.button_label_bounds())},\"counter\":\{rect_json(frame.counter_bounds())},\"card\":\{rect_json(frame.card_bounds())},\"heading\":\{rect_json(frame.heading_bounds())},\"root\":\{rect_json(frame.root_bounds())},\"scale\":\{captured.scale()},\"scene\":\{frame.snapshot().canonical_json()},\"frame\":{\"path\":\"\{escape_json(path)}\",\"width\":\{captured.width()},\"height\":\{captured.height()},\"scale\":\{captured.scale()}}}"
+  let payload = spacing_payload +
+    "\"fixture\":\"\{proof.fixture}\",\"phase\":\{proof.phase},\"count\":\{frame.count()},\"value\":\{frame.count()},\"enabled\":\{frame.button_enabled()},\"loading\":\{frame.button_loading()},\"pressed\":\{frame.button_pressed()},\"focused\":\{frame.button_focused()},\"releases\":\{proof.releases},\"actions\":\{actions.to_string()},\"windowId\":\{window.value()},\"title\":\"\{escape_json(title)}\",\"button\":\{rect_json(frame.button_bounds())},\"buttonLabel\":\{rect_json(frame.button_label_bounds())},\"counter\":\{rect_json(frame.counter_bounds())},\"card\":\{rect_json(frame.card_bounds())},\"heading\":\{rect_json(frame.heading_bounds())},\"root\":\{rect_json(frame.root_bounds())},\"scale\":\{captured.scale()},\"scene\":\{frame.snapshot().canonical_json()},\"frame\":{\"path\":\"\{escape_json(path)}\",\"width\":\{captured.width()},\"height\":\{captured.height()},\"scale\":\{captured.scale()}}}"
   emit("YAMI_NATIVE_UI_PRESENTED", "{" + payload)
   if proof.last_payload is None {
     emit("YAMI_NATIVE_UI_READY", "{" + payload)
@@ -465,4 +492,18 @@ fn runner_error(message : String) -> @diagnostics.FrameworkError {
     subsystem="shared-ui",
     message~,
   )
+}
+
+///|
+fn spacing_json(frame : @shared_counter.CounterFrame) -> String {
+  let keys = StringBuilder()
+  keys.write_string("[")
+  for index, key in frame.action_keys() {
+    if index > 0 {
+      keys.write_string(",")
+    }
+    keys.write_string("\"" + escape_json(key) + "\"")
+  }
+  keys.write_string("]")
+  "\"spacing\":{\"expanded\":\{frame.expanded()},\"stack\":\{rect_json(frame.stack_bounds())},\"row\":\{rect_json(frame.row_bounds())},\"cardLabel\":\{rect_json(frame.card_label_bounds())},\"toggle\":\{rect_json(frame.toggle_bounds())},\"toggleLabel\":\{rect_json(frame.toggle_label_bounds())},\"togglePressed\":\{frame.toggle_pressed()},\"toggleFocused\":\{frame.toggle_focused()},\"buttonId\":\{frame.button_binding_id()},\"toggleId\":\{frame.toggle_binding_id()},\"actionKeys\":\{keys.to_string()}},"
 }
