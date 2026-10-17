@@ -35,6 +35,7 @@ pub struct View {
   priv loading : Bool
   priv card : Bool
   priv spacing : StackSpacing?
+  priv button_palette : ButtonPaletteToken?
   priv children : Array[View]
 } derive(Eq, @debug.Debug)
 
@@ -48,6 +49,7 @@ pub fn text(key : NodeKey, value : String) -> View {
     loading: false,
     card: false,
     spacing: None,
+    button_palette: None,
     children: [],
   }
 }
@@ -73,6 +75,7 @@ pub fn button(
     loading,
     card: false,
     spacing: None,
+    button_palette: None,
     children: [],
   }
 }
@@ -87,6 +90,7 @@ pub fn column(key : NodeKey, children : Array[View]) -> View {
     loading: false,
     card: false,
     spacing: None,
+    button_palette: None,
     children: children.copy(),
   }
 }
@@ -101,6 +105,7 @@ pub fn row(key : NodeKey, children : Array[View]) -> View {
     loading: false,
     card: false,
     spacing: None,
+    button_palette: None,
     children: children.copy(),
   }
 }

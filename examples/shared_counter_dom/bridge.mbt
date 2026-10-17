@@ -2,7 +2,7 @@
 /// A browser bootstrap and bounded test driver. The actual model/view/update
 /// come from the same portable package used by the independent native consumer.
 priv struct Counter {
-  mut model : @shared_counter.SpacingModel
+  mut model : @shared_counter.PaletteModel
   mut mounted : @dom.DomRoot?
   mut mode : String
   mut label : String
@@ -19,12 +19,25 @@ fn Counter::test_view(self : Counter, view : @core.View) -> @core.View {
         return @core.text(@core.NodeKey::new("placeholder"), "Removed")
       "text" => return @core.text(view.key(), self.label)
       _ =>
-        return @core.button(
-          view.key(),
-          self.label,
-          disabled=self.mode == "disabled" || self.mode == "disabled-loading",
-          loading=self.mode == "loading" || self.mode == "disabled-loading",
-        )
+        return match view.button_palette() {
+          None =>
+            @core.button(
+              view.key(),
+              self.label,
+              disabled=self.mode == "disabled" ||
+                self.mode == "disabled-loading",
+              loading=self.mode == "loading" || self.mode == "disabled-loading",
+            )
+          Some(token) =>
+            @core.button_with_palette(
+              view.key(),
+              self.label,
+              token,
+              disabled=self.mode == "disabled" ||
+                self.mode == "disabled-loading",
+              loading=self.mode == "loading" || self.mode == "disabled-loading",
+            )
+        }
     }
   }
   match view.kind() {
@@ -56,7 +69,9 @@ fn Counter::view(self : Counter) -> @core.View {
   if self.mode == "fixed-spacing" {
     return @shared_counter.spacing_geometry_view()
   }
-  let common = if self.mode == "spacing" {
+  let common = if self.mode == "palette" {
+    self.model.palette_view()
+  } else if self.mode == "spacing" {
     self.model.view()
   } else if self.mode == "card" || self.mode == "nested-card" {
     self.model.counter().card_view()
@@ -105,7 +120,7 @@ pub fn mount_counter(id : String) -> String {
     return "already-mounted"
   }
   let counter : Counter = {
-    model: @shared_counter.SpacingModel::new(),
+    model: @shared_counter.PaletteModel::new(),
     mounted: None,
     mode: "normal",
     label: "Increment",
@@ -115,7 +130,9 @@ pub fn mount_counter(id : String) -> String {
       None => ()
       Some(mounted) =>
         while mounted.next_action() is Some(action) {
-          counter.model = if counter.mode == "spacing" {
+          counter.model = if counter.mode == "palette" {
+            counter.model.update_palette(action)
+          } else if counter.mode == "spacing" {
             counter.model.update(action)
           } else {
             counter.model.update_counter(action)

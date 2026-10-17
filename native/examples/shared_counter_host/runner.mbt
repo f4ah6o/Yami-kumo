@@ -89,6 +89,7 @@ pub fn run(
     Some("counter") => "counter"
     Some("card") => "card"
     Some("spacing") => "spacing"
+    Some("palette") => "palette"
     Some("disabled-loading") if e2e => "disabled-loading"
     _ => return Err(runner_error("invalid shared counter fixture"))
   }
@@ -131,6 +132,7 @@ pub fn run(
       disabled=fixture == "disabled-loading",
       card=fixture == "card",
       spacing=fixture == "spacing",
+      palette=fixture == "palette",
     ) {
     Err(error) => {
       let _ = host.destroy_window(window)
@@ -256,7 +258,11 @@ fn run_loop(
                     ),
                     Some(frame),
                   ) =>
-                    if fixture == "spacing" && proof.phase % 2 == 1 {
+                    if (fixture == "spacing" && proof.phase % 2 == 1) ||
+                      (
+                        fixture == "palette" &&
+                        (proof.phase == 1 || proof.phase >= 3)
+                      ) {
                       frame.toggle_bounds().contains(position)
                     } else {
                       frame.button_bounds().contains(position)
@@ -367,14 +373,18 @@ fn run_loop(
     return Err(runner_error("host window destruction timed out"))
   }
   if e2e {
-    let expected_phase = if fixture == "spacing" {
+    let expected_phase = if fixture == "palette" {
+      5
+    } else if fixture == "spacing" {
       4
     } else if fixture != "disabled-loading" {
       2
     } else {
       3
     }
-    let expected_actions = if fixture == "spacing" {
+    let expected_actions = if fixture == "palette" {
+      5
+    } else if fixture == "spacing" {
       4
     } else if fixture != "disabled-loading" {
       2
@@ -438,7 +448,9 @@ fn publish(
     actions.write_string("\"Activate\"")
   }
   actions.write_string("]")
-  let spacing_payload = if proof.fixture == "spacing" {
+  let spacing_payload = if proof.fixture == "palette" {
+    palette_json(frame)
+  } else if proof.fixture == "spacing" {
     spacing_json(frame)
   } else {
     ""
@@ -506,4 +518,29 @@ fn spacing_json(frame : @shared_counter.CounterFrame) -> String {
   }
   keys.write_string("]")
   "\"spacing\":{\"expanded\":\{frame.expanded()},\"stack\":\{rect_json(frame.stack_bounds())},\"row\":\{rect_json(frame.row_bounds())},\"cardLabel\":\{rect_json(frame.card_label_bounds())},\"toggle\":\{rect_json(frame.toggle_bounds())},\"toggleLabel\":\{rect_json(frame.toggle_label_bounds())},\"togglePressed\":\{frame.toggle_pressed()},\"toggleFocused\":\{frame.toggle_focused()},\"buttonId\":\{frame.button_binding_id()},\"toggleId\":\{frame.toggle_binding_id()},\"actionKeys\":\{keys.to_string()}},"
+}
+
+///|
+/// All observations come from the accepted frame, never subsequent live input.
+fn palette_json(frame : @shared_counter.CounterFrame) -> String {
+  let token = match frame.button_palette() {
+    None => "none"
+    Some(Light) => "light"
+    Some(Dark) => "dark"
+  }
+  let toggle_token = match frame.toggle_palette() {
+    None => "none"
+    Some(Light) => "light"
+    Some(Dark) => "dark"
+  }
+  let keys = StringBuilder()
+  keys.write_string("[")
+  for index, key in frame.action_keys() {
+    if index > 0 {
+      keys.write_string(",")
+    }
+    keys.write_string("\"" + escape_json(key) + "\"")
+  }
+  keys.write_string("]")
+  "\"palette\":{\"token\":\"\{token}\",\"toggleToken\":\"\{toggle_token}\",\"hovered\":\{frame.button_hovered()},\"toggleEnabled\":\{frame.toggle_enabled()},\"toggleLoading\":\{frame.toggle_loading()},\"toggleHovered\":\{frame.toggle_hovered()},\"togglePressed\":\{frame.toggle_pressed()},\"toggleFocused\":\{frame.toggle_focused()},\"toggle\":\{rect_json(frame.toggle_bounds())},\"toggleLabel\":\{rect_json(frame.toggle_label_bounds())},\"buttonId\":\{frame.button_binding_id()},\"toggleId\":\{frame.toggle_binding_id()},\"revision\":\{frame.revision()},\"actionKeys\":\{keys.to_string()}},"
 }

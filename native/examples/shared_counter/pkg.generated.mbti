@@ -23,8 +23,10 @@ pub fn CounterFrame::button_binding_id(Self) -> UInt64
 pub fn CounterFrame::button_bounds(Self) -> @primitives.Rect
 pub fn CounterFrame::button_enabled(Self) -> Bool
 pub fn CounterFrame::button_focused(Self) -> Bool
+pub fn CounterFrame::button_hovered(Self) -> Bool
 pub fn CounterFrame::button_label_bounds(Self) -> @primitives.Rect
 pub fn CounterFrame::button_loading(Self) -> Bool
+pub fn CounterFrame::button_palette(Self) -> @core.ButtonPaletteToken?
 pub fn CounterFrame::button_pressed(Self) -> Bool
 pub fn CounterFrame::canonical_scene(Self) -> String
 pub fn CounterFrame::card_bounds(Self) -> @primitives.Rect
@@ -40,8 +42,12 @@ pub fn CounterFrame::snapshot(Self) -> @scene.SceneSnapshot
 pub fn CounterFrame::stack_bounds(Self) -> @primitives.Rect
 pub fn CounterFrame::toggle_binding_id(Self) -> UInt64
 pub fn CounterFrame::toggle_bounds(Self) -> @primitives.Rect
+pub fn CounterFrame::toggle_enabled(Self) -> Bool
 pub fn CounterFrame::toggle_focused(Self) -> Bool
+pub fn CounterFrame::toggle_hovered(Self) -> Bool
 pub fn CounterFrame::toggle_label_bounds(Self) -> @primitives.Rect
+pub fn CounterFrame::toggle_loading(Self) -> Bool
+pub fn CounterFrame::toggle_palette(Self) -> @core.ButtonPaletteToken?
 pub fn CounterFrame::toggle_pressed(Self) -> Bool
 
 pub struct NativeCounter {
@@ -54,7 +60,7 @@ pub fn NativeCounter::drain_one(Self, Double, Double, Double, (String, Double) -
 pub fn NativeCounter::handle_event(Self, @platform.Event) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn NativeCounter::invalidate_layout(Self) -> Unit
 pub fn NativeCounter::model_revision(Self) -> Result[UInt64, @diagnostics.FrameworkError]
-pub fn NativeCounter::new(@platform.WindowId, card? : Bool, spacing? : Bool, disabled? : Bool, loading? : Bool) -> Result[Self, @diagnostics.FrameworkError]
+pub fn NativeCounter::new(@platform.WindowId, card? : Bool, spacing? : Bool, palette? : Bool, disabled? : Bool, loading? : Bool) -> Result[Self, @diagnostics.FrameworkError]
 pub fn NativeCounter::render(Self, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[CounterFrame, @diagnostics.FrameworkError]
 pub fn NativeCounter::set_mode(Self, Bool, Bool, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Unit, @diagnostics.FrameworkError]
 

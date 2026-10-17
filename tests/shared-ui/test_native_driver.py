@@ -173,6 +173,7 @@ class MarkerTests(unittest.TestCase):
             "disabled-loading": "counter-disabled-loading",
             "card": "card-counter-two-activations",
             "spacing": "spacing-count-and-toggle",
+            "palette": "palette-count-and-toggle",
         })
         self.assertEqual(set(driver.CONTRACT_PHASES) - set(driver.FIXTURES.values()), {
             "button-interrupted-loading", "button-interrupted-disabled",
@@ -840,6 +841,16 @@ class LifecycleTests(unittest.TestCase):
 
     def test_wrong_phase_stops_before_another_input(self):
         self.assertEqual(self.exercise(wrong_phase=True), ["launch", "click"])
+
+
+class IsolatedImportTests(unittest.TestCase):
+    def test_path_loaded_driver_is_inert_without_sibling_sys_path(self):
+        code = "import importlib.util; s=importlib.util.spec_from_file_location('isolated_driver', " + repr(str(PATH)) + "); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); assert callable(m.validate_palette_marker)"
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run([sys.executable, "-I", "-B", "-c", code], cwd=directory,
+                                    capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "")
 
 
 if __name__ == "__main__":

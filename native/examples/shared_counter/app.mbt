@@ -1,12 +1,13 @@
 ///|
-/// The bootstrap owns exactly one App Entity containing the common SpacingModel,
-/// which composes the unchanged shared counter Model. Native host state and
+/// The bootstrap owns exactly one App Entity containing the common PaletteModel,
+/// which composes unchanged SpacingModel and shared counter Model. Native host state and
 /// bounded fixture props contain no counter or expanded-state copy.
 pub struct NativeCounter {
   priv app : @app.App
-  priv state : @app.Entity[@model.SpacingModel]
+  priv state : @app.Entity[@model.PaletteModel]
   priv mount : @ui.Mounted
   priv spacing : Bool
+  priv palette : Bool
   priv card : Bool
   priv mut disabled : Bool
   priv mut loading : Bool
@@ -20,10 +21,9 @@ pub struct CounterFrame {
   priv frame : @ui.Frame
   priv count : Int32
   priv spacing : Bool
+  priv palette : Bool
   priv expanded : Bool
   priv action_keys : Array[String]
-  priv disabled : Bool
-  priv loading : Bool
 }
 
 ///|
@@ -80,12 +80,12 @@ pub fn CounterFrame::button_focused(self : CounterFrame) -> Bool {
 
 ///|
 pub fn CounterFrame::button_enabled(self : CounterFrame) -> Bool {
-  !self.disabled
+  self.frame.enabled(@view.NodeKey::new("increment"))
 }
 
 ///|
 pub fn CounterFrame::button_loading(self : CounterFrame) -> Bool {
-  self.loading
+  self.frame.loading(@view.NodeKey::new("increment"))
 }
 
 ///|
@@ -93,10 +93,11 @@ pub fn NativeCounter::new(
   window : @platform.WindowId,
   card~ : Bool = false,
   spacing~ : Bool = false,
+  palette~ : Bool = false,
   disabled~ : Bool = false,
   loading~ : Bool = false,
 ) -> Result[NativeCounter, @diagnostics.FrameworkError] {
-  if card && spacing {
+  if (card && spacing) || (palette && (card || spacing)) {
     return Err(counter_error("Card and spacing fixtures cannot be combined"))
   }
   let app = match @app.App::new() {
@@ -107,7 +108,7 @@ pub fn NativeCounter::new(
     Err(error) => return Err(error)
     Ok(_) => ()
   }
-  let state = match app.create_entity(@model.SpacingModel::new()) {
+  let state = match app.create_entity(@model.PaletteModel::new()) {
     Err(error) => return Err(error)
     Ok(value) => value
   }
@@ -117,6 +118,7 @@ pub fn NativeCounter::new(
     mount: @ui.Mounted::new(window),
     card,
     spacing,
+    palette,
     disabled,
     loading,
     draining: false,
@@ -150,7 +152,18 @@ pub fn NativeCounter::actions(
 ///|
 fn mode_view(view : @view.View, disabled : Bool, loading : Bool) -> @view.View {
   match view.kind() {
-    @view.Button => @view.button(view.key(), view.label(), disabled~, loading~)
+    @view.Button =>
+      match view.button_palette() {
+        None => @view.button(view.key(), view.label(), disabled~, loading~)
+        Some(token) =>
+          @view.button_with_palette(
+            view.key(),
+            view.label(),
+            token,
+            disabled~,
+            loading~,
+          )
+      }
     @view.Row => {
       let children = view
         .children()
@@ -216,14 +229,13 @@ pub fn NativeCounter::render(
         frame,
         count: model.value(),
         spacing: self.spacing,
+        palette: self.palette,
         expanded: model.expanded(),
         action_keys: self.actions.map(action => {
           match action {
             @view.Activate(key) => key.value()
           }
         }),
-        disabled: self.disabled,
-        loading: self.loading,
       })
   }
 }
@@ -281,7 +293,9 @@ fn NativeCounter::apply_action(
 ) -> Result[Bool, @diagnostics.FrameworkError] {
   let next = match
     self.app.read(self.state, model => {
-      if self.spacing {
+      if self.palette {
+        model.update_palette(action)
+      } else if self.spacing {
         model.update(action)
       } else {
         model.update_counter(action)
@@ -416,9 +430,11 @@ fn NativeCounter::drain_app_work(
 ///|
 fn NativeCounter::common_view(
   self : NativeCounter,
-  model : @model.SpacingModel,
+  model : @model.PaletteModel,
 ) -> @view.View {
-  if self.spacing {
+  if self.palette {
+    model.palette_view()
+  } else if self.spacing {
     model.view()
   } else if self.card {
     model.counter().card_view()
@@ -462,14 +478,34 @@ pub fn CounterFrame::row_bounds(self : CounterFrame) -> @primitives.Rect {
 
 ///|
 pub fn CounterFrame::toggle_bounds(self : CounterFrame) -> @primitives.Rect {
-  self.frame.bounds(@view.NodeKey::new("spacing-toggle")).unwrap()
+  self.frame
+  .bounds(
+    @view.NodeKey::new(
+      if self.palette {
+        "palette-toggle"
+      } else {
+        "spacing-toggle"
+      },
+    ),
+  )
+  .unwrap()
 }
 
 ///|
 pub fn CounterFrame::toggle_label_bounds(
   self : CounterFrame,
 ) -> @primitives.Rect {
-  self.frame.label_bounds(@view.NodeKey::new("spacing-toggle")).unwrap()
+  self.frame
+  .label_bounds(
+    @view.NodeKey::new(
+      if self.palette {
+        "palette-toggle"
+      } else {
+        "spacing-toggle"
+      },
+    ),
+  )
+  .unwrap()
 }
 
 ///|
@@ -479,12 +515,28 @@ pub fn CounterFrame::card_label_bounds(self : CounterFrame) -> @primitives.Rect 
 
 ///|
 pub fn CounterFrame::toggle_pressed(self : CounterFrame) -> Bool {
-  self.frame.pressed(@view.NodeKey::new("spacing-toggle"))
+  self.frame.pressed(
+    @view.NodeKey::new(
+      if self.palette {
+        "palette-toggle"
+      } else {
+        "spacing-toggle"
+      },
+    ),
+  )
 }
 
 ///|
 pub fn CounterFrame::toggle_focused(self : CounterFrame) -> Bool {
-  self.frame.focused(@view.NodeKey::new("spacing-toggle"))
+  self.frame.focused(
+    @view.NodeKey::new(
+      if self.palette {
+        "palette-toggle"
+      } else {
+        "spacing-toggle"
+      },
+    ),
+  )
 }
 
 ///|
@@ -494,5 +546,49 @@ pub fn CounterFrame::button_binding_id(self : CounterFrame) -> UInt64 {
 
 ///|
 pub fn CounterFrame::toggle_binding_id(self : CounterFrame) -> UInt64 {
-  self.frame.binding_id(@view.NodeKey::new("spacing-toggle")).unwrap()
+  self.frame
+  .binding_id(
+    @view.NodeKey::new(
+      if self.palette {
+        "palette-toggle"
+      } else {
+        "spacing-toggle"
+      },
+    ),
+  )
+  .unwrap()
+}
+
+///|
+pub fn CounterFrame::button_hovered(self : CounterFrame) -> Bool {
+  self.frame.hovered(@view.NodeKey::new("increment"))
+}
+
+///|
+pub fn CounterFrame::toggle_hovered(self : CounterFrame) -> Bool {
+  self.frame.hovered(@view.NodeKey::new("palette-toggle"))
+}
+
+///|
+pub fn CounterFrame::button_palette(
+  self : CounterFrame,
+) -> @view.ButtonPaletteToken? {
+  self.frame.button_palette(@view.NodeKey::new("increment"))
+}
+
+///|
+pub fn CounterFrame::toggle_palette(
+  self : CounterFrame,
+) -> @view.ButtonPaletteToken? {
+  self.frame.button_palette(@view.NodeKey::new("palette-toggle"))
+}
+
+///|
+pub fn CounterFrame::toggle_enabled(self : CounterFrame) -> Bool {
+  self.frame.enabled(@view.NodeKey::new("palette-toggle"))
+}
+
+///|
+pub fn CounterFrame::toggle_loading(self : CounterFrame) -> Bool {
+  self.frame.loading(@view.NodeKey::new("palette-toggle"))
 }

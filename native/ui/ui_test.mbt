@@ -962,3 +962,287 @@ test "all closed tokens and empty explicit Row Column have exact intrinsic paddi
     }
   }
 }
+
+///|
+fn palette_view(
+  token : @view.ButtonPaletteToken?,
+  disabled~ : Bool = false,
+  loading~ : Bool = false,
+) -> @view.View {
+  let key = @view.NodeKey::new("palette")
+  match token {
+    None => @view.button(key, "Palette", disabled~, loading~)
+    Some(value) =>
+      @view.button_with_palette(key, "Palette", value, disabled~, loading~)
+  }
+}
+
+///|
+fn item_color(item : @scene.SceneItem) -> @primitives.Color {
+  match item {
+    @scene.QuadItem(color~, ..) | @scene.TextRunItem(color~, ..) => color
+    _ => abort("expected measured text or quad")
+  }
+}
+
+///|
+fn expected_color(
+  token : @view.ButtonPaletteToken,
+  role : @view.ButtonPaintRole,
+) -> @primitives.Color {
+  let c = token.color(role)
+  @primitives.Color::rgba(c.red(), c.green(), c.blue(), c.alpha()).unwrap()
+}
+
+///|
+test "palette native every role is delegated and measured geometry is preserved" {
+  let key = @view.NodeKey::new("palette")
+  for token in [@view.Light, @view.Dark] {
+    // Each portable input state is selected through public controls, never RGB.
+    for state in 0..<7 {
+      let mount = @ui.Mounted::new(@platform.WindowId::new(1L))
+      let initial = mount
+        .commit(palette_view(None), 800.0, 600.0, 1.0, measure)
+        .unwrap()
+      let bounds = initial.bounds(key).unwrap()
+      let point = @primitives.Point::new(
+        bounds.left() + 4.0,
+        bounds.top() + 4.0,
+      ).unwrap()
+      if state == 1 || state == 2 || state == 3 {
+        assert_true(mount.focus(key))
+      }
+      if state == 2 || state == 3 {
+        ignore(
+          mount
+          .handle_event(event(1L, @primitives.PointerMoved(position=point)))
+          .unwrap(),
+        )
+      }
+      if state == 3 {
+        ignore(mount.handle_event(event(2L, down(bounds))).unwrap())
+      }
+      let frame = mount
+        .commit(
+          palette_view(
+            Some(token),
+            disabled=state == 5 || state == 6,
+            loading=state == 4 || state == 6,
+          ),
+          800.0,
+          600.0,
+          1.0,
+          measure,
+        )
+        .unwrap()
+      assert_true(frame.bounds(key) == initial.bounds(key))
+      assert_true(frame.label_bounds(key) == initial.label_bounds(key))
+      assert_eq(frame.binding_id(key), initial.binding_id(key))
+      assert_eq(frame.button_palette(key), Some(token))
+      let border = if state >= 5 {
+        @view.DisabledBorder
+      } else if state >= 1 && state <= 3 {
+        @view.FocusedBorder
+      } else {
+        @view.NormalBorder
+      }
+      let fill = if state >= 5 {
+        @view.DisabledFill
+      } else if state == 4 {
+        @view.LoadingFill
+      } else if state == 3 {
+        @view.PressedFill
+      } else if state == 2 {
+        @view.HoveredFill
+      } else {
+        @view.NormalFill
+      }
+      let foreground = if state >= 5 {
+        @view.DisabledForeground
+      } else {
+        @view.EnabledForeground
+      }
+      let items = frame.snapshot().items()
+      assert_eq(items.length(), 4)
+      assert_true(item_color(items[1]) == expected_color(token, border))
+      assert_true(item_color(items[2]) == expected_color(token, fill))
+      assert_true(item_color(items[3]) == expected_color(token, foreground))
+      assert_true(items[3] is @scene.TextRunItem(..))
+      assert_eq(frame.pressed(key), state == 3)
+      assert_eq(frame.hovered(key), state == 2 || state == 3)
+      assert_eq(frame.enabled(key), state < 5)
+      assert_eq(frame.loading(key), state == 4 || state == 6)
+    }
+  }
+}
+
+///|
+test "palette changes retain held press focus callbacks and queued activation" {
+  let key = @view.NodeKey::new("palette")
+  let mount = @ui.Mounted::new(@platform.WindowId::new(1L))
+  let first = mount
+    .commit(palette_view(None), 800.0, 600.0, 1.0, measure)
+    .unwrap()
+  let bounds = first.bounds(key).unwrap()
+  assert_true(mount.focus(key))
+  let callback = mount.callback(key).unwrap()
+  ignore(mount.handle_event(event(1L, down(bounds))).unwrap())
+  for token in [Some(@view.Light), Some(@view.Dark), None] {
+    let frame = mount
+      .commit(palette_view(token), 800.0, 600.0, 1.0, measure)
+      .unwrap()
+    assert_true(frame.pressed(key) && frame.focused(key))
+    assert_eq(frame.binding_id(key), first.binding_id(key))
+    assert_true(frame.label_bounds(key) == first.label_bounds(key))
+    assert_true(mount.activate(callback))
+    assert_eq(mount.next_action(), Some(@view.Activate(key)))
+  }
+  assert_true(mount.activate(callback))
+  ignore(
+    mount
+    .commit(palette_view(Some(@view.Light)), 800.0, 600.0, 1.0, measure)
+    .unwrap(),
+  )
+  assert_eq(mount.next_action(), Some(@view.Activate(key)))
+  let failed = mount.stage(
+    palette_view(Some(@view.Dark)),
+    800.0,
+    600.0,
+    1.0,
+    failed_measure,
+  )
+  assert_true(failed is Err(_))
+  let stale = mount
+    .stage(palette_view(Some(@view.Dark)), 800.0, 600.0, 1.0, measure)
+    .unwrap()
+  ignore(mount.commit(palette_view(None), 800.0, 600.0, 1.0, measure).unwrap())
+  assert_true(mount.publish(stale) is Err(_))
+  ignore(mount.handle_event(event(2L, up(bounds))).unwrap())
+  assert_eq(mount.next_action(), Some(@view.Activate(key)))
+  assert_eq(mount.next_action(), None)
+}
+
+///|
+test "palette all gate and input overlaps use accepted core states for role selection" {
+  let key = @view.NodeKey::new("palette")
+  for token in [@view.Light, @view.Dark] {
+    for flags in 0..<32 {
+      let focused = flags % 2 == 1
+      let hovered = flags / 2 % 2 == 1
+      let pressed = flags / 4 % 2 == 1
+      let disabled = flags / 8 % 2 == 1
+      let loading = flags / 16 % 2 == 1
+      let mount = @ui.Mounted::new(@platform.WindowId::new(1L))
+      let frame = mount
+        .commit(palette_view(Some(token)), 800.0, 600.0, 1.0, measure)
+        .unwrap()
+      let bounds = frame.bounds(key).unwrap()
+      if focused {
+        assert_true(mount.focus(key))
+      }
+      if hovered {
+        ignore(
+          mount
+          .handle_event(
+            event(
+              1L,
+              @primitives.PointerMoved(
+                position=@primitives.Point::new(
+                  bounds.left() + 4.0,
+                  bounds.top() + 4.0,
+                ).unwrap(),
+              ),
+            ),
+          )
+          .unwrap(),
+        )
+      }
+      if pressed {
+        ignore(mount.handle_event(event(2L, down(bounds))).unwrap())
+      }
+      let actual = mount
+        .commit(
+          palette_view(Some(token), disabled~, loading~),
+          800.0,
+          600.0,
+          1.0,
+          measure,
+        )
+        .unwrap()
+      let border = if !actual.enabled(key) {
+        @view.DisabledBorder
+      } else if actual.focused(key) {
+        @view.FocusedBorder
+      } else {
+        @view.NormalBorder
+      }
+      let fill = if !actual.enabled(key) {
+        @view.DisabledFill
+      } else if actual.loading(key) {
+        @view.LoadingFill
+      } else if actual.pressed(key) {
+        @view.PressedFill
+      } else if actual.hovered(key) {
+        @view.HoveredFill
+      } else {
+        @view.NormalFill
+      }
+      let foreground = if !actual.enabled(key) {
+        @view.DisabledForeground
+      } else {
+        @view.EnabledForeground
+      }
+      let items = actual.snapshot().items()
+      assert_true(item_color(items[1]) == expected_color(token, border))
+      assert_true(item_color(items[2]) == expected_color(token, fill))
+      assert_true(item_color(items[3]) == expected_color(token, foreground))
+      // Dark explicitly matches the legacy entry, including complete scene IDs,
+      // measured origins, bounds and metadata, for every accepted state overlap.
+      if token == @view.Dark {
+        let legacy = mount
+          .commit(
+            palette_view(None, disabled~, loading~),
+            800.0,
+            600.0,
+            1.0,
+            measure,
+          )
+          .unwrap()
+        assert_eq(
+          legacy.snapshot().canonical_json(),
+          actual.snapshot().canonical_json(),
+        )
+      }
+    }
+  }
+}
+
+///|
+test "explicit palettes preserve core overlong label rejection and atomic frame" {
+  let key = @view.NodeKey::new("palette")
+  let mount = @ui.Mounted::new(@platform.WindowId::new(1L))
+  let before = mount
+    .commit(palette_view(None), 800.0, 600.0, 1.0, measure)
+    .unwrap()
+  let callback = mount.callback(key).unwrap()
+  for token in [@view.Light, @view.Dark] {
+    let invalid = @view.button_with_palette(
+      key,
+      String::make(65537, 'a'),
+      token,
+    )
+    assert_true(
+      mount.commit(invalid, 800.0, 600.0, 1.0, (_text, size) => {
+        measure("short", size)
+      })
+      is Err(_),
+    )
+    assert_eq(
+      mount.frame().unwrap().snapshot().canonical_json(),
+      before.snapshot().canonical_json(),
+    )
+    assert_eq(mount.frame().unwrap().button_palette(key), None)
+    assert_true(mount.activate(callback))
+    assert_eq(mount.next_action(), Some(@view.Activate(key)))
+  }
+}

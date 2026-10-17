@@ -107,6 +107,14 @@ extern "js" fn update_spacing(
   #| }
 
 ///|
+/// Paint-only closed classes; removal restores the unstyled legacy control.
+extern "js" fn update_button_palette(node : DomNode, palette : Int) -> Unit =
+  #| (node, palette) => {
+  #|   node.classList.toggle("yk-ui-button-light", palette === 1);
+  #|   node.classList.toggle("yk-ui-button-dark", palette === 2);
+  #| }
+
+///|
 #external
 priv type ButtonEvents
 
@@ -364,6 +372,16 @@ fn DomRoot::render_node(
     view.loading(),
     view.is_card(),
   )
+  if kind == @core.Button {
+    update_button_palette(
+      mounted.node,
+      match view.button_palette() {
+        None => 0
+        Some(Light) => 1
+        Some(Dark) => 2
+      },
+    )
+  }
   if kind == @core.Row || kind == @core.Column {
     match view.spacing() {
       Some(spacing) =>
