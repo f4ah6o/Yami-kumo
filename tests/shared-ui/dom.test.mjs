@@ -10,6 +10,7 @@ import test from 'node:test';
 import { chromium } from 'playwright';
 import { validateResult, validateArtifacts, validateGate } from './evidence.mjs';
 import { exerciseButtonStates } from './button-states.mjs';
+import { exerciseCard } from './card.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const bundle = resolve(
@@ -20,6 +21,25 @@ const output =
   process.env.SHARED_UI_EVIDENCE_DIR || resolve(root, `_build/shared-ui-dom-${Date.now()}`);
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
+const sourcePaths = [
+  'ui/core',
+  'ui/runtime',
+  'ui/dom',
+  'examples/shared_counter',
+  'examples/shared_counter_dom',
+  'styles/shared-ui.css',
+  'fixtures/shared-ui',
+  'tests/shared-ui',
+  'docs/shared-card.md',
+];
+async function sourceHashes() {
+  const paths = git('ls-files', '-z', '--', ...sourcePaths)
+    .split('\0')
+    .filter(Boolean);
+  return Object.fromEntries(
+    await Promise.all(paths.map(async (path) => [path, hash(await readFile(resolve(root, path)))])),
+  );
+}
 
 test('new common DOM entry is inert in Node and contains no third-party GUI runtime', async () => {
   const bytes = await readFile(bundle, 'utf8');
@@ -50,6 +70,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
   await mkdir(output, { recursive: true });
   const compiled = await readFile(bundle);
   const css = await readFile(resolve(root, 'styles/shared-ui.css'));
+  const boundSources = await sourceHashes();
   const server = createServer((request, response) => {
     const route = request.url;
     response.setHeader(
@@ -430,6 +451,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     const beforeStateListeners = await page.evaluate(() => window.ownedButtonListeners);
     await exerciseButtonStates(page, observe);
     assert.equal(await page.evaluate(() => window.ownedButtonListeners), beforeStateListeners);
+    await exerciseCard(page, observe);
     assert.deepEqual(errors, []);
     await page.screenshot({ path: resolve(output, 'counter.png') });
     await page.evaluate(() => {
@@ -446,8 +468,24 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     await writeFile(resolve(output, 'trace.json'), JSON.stringify(trace, null, 2) + '\n');
     const candidateSha = git('rev-parse', 'HEAD');
     const sourceDirty = git('status', '--porcelain').length > 0;
+    assert.deepEqual(await sourceHashes(), boundSources, 'source changed during browser fixture');
+    await writeFile(resolve(output, 'shared-ui.css'), css);
+    await writeFile(
+      resolve(output, 'source-provenance.json'),
+      JSON.stringify(
+        {
+          candidateSha,
+          sourceDirty,
+          sourceSha256: boundSources,
+          servedCssSha256: hash(css),
+          compiledBridgeSha256: hash(compiled),
+        },
+        null,
+        2,
+      ) + '\n',
+    );
     const artifacts = [];
-    for (const path of ['trace.json', 'counter.png'])
+    for (const path of ['trace.json', 'counter.png', 'shared-ui.css', 'source-provenance.json'])
       artifacts.push({ path, sha256: hash(await readFile(resolve(output, path))) });
     const finishedAt = new Date().toISOString();
     const coreManifest = await readFile(
@@ -464,6 +502,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       'counter-disabled-loading',
       'button-interrupted-loading',
       'button-interrupted-disabled',
+      'card-counter-two-activations',
     ].map((fixtureId) => ({
       schemaVersion: 'shared-ui-result/v1',
       contractVersion: 'shared-ui-contract/v1',
@@ -474,6 +513,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       finishedAt,
       dependencies: [
         { name: 'compiled-bridge-sha256', revision: hash(compiled) },
+        { name: 'served-stylesheet-sha256', revision: hash(css) },
         { name: 'moonbit-core-manifest-sha256', revision: coreHash },
       ],
       profile: {
@@ -515,7 +555,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       JSON.stringify(
         {
           status: 'pass',
-          scope: 'Chromium DOM Text/Button and root lifecycle only',
+          scope: 'Chromium DOM Text/Button/Card fixed geometry and root lifecycle only',
           startedAt,
           finishedAt,
           candidateSha: git('rev-parse', 'HEAD'),

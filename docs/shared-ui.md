@@ -7,7 +7,7 @@ inherited from the legacy Kumo API and what remains a separate contract.
 
 ## What is implemented
 
-- `ui/core`: immutable Text/Button/Column/Row View and semantic Activate values.
+- `ui/core`: immutable Text/Button/Column/Row View, additive fixed Card decoration, and semantic Activate values.
 - `ui/runtime`: root-wide key validation, opaque root/incarnation ownership,
   atomic commits, queued activation, per-button disabled/loading cancellation,
   observed focus results and idempotent disposal.
@@ -15,7 +15,7 @@ inherited from the legacy Kumo API and what remains a separate contract.
   standalone JS/native source consumers, the DOM bootstrap, and the App/Entity native bootstrap.
 - `ui/dom`: explicit mount into an empty element, keyed text spans and native buttons,
   keyed updates, root overlap rejection, retained focus and owned cleanup.
-- `styles/shared-ui.css`: optional layout-only row/column rules, without Kumo.
+- `styles/shared-ui.css`: scoped row/column rules and required fixed Card geometry, without Kumo.
 - `native/ui`: explicit GPUI Text/Button/Column/Row adapter with private native IDs,
   common lifetime tokens, staged geometry/scene publication and one GPUI Button
   controller per live Button.
@@ -33,6 +33,10 @@ their common packages are also unpublished. Existing published contents, npm
 preview exports, package names and versions remain unchanged. A
 clean standalone source consumer proves the dependency boundary, not a new
 registry release. Distribution is a later YK-09 gate.
+
+See [the bounded Card contract](shared-card.md) for `card`/`is_card`,
+`Model.card_view()` and the explicit stylesheet requirement. Existing counter
+view and Row/Column behavior remain unchanged.
 
 ## Identity and thread confinement
 
@@ -166,8 +170,10 @@ Box, grids, text editing and IME are not part of this adapter.
 The opt-in `Shared counter native proof` workflow uses its own pinned GPUI
 revision in `tests/shared-ui/gpui-revision.txt` and MoonBit toolchain. Existing
 legacy native jobs keep their old pins and default runners. Linux and Windows
-run both fixed shared fixtures with actual host-delivered pointer input:
-`[0, 1, 2]` and `[0, 0, 0, 1]`. The latter starts disabled, advances to loading
+run three fixed shared fixtures with actual host-delivered pointer input:
+plain counter `[0, 1, 2]`, disabled/loading `[0, 0, 0, 1]`, and Card counter
+`[0, 1, 2]`. Card additionally checks measured content insets/gaps, border paint
+and actual focus after each click. The disabled/loading fixture starts disabled, advances to loading
 only after the first actual primary release, then enabled after the second;
 the third click increments the unchanged model. These test-only props are not
 an alternate model or synthetic Button recognizer.

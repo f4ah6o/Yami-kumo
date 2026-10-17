@@ -1,7 +1,8 @@
 # YK-04 — Button/Text/Cardの共通部品契約と全状態
 
-状態：部分実装候補／Button状態契約・fixtureの限定slice／Text・Card・M2全体は未完了。
+状態：部分実装候補／Button状態契約・fixtureの限定slice／固定Card consumer追加候補／Text・Cardの一般化・M2全体は未完了。
 Buttonの現行契約・profile差・証拠境界は [shared-button-states.md](../../docs/shared-button-states.md) を参照。
+固定Cardの限定契約・検証境界は [shared-card.md](../../docs/shared-card.md) を参照。
 この更新自体は実ブラウザ・Native windowの新candidate合格を意味しない。
 作成日：2026-10-17 JST。
 作業先：`f4ah6o/Yami-kumo`。段階：M2。依存：YK-02, YK-03。

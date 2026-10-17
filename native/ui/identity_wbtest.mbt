@@ -37,3 +37,31 @@ test "native epoch probes preserve markers and liveness for aliases and distinct
     }
   }
 }
+
+///|
+test "same-key Column Card transitions retain native binding and runtime token" {
+  let mount = Mounted::new(@platform.WindowId::new(1L))
+  let key = @view.NodeKey::new("surface")
+  let no_text : @components.TextMeasure = fn(_, _) {
+    Err(adapter_error("empty containers must not measure text"))
+  }
+  ignore(
+    mount.commit(@view.column(key, []), 800.0, 600.0, 1.0, no_text).unwrap(),
+  )
+  let before = binding_for(mount.bindings, key).unwrap()
+  for card in [true, false, true] {
+    let view = if card { @view.card(key, []) } else { @view.column(key, []) }
+    let frame = mount.commit(view, 800.0, 600.0, 1.0, no_text).unwrap()
+    let after = binding_for(mount.bindings, key).unwrap()
+    assert_eq(after.id, before.id)
+    assert_true(after.token == before.token)
+    assert_true(!mount.focus(key))
+    if card {
+      assert_eq(frame.snapshot().items().length(), 3)
+      assert_eq(frame.snapshot().items()[1].id(), before.id + 1UL)
+      assert_eq(frame.snapshot().items()[2].id(), before.id + 2UL)
+    } else {
+      assert_eq(frame.snapshot().items().length(), 1)
+    }
+  }
+}

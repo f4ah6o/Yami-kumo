@@ -39,3 +39,27 @@ test "one model owner drains runtime actions before rendering next view" {
   assert_true(!runtime.enqueue_activate(increment))
   assert_eq(model.value(), 3)
 }
+
+///|
+test "Card consumer shares unchanged model children keys and actions" {
+  let runtime = @runtime.Runtime::new()
+  let mut model = @shared_counter.Model::new()
+  assert_true(!model.view().is_card())
+  assert_eq(model.card_view().children(), model.view().children())
+  assert_eq(model.card_view().key(), model.view().key())
+  assert_eq(runtime.commit(model.view()), Ok(()))
+  let root = runtime.token(@core.NodeKey::new("counter")).unwrap()
+  let increment = runtime.token(@core.NodeKey::new("increment")).unwrap()
+  assert_eq(runtime.commit(model.card_view()), Ok(()))
+  assert_true(runtime.token(model.card_view().key()) == Some(root))
+  assert_true(!runtime.enqueue_activate(root))
+  assert_true(runtime.request_focus(root) is Err(_))
+  for _ in 0..<2 {
+    assert_true(runtime.enqueue_activate(increment))
+    model = model.update(runtime.next_action().unwrap())
+    assert_eq(runtime.commit(model.card_view()), Ok(()))
+  }
+  assert_eq(model.value(), 2)
+  assert_eq(runtime.commit(model.view()), Ok(()))
+  assert_true(runtime.token(@core.NodeKey::new("increment")) == Some(increment))
+}

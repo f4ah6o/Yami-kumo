@@ -38,3 +38,10 @@ pub extend Model with Eq::{equal, not_equal}
 
 ///|
 pub extend Model with @debug.Debug::{to_repr}
+
+///|
+/// Same counter model, actions, keys and children with the fixed Card container.
+pub fn Model::card_view(self : Model) -> @core.View {
+  let view = self.view()
+  @core.card(view.key(), view.children())
+}

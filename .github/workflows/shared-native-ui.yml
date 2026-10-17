@@ -117,7 +117,7 @@ jobs:
             libxkbcommon-dev libpango1.0-dev libfontconfig1-dev weston xvfb xauth xdotool
           moon version --all
 
-      - name: Run shared adapter tests and both real Wayland counter fixtures
+      - name: Run shared adapter tests and all three real Wayland counter fixtures
         shell: bash
         env:
           GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
@@ -183,7 +183,7 @@ jobs:
           where.exe cl
           moon version --all
 
-      - name: Run shared adapter tests and both SendInput counter fixtures
+      - name: Run shared adapter tests and all three SendInput counter fixtures
         shell: pwsh
         env:
           GPUI_SOURCE: ${{ github.workspace }}\gpui.mbt

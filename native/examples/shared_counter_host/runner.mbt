@@ -87,6 +87,7 @@ pub fn run(
   let fixture = match @env.get_env_var("YAMI_SHARED_UI_FIXTURE") {
     None => "counter"
     Some("counter") => "counter"
+    Some("card") => "card"
     Some("disabled-loading") if e2e => "disabled-loading"
     _ => return Err(runner_error("invalid shared counter fixture"))
   }
@@ -127,6 +128,7 @@ pub fn run(
     @shared_counter.NativeCounter::new(
       window,
       disabled=fixture == "disabled-loading",
+      card=fixture == "card",
     ) {
     Err(error) => {
       let _ = host.destroy_window(window)
@@ -275,7 +277,7 @@ fn run_loop(
                       app.invalidate_layout()
                     }
                   } else {
-                    proof.phase = if fixture == "counter" {
+                    proof.phase = if fixture != "disabled-loading" {
                       proof.actions
                     } else {
                       3
@@ -358,8 +360,8 @@ fn run_loop(
     return Err(runner_error("host window destruction timed out"))
   }
   if e2e {
-    let expected_phase = if fixture == "counter" { 2 } else { 3 }
-    let expected_actions = if fixture == "counter" { 2 } else { 1 }
+    let expected_phase = if fixture != "disabled-loading" { 2 } else { 3 }
+    let expected_actions = if fixture != "disabled-loading" { 2 } else { 1 }
     if proof.last_phase != expected_phase ||
       proof.actions != expected_actions ||
       proof.releases != expected_phase {
@@ -416,7 +418,7 @@ fn publish(
   }
   actions.write_string("]")
   // Store a JSON object tail so completion can add destroyed without reparsing.
-  let payload = "\"fixture\":\"\{proof.fixture}\",\"phase\":\{proof.phase},\"count\":\{frame.count()},\"value\":\{frame.count()},\"enabled\":\{frame.button_enabled()},\"loading\":\{frame.button_loading()},\"pressed\":\{frame.button_pressed()},\"focused\":\{frame.button_focused()},\"releases\":\{proof.releases},\"actions\":\{actions.to_string()},\"windowId\":\{window.value()},\"title\":\"\{escape_json(title)}\",\"button\":\{rect_json(frame.button_bounds())},\"buttonLabel\":\{rect_json(frame.button_label_bounds())},\"counter\":\{rect_json(frame.counter_bounds())},\"root\":\{rect_json(frame.root_bounds())},\"scale\":\{captured.scale()},\"scene\":\{frame.snapshot().canonical_json()},\"frame\":{\"path\":\"\{escape_json(path)}\",\"width\":\{captured.width()},\"height\":\{captured.height()},\"scale\":\{captured.scale()}}}"
+  let payload = "\"fixture\":\"\{proof.fixture}\",\"phase\":\{proof.phase},\"count\":\{frame.count()},\"value\":\{frame.count()},\"enabled\":\{frame.button_enabled()},\"loading\":\{frame.button_loading()},\"pressed\":\{frame.button_pressed()},\"focused\":\{frame.button_focused()},\"releases\":\{proof.releases},\"actions\":\{actions.to_string()},\"windowId\":\{window.value()},\"title\":\"\{escape_json(title)}\",\"button\":\{rect_json(frame.button_bounds())},\"buttonLabel\":\{rect_json(frame.button_label_bounds())},\"counter\":\{rect_json(frame.counter_bounds())},\"card\":\{rect_json(frame.card_bounds())},\"heading\":\{rect_json(frame.heading_bounds())},\"root\":\{rect_json(frame.root_bounds())},\"scale\":\{captured.scale()},\"scene\":\{frame.snapshot().canonical_json()},\"frame\":{\"path\":\"\{escape_json(path)}\",\"width\":\{captured.width()},\"height\":\{captured.height()},\"scale\":\{captured.scale()}}}"
   emit("YAMI_NATIVE_UI_PRESENTED", "{" + payload)
   if proof.last_payload is None {
     emit("YAMI_NATIVE_UI_READY", "{" + payload)

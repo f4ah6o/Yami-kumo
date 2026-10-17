@@ -5,6 +5,7 @@ pub struct NativeCounter {
   priv app : @app.App
   priv state : @app.Entity[@model.Model]
   priv mount : @ui.Mounted
+  priv card : Bool
   priv mut disabled : Bool
   priv mut loading : Bool
   priv mut draining : Bool
@@ -85,6 +86,7 @@ pub fn CounterFrame::button_loading(self : CounterFrame) -> Bool {
 ///|
 pub fn NativeCounter::new(
   window : @platform.WindowId,
+  card~ : Bool = false,
   disabled~ : Bool = false,
   loading~ : Bool = false,
 ) -> Result[NativeCounter, @diagnostics.FrameworkError] {
@@ -104,6 +106,7 @@ pub fn NativeCounter::new(
     app,
     state,
     mount: @ui.Mounted::new(window),
+    card,
     disabled,
     loading,
     draining: false,
@@ -143,11 +146,16 @@ fn mode_view(view : @view.View, disabled : Bool, loading : Bool) -> @view.View {
         view.key(),
         view.children().map(child => mode_view(child, disabled, loading)),
       )
-    @view.Column =>
-      @view.column(
-        view.key(),
-        view.children().map(child => mode_view(child, disabled, loading)),
-      )
+    @view.Column => {
+      let children = view
+        .children()
+        .map(child => mode_view(child, disabled, loading))
+      if view.is_card() {
+        @view.card(view.key(), children)
+      } else {
+        @view.column(view.key(), children)
+      }
+    }
     @view.Text => view
   }
 }
@@ -178,7 +186,7 @@ pub fn NativeCounter::render(
   }
   match
     self.mount.commit(
-      mode_view(model.view(), self.disabled, self.loading),
+      mode_view(self.common_view(model), self.disabled, self.loading),
       width,
       height,
       scale,
@@ -252,7 +260,7 @@ fn NativeCounter::apply_action(
   }
   let prepared = match
     self.mount.stage(
-      mode_view(next.view(), self.disabled, self.loading),
+      mode_view(self.common_view(next), self.disabled, self.loading),
       width,
       height,
       scale,
@@ -312,7 +320,7 @@ pub fn NativeCounter::set_mode(
   }
   match
     self.mount.commit(
-      mode_view(model.view(), disabled, loading),
+      mode_view(self.common_view(model), disabled, loading),
       width,
       height,
       scale,
@@ -371,4 +379,26 @@ fn NativeCounter::drain_app_work(
         )
       }
   }
+}
+
+///|
+fn NativeCounter::common_view(
+  self : NativeCounter,
+  model : @model.Model,
+) -> @view.View {
+  if self.card {
+    model.card_view()
+  } else {
+    model.view()
+  }
+}
+
+///|
+pub fn CounterFrame::card_bounds(self : CounterFrame) -> @primitives.Rect {
+  self.frame.bounds(@view.NodeKey::new("counter")).unwrap()
+}
+
+///|
+pub fn CounterFrame::heading_bounds(self : CounterFrame) -> @primitives.Rect {
+  self.frame.bounds(@view.NodeKey::new("heading")).unwrap()
 }

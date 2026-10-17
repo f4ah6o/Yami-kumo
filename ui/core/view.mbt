@@ -33,6 +33,7 @@ pub struct View {
   priv label : String
   priv disabled : Bool
   priv loading : Bool
+  priv card : Bool
   priv children : Array[View]
 } derive(Eq, @debug.Debug)
 
@@ -44,6 +45,7 @@ pub fn text(key : NodeKey, value : String) -> View {
     label: value,
     disabled: false,
     loading: false,
+    card: false,
     children: [],
   }
 }
@@ -61,7 +63,7 @@ pub fn button(
   disabled~ : Bool = false,
   loading~ : Bool = false,
 ) -> View {
-  { key, kind: Button, label, disabled, loading, children: [], }
+  { key, kind: Button, label, disabled, loading, card: false, children: [], }
 }
 
 ///|
@@ -72,6 +74,7 @@ pub fn column(key : NodeKey, children : Array[View]) -> View {
     label: "",
     disabled: false,
     loading: false,
+    card: false,
     children: children.copy(),
   }
 }
@@ -84,6 +87,7 @@ pub fn row(key : NodeKey, children : Array[View]) -> View {
     label: "",
     disabled: false,
     loading: false,
+    card: false,
     children: children.copy(),
   }
 }
@@ -163,3 +167,16 @@ pub extend FocusOutcome with Eq::{equal, not_equal}
 
 ///|
 pub extend FocusOutcome with @debug.Debug::{to_repr}
+
+///|
+/// A fixed, noninteractive Card decoration on a compatible Column. Border 1,
+/// padding 16, gap 12 logical pixels; see docs/shared-card.md. Same-key changes
+/// between Column and Card preserve semantic identity and descendant lifetimes.
+pub fn card(key : NodeKey, children : Array[View]) -> View {
+  { ..column(key, children), card: true, }
+}
+
+///|
+pub fn View::is_card(self : View) -> Bool {
+  self.card
+}

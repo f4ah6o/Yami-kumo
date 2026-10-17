@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Opt-in real Linux/Windows shared-counter evidence; importing is inert.
 
-This driver proves only the two shared-ui-contract/v1 pointer fixtures. It does
+This driver proves the bounded shared-ui-contract/v1 pointer fixtures. It does
 not establish general DOM/native parity, keyboard/IME behavior or accessibility.
 Host input and pixel decoding use the existing native-ui helpers. Unit tests
 exercise this oracle with explicitly synthetic data, never host input.
@@ -26,12 +26,13 @@ from typing import Any
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
-# Only these two fixtures are driven with actual native host pointer input.
+# Only these declared fixtures are driven with actual native host pointer input.
 # Additional Button contracts are validated below, but portable event tests must
 # never be presented as native-window/keyboard qualification.
-FIXTURES = {"counter": "counter-two-activations", "disabled-loading": "counter-disabled-loading"}
+FIXTURES = {"counter": "counter-two-activations", "disabled-loading": "counter-disabled-loading", "card": "card-counter-two-activations"}
 CONTRACT_PHASES = {
     "counter-two-activations": 3,
+    "card-counter-two-activations": 3,
     "counter-disabled-loading": 4,
     "button-interrupted-loading": 6,
     "button-interrupted-disabled": 6,
@@ -39,7 +40,8 @@ CONTRACT_PHASES = {
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 COMMON_PATHS = ("ui/core", "ui/runtime", "examples/shared_counter")
 BOUND_PATHS = (*COMMON_PATHS, "native/ui", "native/examples/shared_counter",
-               "native/examples/shared_counter_host", "tests/shared-ui", "tests/native-ui/drive_native_ui.py")
+               "native/examples/shared_counter_host", "tests/shared-ui", "tests/native-ui/drive_native_ui.py",
+               "styles/shared-ui.css", "fixtures/shared-ui", "docs/shared-card.md")
 
 
 def _load_legacy() -> Any:
@@ -124,7 +126,7 @@ def validate_marker(marker: dict[str, Any], fixture: str, phase: int,
     for key in ("enabled", "loading", "pressed", "focused"):
         if type(marker.get(key)) is not bool:
             raise E2EError(f"{key} must be a boolean")
-    enabled = fixture == "counter" or phase > 0
+    enabled = fixture != "disabled-loading" or phase > 0
     loading = fixture == "disabled-loading" and phase == 1
     if marker["enabled"] != enabled or marker["loading"] != loading:
         raise E2EError("phase button enabled/loading gates do not match the fixture")
@@ -152,6 +154,10 @@ def validate_marker(marker: dict[str, Any], fixture: str, phase: int,
         raise E2EError("scene viewport disagrees with root bounds")
     if _number(scene.get("scale"), "scene.scale", positive=True) != scale:
         raise E2EError("scene scale disagrees with native scale")
+    if fixture == "card":
+        validate_card_geometry(marker)
+        if phase > 0 and marker["focused"] is not True:
+            raise E2EError("Card nested Button lost actual pointer focus")
     if presented or complete:
         frame = marker.get("frame")
         if not isinstance(frame, dict) or not isinstance(frame.get("path"), str) or not frame["path"]:
@@ -166,6 +172,58 @@ def validate_marker(marker: dict[str, Any], fixture: str, phase: int,
     if complete and marker.get("destroyed") is not True:
         raise E2EError("COMPLETE must confirm host window destruction")
 
+
+
+def validate_card_geometry(marker: dict[str, Any]) -> None:
+    """Fixed <=1 logical pixel snapping budget, never font-size parity."""
+    card = _bounds(marker.get("card"), "card")
+    _inside(card, _bounds(marker.get("root"), "root"), "card")
+    children = [_bounds(marker.get(key), key) for key in ("heading", "counter", "button")]
+    x, y, width, height = card
+    # Native children retain intrinsic widths; the content envelope, not every
+    # individual child, meets the right padding edge. DOM flex children stretch.
+    differences = [children[0][1] - y, y + height - children[-1][1] - children[-1][3],
+                   min(child[0] for child in children) - x,
+                   x + width - max(child[0] + child[2] for child in children)]
+    for child in children:
+        _inside(child, card, "Card child")
+    if any(abs(value - 17) > 1 for value in differences):
+        raise E2EError("Card content inset must be border 1 plus padding 16")
+    gaps = [b[1] - a[1] - a[3] for a, b in zip(children, children[1:])]
+    if any(abs(gap - 12) > 1 for gap in gaps):
+        raise E2EError("Card child gap must be 12 logical pixels")
+    items = marker["scene"]["items"]
+    border = [i for i, item in enumerate(items) if item.get("kind") == "quad"
+              and _bounds(item.get("bounds"), "quad") == card]
+    if len(border) != 1:
+        raise E2EError("Card must paint exactly one outer border quad")
+    index = border[0]
+    if index + 1 >= len(items):
+        raise E2EError("Card interior quad missing")
+    outer, inner = items[index:index + 2]
+    if outer.get("color") != {"red":166,"green":171,"blue":178,"alpha":255}:
+        raise E2EError("Card border color changed")
+    if inner.get("kind") != "quad" or inner.get("color") != {"red":245,"green":247,"blue":250,"alpha":255}:
+        raise E2EError("Card interior color changed")
+    if _bounds(inner.get("bounds"), "Card interior") != (x+1, y+1, width-2, height-2):
+        raise E2EError("Card painted border must be exactly 1 logical pixel")
+    if any(item.get("kind") in ("text", "text_run") for item in items[:index + 2]):
+        raise E2EError("Card paint must precede its text descendants")
+    ids = [item.get("id") for item in items]
+    if len(set(ids)) != len(ids):
+        raise E2EError("scene IDs must be unique")
+
+
+def inspect_card_pixels(image: Any, marker: dict[str, Any]) -> list[list[int]]:
+    x, y, w, h = _bounds(marker["card"], "card")
+    scale = marker["scale"]
+    # Four edge midpoints and an interior padding point; none overlaps text.
+    points = [(x+w/2,y+0.5),(x+w-0.5,y+h/2),(x+w/2,y+h-0.5),(x+0.5,y+h/2),(x+4,y+4)]
+    colors = [list(image.pixel(int(px*scale), int(py*scale))) for px, py in points]
+    for actual, expected in zip(colors, [(166,171,178)]*4 + [(245,247,250)]):
+        if len(actual) != 3 or any(abs(a-b) > 2 for a,b in zip(actual,expected)):
+            raise E2EError("actual Card border/interior pixels disagree with the fixed paint")
+    return colors
 
 def inspect_frame(marker: dict[str, Any], directory: Path) -> tuple[Any, dict[str, Any]]:
     path = native._read_ppm_path(marker["frame"], directory, f"phase {marker['phase']}")
@@ -184,7 +242,8 @@ def inspect_frame(marker: dict[str, Any], directory: Path) -> tuple[Any, dict[st
         raise E2EError("button label has no contrasting pixels inside its label bounds")
     if button_pixels <= 0:
         raise E2EError("button has no visible foreground pixels")
-    return image, {"path": str(path), "sha256": digest(path), "width": image.width,
+    card_pixels = inspect_card_pixels(image, marker) if marker["fixture"] == "card" else None
+    return image, {"cardPixels": card_pixels, "path": str(path), "sha256": digest(path), "width": image.width,
                    "height": image.height, "scale": scale, "counterPixels": counter_pixels,
                    "buttonLabelPixels": label_pixels, "buttonPixels": button_pixels}
 
@@ -198,7 +257,10 @@ def inspect_frame_sequence(markers: list[dict[str, Any]], directory: Path) -> di
         paths.add(report["path"])
         images.append(image)
         reports.append(report)
-        for key in ("root", "counter", "button", "buttonLabel", "scale"):
+        stable = ("root", "counter", "button", "buttonLabel", "scale")
+        if marker["fixture"] == "card":
+            stable += ("card", "heading")
+        for key in stable:
             if marker[key] != markers[0][key]:
                 raise E2EError(f"{key} changed between settled phase captures")
     counter = _bounds(markers[0]["counter"], "counter")

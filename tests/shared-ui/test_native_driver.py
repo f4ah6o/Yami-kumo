@@ -171,10 +171,91 @@ class MarkerTests(unittest.TestCase):
         self.assertEqual(driver.FIXTURES, {
             "counter": "counter-two-activations",
             "disabled-loading": "counter-disabled-loading",
+            "card": "card-counter-two-activations",
         })
         self.assertEqual(set(driver.CONTRACT_PHASES) - set(driver.FIXTURES.values()), {
             "button-interrupted-loading", "button-interrupted-disabled",
         })
+
+
+def card_marker():
+    value = marker()
+    value["fixture"] = "card"
+    value["root"] = {"x":0,"y":0,"width":200,"height":200}
+    value["card"] = {"x":24,"y":24,"width":100,"height":118}
+    value["heading"] = {"x":41,"y":41,"width":66,"height":20}
+    value["counter"] = {"x":41,"y":73,"width":66,"height":20}
+    value["button"] = {"x":41,"y":105,"width":66,"height":20}
+    value["buttonLabel"] = {"x":45,"y":109,"width":50,"height":12}
+    value["scene"]["viewport"] = value["root"].copy()
+    for index,item in enumerate(value["scene"]["items"]):
+        item["id"] = index+4
+    value["scene"]["items"][:0] = [
+        {"kind":"quad","id":2,"bounds":value["card"].copy(),"color":{"red":166,"green":171,"blue":178,"alpha":255}},
+        {"kind":"quad","id":3,"bounds":{"x":25,"y":25,"width":98,"height":116},"color":{"red":245,"green":247,"blue":250,"alpha":255}},
+    ]
+    return value
+
+
+class CardGeometryTests(unittest.TestCase):
+    def test_fixed_card_geometry_and_paint_order(self):
+        driver.validate_card_geometry(card_marker())
+
+    def test_native_intrinsic_widths_measure_the_content_envelope(self):
+        value = card_marker()
+        value["counter"]["width"] = 30
+        value["button"]["width"] = 48
+        driver.validate_card_geometry(value)
+        # The widest child need not be the first one.
+        value["heading"]["width"] = 30
+        value["counter"]["width"] = 66
+        driver.validate_card_geometry(value)
+
+    def test_content_envelope_insets_and_each_child_containment_remain_required(self):
+        variants = []
+        value = card_marker()
+        for key in ("heading", "counter", "button"):
+            value[key]["width"] -= 3
+        variants.append(value)  # right content inset 20 instead of 17
+        value = card_marker()
+        for key in ("heading", "counter", "button"):
+            value[key]["x"] += 3
+            value[key]["width"] -= 3
+        variants.append(value)  # left content inset 20 instead of 17
+        value = card_marker(); value["counter"]["width"] = 100; variants.append(value)
+        value = card_marker(); value["counter"]["x"] = 23; variants.append(value)
+        value = card_marker(); value["counter"]["y"] = 23; variants.append(value)
+        value = card_marker(); value["counter"]["height"] = 120; variants.append(value)
+        for value in variants:
+            with self.subTest(value=value), self.assertRaises(driver.E2EError):
+                driver.validate_card_geometry(value)
+
+    def test_wrong_insets_gaps_border_paint_and_ids_are_rejected(self):
+        variants = []
+        value = card_marker(); value["heading"]["x"] += 3; variants.append(value)
+        value = card_marker(); value["counter"]["y"] += 3; variants.append(value)
+        value = card_marker(); value["scene"]["items"][1]["bounds"]["x"] += 1; variants.append(value)
+        value = card_marker(); value["scene"]["items"][0]["color"]["red"] = 0; variants.append(value)
+        value = card_marker(); value["scene"]["items"].insert(0, value["scene"]["items"].pop()); variants.append(value)
+        value = card_marker(); value["scene"]["items"][1]["id"] = 2; variants.append(value)
+        value = card_marker(); del value["heading"]; variants.append(value)
+        for value in variants:
+            with self.subTest(value=value), self.assertRaises(driver.E2EError):
+                driver.validate_card_geometry(value)
+
+    def test_actual_pixel_oracle_rejects_blank_border_and_interior(self):
+        value = card_marker()
+        pixels = bytearray(bytes((245,247,250)) * (200*200))
+        for x,y in [(74,24),(123,83),(74,141),(24,83)]:
+            offset = (y*200+x)*3
+            pixels[offset:offset+3] = bytes((166,171,178))
+        image = driver.native.PPM(200,200,bytes(pixels))
+        self.assertEqual(len(driver.inspect_card_pixels(image,value)),5)
+        for x,y in [(74,24),(123,83),(74,141),(24,83),(28,28)]:
+            changed = pixels.copy(); offset = (y*200+x)*3
+            changed[offset:offset+3] = bytes((0,0,0))
+            with self.subTest(point=(x,y)), self.assertRaises(driver.E2EError):
+                driver.inspect_card_pixels(driver.native.PPM(200,200,bytes(changed)),value)
 
 
 class PixelTests(unittest.TestCase):

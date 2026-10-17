@@ -270,7 +270,15 @@ fn make_element(
     )
     .with_focusable(view.kind() == @view.Button && !view.disabled())
   if view.kind() == @view.Column || view.kind() == @view.Row {
-    element = element.with_children_style(style(view.kind()))
+    let children_style = if view.is_card() {
+      style(view.kind()).with_insets(
+        @layout.Insets::all(16.0).unwrap(),
+        @layout.Insets::all(1.0).unwrap(),
+      )
+    } else {
+      style(view.kind())
+    }
+    element = element.with_children_style(children_style)
     for child in view.children() {
       element = element.with_child(make_element(child, bindings))
     }
@@ -432,6 +440,33 @@ fn Mounted::prepare(
   for index in 0..<bindings.length() {
     let binding = bindings[index]
     let bounds = tree.node(binding.id).unwrap().bounds()
+    if binding.view.is_card() {
+      // Flat bindings are preorder: paint both Card quads before descendants.
+      let inner = @primitives.Rect::new(
+        bounds.left() + 1.0,
+        bounds.top() + 1.0,
+        bounds.size().width() - 2.0,
+        bounds.size().height() - 2.0,
+      ).unwrap()
+      for
+        (id, rect, fill) in [
+          (binding.id + 1UL, bounds, color(166, 171, 178)),
+          (binding.id + 2UL, inner, color(245, 247, 250)),
+        ] {
+        match
+          @scene.SceneItem::quad(
+            id,
+            rect,
+            fill,
+            @scene.AffineTransform::identity(),
+            1.0,
+            None,
+          ) {
+          Ok(item) => items.push(item)
+          Err(_) => return Err(adapter_error("native Card paint failed"))
+        }
+      }
+    }
     let mut button = binding.button
     if binding.view.kind() == @view.Button {
       let previous = binding.button

@@ -203,6 +203,21 @@ fn main {
   gated_counts.push(gated_model.value())
   emit("counter-disabled-loading", gated_counts)
   gates.dispose()
+  let cards = @runtime.Runtime::new()
+  let mut card_model = @shared_counter.Model::new()
+  commit(cards, card_model.card_view())
+  ensure(card_model.card_view().is_card(), "Card decoration missing")
+  ensure(card_model.card_view().children() == card_model.view().children(), "counter view duplicated")
+  let card_target = cards.token(@core.NodeKey::new("increment")).unwrap()
+  let card_counts = [card_model.value()]
+  for _ in 0..<2 {
+    ensure(cards.enqueue_activate(card_target), "Card nested Button rejected")
+    card_model = card_model.update(cards.next_action().unwrap())
+    commit(cards, card_model.card_view())
+    card_counts.push(card_model.value())
+  }
+  emit("card-counter-two-activations", card_counts)
+  cards.dispose()
 }
 `;
 
@@ -325,7 +340,7 @@ try {
       .map((line) => JSON.parse(line));
     assert.deepEqual(
       observations.map((item) => item.fixtureId),
-      ['counter-two-activations', 'counter-disabled-loading'],
+      ['counter-two-activations', 'counter-disabled-loading', 'card-counter-two-activations'],
     );
     for (const { fixtureId, ...observed } of observations) {
       assert.deepEqual(

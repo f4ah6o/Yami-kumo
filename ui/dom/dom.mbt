@@ -75,8 +75,10 @@ extern "js" fn update_node(
   label : String,
   disabled : Bool,
   loading : Bool,
+  card : Bool,
 ) -> Unit =
-  #| (node, kind, label, disabled, loading) => {
+  #| (node, kind, label, disabled, loading, card) => {
+  #|   if (kind === 2) node.classList.toggle("yk-ui-card", card);
   #|   if (kind === 0) { if (node.textContent !== label) node.textContent = label; return; }
   #|   if (kind !== 1) return;
   #|   if (node.textContent !== label) node.textContent = label;
@@ -346,6 +348,7 @@ fn DomRoot::render_node(
     view.label(),
     view.disabled(),
     view.loading(),
+    view.is_card(),
   )
   // Place parents before children. A retained former descendant can become an
   // ancestor in the next tree; detach its old ancestry before moving children.
