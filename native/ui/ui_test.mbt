@@ -475,3 +475,86 @@ test "independent root disposal leaves another root live through repeated cycles
   }
   assert_true(survivor.frame() is Some(_))
 }
+
+///|
+test "identical native roots reject foreign copied preparations and callbacks symmetrically" {
+  // Both owners intentionally have the same window ID, keys, labels, native ID
+  // allocation sequence and frame revision. None of these confer authority.
+  let first = mount()
+  let second = mount()
+  let first_frame = render(first)
+  let second_frame = render(second)
+  assert_eq(first.view(), second.view())
+  assert_eq(first_frame.revision(), second_frame.revision())
+  assert_true(first_frame.bounds(key()) == second_frame.bounds(key()))
+  let first_callback = first.callback(key()).unwrap()
+  let copied_callback = first_callback
+  let second_callback = second.callback(key()).unwrap()
+  for _ in 0..<3 {
+    assert_true(!second.activate(copied_callback))
+    assert_true(!first.activate(second_callback))
+    assert_true(first.next_action() is None)
+    assert_true(second.next_action() is None)
+  }
+  assert_true(first.activate(copied_callback))
+  assert_true(second.activate(second_callback))
+  assert_eq(first.next_action(), Some(@view.Activate(key())))
+  assert_eq(second.next_action(), Some(@view.Activate(key())))
+  let first_prepared = first
+    .stage(button_view(), 640.0, 480.0, 1.0, measure)
+    .unwrap()
+  let copied_prepared = first_prepared
+  let second_prepared = second
+    .stage(button_view(), 640.0, 480.0, 1.0, measure)
+    .unwrap()
+  for _ in 0..<3 {
+    assert_true(second.publish(copied_prepared) is Err(_))
+    assert_true(first.publish(second_prepared) is Err(_))
+    assert_eq(first.frame().unwrap().revision(), first_frame.revision())
+    assert_eq(second.frame().unwrap().revision(), second_frame.revision())
+  }
+  let accepted = first.publish(copied_prepared).unwrap()
+  assert_eq(accepted.revision(), first_frame.revision() + 1UL)
+  assert_true(first.publish(first_prepared) is Err(_))
+  assert_true(second.publish(first_prepared) is Err(_))
+  assert_eq(first.frame().unwrap().revision(), accepted.revision())
+  assert_true(second.publish(second_prepared) is Ok(_))
+  assert_true(second.publish(second_prepared) is Err(_))
+  // A successful unchanged repaint preserves callbacks, but retiring geometry
+  // and restoring identical content must never revive their old epoch.
+  assert_true(first.activate(first_callback))
+  first.invalidate_layout()
+  ignore(render(first))
+  assert_true(first.next_action() is None)
+  assert_true(!first.activate(copied_callback))
+  let current = first.callback(key()).unwrap()
+  assert_true(first.activate(current))
+  assert_eq(first.next_action(), Some(@view.Activate(key())))
+  first.dispose()
+  assert_true(!first.activate(current))
+  assert_true(!second.activate(current))
+  assert_true(second.activate(second_callback))
+  assert_eq(second.next_action(), Some(@view.Activate(key())))
+}
+
+///|
+test "measurement invalidation changes preparation authority without disposing the owner" {
+  let mounted = mount()
+  ignore(render(mounted))
+  let old = mounted.callback(key()).unwrap()
+  assert_true(
+    mounted.stage(button_view(), 640.0, 480.0, 1.0, (text, size) => {
+      mounted.invalidate_layout()
+      measure(text, size)
+    })
+    is Err(_),
+  )
+  assert_true(!mounted.is_disposed())
+  assert_eq(mounted.view(), Some(button_view()))
+  assert_true(mounted.frame() is None)
+  assert_true(!mounted.activate(old))
+  ignore(render(mounted))
+  assert_true(!mounted.activate(old))
+  assert_true(mounted.activate(mounted.callback(key()).unwrap()))
+  assert_eq(mounted.next_action(), Some(@view.Activate(key())))
+}

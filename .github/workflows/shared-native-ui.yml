@@ -51,6 +51,7 @@ jobs:
           set -o pipefail
           sh Yami-kumo/scripts/native_ui_workspace.sh sh -ec '
             moon test "$YAMI_NATIVE_MODULE_ROOT/ui" "$YAMI_NATIVE_MODULE_ROOT/examples/shared_counter" --target all --deny-warn --no-parallelize
+            moon test "$YAMI_NATIVE_MODULE_ROOT/ui" "$YAMI_NATIVE_MODULE_ROOT/examples/shared_counter" --target all --deny-warn --no-parallelize --release
             python3 "$YAMI_NATIVE_YAMI_ROOT/tests/shared-ui/test_native_driver.py"
             python3 "$YAMI_NATIVE_YAMI_ROOT/scripts/shared_native_ui_provenance.py"
           ' 2>&1 | tee "$YAMI_NATIVE_UI_EVIDENCE_DIR/portable-tests.log"

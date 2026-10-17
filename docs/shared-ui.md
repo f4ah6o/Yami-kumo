@@ -34,6 +34,29 @@ preview exports, package names and versions remain unchanged. A
 clean standalone source consumer proves the dependency boundary, not a new
 registry release. Distribution is a later YK-09 gate.
 
+## Identity and thread confinement
+
+All common runtime, DOM mount and native mount access, including token and
+capability comparisons, must stay on the owning UI thread. These APIs do not
+provide cross-thread synchronization.
+
+Private runtime identities and native epochs use an independent mutable marker
+for observable alias identity. A comparison saves both markers, writes the left
+marker to the opposite of the right's original value, observes whether the right
+changed, then restores both originals. There is no callback, suspension or user
+code inside the probe, and the separate lifecycle `live` bits are never touched.
+Copied capabilities share identity, including after disposal; distinct roots,
+mount incarnations, gates, requests and preparations do not become equal merely
+because their keys, labels, numeric IDs or other fields match.
+
+This is a portability-contract fix: the pinned MoonBit core documents
+`physical_equal` as an optimization facility whose result must not determine
+program semantics and may vary by backend or optimization setting. No previous
+Yami runtime failure was observed. Identity, restoration and lifecycle regressions
+run in debug and release on JS, native, Wasm and Wasm-GC in the existing portable
+CI jobs. Package APIs, versions, compiler/dependency pins and host behavior are
+unchanged.
+
 ## Use the model and DOM host
 
 The application keeps one `Model` value. Pass `model.view()` to
@@ -82,6 +105,7 @@ node scripts/check-shared-ui-consumers.mjs
 pnpm exec playwright install chromium
 node --test tests/shared-ui/dom.test.mjs
 moon test ui/core ui/runtime examples/shared_counter --target all --deny-warn
+moon test ui/core ui/runtime examples/shared_counter --target all --deny-warn --release
 ```
 
 The independent consumer runner compiles the same source packages in separate
