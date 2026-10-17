@@ -59,6 +59,7 @@ pub fn NativeCounter::dispose(Self) -> Unit
 pub fn NativeCounter::drain_one(Self, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn NativeCounter::handle_event(Self, @platform.Event) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn NativeCounter::invalidate_layout(Self) -> Unit
+pub fn NativeCounter::last_dispatched_input_sequence(Self) -> Int64
 pub fn NativeCounter::model_revision(Self) -> Result[UInt64, @diagnostics.FrameworkError]
 pub fn NativeCounter::new(@platform.WindowId, card? : Bool, spacing? : Bool, palette? : Bool, disabled? : Bool, loading? : Bool) -> Result[Self, @diagnostics.FrameworkError]
 pub fn NativeCounter::render(Self, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[CounterFrame, @diagnostics.FrameworkError]

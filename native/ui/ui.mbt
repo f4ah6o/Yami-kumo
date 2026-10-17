@@ -190,6 +190,7 @@ pub struct Mounted {
   priv mut revision : UInt64
   priv mut epoch : Epoch
   priv mut change : Epoch
+  priv mut last_dispatched_input : Int64
   priv mut last_sequence : Int64
   priv mut window_focused : Bool
   priv mut ready : Bool
@@ -209,6 +210,7 @@ pub fn Mounted::new(window : @platform.WindowId) -> Mounted {
     epoch: fresh_epoch(),
     change: fresh_epoch(),
     last_sequence: 0,
+    last_dispatched_input: 0,
     window_focused: true,
     ready: false,
     busy: false,
@@ -938,7 +940,11 @@ pub fn Mounted::handle_event(
         self.invalidate_layout()
         return Ok(false)
       }
-      self.dispatch(input)
+      let result = self.dispatch(input)
+      if result is Ok(_) {
+        self.last_dispatched_input = event.sequence()
+      }
+      result
     }
     _ => Ok(false)
   }
@@ -1023,4 +1029,12 @@ pub fn Mounted::dispose(self : Mounted) -> Unit {
   self.tree = None
   self.current_frame = None
   self.ready = false
+}
+
+///|
+/// Last sequence successfully dispatched through all input admission gates.
+/// Includes unconsumed input (Ok(false)); ignored or failed events do not advance it.
+/// Compare before/after a call to distinguish a newly dispatched event from replay.
+pub fn Mounted::last_dispatched_input_sequence(self : Mounted) -> Int64 {
+  self.last_dispatched_input
 }

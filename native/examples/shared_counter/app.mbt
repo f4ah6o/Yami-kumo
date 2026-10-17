@@ -592,3 +592,11 @@ pub fn CounterFrame::toggle_enabled(self : CounterFrame) -> Bool {
 pub fn CounterFrame::toggle_loading(self : CounterFrame) -> Bool {
   self.frame.loading(@view.NodeKey::new("palette-toggle"))
 }
+
+///|
+/// Read-only successful input dispatch witness; see Mounted's admission contract.
+pub fn NativeCounter::last_dispatched_input_sequence(
+  self : NativeCounter,
+) -> Int64 {
+  self.mount.last_dispatched_input_sequence()
+}

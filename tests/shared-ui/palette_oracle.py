@@ -115,6 +115,37 @@ def _buttons(marker):
              dict(enabled=p['toggleEnabled'],loading=p['toggleLoading'],hovered=p['toggleHovered'],focused=p['toggleFocused'],pressed=p['togglePressed'])))
 
 
+def validate_input_trace(marker):
+    trace = marker.get('inputTrace')
+    require(isinstance(trace,dict) and set(trace) == {'revision','throughSequence','events'}, 'missing input trace')
+    require(type(trace['revision']) is int and trace['revision'] == marker['palette']['revision'], 'input trace revision mismatch')
+    require(type(trace['throughSequence']) is int and trace['throughSequence'] >= 0, 'invalid trace boundary')
+    events = trace['events']
+    require(isinstance(events,list) and len(events) <= 4096, 'unbounded input trace')
+    previous = 0
+    last_dispatch = 0
+    for event in events:
+        require(isinstance(event,dict), 'invalid trace event')
+        kind = event.get('kind')
+        require(kind in ('move','primary-down','primary-up','other-input','focus','other-window'), 'invalid trace kind')
+        fields = {'sequence','scale','consumed','dispatched','beforeDispatch','afterDispatch','kind'}
+        if kind in ('move','primary-down','primary-up'): fields |= {'x','y'}
+        if kind == 'focus': fields |= {'focused'}
+        require(set(event) == fields, 'invalid trace event fields')
+        require(type(event['sequence']) is int and previous < event['sequence'] <= trace['throughSequence'], 'trace sequence mismatch')
+        previous = event['sequence']
+        require(number(event['scale']) > 0, 'invalid trace scale')
+        require(type(event['consumed']) is bool and type(event['dispatched']) is bool, 'invalid trace dispatch flags')
+        before, after = event['beforeDispatch'], event['afterDispatch']
+        require(type(before) is int and type(after) is int and before == last_dispatch and after in (before,event['sequence']), 'invalid dispatch witness')
+        require(event['dispatched'] == (after == event['sequence'] and after != before), 'dispatch witness mismatch')
+        last_dispatch = after
+        if kind in ('focus','other-window'): require(not event['dispatched'], 'non-input dispatched')
+        if kind == 'focus': require(type(event['focused']) is bool, 'invalid trace focus')
+        if 'x' in event: number(event['x']); number(event['y'])
+    require(previous == trace['throughSequence'], 'trace boundary does not match final event')
+
+
 def validate_palette_marker(marker, phase):
     require(type(phase) is int and 0 <= phase < 6, 'unsupported palette phase')
     require(isinstance(marker,dict) and marker.get('fixture') == 'palette' and
@@ -126,11 +157,12 @@ def validate_palette_marker(marker, phase):
         require(type(marker.get(key)) is int and marker[key] == (phase if key == 'releases' else COUNTS[phase]), 'wrong phase count/releases')
     require(marker.get('actions') == ['Activate']*phase and p['actionKeys'] == list(ACTIONS[:phase]), 'wrong action trace')
     require(type(p['revision']) is int and p['revision'] > 0, 'missing accepted frame revision')
+    validate_input_trace(marker)
     require(all(type(marker.get(k)) is bool for k in ('enabled','loading','pressed','focused')), 'missing top-level state')
     require(all(type(p[k]) is bool for k in ('hovered','toggleHovered','togglePressed','toggleFocused','toggleEnabled','toggleLoading')), 'missing nested state')
     require(p['toggleEnabled'] and not p['toggleLoading'] and marker['enabled'] and not marker['loading'] and not marker['pressed'] and not p['togglePressed'], 'actual fixture is enabled nonloading and settled')
     require(marker['focused'] == (phase in (1,3)) and p['toggleFocused'] == (phase in (2,4,5)), 'focus differs from pointer phase')
-    require(not(p['hovered'] and p['toggleHovered']), 'disjoint Buttons cannot both be hovered')
+    # Routed primary clicks can retain another Button's hover until delivered motion.
     require(type(p['buttonId']) is int and type(p['toggleId']) is int and abs(p['buttonId']-p['toggleId']) >= 4, 'overlapping Button IDs')
     root = rect(marker.get('root'))
     require(root[:2] == (0,0), 'root must be frame local')
@@ -170,6 +202,9 @@ def validate_palette_sequence(markers):
         require(path not in paths, 'stale reused capture path')
         paths.add(path)
         if phase:
+            prior = markers[phase-1]['inputTrace']['events']
+            require(marker['inputTrace']['events'][:len(prior)] == prior, 'input trace history changed')
+            require(marker['inputTrace']['throughSequence'] > markers[phase-1]['inputTrace']['throughSequence'], 'input trace did not advance')
             require(marker['palette']['revision'] > markers[phase-1]['palette']['revision'], 'stale accepted frame revision')
         for key in ('root','scale','button','buttonLabel','heading'):
             require(marker.get(key) == markers[0].get(key), 'palette changed fixed geometry')

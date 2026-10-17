@@ -32,6 +32,7 @@ def marker(phase=0):
             togglePressed=False,toggleFocused=phase in (2,4,5),toggle=box(60,30,50,30),toggleLabel=box(70,40,25,10),
             buttonId=10,toggleId=20,revision=phase*3+1,actionKeys=list(actions[:phase])),
         frame=dict(path=f'frame-{phase}.ppm',width=120,height=80,scale=1))
+    m['inputTrace'] = dict(revision=phase*3+1,throughSequence=phase+1,events=[dict(sequence=i+1,scale=1,consumed=False,dispatched=False,beforeDispatch=0,afterDispatch=0,kind='other-window') for i in range(phase+1)])
     items = [paint(1,'quad',m['root'],(245,247,250)),paint(2,'text_run',m['heading'],(242,246,250),'Shared palette'),
              paint(3,'text_run',box(4,15,30,10),(242,246,250),f'Count: {counts[phase]}')]
     for bid,b,lb,label,state in oracle._buttons(m):
@@ -67,6 +68,46 @@ class PaletteTests(unittest.TestCase):
         oracle.validate_palette_sequence(frames)
         for m in frames:
             self.assertEqual(len(oracle.inspect_palette_pixels(SyntheticImage(m),m)),2)
+
+    def test_retained_dual_hover_scene_and_pixels(self):
+        m = marker(4)
+        m['palette']['hovered'] = True
+        m['scene']['items'][4]['color'].update(red=48,green=91,blue=137)
+        oracle.validate_palette_marker(m,4)
+        image = SyntheticImage(m)
+        self.assertEqual(len(oracle.inspect_palette_pixels(image,m)),2)
+        forged = copy.deepcopy(m)
+        forged['palette']['hovered'] = False
+        with self.assertRaisesRegex(oracle.PaletteError,'paint role'):
+            oracle.validate_palette_marker(forged,4)
+        wrong_pixels = marker(4)
+        with self.assertRaises(oracle.PaletteError):
+            oracle.inspect_palette_pixels(SyntheticImage(wrong_pixels),m)
+
+    def test_input_trace_integrity(self):
+        self.reject_mutations([
+            lambda m:m.pop('inputTrace'),
+            lambda m:m['inputTrace'].update(revision=99),
+            lambda m:m['inputTrace'].update(throughSequence=2),
+            lambda m:m['inputTrace']['events'][0].update(dispatched=True),
+            lambda m:m['inputTrace']['events'][0].update(sequence=0),
+            lambda m:m['inputTrace']['events'][0].update(afterDispatch=1),
+            lambda m:m['inputTrace']['events'][0].update(beforeDispatch=1),
+            lambda m:m['inputTrace']['events'][0].update(consumed=1),
+            lambda m:m['inputTrace']['events'][0].update(kind='move'),
+        ])
+        m = marker(1)
+        event = m['inputTrace']['events'][1]
+        event.update(kind='move',dispatched=True,afterDispatch=2,x=20,y=40)
+        oracle.validate_palette_marker(m,1)
+        for field,value in (('dispatched',False),('x',float('nan')),('sequence',1),('afterDispatch',3)):
+            forged = copy.deepcopy(m)
+            forged['inputTrace']['events'][1][field] = value
+            with self.assertRaises(oracle.PaletteError): oracle.validate_palette_marker(forged,1)
+        frames = [marker(p) for p in range(6)]
+        frames[3]['inputTrace']['events'][0]['consumed'] = True
+        with self.assertRaisesRegex(oracle.PaletteError,'history'):
+            oracle.validate_palette_sequence(frames)
 
     def test_all_ten_roles_and_gate_precedence(self):
         tables = {

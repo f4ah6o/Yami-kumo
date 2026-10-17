@@ -1246,3 +1246,148 @@ test "explicit palettes preserve core overlong label rejection and atomic frame"
     assert_eq(mount.next_action(), Some(@view.Activate(key)))
   }
 }
+
+///|
+fn pair(palette : @view.ButtonPaletteToken?) -> @view.View {
+  fn button(key : String) -> @view.View {
+    match palette {
+      None => @view.button(@view.NodeKey::new(key), key)
+      Some(token) =>
+        @view.button_with_palette(@view.NodeKey::new(key), key, token)
+    }
+  }
+  @view.row(@view.NodeKey::new("root"), [button("first"), button("second")])
+}
+
+///|
+test "legacy routed click without motion retains previous core hover" {
+  let mount = @ui.Mounted::new(@platform.WindowId::new(1L))
+  let first = @view.NodeKey::new("first")
+  let second = @view.NodeKey::new("second")
+  let initial = mount.commit(pair(None), 800.0, 600.0, 1.0, measure).unwrap()
+  let a = initial.bounds(first).unwrap()
+  let b = initial.bounds(second).unwrap()
+  ignore(
+    mount
+    .handle_event(
+      event(
+        1L,
+        @primitives.PointerMoved(
+          position=@primitives.Point::new(a.left() + 4.0, a.top() + 4.0).unwrap(),
+        ),
+      ),
+    )
+    .unwrap(),
+  )
+  ignore(mount.handle_event(event(2L, down(a))).unwrap())
+  ignore(mount.handle_event(event(3L, up(a))).unwrap())
+  let before = mount.commit(pair(None), 800.0, 600.0, 1.0, measure).unwrap()
+  assert_true(before.hovered(first) && !before.hovered(second))
+  // Valid public event sequence: routed click has coordinates, but no separate motion event.
+  ignore(mount.handle_event(event(4L, down(b))).unwrap())
+  ignore(mount.handle_event(event(5L, up(b))).unwrap())
+  let legacy = mount.commit(pair(None), 800.0, 600.0, 1.0, measure).unwrap()
+  assert_true(legacy.hovered(first) && legacy.hovered(second))
+  assert_true(!legacy.focused(first) && legacy.focused(second))
+  assert_true(!legacy.pressed(first) && !legacy.pressed(second))
+  for token in [Some(@view.Light), Some(@view.Dark), None] {
+    let themed = mount.commit(pair(token), 800.0, 600.0, 1.0, measure).unwrap()
+    assert_true(themed.hovered(first) && themed.hovered(second))
+    assert_eq(themed.binding_id(first), initial.binding_id(first))
+    assert_eq(themed.binding_id(second), initial.binding_id(second))
+  }
+  // An actual delivered motion reaches both existing controllers and clears the former owner.
+  ignore(
+    mount
+    .handle_event(
+      event(
+        6L,
+        @primitives.PointerMoved(
+          position=@primitives.Point::new(b.left() + 4.0, b.top() + 4.0).unwrap(),
+        ),
+      ),
+    )
+    .unwrap(),
+  )
+  let moved = mount
+    .commit(pair(Some(@view.Light)), 800.0, 600.0, 1.0, measure)
+    .unwrap()
+  assert_true(!moved.hovered(first) && moved.hovered(second))
+}
+
+///|
+test "dispatch witness distinguishes unconsumed motion from ignored input" {
+  let mounted = mount()
+  let point = @primitives.Point::new(20.0, 20.0).unwrap()
+  let motion = @primitives.PointerMoved(position=point)
+  assert_eq(mounted.last_dispatched_input_sequence(), 0L)
+  // Not ready; no successful dispatch.
+  assert_false(mounted.handle_event(event(1L, motion)).unwrap())
+  assert_eq(mounted.last_dispatched_input_sequence(), 0L)
+  ignore(render(mounted))
+  // A foreign window cannot consume the owned sequence or dispatch witness.
+  assert_false(
+    mounted
+    .handle_event(
+      @platform.Event::new(
+        @platform.WindowId::new(2L),
+        2L,
+        1.0,
+        @platform.Input(motion),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_eq(mounted.last_dispatched_input_sequence(), 0L)
+  assert_false(mounted.handle_event(event(2L, motion)).unwrap())
+  assert_eq(mounted.last_dispatched_input_sequence(), 2L)
+  assert_false(mounted.handle_event(event(2L, motion)).unwrap())
+  assert_eq(mounted.last_dispatched_input_sequence(), 2L)
+  ignore(
+    mounted
+    .handle_event(
+      @platform.Event::new(
+        @platform.WindowId::new(1L),
+        3L,
+        1.0,
+        @platform.FocusChanged(false),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_false(mounted.handle_event(event(4L, motion)).unwrap())
+  assert_eq(mounted.last_dispatched_input_sequence(), 2L)
+  ignore(
+    mounted
+    .handle_event(
+      @platform.Event::new(
+        @platform.WindowId::new(1L),
+        5L,
+        1.0,
+        @platform.FocusChanged(true),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_false(
+    mounted
+    .handle_event(
+      @platform.Event::new(
+        @platform.WindowId::new(1L),
+        6L,
+        2.0,
+        @platform.Input(motion),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_eq(mounted.last_dispatched_input_sequence(), 2L)
+  assert_false(mounted.handle_event(event(7L, motion)).unwrap())
+  assert_eq(mounted.last_dispatched_input_sequence(), 2L)
+  ignore(render(mounted))
+  assert_false(mounted.handle_event(event(8L, motion)).unwrap())
+  assert_eq(mounted.last_dispatched_input_sequence(), 8L)
+  mounted.dispose()
+  assert_false(mounted.handle_event(event(9L, motion)).unwrap())
+  assert_eq(mounted.last_dispatched_input_sequence(), 8L)
+}

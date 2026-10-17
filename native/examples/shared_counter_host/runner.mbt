@@ -72,6 +72,8 @@ priv struct Proof {
   mut frame_index : Int32
   mut last_payload : String?
   mut last_phase : Int32
+  events : Array[String]
+  mut frame_trace : String
 }
 
 ///|
@@ -175,6 +177,8 @@ fn run_loop(
     frame_index: 0,
     last_payload: None,
     last_phase: -1,
+    events: [],
+    frame_trace: "",
   }
   let mut pending : @shared_counter.CounterFrame? = None
   let mut current : @shared_counter.CounterFrame? = None
@@ -196,9 +200,19 @@ fn run_loop(
         }
         sequence = value.sequence()
         // Even non-input events reach the adapter's window/sequence lifetime gate.
-        match app.handle_event(value) {
+        let before_dispatch = app.last_dispatched_input_sequence()
+        let consumed = match app.handle_event(value) {
           Err(error) => return Err(error)
-          Ok(_) => ()
+          Ok(value) => value
+        }
+        if e2e && fixture == "palette" {
+          if proof.events.length() >= 4096 {
+            return Err(runner_error("palette event trace limit exceeded"))
+          }
+          let after_dispatch = app.last_dispatched_input_sequence()
+          proof.events.push(
+            palette_event_json(value, consumed, before_dispatch, after_dispatch),
+          )
         }
         match value.kind() {
           @platform.Created => dirty = true
@@ -350,6 +364,12 @@ fn run_loop(
         Err(error) => return Err(error)
         Ok(value) => value
       }
+      if e2e && fixture == "palette" {
+        // Freeze before presentation: later completion events cannot relabel this scene.
+        proof.frame_trace = "\"inputTrace\":{\"revision\":\{frame.revision()},\"throughSequence\":\{sequence},\"events\":[" +
+          proof.events.join(",") +
+          "]},"
+      }
       match host.present(window, frame.snapshot()) {
         Err(error) => return Err(error)
         Ok(_) => ()
@@ -449,7 +469,7 @@ fn publish(
   }
   actions.write_string("]")
   let spacing_payload = if proof.fixture == "palette" {
-    palette_json(frame)
+    palette_json(frame) + proof.frame_trace
   } else if proof.fixture == "spacing" {
     spacing_json(frame)
   } else {
@@ -543,4 +563,40 @@ fn palette_json(frame : @shared_counter.CounterFrame) -> String {
   }
   keys.write_string("]")
   "\"palette\":{\"token\":\"\{token}\",\"toggleToken\":\"\{toggle_token}\",\"hovered\":\{frame.button_hovered()},\"toggleEnabled\":\{frame.toggle_enabled()},\"toggleLoading\":\{frame.toggle_loading()},\"toggleHovered\":\{frame.toggle_hovered()},\"togglePressed\":\{frame.toggle_pressed()},\"toggleFocused\":\{frame.toggle_focused()},\"toggle\":\{rect_json(frame.toggle_bounds())},\"toggleLabel\":\{rect_json(frame.toggle_label_bounds())},\"buttonId\":\{frame.button_binding_id()},\"toggleId\":\{frame.toggle_binding_id()},\"revision\":\{frame.revision()},\"actionKeys\":\{keys.to_string()}},"
+}
+
+///|
+fn palette_event_json(
+  event : @platform.Event,
+  consumed : Bool,
+  before_dispatch : Int64,
+  after_dispatch : Int64,
+) -> String {
+  let dispatched = after_dispatch == event.sequence() &&
+    after_dispatch != before_dispatch
+  let detail = match event.kind() {
+    @platform.Input(@primitives.PointerMoved(position~)) =>
+      "\"kind\":\"move\",\"x\":\{position.x()},\"y\":\{position.y()}"
+    @platform.Input(
+      @primitives.PointerButtonPressed(
+        position~,
+        button=@primitives.Primary,
+        ..
+      )
+    ) => "\"kind\":\"primary-down\",\"x\":\{position.x()},\"y\":\{position.y()}"
+    @platform.Input(
+      @primitives.PointerButtonReleased(
+        position~,
+        button=@primitives.Primary,
+        ..
+      )
+    ) => "\"kind\":\"primary-up\",\"x\":\{position.x()},\"y\":\{position.y()}"
+    @platform.Input(_) => "\"kind\":\"other-input\""
+    @platform.FocusChanged(focused) =>
+      "\"kind\":\"focus\",\"focused\":\{focused}"
+    _ => "\"kind\":\"other-window\""
+  }
+  "{\"sequence\":\{event.sequence()},\"scale\":\{event.scale()},\"consumed\":\{consumed},\"dispatched\":\{dispatched},\"beforeDispatch\":\{before_dispatch},\"afterDispatch\":\{after_dispatch}," +
+  detail +
+  "}"
 }

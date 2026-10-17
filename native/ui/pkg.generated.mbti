@@ -48,6 +48,7 @@ pub fn Mounted::frame(Self) -> Frame?
 pub fn Mounted::handle_event(Self, @platform.Event) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn Mounted::invalidate_layout(Self) -> Unit
 pub fn Mounted::is_disposed(Self) -> Bool
+pub fn Mounted::last_dispatched_input_sequence(Self) -> Int64
 pub fn Mounted::new(@platform.WindowId) -> Self
 pub fn Mounted::next_action(Self) -> @core.SemanticAction?
 pub fn Mounted::next_focus_result(Self) -> @runtime.FocusResult?
