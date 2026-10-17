@@ -172,3 +172,17 @@ test('retained artifacts must exist and match their recorded bytes', () => {
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+for (const fixtureId of ['button-interrupted-loading', 'button-interrupted-disabled']) {
+  test(`${fixtureId} requires its exact interruption trace and cannot borrow another fixture`, () => {
+    const result = record();
+    result.fixtureId = fixtureId;
+    result.observed = { counts: [0, 0, 0, 1, 1, 2] };
+    assert.equal(validateResult(result, candidate).status, 'pass');
+    const required = [`${fixtureId}:web/dom/js/runtime`];
+    assert.equal(validateGate([result], required, candidate), true);
+    assert.throws(() => validateGate([record()], required, candidate), /required evidence/);
+    result.observed.counts[2] = 1;
+    assert.throws(() => validateResult(result, candidate), /domain result mismatch/);
+  });
+}

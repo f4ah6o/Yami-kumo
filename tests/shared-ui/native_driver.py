@@ -26,7 +26,16 @@ from typing import Any
 import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
+# Only these two fixtures are driven with actual native host pointer input.
+# Additional Button contracts are validated below, but portable event tests must
+# never be presented as native-window/keyboard qualification.
 FIXTURES = {"counter": "counter-two-activations", "disabled-loading": "counter-disabled-loading"}
+CONTRACT_PHASES = {
+    "counter-two-activations": 3,
+    "counter-disabled-loading": 4,
+    "button-interrupted-loading": 6,
+    "button-interrupted-disabled": 6,
+}
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 COMMON_PATHS = ("ui/core", "ui/runtime", "examples/shared_counter")
 BOUND_PATHS = (*COMMON_PATHS, "native/ui", "native/examples/shared_counter",
@@ -55,13 +64,13 @@ def load_contract(path: Path = ROOT / "fixtures/shared-ui/contract-v1.json") -> 
     if contract.get("version") != "shared-ui-contract/v1" or contract.get("profileDifferences") != []:
         raise E2EError("unsupported shared UI contract")
     fixtures = contract.get("fixtures")
-    if not isinstance(fixtures, list) or len(fixtures) != len(FIXTURES):
+    if not isinstance(fixtures, list) or len(fixtures) != len(CONTRACT_PHASES):
         raise E2EError("shared UI contract fixture set changed")
     by_id = {item.get("id"): item.get("expected") for item in fixtures}
-    if set(by_id) != set(FIXTURES.values()):
+    if set(by_id) != set(CONTRACT_PHASES):
         raise E2EError("shared UI contract has unknown or duplicate fixtures")
-    for fixture, count in (("counter", 3), ("disabled-loading", 4)):
-        expected = by_id[FIXTURES[fixture]]
+    for fixture_id, count in CONTRACT_PHASES.items():
+        expected = by_id[fixture_id]
         if not isinstance(expected, dict) or set(expected) != {"counts"}:
             raise E2EError("fixture expectation must contain only counts")
         values = expected["counts"]

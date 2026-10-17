@@ -22,8 +22,8 @@ fn Counter::test_view(self : Counter, view : @core.View) -> @core.View {
         return @core.button(
           view.key(),
           self.label,
-          disabled=self.mode == "disabled",
-          loading=self.mode == "loading",
+          disabled=self.mode == "disabled" || self.mode == "disabled-loading",
+          loading=self.mode == "loading" || self.mode == "disabled-loading",
         )
     }
   }

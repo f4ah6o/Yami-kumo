@@ -5,12 +5,30 @@
     {
       "id": "counter-two-activations",
       "description": "A single common model increments once per accepted semantic Activate.",
-      "expected": { "counts": [0, 1, 2] }
+      "expected": {
+        "counts": [0, 1, 2]
+      }
     },
     {
       "id": "counter-disabled-loading",
       "description": "Disabled or loading Button events do not change the shared model.",
-      "expected": { "counts": [0, 0, 0, 1] }
+      "expected": {
+        "counts": [0, 0, 0, 1]
+      }
+    },
+    {
+      "id": "button-interrupted-loading",
+      "description": "Held Space and pointer canceled by loading then enabled before release; already-delivered Enter remains one action, its stale repeat is rejected, and fresh click succeeds. Native portable tests share the counts; real keyboard evidence remains profile-specific.",
+      "expected": {
+        "counts": [0, 0, 0, 1, 1, 2]
+      }
+    },
+    {
+      "id": "button-interrupted-disabled",
+      "description": "Held Space and pointer canceled by disabled then enabled before release; already-delivered Enter remains one action, its stale repeat is rejected, and fresh click succeeds. Native portable tests share the counts; real keyboard evidence remains profile-specific.",
+      "expected": {
+        "counts": [0, 0, 0, 1, 1, 2]
+      }
     }
   ]
 }

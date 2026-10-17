@@ -51,6 +51,10 @@ pub fn text(key : NodeKey, value : String) -> View {
 ///|
 /// Describes a semantic button. Low-level pointer/key behavior belongs to the
 /// host control; this package does not introduce another button state machine.
+/// Disabled and loading both reject Activate. Loading alone retains eligible
+/// focus; disabled removes focus eligibility even when loading is also true.
+/// Labels are literal. Browser repeat/focus-visible and GPUI focus paint are
+/// separate profiles; see docs/shared-button-states.md for cancellation limits.
 pub fn button(
   key : NodeKey,
   label : String,

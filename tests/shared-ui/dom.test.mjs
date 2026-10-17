@@ -9,6 +9,7 @@ import { execFileSync } from 'node:child_process';
 import test from 'node:test';
 import { chromium } from 'playwright';
 import { validateResult, validateArtifacts, validateGate } from './evidence.mjs';
+import { exerciseButtonStates } from './button-states.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const bundle = resolve(
@@ -91,19 +92,30 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       const originalAdd = EventTarget.prototype.addEventListener;
       const originalRemove = EventTarget.prototype.removeEventListener;
       window.ownedClickListeners = 0;
+      window.ownedButtonListeners = 0;
       EventTarget.prototype.addEventListener = function (type, callback, options) {
-        if (type === 'click' && this instanceof Element && this.hasAttribute('data-yk-key')) {
-          const set = listeners.get(this) || new Set();
+        if (
+          this instanceof Element &&
+          this.tagName === 'BUTTON' &&
+          this.hasAttribute('data-yk-key')
+        ) {
+          const types = listeners.get(this) || new Map();
+          const set = types.get(type) || new Set();
           if (!set.has(callback)) {
             set.add(callback);
-            window.ownedClickListeners++;
+            window.ownedButtonListeners++;
+            if (type === 'click') window.ownedClickListeners++;
           }
-          listeners.set(this, set);
+          types.set(type, set);
+          listeners.set(this, types);
         }
         return originalAdd.call(this, type, callback, options);
       };
       EventTarget.prototype.removeEventListener = function (type, callback, options) {
-        if (type === 'click' && listeners.get(this)?.delete(callback)) window.ownedClickListeners--;
+        if (listeners.get(this)?.get(type)?.delete(callback)) {
+          window.ownedButtonListeners--;
+          if (type === 'click') window.ownedClickListeners--;
+        }
         return originalRemove.call(this, type, callback, options);
       };
     });
@@ -415,6 +427,9 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       api.mountCounter('root-a');
     });
     observe('external-dom-move-is-not-mutated-and-listener-revoked');
+    const beforeStateListeners = await page.evaluate(() => window.ownedButtonListeners);
+    await exerciseButtonStates(page, observe);
+    assert.equal(await page.evaluate(() => window.ownedButtonListeners), beforeStateListeners);
     assert.deepEqual(errors, []);
     await page.screenshot({ path: resolve(output, 'counter.png') });
     await page.evaluate(() => {
@@ -422,6 +437,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       api.disposeCounter('root-b');
     });
     assert.equal(await page.evaluate(() => window.ownedClickListeners), 0);
+    assert.equal(await page.evaluate(() => window.ownedButtonListeners), 0);
     assert.equal(await page.locator('#root-a').textContent(), '');
     assert.equal(await page.locator('#root-b').textContent(), '');
     assert.equal(await page.locator('#occupied').textContent(), 'Existing content');
@@ -443,7 +459,12 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     );
     const coreRoot = coreCatalog.artifact.replaceAll('\\', '/').split('/_build/')[0];
     const coreHash = hash(await readFile(resolve(coreRoot, 'moon.mod')));
-    const results = ['counter-two-activations', 'counter-disabled-loading'].map((fixtureId) => ({
+    const results = [
+      'counter-two-activations',
+      'counter-disabled-loading',
+      'button-interrupted-loading',
+      'button-interrupted-disabled',
+    ].map((fixtureId) => ({
       schemaVersion: 'shared-ui-result/v1',
       contractVersion: 'shared-ui-contract/v1',
       fixtureId,

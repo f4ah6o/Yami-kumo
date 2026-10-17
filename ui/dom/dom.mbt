@@ -91,12 +91,87 @@ extern "js" fn update_node(
   #| }
 
 ///|
-extern "js" fn add_click(node : DomNode, callback : () -> Unit) -> Unit =
-  #| (node, callback) => node.addEventListener("click", callback)
+#external
+priv type ButtonEvents
 
 ///|
-extern "js" fn remove_click(node : DomNode, callback : () -> Unit) -> Unit =
-  #| (node, callback) => node.removeEventListener("click", callback)
+/// Browser click remains the only Activate source. These listeners only cancel
+/// browser defaults/admission when an observed gesture crosses a gate change;
+/// they never synthesize clicks, capture a pointer, or implement key activation.
+extern "js" fn add_button_events(
+  node : DomNode,
+  callback : () -> Unit,
+) -> ButtonEvents =
+  #| (node, callback) => {
+  #|   let disabled = false, loading = false;
+  #|   const pointers = new Map();
+  #|   const keys = new Map();
+  #|   const unavailable = () => disabled || loading;
+  #|   const cancel = () => {
+  #|     for (const key of keys.keys()) keys.set(key, true);
+  #|     for (const pointer of pointers.values()) pointer.cancelled = true;
+  #|   };
+  #|   const activationKey = event => event.key === " " || event.key === "Enter";
+  #|   const keydown = event => {
+  #|     if (!activationKey(event)) return;
+  #|     if (!event.repeat) keys.set(event.key, unavailable());
+  #|     if (unavailable() || keys.get(event.key)) event.preventDefault();
+  #|   };
+  #|   const keyup = event => {
+  #|     if (!activationKey(event)) return;
+  #|     // In particular, cancel Space's browser-generated click synchronously.
+  #|     if (unavailable() || keys.get(event.key)) event.preventDefault();
+  #|     keys.delete(event.key);
+  #|   };
+  #|   const pointerdown = event => {
+  #|     if (event.button !== 0 || !event.isPrimary) return;
+  #|     // At most one latest primary gesture per browser pointer type. A new
+  #|     // primary down replaces even an old release delivered outside this node.
+  #|     pointers.set(event.pointerType, {id: event.pointerId, cancelled: unavailable()});
+  #|   };
+  #|   const pointercancel = event => {
+  #|     const pointer = pointers.get(event.pointerType);
+  #|     if (pointer?.id === event.pointerId) pointer.cancelled = true;
+  #|   };
+  #|   const click = event => {
+  #|     // Independent detail=0 clicks (including AT-like/programmatic input)
+  #|     // need no preceding keyboard event. Key cancellation lives in keyup.
+  #|     const pointer = event.detail > 0 ? pointers.get(event.pointerType) : undefined;
+  #|     const matches = pointer && pointer.id === event.pointerId;
+  #|     if (matches) pointers.delete(event.pointerType);
+  #|     if (unavailable() || (matches && pointer.cancelled)) {
+  #|       event.preventDefault();
+  #|       return;
+  #|     }
+  #|     callback();
+  #|   };
+  #|   const listeners = {click, keydown, keyup, pointerdown, pointercancel, blur: cancel};
+  #|   for (const [type, listener] of Object.entries(listeners)) node.addEventListener(type, listener);
+  #|   return {
+  #|     update(nextDisabled, nextLoading) {
+  #|       if (disabled !== nextDisabled || loading !== nextLoading) cancel();
+  #|       disabled = nextDisabled;
+  #|       loading = nextLoading;
+  #|     },
+  #|     dispose() {
+  #|       for (const [type, listener] of Object.entries(listeners)) node.removeEventListener(type, listener);
+  #|       keys.clear();
+  #|       pointers.clear();
+  #|     }
+  #|   };
+  #| }
+
+///|
+extern "js" fn update_button_events(
+  events : ButtonEvents,
+  disabled : Bool,
+  loading : Bool,
+) -> Unit =
+  #| (events, disabled, loading) => events.update(disabled, loading)
+
+///|
+extern "js" fn remove_button_events(events : ButtonEvents) -> Unit =
+  #| events => events.dispose()
 
 ///|
 extern "js" fn enqueue_microtask(callback : () -> Unit) -> Unit =
@@ -155,7 +230,7 @@ pub(all) enum DomError {
 priv struct MountedNode {
   token : @runtime.InstanceToken
   node : DomNode
-  click : (() -> Unit)?
+  events : ButtonEvents?
 }
 
 ///|
@@ -244,22 +319,26 @@ fn DomRoot::render_node(
     Some(existing) => existing
     None => {
       let node = create_node(kind_number(kind), key, view.label())
-      let click = if kind == @core.Button {
+      let events = if kind == @core.Button {
         let callback = fn() {
           if accepts_events(self.root, node) &&
             self.runtime.enqueue_activate(token) {
             self.schedule_actions()
           }
         }
-        add_click(node, callback)
-        Some(callback)
+        Some(add_button_events(node, callback))
       } else {
         None
       }
-      let item = { token, node, click, }
+      let item = { token, node, events, }
       self.nodes.set(key, item)
       item
     }
+  }
+  match mounted.events {
+    Some(events) =>
+      update_button_events(events, view.disabled(), view.loading())
+    None => ()
   }
   update_node(
     mounted.node,
@@ -302,8 +381,8 @@ pub fn DomRoot::update(
   let removed : Array[String] = []
   for key, mounted in self.nodes {
     if !self.runtime.is_current(mounted.token) {
-      match mounted.click {
-        Some(callback) => remove_click(mounted.node, callback)
+      match mounted.events {
+        Some(events) => remove_button_events(events)
         None => ()
       }
       remove_owned_node(self.root, mounted.node)
@@ -363,8 +442,8 @@ pub fn DomRoot::dispose(self : DomRoot) -> Unit {
   }
   self.runtime.dispose()
   for _, mounted in self.nodes {
-    match mounted.click {
-      Some(callback) => remove_click(mounted.node, callback)
+    match mounted.events {
+      Some(events) => remove_button_events(events)
       None => ()
     }
     remove_owned_node(self.root, mounted.node)

@@ -558,3 +558,162 @@ test "measurement invalidation changes preparation authority without disposing t
   assert_true(mounted.activate(mounted.callback(key()).unwrap()))
   assert_eq(mounted.next_action(), Some(@view.Activate(key())))
 }
+
+///|
+// Matches button-interrupted-loading/disabled in contract-v1.json. These are
+// portable adapter events, not actual native-window/keyboard qualification.
+test "Button state fixtures cancel held Space pointer and Enter repeats across gate cycles" {
+  for disabled in [false, true] {
+    let mounted = mount()
+    let bounds = render(mounted).bounds(key()).unwrap()
+    let gated = button_view(disabled~, loading=!disabled)
+    let counts = [0]
+    assert_true(mounted.focus(key()))
+    ignore(mounted.handle_event(event(1L, key_down(@primitives.Space))))
+    assert_true(render(mounted).pressed(key()))
+    let frame = render(mounted, view=gated)
+    assert_true(!frame.pressed(key()))
+    assert_eq(frame.focused(key()), !disabled)
+    ignore(render(mounted))
+    ignore(mounted.handle_event(event(2L, key_up(@primitives.Space))))
+    assert_true(mounted.next_action() is None)
+    counts.push(0)
+    ignore(mounted.handle_event(event(3L, down(bounds))))
+    assert_true(render(mounted).pressed(key()))
+    ignore(render(mounted, view=gated))
+    ignore(render(mounted))
+    ignore(mounted.handle_event(event(4L, up(bounds))))
+    assert_true(mounted.next_action() is None)
+    counts.push(0)
+    assert_true(mounted.focus(key()))
+    ignore(mounted.handle_event(event(5L, key_down(@primitives.Enter))))
+    assert_true(mounted.next_action() is Some(@view.Activate(_)))
+    assert_true(mounted.next_action() is None)
+    counts.push(1)
+    ignore(render(mounted, view=gated))
+    ignore(render(mounted))
+    ignore(
+      mounted.handle_event(event(6L, key_down(@primitives.Enter, repeat=true))),
+    )
+    ignore(mounted.handle_event(event(7L, key_up(@primitives.Enter))))
+    assert_true(mounted.next_action() is None)
+    counts.push(1)
+    ignore(mounted.handle_event(event(8L, down(bounds))))
+    ignore(mounted.handle_event(event(9L, up(bounds))))
+    assert_true(mounted.next_action() is Some(@view.Activate(_)))
+    assert_true(mounted.next_action() is None)
+    counts.push(2)
+    assert_eq(counts, [0, 0, 0, 1, 1, 2])
+    mounted.dispose()
+  }
+}
+
+///|
+test "loading consumes focused activation keys without actions and disabled wins over loading" {
+  let mounted = mount()
+  ignore(render(mounted))
+  assert_true(mounted.focus(key()))
+  ignore(render(mounted, view=button_view(loading=true)))
+  assert_true(!mounted.focus(key()))
+  assert_true(render(mounted, view=button_view(loading=true)).focused(key()))
+  assert_true(
+    mounted.handle_event(event(1L, key_down(@primitives.Enter))).unwrap(),
+  )
+  assert_true(
+    mounted.handle_event(event(2L, key_up(@primitives.Enter))).unwrap(),
+  )
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Space))).unwrap(),
+  )
+  assert_true(
+    mounted.handle_event(event(4L, key_up(@primitives.Space))).unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  let frame = render(mounted, view=button_view(disabled=true, loading=true))
+  assert_true(!frame.focused(key()) && !frame.pressed(key()))
+  assert_true(!mounted.focus(key()))
+  assert_true(
+    !mounted.handle_event(event(5L, key_down(@primitives.Enter))).unwrap(),
+  )
+  assert_true(!mounted.activate(mounted.callback(key()).unwrap()))
+  assert_true(mounted.next_action() is None)
+  ignore(render(mounted))
+  assert_true(!render(mounted).focused(key()))
+}
+
+///|
+fn quad_color(frame : @ui.Frame, index : Int32) -> @primitives.Color {
+  match frame.snapshot().items()[index] {
+    @scene.QuadItem(color~, ..) => color
+    _ => abort("expected Button quad")
+  }
+}
+
+///|
+test "GPUI hover and retained-focus painting survive unchanged repaint with explicit profile differences" {
+  let mounted = mount()
+  let initial = render(mounted)
+  let bounds = initial.bounds(key()).unwrap()
+  let motion = @primitives.PointerMoved(
+    position=@primitives.Point::new(bounds.left() + 4.0, bounds.top() + 4.0).unwrap(),
+  )
+  ignore(mounted.handle_event(event(1L, motion)))
+  let hovered = render(mounted)
+  assert_true(quad_color(initial, 3) != quad_color(hovered, 3))
+  assert_true(quad_color(hovered, 3) == quad_color(render(mounted), 3))
+  ignore(mounted.handle_event(event(2L, down(bounds))))
+  ignore(mounted.handle_event(event(3L, up(bounds))))
+  assert_true(mounted.next_action() is Some(_))
+  let focused = render(mounted)
+  assert_true(focused.focused(key()))
+  // Existing GPUI paints a focus border even for pointer-obtained focus.
+  assert_true(quad_color(focused, 2) != quad_color(initial, 2))
+  let loading = render(mounted, view=button_view(loading=true))
+  assert_true(loading.focused(key()))
+  assert_true(quad_color(loading, 2) == quad_color(focused, 2))
+  let enabled = render(mounted)
+  assert_true(enabled.focused(key()))
+  assert_true(quad_color(enabled, 3) == quad_color(initial, 3))
+  ignore(mounted.handle_event(event(4L, motion)))
+  assert_true(quad_color(render(mounted), 3) == quad_color(hovered, 3))
+  let renamed = render(mounted, view=button_view(label="Renamed"))
+  assert_true(renamed.focused(key()))
+  assert_true(quad_color(renamed, 3) == quad_color(initial, 3))
+  let disabled = render(mounted, view=button_view(disabled=true))
+  assert_true(!disabled.focused(key()))
+  ignore(mounted.handle_event(event(5L, motion)))
+  assert_true(
+    quad_color(render(mounted, view=button_view(disabled=true)), 3) ==
+    quad_color(disabled, 3),
+  )
+  assert_true(mounted.next_action() is None)
+}
+
+///|
+test "removed and retyped held buttons cannot activate a freshly focused replacement" {
+  for
+    replacement in [
+      @view.text(key(), "Replacement text"),
+      @view.column(@view.NodeKey::new("root"), []),
+    ] {
+    let mounted = mount()
+    let bounds = render(mounted).bounds(key()).unwrap()
+    assert_true(mounted.focus(key()))
+    ignore(mounted.handle_event(event(1L, key_down(@primitives.Space))))
+    ignore(render(mounted, view=replacement))
+    ignore(render(mounted))
+    assert_true(mounted.focus(key()))
+    ignore(mounted.handle_event(event(2L, key_up(@primitives.Space))))
+    assert_true(mounted.next_action() is None)
+    ignore(mounted.handle_event(event(3L, down(bounds))))
+    ignore(render(mounted, view=replacement))
+    ignore(render(mounted))
+    ignore(mounted.handle_event(event(4L, up(bounds))))
+    assert_true(mounted.next_action() is None)
+    ignore(mounted.handle_event(event(5L, down(bounds))))
+    ignore(mounted.handle_event(event(6L, up(bounds))))
+    assert_true(mounted.next_action() is Some(_))
+    assert_true(mounted.next_action() is None)
+    mounted.dispose()
+  }
+}
