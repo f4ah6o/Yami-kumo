@@ -7,7 +7,9 @@ import {
   "f4ah6o/gpui/primitives",
   "f4ah6o/gpui/scene",
   "f4ah6o/gpui/text_layout",
+  "f4ah6o/yami_kumo/examples/shared_button_theme",
   "f4ah6o/yami_kumo/ui/core",
+  "f4ah6o/yami_kumo_native/ui",
 }
 
 // Values
@@ -64,6 +66,24 @@ pub fn NativeCounter::model_revision(Self) -> Result[UInt64, @diagnostics.Framew
 pub fn NativeCounter::new(@platform.WindowId, card? : Bool, spacing? : Bool, palette? : Bool, disabled? : Bool, loading? : Bool) -> Result[Self, @diagnostics.FrameworkError]
 pub fn NativeCounter::render(Self, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[CounterFrame, @diagnostics.FrameworkError]
 pub fn NativeCounter::set_mode(Self, Bool, Bool, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Unit, @diagnostics.FrameworkError]
+
+pub struct NativeTheme {
+  // private fields
+}
+pub fn NativeTheme::control(Self, String, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Bool, @diagnostics.FrameworkError]
+pub fn NativeTheme::dispose(Self) -> Unit
+pub fn NativeTheme::drain_one(Self, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Bool, @diagnostics.FrameworkError]
+pub fn NativeTheme::handle_event(Self, @platform.Event) -> Result[Bool, @diagnostics.FrameworkError]
+pub fn NativeTheme::invalidate_layout(Self) -> Unit
+pub fn NativeTheme::new(@platform.WindowId) -> Result[Self, @diagnostics.FrameworkError]
+pub fn NativeTheme::render(Self, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[ThemeFrame, @diagnostics.FrameworkError]
+
+pub struct ThemeFrame {
+  // private fields
+}
+pub fn ThemeFrame::action_keys(Self) -> Array[String]
+pub fn ThemeFrame::frame(Self) -> @ui.Frame
+pub fn ThemeFrame::model(Self) -> @shared_button_theme.Model
 
 // Type aliases
 

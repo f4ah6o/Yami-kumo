@@ -61,6 +61,7 @@ pub struct Frame {
   priv snapshot : @scene.SceneSnapshot
   priv revision : UInt64
   priv observations : Array[Observation]
+  priv theme : @theme.Theme?
 }
 
 ///|
@@ -71,6 +72,12 @@ pub fn Frame::snapshot(self : Frame) -> @scene.SceneSnapshot {
 ///|
 pub fn Frame::revision(self : Frame) -> UInt64 {
   self.revision
+}
+
+///|
+/// The accepted root Button theme. Explicit View palettes retain their overrides.
+pub fn Frame::theme(self : Frame) -> @theme.Theme? {
+  self.theme
 }
 
 ///|
@@ -195,10 +202,14 @@ pub struct Mounted {
   priv mut window_focused : Bool
   priv mut ready : Bool
   priv mut busy : Bool
+  priv mut theme : @theme.Theme?
 }
 
 ///|
-pub fn Mounted::new(window : @platform.WindowId) -> Mounted {
+pub fn Mounted::new(
+  window : @platform.WindowId,
+  theme~ : @theme.Theme? = None,
+) -> Mounted {
   {
     window,
     runtime: @runtime.Runtime::new(),
@@ -214,7 +225,29 @@ pub fn Mounted::new(window : @platform.WindowId) -> Mounted {
     window_focused: true,
     ready: false,
     busy: false,
+    theme,
   }
+}
+
+///|
+/// Requested fallback Button colors. Frame::theme observes the accepted root theme.
+pub fn Mounted::theme(self : Mounted) -> @theme.Theme? {
+  self.theme
+}
+
+///|
+/// Request fallback colors for the next commit. Explicit View palettes take
+/// precedence; None restores legacy paint for Buttons without an override.
+/// Pending gestures and accepted geometry remain valid across paint changes.
+pub fn Mounted::set_theme(self : Mounted, theme : @theme.Theme?) -> Bool {
+  if self.is_disposed() || self.busy {
+    return false
+  }
+  if self.theme != theme {
+    self.theme = theme
+    self.change = fresh_epoch()
+  }
+  true
 }
 
 ///|
@@ -570,7 +603,7 @@ fn Mounted::prepare(
       }
     }
     let mut button = binding.button
-    let mut resolved_text = binding.text
+    let mut text = binding.text
     if binding.view.kind() == @view.Button {
       let previous = binding.button
       let model = match previous {
@@ -608,7 +641,17 @@ fn Mounted::prepare(
         }) {
         model = model.cancel_press()
       }
-      let painted_button = match binding.view.button_palette() {
+      let palette = match binding.view.button_palette() {
+        Some(token) => Some(token)
+        None =>
+          self.theme.map(theme => {
+            match theme {
+              @theme.Light => @view.Light
+              @theme.Dark => @view.Dark
+            }
+          })
+      }
+      let painted_button = match palette {
         None => model.paint_items(binding.id + 1UL)
         Some(token) =>
           model.paint_items_with_palette(
@@ -624,18 +667,16 @@ fn Mounted::prepare(
       // existing NativeText path and the host's actual measurement callback.
       items.push(paint[0])
       items.push(paint[1])
-      // Core owns foreground resolution, including gate precedence. Recolor only
-      // after its full paint validation; retain host measurement and text origin.
+      // GPUI owns foreground precedence too; choosing it here from View flags
+      // would diverge from the controller when states overlap.
       match paint[2] {
         @scene.TextItem(color~, ..) =>
-          resolved_text = binding.text.map(text => {
-            text.recolored(binding.id + 3UL, color)
-          })
-        _ => return Err(adapter_error("native Button label paint missing"))
+          text = text.map(text => text.recolored(text.id(), color))
+        _ => return Err(adapter_error("native Button label paint is not text"))
       }
       button = Some(model)
     }
-    match resolved_text {
+    match text {
       Some(text) => {
         let align = if binding.view.kind() == @view.Button {
           @components.Center
@@ -675,7 +716,7 @@ fn Mounted::prepare(
       loading: button.map(model => model.is_loading()).unwrap_or(false),
       palette: binding.view.button_palette(),
     })
-    bindings[index] = { ..binding, button, }
+    bindings[index] = { ..binding, button, text, }
   }
   let snapshot = match
     @scene.SceneSnapshot::new(viewport, scale, [], [], items) {
@@ -687,7 +728,12 @@ fn Mounted::prepare(
     tree,
     next_id,
     cancel_pending,
-    frame: { snapshot, revision: self.revision + 1UL, observations, },
+    frame: {
+      snapshot,
+      revision: self.revision + 1UL,
+      observations,
+      theme: self.theme,
+    },
   })
 }
 

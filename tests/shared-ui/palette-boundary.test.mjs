@@ -36,7 +36,9 @@ test('production palette FFI changes only two opt-in classes and removes stale p
 });
 test('production CSS resolves every frozen role with paint-only scoped selectors', () => {
   const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter((m) =>
-    m[1].includes('.yk-ui-button-'),
+    /^\.yk-ui-button-(?:light|dark)(?=[:\s]|\[|$)/.test(
+      m[1].replace(/\/\*[\s\S]*?\*\//g, '').trim(),
+    ),
   );
   assert.equal(rules.length, 12);
   for (const token of ['Light', 'Dark']) {

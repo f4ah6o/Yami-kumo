@@ -1,0 +1,43 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "f4ah6o/yami_kumo/examples/shared_button_theme"
+
+import {
+  "f4ah6o/yami_kumo/ui/core",
+  "f4ah6o/yami_kumo/ui/theme",
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) enum Mode {
+  Normal
+  Disabled
+  Loading
+  DisabledLoading
+} derive(Eq, @debug.Debug)
+pub fn Mode::equal(Self, Self) -> Bool
+pub fn Mode::name(Self) -> String
+pub fn Mode::not_equal(Self, Self) -> Bool
+pub fn Mode::to_repr(Self) -> @debug.Repr
+
+pub struct Model {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::mode(Self) -> Mode
+pub fn Model::new() -> Self
+pub fn Model::not_equal(Self, Self) -> Bool
+pub fn Model::theme(Self) -> @theme.Theme
+pub fn Model::to_repr(Self) -> @debug.Repr
+pub fn Model::update(Self, @core.SemanticAction) -> Self
+pub fn Model::value(Self) -> Int
+pub fn Model::view(Self) -> @core.View
+pub fn Model::with_mode(Self, Mode) -> Self
+pub fn Model::with_theme(Self, @theme.Theme) -> Self
+
+// Type aliases
+
+// Traits

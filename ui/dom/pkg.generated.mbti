@@ -4,11 +4,12 @@ package "f4ah6o/yami_kumo/ui/dom"
 import {
   "f4ah6o/yami_kumo/ui/core",
   "f4ah6o/yami_kumo/ui/runtime",
+  "f4ah6o/yami_kumo/ui/theme",
   "moonbitlang/core/debug",
 }
 
 // Values
-pub fn mount(String, @core.View, () -> Unit) -> Result[DomRoot, DomError]
+pub fn mount(String, @core.View, () -> Unit, theme? : @theme.Theme?) -> Result[DomRoot, DomError]
 
 // Errors
 
@@ -35,6 +36,7 @@ pub fn DomRoot::focus(Self, @core.NodeKey) -> Bool
 pub fn DomRoot::is_disposed(Self) -> Bool
 pub fn DomRoot::next_action(Self) -> @core.SemanticAction?
 pub fn DomRoot::next_focus_result(Self) -> @runtime.FocusResult?
+pub fn DomRoot::set_theme(Self, @theme.Theme?) -> Result[Unit, DomError]
 pub fn DomRoot::update(Self, @core.View) -> Result[Unit, DomError]
 
 // Type aliases

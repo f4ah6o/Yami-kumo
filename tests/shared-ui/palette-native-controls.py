@@ -6,7 +6,11 @@ import json, os, pathlib, shutil, subprocess, tempfile
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CASES = [
  ('wrong-native-fill','native/ui/ui.mbt','normal_fill=palette_color(token, @view.NormalFill)','normal_fill=palette_color(token, @view.HoveredFill)'),
- ('bypass-resolved-foreground','native/ui/ui.mbt','match resolved_text {','match binding.text {'),
+ ('bypass-resolved-foreground','native/ui/ui.mbt','''match text {
+      Some(text) => {
+        let align''','''match binding.text {
+      Some(text) => {
+        let align'''),
  ('palette-recreates-native-binding','native/ui/ui.mbt','Some(binding) if binding.view.kind() == node.kind() => Some(binding)','Some(binding) if binding.view.kind() == node.kind() && binding.view.button_palette() == node.button_palette() => Some(binding)'),
  ('palette-recreates-runtime-token','ui/runtime/runtime.mbt','Some(previous) if previous.view.kind() == node.kind() => {','Some(previous) if previous.view.kind() == node.kind() && previous.view.button_palette() == node.button_palette() => {'),
  ('bootstrap-strips-palette','native/examples/shared_counter/app.mbt','''Some(token) =>

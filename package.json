@@ -17,7 +17,9 @@
     "pack:npm": "pnpm run build:npm && npm pack ./dist/npm --pack-destination ./dist",
     "test:npm": "node scripts/test-npm-consumers.mjs",
     "build:shared-ui": "moon build examples/shared_counter_dom --target js --release --deny-warn",
-    "test:shared-ui": "pnpm run build:shared-ui && node --test tests/shared-ui/*.test.mjs && node scripts/check-shared-ui-consumers.mjs"
+    "generate:shared-theme": "node scripts/generate-shared-theme.mjs",
+    "check:shared-theme": "node scripts/generate-shared-theme.mjs --check",
+    "test:shared-ui": "pnpm run check:shared-theme && pnpm run build:shared-ui && node --test tests/shared-ui/*.test.mjs && node scripts/check-shared-ui-consumers.mjs"
   },
   "dependencies": {
     "@cloudflare/kumo": "2.14.0",
