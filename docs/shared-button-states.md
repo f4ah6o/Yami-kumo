@@ -28,9 +28,9 @@ repeat behavior. No third activation controller is introduced.
 | State or operation               | DOM / Chromium fixture                                                                                                                | GPUI native adapter at the checked-in pin                                                                                                 |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | Enabled primary click            | Browser `click` produces one queued Activate                                                                                          | GPUI in-bounds primary down/up produces one queued Activate                                                                               |
-| Disabled                         | Native `disabled`; cannot be focused or activate                                                                                      | Nonfocusable/non-hit-testable; clears focus, hover and held state                                                                         |
+| Disabled                         | Native `disabled`; rejects new common focus requests and activation; browser owns focus-loss timing                                   | Nonfocusable/non-hit-testable; clears focus, hover and held state                                                                         |
 | Loading                          | `aria-busy=true`, `aria-disabled=true`; not native disabled, so retained focus survives; no Activate                                  | GPUI loading gate retains focus, clears hover/held state, rejects Activate                                                                |
-| Both flags                       | Native disabled wins focus/activation; busy state remains exposed                                                                     | Disabled wins focus/activation; loading remains set                                                                                       |
+| Both flags                       | Native disabled wins new focus eligibility/activation; busy state remains exposed                                                     | Disabled wins focus/activation; loading remains set                                                                                       |
 | Retained focus and focus-visible | Browser `:focus-visible` heuristic; keyboard Tab and pointer-focus observations are separate                                          | Existing GPUI paints its focus border whenever focused, including pointer-obtained focus. No browser focus-visible equivalence is claimed |
 | Hover                            | Browser `:hover`, including an unavailable button physically under the pointer                                                        | GPUI hover follows delivered PointerMoved; loading/disabled clears it; enabling needs a new pointer observation                           |
 | Unchanged repaint                | Retains node, focus and browser-held input                                                                                            | Retains Button, focus, hover and held input                                                                                               |
@@ -42,6 +42,13 @@ repeat behavior. No third activation controller is introduced.
 | Geometry/resize                  | Browser owns hit testing and default cancellation; no custom resize observer or cross-host resize parity claim                        | Changed accepted bounds, viewport or scale cancels input; invalidated geometry rejects dispatch until a successful commit                 |
 | Default action                   | `type=button` never implicitly submits an enclosing form; unavailable/canceled activation defaults are prevented synchronously        | Focused loading Enter/Space is consumed without activation. No form-submit/default-button API exists in this slice                        |
 | Mixed pointer/Space              | Browser default ordering; no universal mixed-input equivalence                                                                        | Existing GPUI may emit one Space activation and one pointer activation                                                                    |
+
+DOM disabled removes new focus eligibility; it does not promise synchronous
+loss of `document.activeElement`. Chromium 156 retained `activeElement` during
+the observed held-Space disabled transition while activation stayed blocked.
+Focus-loss timing remains browser-owned, and the adapter does not force blur.
+The fixture asserts the disabled flag and rejected common focus request while
+recording retained focus as an observation, not a cross-host timing guarantee.
 
 The browser fixture uses actual Playwright keyboard/mouse input. Its
 `detail=0` cases are explicitly synthetic or programmatic AT-like admission

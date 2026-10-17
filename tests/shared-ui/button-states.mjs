@@ -130,6 +130,11 @@ export async function exerciseButtonStates(page, observe) {
     await page.keyboard.down('Space');
     await update(mode);
     const gated = await state();
+    assert.equal(gated.disabled, mode === 'disabled');
+    assert.equal(await page.evaluate(() => api.focusCounter('state-root')), false);
+    assert.equal(await count(), initial, 'gated held input cannot activate');
+    // Focus-loss timing is browser-owned: activeElement may remain this node
+    // during a disabled held-Space transition. Preserve that raw observation.
     await update();
     await page.keyboard.up('Space');
     await expectCount(initial);
