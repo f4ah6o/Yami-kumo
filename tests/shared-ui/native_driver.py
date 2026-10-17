@@ -583,16 +583,30 @@ def inspect_theme_frame(marker: dict[str, Any], directory: Path, contract: dict[
             raise E2EError(f"theme actual {slot} pixels differ from shared tokens at phase {marker['phase']}")
         observed.append({"slot": slot, "rgb": actual})
     region = native._region_pixels(image, _bounds(marker["buttonLabel"], "buttonLabel"), scale)
-    # A fixed 24-channel budget permits antialiasing, while the canonical text
-    # color above remains exact. Background/empty labels cannot pass this check.
-    foreground = sum(all(abs(a - b) <= 24 for a, b in zip(pixel, colors["foreground"])) for pixel in region)
-    if foreground <= 0:
-        raise E2EError("theme Button label has no pixels matching its semantic foreground")
+    # Fractional glyph origins need not produce an opaque foreground pixel.
+    # Test the expected foreground/fill blend instead of weakening scene RGB.
+    delta = [a - b for a, b in zip(colors["foreground"], colors["fill"])]
+    magnitude = sum(channel * channel for channel in delta)
+    if magnitude == 0:
+        raise E2EError("theme Button foreground has no contrast against fill")
+    covered = []
+    for pixel in region:
+        coverage = sum((actual - background) * channel
+                       for actual, background, channel in zip(pixel, colors["fill"], delta)) / magnitude
+        residual = max(abs(actual - (background + coverage * channel))
+                       for actual, background, channel in zip(pixel, colors["fill"], delta))
+        if .5 <= coverage <= 1.01 and residual <= 2:
+            covered.append((coverage, residual))
+    # A few accidental colored pixels cannot qualify this nine-letter label.
+    if len(covered) < 8:
+        raise E2EError("theme Button label lacks nontrivial pixels matching its semantic foreground blend")
     counter_pixels = native._foreground_count(image, _bounds(marker["counter"], "counter"), scale)
     if counter_pixels <= 0:
         raise E2EError("theme fixture count has no visible text pixels")
     return image, {"path": str(path), "sha256": digest(path), "width": image.width, "height": image.height,
-                   "scale": scale, "samples": observed, "foregroundPixels": foreground, "counterPixels": counter_pixels}
+                   "scale": scale, "samples": observed, "foregroundPixels": len(covered),
+                   "maximumForegroundCoverage": max(value[0] for value in covered),
+                   "maximumForegroundBlendResidual": max(value[1] for value in covered), "counterPixels": counter_pixels}
 
 
 def inspect_theme_sequence(markers: list[dict[str, Any]], directory: Path, contract: dict[str, Any]) -> dict[str, Any]:
@@ -840,7 +854,9 @@ def send_theme_input(platform: str, operation: str, marker: dict[str, Any], args
         px, py = rx + rw - 16, ry + rh - 16
     if platform == "linux":
         if operation.startswith("move-"):
-            command = ["xdotool", "mousemove", "--sync", str(args.linux_origin_x + round(px * marker["scale"])),
+            # --sync waits for movement even when the pointer is already here.
+            # The following exact capture phase validates delivered host state.
+            command = ["xdotool", "mousemove", str(args.linux_origin_x + round(px * marker["scale"])),
                        str(args.linux_origin_y + round(py * marker["scale"]))]
         elif operation.startswith("pointer-"):
             command = ["xdotool", "mousedown" if operation.endswith("down") else "mouseup", "1"]

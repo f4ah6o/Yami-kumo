@@ -777,7 +777,7 @@ def theme_marker(phase=0):
     return value
 
 
-def write_theme_frame(directory, value, *, blank_label=False, counter_value=None):
+def write_theme_frame(directory, value, *, blank_label=False, counter_value=None, label_rgb=None, label_pixels=15):
     width, height = 160, 140
     pixels = bytearray(bytes((245, 247, 250)) * width * height)
     def pixel(x, y, rgb):
@@ -791,8 +791,8 @@ def write_theme_frame(directory, value, *, blank_label=False, counter_value=None
                 for x in range(bounds["x"], bounds["x"] + bounds["width"]):
                     pixel(x, y, rgb)
     if not blank_label:
-        foreground = driver.theme_colors(value, driver.load_theme_contract())["foreground"]
-        for x in range(40, 55):
+        foreground = label_rgb if label_rgb is not None else driver.theme_colors(value, driver.load_theme_contract())["foreground"]
+        for x in range(40, 40 + label_pixels):
             pixel(x, 53, foreground)
     count = value["count"] if counter_value is None else counter_value
     for x in range(22, 24 + count):
@@ -857,6 +857,23 @@ class ThemeOracleTests(unittest.TestCase):
         with self.assertRaisesRegex(driver.E2EError, "semantic foreground"):
             driver.inspect_theme_frame(dark, self.directory, self.contract)
 
+    def test_fractional_glyph_coverage_matches_expected_color_without_opaque_pixels(self):
+        value = theme_marker()
+        # Actual observed DirectWrite blend at the initial nine-letter label.
+        write_theme_frame(self.directory, value, label_rgb=(41, 48, 65))
+        _, report = driver.inspect_theme_frame(value, self.directory, self.contract)
+        self.assertEqual(report["foregroundPixels"], 15)
+        self.assertGreater(report["maximumForegroundCoverage"], .89)
+        self.assertLess(report["maximumForegroundCoverage"], .90)
+        self.assertLess(report["maximumForegroundBlendResidual"], 1)
+
+    def test_wrong_hue_faint_glyph_or_accidental_speck_cannot_qualify_label(self):
+        value = theme_marker()
+        for rgb, pixels in (((80, 80, 80), 15), ((195, 197, 202), 15), ((15, 23, 42), 1)):
+            write_theme_frame(self.directory, value, label_rgb=rgb, label_pixels=pixels)
+            with self.subTest(rgb=rgb, pixels=pixels), self.assertRaisesRegex(driver.E2EError, "nontrivial pixels"):
+                driver.inspect_theme_frame(value, self.directory, self.contract)
+
     def test_identity_replacement_with_consistent_scene_cannot_pass_sequence(self):
         values = self.sequence()
         values[5]["buttonId"] += 100
@@ -894,7 +911,7 @@ class ThemeOracleTests(unittest.TestCase):
             for op in ("move-inside", "pointer-down", "key-t", "pointer-up"):
                 driver.send_theme_input("linux", op, theme_marker(), args)
             self.assertEqual([call.args[0] for call in run.call_args_list], [
-                ["xdotool", "mousemove", "--sync", "78", "59"],
+                ["xdotool", "mousemove", "78", "59"],
                 ["xdotool", "mousedown", "1"], ["xdotool", "key", "Prior"], ["xdotool", "mouseup", "1"]])
         with patch.object(driver.subprocess, "run", side_effect=AssertionError("input forbidden")):
             for platform, operation in (("macos", "pointer-down"), ("linux", "unknown")):
