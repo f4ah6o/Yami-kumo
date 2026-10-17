@@ -8,7 +8,12 @@ neutral colors. No theme, radius, clipping, overflow policy or arbitrary style A
 is introduced. DOM uses CSS pixels; native uses GPUI logical coordinates.
 Geometry assertions allow at most 1 logical pixel for host snapping, fixed before
 measurement. Text metrics and font-dependent outer dimensions are not compared
-across hosts. Each host must measure all four content insets and direct child gaps.
+across hosts. Each host must measure all four content-envelope insets and direct child gaps.
+The content envelope is the union of direct child bounds: its left/top/right/
+bottom edges must be inset 17 (border 1 plus padding 16). Every child must stay
+inside the Card. The existing native profile retains intrinsic child widths;
+the DOM profile stretches flex children across the available content width.
+Equal right edges for all native children are not part of the Card contract.
 
 `card(key, children)` is a Column with private decoration metadata, observable via
 `View.is_card()`. NodeKind remains Text/Button/Column/Row; existing exhaustive

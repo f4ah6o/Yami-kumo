@@ -201,6 +201,35 @@ class CardGeometryTests(unittest.TestCase):
     def test_fixed_card_geometry_and_paint_order(self):
         driver.validate_card_geometry(card_marker())
 
+    def test_native_intrinsic_widths_measure_the_content_envelope(self):
+        value = card_marker()
+        value["counter"]["width"] = 30
+        value["button"]["width"] = 48
+        driver.validate_card_geometry(value)
+        # The widest child need not be the first one.
+        value["heading"]["width"] = 30
+        value["counter"]["width"] = 66
+        driver.validate_card_geometry(value)
+
+    def test_content_envelope_insets_and_each_child_containment_remain_required(self):
+        variants = []
+        value = card_marker()
+        for key in ("heading", "counter", "button"):
+            value[key]["width"] -= 3
+        variants.append(value)  # right content inset 20 instead of 17
+        value = card_marker()
+        for key in ("heading", "counter", "button"):
+            value[key]["x"] += 3
+            value[key]["width"] -= 3
+        variants.append(value)  # left content inset 20 instead of 17
+        value = card_marker(); value["counter"]["width"] = 100; variants.append(value)
+        value = card_marker(); value["counter"]["x"] = 23; variants.append(value)
+        value = card_marker(); value["counter"]["y"] = 23; variants.append(value)
+        value = card_marker(); value["counter"]["height"] = 120; variants.append(value)
+        for value in variants:
+            with self.subTest(value=value), self.assertRaises(driver.E2EError):
+                driver.validate_card_geometry(value)
+
     def test_wrong_insets_gaps_border_paint_and_ids_are_rejected(self):
         variants = []
         value = card_marker(); value["heading"]["x"] += 3; variants.append(value)

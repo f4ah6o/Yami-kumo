@@ -180,10 +180,13 @@ def validate_card_geometry(marker: dict[str, Any]) -> None:
     _inside(card, _bounds(marker.get("root"), "root"), "card")
     children = [_bounds(marker.get(key), key) for key in ("heading", "counter", "button")]
     x, y, width, height = card
-    differences = [children[0][1] - y, y + height - children[-1][1] - children[-1][3]]
+    # Native children retain intrinsic widths; the content envelope, not every
+    # individual child, meets the right padding edge. DOM flex children stretch.
+    differences = [children[0][1] - y, y + height - children[-1][1] - children[-1][3],
+                   min(child[0] for child in children) - x,
+                   x + width - max(child[0] + child[2] for child in children)]
     for child in children:
         _inside(child, card, "Card child")
-        differences += [child[0] - x, x + width - child[0] - child[2]]
     if any(abs(value - 17) > 1 for value in differences):
         raise E2EError("Card content inset must be border 1 plus padding 16")
     gaps = [b[1] - a[1] - a[3] for a, b in zip(children, children[1:])]

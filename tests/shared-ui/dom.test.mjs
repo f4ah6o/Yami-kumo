@@ -21,13 +21,24 @@ const output =
   process.env.SHARED_UI_EVIDENCE_DIR || resolve(root, `_build/shared-ui-dom-${Date.now()}`);
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const git = (...args) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
-const sourcePaths = ['ui/core', 'ui/runtime', 'ui/dom', 'examples/shared_counter',
-  'examples/shared_counter_dom', 'styles/shared-ui.css', 'fixtures/shared-ui',
-  'tests/shared-ui', 'docs/shared-card.md'];
+const sourcePaths = [
+  'ui/core',
+  'ui/runtime',
+  'ui/dom',
+  'examples/shared_counter',
+  'examples/shared_counter_dom',
+  'styles/shared-ui.css',
+  'fixtures/shared-ui',
+  'tests/shared-ui',
+  'docs/shared-card.md',
+];
 async function sourceHashes() {
-  const paths = git('ls-files', '-z', '--', ...sourcePaths).split('\0').filter(Boolean);
-  return Object.fromEntries(await Promise.all(paths.map(async path => [path,
-    hash(await readFile(resolve(root, path)))])));
+  const paths = git('ls-files', '-z', '--', ...sourcePaths)
+    .split('\0')
+    .filter(Boolean);
+  return Object.fromEntries(
+    await Promise.all(paths.map(async (path) => [path, hash(await readFile(resolve(root, path)))])),
+  );
 }
 
 test('new common DOM entry is inert in Node and contains no third-party GUI runtime', async () => {
@@ -459,10 +470,20 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     const sourceDirty = git('status', '--porcelain').length > 0;
     assert.deepEqual(await sourceHashes(), boundSources, 'source changed during browser fixture');
     await writeFile(resolve(output, 'shared-ui.css'), css);
-    await writeFile(resolve(output, 'source-provenance.json'), JSON.stringify({
-      candidateSha, sourceDirty, sourceSha256: boundSources,
-      servedCssSha256: hash(css), compiledBridgeSha256: hash(compiled),
-    }, null, 2) + '\n');
+    await writeFile(
+      resolve(output, 'source-provenance.json'),
+      JSON.stringify(
+        {
+          candidateSha,
+          sourceDirty,
+          sourceSha256: boundSources,
+          servedCssSha256: hash(css),
+          compiledBridgeSha256: hash(compiled),
+        },
+        null,
+        2,
+      ) + '\n',
+    );
     const artifacts = [];
     for (const path of ['trace.json', 'counter.png', 'shared-ui.css', 'source-provenance.json'])
       artifacts.push({ path, sha256: hash(await readFile(resolve(output, path))) });
