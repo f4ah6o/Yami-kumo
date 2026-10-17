@@ -1,9 +1,10 @@
 # YK-05 — 制限付き共通layout・標準theme・AppShell
 
-状態：部分実装候補／closed-token Row・Column gap/paddingと共通Button色token・light/dark切替の限定slice／AppShell・一般layout・YK-05全体は未完了。
+状態：部分実装候補／closed-token Row・Column gap/padding、共通Button色token・light/dark切替、AppShell region/semantic wrapper/compact stacked layoutの限定slice／一般layout・visible-window shell実機・YK-05全体は未完了。
 限定契約と検証境界は [shared-stack-spacing.md](../../docs/shared-stack-spacing.md) を参照。
 この更新自体は実ブラウザ・Native windowの新candidate合格を意味しない。
 Button themeのAPI、既存controllerの再利用、検証profileは [shared-button-theme.md](../../docs/shared-button-theme.md) を参照。
+AppShellのAPI、breakpoint、visibility/focus/action、DOM/Native差は [shared-app-shell.md](../../docs/shared-app-shell.md) を参照。
 作成日：2026-10-17 JST。
 作業先：`f4ah6o/Yami-kumo`。段階：M2。依存：YK-04。
 
@@ -66,3 +67,23 @@ Its numeric colors move into `ui/theme` without changing that API's RGB values;
 explicit per-Button selections override a mounted root's theme. The shared root
 fixture covers held input, gates and theme changes on both adapters. Its own
 final-candidate runtime evidence is required; the broader YK-05 scope stays open.
+
+## 2026-10-18 bounded shared AppShell candidate
+
+Additive `app_shell` in `ui/core`, semantic DOM wrappers plus scoped CSS in
+`ui/dom`, and a GPUI flex adapter in `native/ui` are implemented for the bounded
+Text/Button/container slice. The same `examples/shared_counter` source composes
+brand/main plus optional navigation, header, rail, sidebar, tabs, context and
+bottom regions. Compact mode stacks optional panels at the shared 820 logical-px
+boundary; it is not an overlay drawer. Shell surface/text/Card tokens are
+generated from `ui/theme`, while existing Button RGB values and explicit
+per-Button selections are unchanged.
+
+Chromium verifies wide/compact semantics, geometry, theme switching, visible
+identity, hidden focus rejection and queued-action dropping. Native portable
+tests verify the same layout/visibility contract, slot identity and nested-shell
+rejection. **Native visible-window shell rendering, physical input, external
+accessibility, IME/TextField, Dialog, drawer overlays and general layout remain
+unimplemented or not-run.** Final-head CI and independent actual-artifact review
+are required before this slice is qualified; no broader YK-05 acceptance
+criterion is closed by this note.

@@ -55,6 +55,7 @@ const sourceNames = [
   'scripts/check-shared-ui-consumers.mjs',
   'fixtures/shared-ui/contract-v1.json',
   'fixtures/shared-ui/button-theme-v1.json',
+  'fixtures/shared-ui/app-shell-v1.json',
   ...packages.flatMap((dir) =>
     readdirSync(join(root, dir))
       .filter((name) => name.endsWith('.mbt') || name.endsWith('.mbti') || name === 'moon.pkg')
@@ -170,6 +171,7 @@ fn gate(view : @core.View, disabled~ : Bool, loading~ : Bool) -> @core.View {
     @core.Button => @core.button(view.key(), view.label(), disabled~, loading~)
     @core.Column => @core.column(view.key(), view.children().map(child => gate(child, disabled~, loading~)))
     @core.Row => @core.row(view.key(), view.children().map(child => gate(child, disabled~, loading~)))
+    @core.AppShell => view
   }
 }
 

@@ -1,14 +1,24 @@
 ///|
 fn main {
-  let themes : Array[String] = []
+  let buttons : Array[String] = []
+  let shells : Array[String] = []
   for theme in [@theme.Light, @theme.Dark] {
-    let tokens : Array[String] = []
+    let button_tokens : Array[String] = []
     for (name, color) in theme.button_colors().entries() {
-      tokens.push(
+      button_tokens.push(
         "\"\{name}\":[\{color.red()},\{color.green()},\{color.blue()}]",
       )
     }
-    themes.push("\"\{theme.name()}\":{\{tokens.join(",")}}")
+    buttons.push("\"\{theme.name()}\":{\{button_tokens.join(",")}}")
+    let shell_tokens : Array[String] = []
+    for (name, color) in theme.shell_colors().entries() {
+      shell_tokens.push(
+        "\"\{name}\":[\{color.red()},\{color.green()},\{color.blue()}]",
+      )
+    }
+    shells.push("\"\{theme.name()}\":{\{shell_tokens.join(",")}}")
   }
-  println("{\{themes.join(",")}}")
+  println(
+    "{\"buttons\":{\{buttons.join(",")}},\"shell\":{\{shells.join(",")}}}",
+  )
 }

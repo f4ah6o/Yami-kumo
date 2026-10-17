@@ -150,6 +150,61 @@ pub fn NativeCounter::actions(
 }
 
 ///|
+fn shell_slot(view : @view.View, region : @view.ShellRegion) -> @view.View? {
+  for child in view.children() {
+    if child.shell_region() == Some(region) {
+      return Some(child)
+    }
+  }
+  None
+}
+
+///|
+/// Rebuild the shell with bounded adapter gates applied to its slot contents.
+/// The application still owns the state and labels.
+fn shell_mode_view(
+  view : @view.View,
+  disabled : Bool,
+  loading : Bool,
+) -> @view.View {
+  let state = view.shell().unwrap()
+  let brand = match shell_slot(view, @view.Brand) {
+    Some(child) => mode_view(child, disabled, loading)
+    None => return view
+  }
+  let main = match shell_slot(view, @view.Main) {
+    Some(child) => mode_view(child, disabled, loading)
+    None => return view
+  }
+  fn transformed(region : @view.ShellRegion) -> @view.View? {
+    match shell_slot(view, region) {
+      Some(child) => Some(mode_view(child, disabled, loading))
+      None => None
+    }
+  }
+  @view.app_shell(
+    view.key(),
+    brand,
+    main,
+    navigation_trigger?=transformed(@view.NavigationTrigger),
+    global_search?=transformed(@view.GlobalSearch),
+    header_actions?=transformed(@view.HeaderActions),
+    account_menu?=transformed(@view.AccountMenu),
+    rail?=transformed(@view.Rail),
+    sidebar?=transformed(@view.Sidebar),
+    tabs?=transformed(@view.Tabs),
+    context_panel?=transformed(@view.ContextPanel),
+    bottom_bar?=transformed(@view.BottomBar),
+    sidebar_collapsed=state.sidebar_collapsed(),
+    mobile_sidebar_open=state.mobile_sidebar_open(),
+    context_panel_open=state.context_panel_open(),
+    primary_navigation_label=state.primary_navigation_label(),
+    workspace_navigation_label=state.workspace_navigation_label(),
+    context_panel_label=state.context_panel_label(),
+  )
+}
+
+///|
 fn mode_view(view : @view.View, disabled : Bool, loading : Bool) -> @view.View {
   match view.kind() {
     @view.Button =>
@@ -188,6 +243,7 @@ fn mode_view(view : @view.View, disabled : Bool, loading : Bool) -> @view.View {
       }
     }
     @view.Text => view
+    @view.AppShell => shell_mode_view(view, disabled, loading)
   }
 }
 

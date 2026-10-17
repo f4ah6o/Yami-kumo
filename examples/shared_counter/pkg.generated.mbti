@@ -41,6 +41,20 @@ pub fn PaletteModel::update_palette(Self, @core.SemanticAction) -> Self
 pub fn PaletteModel::value(Self) -> Int
 pub fn PaletteModel::view(Self) -> @core.View
 
+pub struct ShellModel {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn ShellModel::context_open(Self) -> Bool
+pub fn ShellModel::equal(Self, Self) -> Bool
+pub fn ShellModel::new() -> Self
+pub fn ShellModel::not_equal(Self, Self) -> Bool
+pub fn ShellModel::sidebar_open(Self) -> Bool
+pub fn ShellModel::to_repr(Self) -> @debug.Repr
+pub fn ShellModel::update(Self, @core.SemanticAction) -> Self
+pub fn ShellModel::update_counter(Self, @core.SemanticAction) -> Self
+pub fn ShellModel::value(Self) -> Int
+pub fn ShellModel::view(Self) -> @core.View
+
 pub struct SpacingModel {
   // private fields
 } derive(Eq, @debug.Debug)

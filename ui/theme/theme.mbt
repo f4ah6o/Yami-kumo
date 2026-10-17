@@ -51,6 +51,19 @@ pub struct ButtonColors {
 } derive(Eq, @debug.Debug)
 
 ///|
+/// Surface, border and text tokens used by the shared AppShell. These are
+/// intentionally separate from ButtonColors; neither table changes the other.
+pub struct ShellColors {
+  background : Color
+  panel : Color
+  subtle : Color
+  border : Color
+  strong_border : Color
+  text : Color
+  muted : Color
+} derive(Eq, @debug.Debug)
+
+///|
 pub fn Theme::name(self : Theme) -> String {
   match self {
     Light => "light"
@@ -91,6 +104,45 @@ pub fn Theme::button_colors(self : Theme) -> ButtonColors {
 }
 
 ///|
+pub fn Theme::shell_colors(self : Theme) -> ShellColors {
+  match self {
+    Light =>
+      {
+        background: rgb(238, 240, 242),
+        panel: rgb(255, 255, 255),
+        subtle: rgb(245, 246, 247),
+        border: rgb(217, 221, 226),
+        strong_border: rgb(199, 204, 210),
+        text: rgb(23, 25, 28),
+        muted: rgb(109, 116, 125),
+      }
+    Dark =>
+      {
+        background: rgb(15, 18, 22),
+        panel: rgb(23, 27, 33),
+        subtle: rgb(30, 36, 43),
+        border: rgb(43, 51, 60),
+        strong_border: rgb(58, 67, 77),
+        text: rgb(238, 242, 246),
+        muted: rgb(163, 173, 184),
+      }
+  }
+}
+
+///|
+pub fn ShellColors::entries(self : ShellColors) -> Array[(String, Color)] {
+  [
+    ("background", self.background),
+    ("panel", self.panel),
+    ("subtle", self.subtle),
+    ("border", self.border),
+    ("strong_border", self.strong_border),
+    ("text", self.text),
+    ("muted", self.muted),
+  ]
+}
+
+///|
 pub fn ButtonColors::entries(self : ButtonColors) -> Array[(String, Color)] {
   [
     ("normal_border", self.normal_border),
@@ -117,6 +169,12 @@ pub extend Color with Eq::{equal, not_equal}
 
 ///|
 pub extend Color with @debug.Debug::{to_repr}
+
+///|
+pub extend ShellColors with Eq::{equal, not_equal}
+
+///|
+pub extend ShellColors with @debug.Debug::{to_repr}
 
 ///|
 pub extend ButtonColors with Eq::{equal, not_equal}

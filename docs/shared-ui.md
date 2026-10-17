@@ -7,22 +7,25 @@ inherited from the legacy Kumo API and what remains a separate contract.
 
 ## What is implemented
 
-- `ui/core`: immutable Text/Button/Column/Row View, additive fixed Card decoration, and semantic Activate values.
+- `ui/core`: immutable Text/Button/Column/Row View, additive fixed Card decoration, semantic Activate values, and the host-neutral AppShell region model.
 - `ui/runtime`: root-wide key validation, opaque root/incarnation ownership,
   atomic commits, queued activation, per-button disabled/loading cancellation,
   observed focus results and idempotent disposal.
-- `ui/theme`: light/dark semantic Button colors shared by generated CSS and
-  GPUI paint palettes; see [shared-button-theme.md](shared-button-theme.md).
+- `ui/theme`: light/dark semantic Button and AppShell surface/text colors shared
+  by generated CSS and GPUI paint palettes; see
+  [shared-button-theme.md](shared-button-theme.md) and
+  [shared-app-shell.md](shared-app-shell.md).
 - `examples/shared_counter`: one pure model/view/update, imported unchanged by
   standalone JS/native source consumers, the DOM bootstrap, and the App/Entity native bootstrap.
 - `ui/dom`: explicit mount into an empty element, keyed text spans and native buttons,
-  keyed updates, root overlap rejection, retained focus and owned cleanup.
+  keyed updates, root overlap rejection, retained focus and owned cleanup; the
+  same adapter renders the semantic AppShell skeleton and scoped CSS.
 - `styles/shared-ui.css`: scoped row/column rules and required fixed Card geometry, without Kumo.
 - `examples/shared_button_theme`: one immutable Button-theme fixture model,
   imported unchanged by DOM and native host runners.
-- `native/ui`: explicit GPUI Text/Button/Column/Row adapter with private native IDs,
-  common lifetime tokens, staged geometry/scene publication and one GPUI Button
-  controller per live Button.
+- `native/ui`: explicit GPUI Text/Button/Column/Row and AppShell adapter with
+  private native IDs, common lifetime tokens, staged geometry/scene publication
+  and one GPUI Button controller per live Button.
 - `native/examples/shared_counter`: one App Entity owning the unchanged common
   Model, plus thin Linux/Windows/macOS entrypoints.
 
@@ -39,8 +42,10 @@ clean standalone source consumer proves the dependency boundary, not a new
 registry release. Distribution is a later YK-09 gate.
 
 See [the bounded Card contract](shared-card.md) for `card`/`is_card`,
-`Model.card_view()` and the explicit stylesheet requirement. Existing counter
-view and Row/Column behavior remain unchanged.
+`Model.card_view()` and the explicit stylesheet requirement. See
+[the bounded AppShell contract](shared-app-shell.md) for shell regions,
+breakpoint, visibility/focus rules and theme behavior. Existing counter view
+and Row/Column behavior remain unchanged.
 
 ## Identity and thread confinement
 
@@ -219,11 +224,14 @@ this slice does not claim to fix hover after an unreported window exit.
 
 The bounded YK-03 adapter is present, but macOS visible-window execution remains
 unqualified. Compiling a portable consumer or macOS bootstrap is not a native
-GUI pass. M1 is not complete without all required platform evidence. General themes/layout, Input/TextField, composition,
-Dialog, external accessibility and packaged distribution are later gates.
-Browser coverage in this slice is Chromium only; Firefox, WebKit, actual Safari,
-real IME and assistive technology require their own measured profiles. The
-existing GPUI Canvas backend and legacy native Button controllers are unchanged.
+GUI pass. M1 is not complete without all required platform evidence. The
+bounded AppShell slice adds semantic regions and portable native layout, but
+visible-window shell execution, drawer overlays, general layout, Input/TextField,
+composition, Dialog, external accessibility and packaged distribution are later
+gates. Browser coverage in this slice is Chromium only; Firefox, WebKit, actual
+Safari, real IME and assistive technology require their own measured profiles.
+The existing GPUI Canvas backend and legacy native Button controllers are
+unchanged.
 
 ## Explicit stack-spacing slice
 

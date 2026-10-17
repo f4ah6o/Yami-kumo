@@ -16,6 +16,10 @@
 
 ### Added
 
+- Added the additive shared AppShell region model, DOM semantic wrappers, GPUI
+  flex layout, compact stacked layout, shell surface/text/Card theme tokens, and
+  bounded DOM/native tests. Native visible-window shell execution remains
+  unverified.
 - Added a focused Mooncakes archive and package README for installing the pure MoonBit module `f4ah6o/yami_kumo`.
 - Added a pure MoonBit module for safe HTML rendering, the semantic AppShell, and a pinned subset of Kumo Button, Input, Text, and LayerCard components.
 - Added a canonical parity gallery that mounts real React Kumo and the compiled MoonBit renderer independently across component matrices and interaction states.

@@ -39,6 +39,13 @@ priv struct Binding {
   token : @runtime.InstanceToken?
   text : @components.NativeText?
   button : @button.Button?
+  visible : Bool
+}
+
+///|
+priv struct RegionObservation {
+  region : @view.ShellRegion
+  bounds : @primitives.Rect
 }
 
 ///|
@@ -62,6 +69,8 @@ pub struct Frame {
   priv revision : UInt64
   priv observations : Array[Observation]
   priv theme : @theme.Theme?
+  priv shell_mode : @view.ShellMode?
+  priv regions : Array[RegionObservation]
 }
 
 ///|
@@ -78,6 +87,27 @@ pub fn Frame::revision(self : Frame) -> UInt64 {
 /// The accepted root Button theme. Explicit View palettes retain their overrides.
 pub fn Frame::theme(self : Frame) -> @theme.Theme? {
   self.theme
+}
+
+///|
+/// Accepted shell mode, or None for a non-shell root.
+pub fn Frame::shell_mode(self : Frame) -> @view.ShellMode? {
+  self.shell_mode
+}
+
+///|
+/// Accepted bounds for one visible shell region. Absent or hidden regions have
+/// no observation; callers must not treat that as a zero-sized success.
+pub fn Frame::region_bounds(
+  self : Frame,
+  region : @view.ShellRegion,
+) -> @primitives.Rect? {
+  for observation in self.regions {
+    if observation.region == region {
+      return Some(observation.bounds)
+    }
+  }
+  None
 }
 
 ///|
@@ -294,8 +324,19 @@ fn flatten(
   if depth >= 63 {
     return Err(adapter_error("view exceeds native layout depth"))
   }
+  if depth > 0 && view.kind() == @view.AppShell {
+    return Err(adapter_error("nested AppShell is unsupported"))
+  }
   if view.key().value().is_empty() {
     return Err(adapter_error("empty view key"))
+  }
+  if view.is_shell() {
+    for child in view.children() {
+      match child.shell_region() {
+        None => return Err(adapter_error("AppShell child has no region"))
+        Some(_) => ()
+      }
+    }
   }
   for prior in nodes {
     if prior.key() == view.key() {
@@ -315,6 +356,11 @@ fn flatten(
 ///|
 fn color(r : Int32, g : Int32, b : Int32) -> @primitives.Color {
   @primitives.Color::rgba(r, g, b, 255).unwrap()
+}
+
+///|
+fn theme_color(value : @theme.Color) -> @primitives.Color {
+  @primitives.Color::rgba(value.red(), value.green(), value.blue(), 255).unwrap()
 }
 
 ///|
@@ -347,6 +393,49 @@ fn button_palette(
     enabled_foreground=palette_color(token, @view.EnabledForeground),
     disabled_foreground=palette_color(token, @view.DisabledForeground),
   )
+}
+
+///|
+fn shell_colors(theme : @theme.Theme?) -> @theme.ShellColors {
+  match theme {
+    Some(theme) => theme.shell_colors()
+    None => @theme.Light.shell_colors()
+  }
+}
+
+///|
+fn mark_visible(
+  view : @view.View,
+  visible : Bool,
+  keys : Map[String, Bool],
+) -> Unit {
+  keys.set(view.key().value(), visible)
+  for child in view.children() {
+    mark_visible(child, visible, keys)
+  }
+}
+
+///|
+fn visible_keys(
+  view : @view.View,
+  mode : @view.ShellMode?,
+) -> Map[String, Bool] {
+  let keys : Map[String, Bool] = Map([])
+  if view.is_shell() {
+    mark_visible(view, true, keys)
+    let state = view.shell().unwrap()
+    let mode = mode.unwrap()
+    for child in view.children() {
+      let visible = match child.shell_region() {
+        Some(region) => region.visible(state, mode)
+        None => false
+      }
+      mark_visible(child, visible, keys)
+    }
+  } else {
+    mark_visible(view, true, keys)
+  }
+  keys
 }
 
 ///|
@@ -423,12 +512,590 @@ fn make_element(
 }
 
 ///|
+fn points(value : Double) -> @layout.Dimension {
+  @layout.Dimension::points(value).unwrap()
+}
+
+///|
+fn shell_box(
+  id : UInt64,
+  main : @layout.Dimension,
+  cross : @layout.Dimension,
+  grow : Double,
+) -> @element.Element {
+  let size = @primitives.Size::new(0.0, 0.0).unwrap()
+  let item = @layout.FlexItem::new(id, main, cross, size)
+    .with_flex(grow, 0.0)
+    .unwrap()
+  @element.Element::new(item).with_pointer_events(false)
+}
+
+///|
+fn region_view(view : @view.View, region : @view.ShellRegion) -> @view.View? {
+  for child in view.children() {
+    if child.shell_region() == Some(region) {
+      return Some(child)
+    }
+  }
+  None
+}
+
+///|
+/// Build the bounded shell flex tree. Only regions that are visible in the
+/// selected mode are laid out; hidden slot bindings remain in the runtime but
+/// have no host element and cannot receive input or focus.
+fn make_shell_element(
+  view : @view.View,
+  bindings : Array[Binding],
+  mode : @view.ShellMode,
+) -> @element.Element {
+  let binding = binding_for(bindings, view.key()).unwrap()
+  let base = binding.id
+  let state = view.shell().unwrap()
+  fn visible(region : @view.ShellRegion) -> Bool {
+    region.visible(state, mode)
+  }
+  fn slot(region : @view.ShellRegion) -> @element.Element? {
+    match region_view(view, region) {
+      Some(child) => Some(make_element(child, bindings))
+      None => None
+    }
+  }
+  let header = shell_box(
+    base + 1UL,
+    points(60.0),
+    @layout.Dimension::auto(),
+    0.0,
+  ).with_children_style(
+    @layout.FlexTreeStyle::new(@layout.FlowDirection::row())
+    .with_gap(18.0)
+    .unwrap()
+    .with_align(@layout.AlignItems::center())
+    .with_insets(
+      @layout.Insets::new(10.0, 14.0, 10.0, 14.0).unwrap(),
+      @layout.Insets::zero(),
+    ),
+  )
+  let brand_group_children : Array[@element.Element] = []
+  if visible(@view.NavigationTrigger) {
+    let nav = shell_box(
+      base + 3UL,
+      @layout.Dimension::auto(),
+      @layout.Dimension::auto(),
+      0.0,
+    ).with_children_style(
+      @layout.FlexTreeStyle::new(@layout.FlowDirection::row()).with_align(
+        @layout.AlignItems::center(),
+      ),
+    )
+    match slot(@view.NavigationTrigger) {
+      Some(child) => brand_group_children.push(nav.with_child(child))
+      None => ()
+    }
+  }
+  match slot(@view.Brand) {
+    Some(child) => brand_group_children.push(child)
+    None => ()
+  }
+  let brand_group = shell_box(
+    base + 2UL,
+    @layout.Dimension::auto(),
+    @layout.Dimension::auto(),
+    0.0,
+  ).with_children_style(
+    @layout.FlexTreeStyle::new(@layout.FlowDirection::row())
+    .with_gap(8.0)
+    .unwrap()
+    .with_align(@layout.AlignItems::center()),
+  )
+  let mut brand_group = brand_group
+  for child in brand_group_children {
+    brand_group = brand_group.with_child(child)
+  }
+  let header_children : Array[@element.Element] = [brand_group]
+  if visible(@view.GlobalSearch) {
+    let search = shell_box(
+      base + 4UL,
+      @layout.Dimension::auto(),
+      @layout.Dimension::auto(),
+      1.0,
+    ).with_children_style(
+      @layout.FlexTreeStyle::new(@layout.FlowDirection::row()).with_align(
+        @layout.AlignItems::center(),
+      ),
+    )
+    match slot(@view.GlobalSearch) {
+      Some(child) => header_children.push(search.with_child(child))
+      None => ()
+    }
+  }
+  let end_children : Array[@element.Element] = []
+  if visible(@view.HeaderActions) {
+    let actions = shell_box(
+      base + 6UL,
+      @layout.Dimension::auto(),
+      @layout.Dimension::auto(),
+      0.0,
+    ).with_children_style(
+      @layout.FlexTreeStyle::new(@layout.FlowDirection::row())
+      .with_gap(8.0)
+      .unwrap()
+      .with_align(@layout.AlignItems::center()),
+    )
+    match slot(@view.HeaderActions) {
+      Some(child) => end_children.push(actions.with_child(child))
+      None => ()
+    }
+  }
+  if visible(@view.AccountMenu) {
+    let account = shell_box(
+      base + 7UL,
+      @layout.Dimension::auto(),
+      @layout.Dimension::auto(),
+      0.0,
+    ).with_children_style(
+      @layout.FlexTreeStyle::new(@layout.FlowDirection::row()).with_align(
+        @layout.AlignItems::center(),
+      ),
+    )
+    match slot(@view.AccountMenu) {
+      Some(child) => end_children.push(account.with_child(child))
+      None => ()
+    }
+  }
+  if end_children.length() > 0 {
+    let end = shell_box(
+      base + 5UL,
+      @layout.Dimension::auto(),
+      @layout.Dimension::auto(),
+      1.0,
+    ).with_children_style(
+      @layout.FlexTreeStyle::new(@layout.FlowDirection::row())
+      .with_gap(10.0)
+      .unwrap()
+      .with_justify(@layout.JustifyContent::end())
+      .with_align(@layout.AlignItems::center()),
+    )
+    let mut end = end
+    for child in end_children {
+      end = end.with_child(child)
+    }
+    header_children.push(end)
+  }
+  let mut header = header
+  for child in header_children {
+    header = header.with_child(child)
+  }
+  let main_column_children : Array[@element.Element] = []
+  if visible(@view.Tabs) {
+    let tabs = shell_box(
+      base + 12UL,
+      points(45.0),
+      @layout.Dimension::auto(),
+      0.0,
+    ).with_children_style(
+      @layout.FlexTreeStyle::new(@layout.FlowDirection::row()).with_align(
+        @layout.AlignItems::stretch(),
+      ),
+    )
+    match slot(@view.Tabs) {
+      Some(child) => main_column_children.push(tabs.with_child(child))
+      None => ()
+    }
+  }
+  let main = shell_box(
+    base + 13UL,
+    @layout.Dimension::auto(),
+    @layout.Dimension::auto(),
+    1.0,
+  ).with_children_style(
+    @layout.FlexTreeStyle::new(@layout.FlowDirection::column())
+    .with_align(@layout.AlignItems::stretch())
+    .with_insets(
+      @layout.Insets::all(24.0).unwrap(),
+      @layout.Insets::zero(),
+    ),
+  )
+  let main = match slot(@view.Main) {
+    Some(child) => main.with_child(child)
+    None => main
+  }
+  main_column_children.push(main)
+  let main_column = shell_box(
+    base + 11UL,
+    @layout.Dimension::auto(),
+    @layout.Dimension::auto(),
+    1.0,
+  ).with_children_style(
+    @layout.FlexTreeStyle::new(@layout.FlowDirection::column()).with_align(
+      @layout.AlignItems::stretch(),
+    ),
+  )
+  let mut main_column = main_column
+  for child in main_column_children {
+    main_column = main_column.with_child(child)
+  }
+  let shell_children : Array[@element.Element] = [header]
+  if mode == @view.Wide {
+    let workspace_children : Array[@element.Element] = []
+    if visible(@view.Rail) {
+      let rail = shell_box(
+        base + 8UL,
+        points(58.0),
+        @layout.Dimension::auto(),
+        0.0,
+      ).with_children_style(
+        @layout.FlexTreeStyle::new(@layout.FlowDirection::column())
+        .with_gap(8.0)
+        .unwrap()
+        .with_insets(
+          @layout.Insets::new(10.0, 8.0, 10.0, 8.0).unwrap(),
+          @layout.Insets::zero(),
+        ),
+      )
+      match slot(@view.Rail) {
+        Some(child) => workspace_children.push(rail.with_child(child))
+        None => ()
+      }
+    }
+    if visible(@view.Sidebar) {
+      let sidebar = shell_box(
+        base + 9UL,
+        points(240.0),
+        @layout.Dimension::auto(),
+        0.0,
+      ).with_children_style(
+        @layout.FlexTreeStyle::new(@layout.FlowDirection::column())
+        .with_gap(8.0)
+        .unwrap()
+        .with_insets(
+          @layout.Insets::new(14.0, 12.0, 14.0, 12.0).unwrap(),
+          @layout.Insets::zero(),
+        ),
+      )
+      match slot(@view.Sidebar) {
+        Some(child) => workspace_children.push(sidebar.with_child(child))
+        None => ()
+      }
+    }
+    workspace_children.push(main_column)
+    if visible(@view.ContextPanel) {
+      let context = shell_box(
+        base + 14UL,
+        points(288.0),
+        @layout.Dimension::auto(),
+        0.0,
+      ).with_children_style(
+        @layout.FlexTreeStyle::new(@layout.FlowDirection::column())
+        .with_gap(8.0)
+        .unwrap()
+        .with_insets(
+          @layout.Insets::new(14.0, 12.0, 14.0, 12.0).unwrap(),
+          @layout.Insets::zero(),
+        ),
+      )
+      match slot(@view.ContextPanel) {
+        Some(child) => workspace_children.push(context.with_child(child))
+        None => ()
+      }
+    }
+    let workspace = shell_box(
+      base + 10UL,
+      @layout.Dimension::auto(),
+      @layout.Dimension::auto(),
+      1.0,
+    ).with_children_style(
+      @layout.FlexTreeStyle::new(@layout.FlowDirection::row()).with_align(
+        @layout.AlignItems::stretch(),
+      ),
+    )
+    let mut workspace = workspace
+    for child in workspace_children {
+      workspace = workspace.with_child(child)
+    }
+    shell_children.push(workspace)
+  } else {
+    if visible(@view.Sidebar) {
+      let sidebar = shell_box(
+        base + 9UL,
+        points(240.0),
+        @layout.Dimension::auto(),
+        0.0,
+      ).with_children_style(
+        @layout.FlexTreeStyle::new(@layout.FlowDirection::column())
+        .with_gap(8.0)
+        .unwrap()
+        .with_insets(
+          @layout.Insets::new(14.0, 12.0, 14.0, 12.0).unwrap(),
+          @layout.Insets::zero(),
+        ),
+      )
+      match slot(@view.Sidebar) {
+        Some(child) => shell_children.push(sidebar.with_child(child))
+        None => ()
+      }
+    }
+    let workspace = shell_box(
+        base + 10UL,
+        @layout.Dimension::auto(),
+        @layout.Dimension::auto(),
+        1.0,
+      )
+      .with_children_style(
+        @layout.FlexTreeStyle::new(@layout.FlowDirection::column()).with_align(
+          @layout.AlignItems::stretch(),
+        ),
+      )
+      .with_child(main_column)
+    shell_children.push(workspace)
+    if visible(@view.ContextPanel) {
+      let context = shell_box(
+        base + 14UL,
+        points(200.0),
+        @layout.Dimension::auto(),
+        0.0,
+      ).with_children_style(
+        @layout.FlexTreeStyle::new(@layout.FlowDirection::column())
+        .with_gap(8.0)
+        .unwrap()
+        .with_insets(
+          @layout.Insets::new(14.0, 12.0, 14.0, 12.0).unwrap(),
+          @layout.Insets::zero(),
+        ),
+      )
+      match slot(@view.ContextPanel) {
+        Some(child) => shell_children.push(context.with_child(child))
+        None => ()
+      }
+    }
+  }
+  if visible(@view.BottomBar) {
+    let bottom = shell_box(
+      base + 15UL,
+      points(32.0),
+      @layout.Dimension::auto(),
+      0.0,
+    ).with_children_style(
+      @layout.FlexTreeStyle::new(@layout.FlowDirection::row())
+      .with_align(@layout.AlignItems::center())
+      .with_insets(
+        @layout.Insets::new(0.0, 12.0, 0.0, 12.0).unwrap(),
+        @layout.Insets::zero(),
+      ),
+    )
+    match slot(@view.BottomBar) {
+      Some(child) => shell_children.push(bottom.with_child(child))
+      None => ()
+    }
+  }
+  let shell = shell_box(
+    base,
+    @layout.Dimension::auto(),
+    @layout.Dimension::auto(),
+    1.0,
+  ).with_children_style(
+    @layout.FlexTreeStyle::new(@layout.FlowDirection::column()).with_align(
+      @layout.AlignItems::stretch(),
+    ),
+  )
+  let mut shell = shell
+  for child in shell_children {
+    shell = shell.with_child(child)
+  }
+  shell
+}
+
+///|
 fn max(left : Double, right : Double) -> Double {
   if left > right {
     left
   } else {
     right
   }
+}
+
+///|
+fn scene_rect(
+  left : Double,
+  top : Double,
+  width : Double,
+  height : Double,
+) -> @primitives.Rect {
+  @primitives.Rect::new(left, top, max(0.0, width), max(0.0, height)).unwrap()
+}
+
+///|
+fn push_quad(
+  items : Array[@scene.SceneItem],
+  id : UInt64,
+  rect : @primitives.Rect,
+  fill : @primitives.Color,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  match
+    @scene.SceneItem::quad(
+      id,
+      rect,
+      fill,
+      @scene.AffineTransform::identity(),
+      1.0,
+      None,
+    ) {
+    Ok(item) => {
+      items.push(item)
+      Ok(())
+    }
+    Err(_) => Err(adapter_error("native shell paint failed"))
+  }
+}
+
+///|
+fn paint_shell(
+  items : Array[@scene.SceneItem],
+  tree : @element.ElementTree,
+  base : UInt64,
+  colors : @theme.ShellColors,
+) -> Result[Array[RegionObservation], @diagnostics.FrameworkError] {
+  let background = theme_color(colors.background)
+  let panel = theme_color(colors.panel)
+  let subtle = theme_color(colors.subtle)
+  let border = theme_color(colors.border)
+  let shell_rect = match tree.node(base) {
+    Some(node) => node.bounds()
+    None => return Err(adapter_error("native shell root has no bounds"))
+  }
+  match push_quad(items, base + 16UL, shell_rect, background) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
+  match tree.node(base + 1UL) {
+    Some(node) => {
+      let b = node.bounds()
+      match push_quad(items, base + 17UL, b, panel) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+      match
+        push_quad(
+          items,
+          base + 23UL,
+          scene_rect(b.left(), b.bottom() - 1.0, b.size().width(), 1.0),
+          border,
+        ) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+    }
+    None => ()
+  }
+  match tree.node(base + 8UL) {
+    Some(node) => {
+      let b = node.bounds()
+      match push_quad(items, base + 18UL, b, subtle) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+      match
+        push_quad(
+          items,
+          base + 24UL,
+          scene_rect(b.right() - 1.0, b.top(), 1.0, b.size().height()),
+          border,
+        ) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+    }
+    None => ()
+  }
+  match tree.node(base + 9UL) {
+    Some(node) => {
+      let b = node.bounds()
+      match push_quad(items, base + 19UL, b, panel) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+      match
+        push_quad(
+          items,
+          base + 25UL,
+          scene_rect(b.right() - 1.0, b.top(), 1.0, b.size().height()),
+          border,
+        ) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+    }
+    None => ()
+  }
+  match tree.node(base + 13UL) {
+    Some(node) =>
+      match push_quad(items, base + 20UL, node.bounds(), panel) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+    None => ()
+  }
+  match tree.node(base + 14UL) {
+    Some(node) => {
+      let b = node.bounds()
+      match push_quad(items, base + 21UL, b, subtle) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+      match
+        push_quad(
+          items,
+          base + 26UL,
+          scene_rect(b.left(), b.top(), 1.0, b.size().height()),
+          border,
+        ) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+    }
+    None => ()
+  }
+  match tree.node(base + 15UL) {
+    Some(node) => {
+      let b = node.bounds()
+      match push_quad(items, base + 22UL, b, subtle) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+      match
+        push_quad(
+          items,
+          base + 27UL,
+          scene_rect(b.left(), b.top(), b.size().width(), 1.0),
+          border,
+        ) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+    }
+    None => ()
+  }
+  let regions : Array[RegionObservation] = []
+  for
+    (region, offset) in [
+      (@view.Brand, 2UL),
+      (@view.NavigationTrigger, 3UL),
+      (@view.GlobalSearch, 4UL),
+      (@view.HeaderActions, 6UL),
+      (@view.AccountMenu, 7UL),
+      (@view.Rail, 8UL),
+      (@view.Sidebar, 9UL),
+      (@view.Tabs, 12UL),
+      (@view.Main, 13UL),
+      (@view.ContextPanel, 14UL),
+      (@view.BottomBar, 15UL),
+    ] {
+    match tree.node(base + offset) {
+      Some(node) => regions.push({ region, bounds: node.bounds(), })
+      None => ()
+    }
+  }
+  Ok(regions)
 }
 
 ///|
@@ -464,6 +1131,19 @@ fn Mounted::prepare(
     Err(error) => return Err(error)
     Ok(_) => ()
   }
+  let is_shell = view.is_shell()
+  let mode = if is_shell {
+    Some(@view.ShellMode::for_width(width))
+  } else {
+    None
+  }
+  let visibility = visible_keys(view, mode)
+  let colors = shell_colors(self.theme)
+  let text_color = if is_shell {
+    theme_color(colors.text)
+  } else {
+    color(30, 36, 45)
+  }
   let bindings : Array[Binding] = []
   let mut next_id = self.next_id
   for node in nodes {
@@ -471,20 +1151,22 @@ fn Mounted::prepare(
       Some(binding) if binding.view.kind() == node.kind() => Some(binding)
       _ => None
     }
+    let visible = visibility.get(node.key().value()).unwrap_or(false)
     let id = match previous {
       Some(binding) => binding.id
       None => {
-        if next_id > 18446744073709551600UL {
+        if next_id > 18446744073709551560UL {
           return Err(adapter_error("native identity space exhausted"))
         }
         let id = next_id
-        next_id += 8UL
+        next_id += if node.kind() == @view.AppShell { 40UL } else { 8UL }
         id
       }
     }
-    let text = if node.kind() == @view.Text || node.kind() == @view.Button {
+    let text = if visible &&
+      (node.kind() == @view.Text || node.kind() == @view.Button) {
       let foreground = if node.kind() == @view.Text {
-        color(30, 36, 45)
+        text_color
       } else {
         // Measurement is color-independent; core resolves paint below.
         color(242, 246, 250)
@@ -508,19 +1190,35 @@ fn Mounted::prepare(
       id,
       token: None,
       text,
-      button: match previous {
-        Some(binding) => binding.button
-        None => None
+      button: if visible {
+        match previous {
+          Some(binding) => binding.button
+          None => None
+        }
+      } else {
+        None
       },
+      visible,
     })
   }
-  let root_style = style(@view.Column).with_insets(
-    @layout.Insets::all(24.0).unwrap(),
-    @layout.Insets::zero(),
-  )
+  let root_style = if view.is_shell() {
+    @layout.FlexTreeStyle::new(@layout.FlowDirection::column()).with_align(
+      @layout.AlignItems::stretch(),
+    )
+  } else {
+    style(@view.Column).with_insets(
+      @layout.Insets::all(24.0).unwrap(),
+      @layout.Insets::zero(),
+    )
+  }
+  let child = if view.is_shell() {
+    make_shell_element(view, bindings, mode.unwrap())
+  } else {
+    make_element(view, bindings)
+  }
   let root = @element.Element::root(1UL, root_style)
     .with_pointer_events(false)
-    .with_child(make_element(view, bindings))
+    .with_child(child)
   let requested = match
     root.request_layout_with_device_scale(viewport.size(), scale) {
     Err(_) => return Err(adapter_error("native flex layout failed"))
@@ -559,11 +1257,16 @@ fn Mounted::prepare(
     None => !self.ready
   }
   let items = []
+  let background = if is_shell {
+    theme_color(colors.background)
+  } else {
+    color(245, 247, 250)
+  }
   match
     @scene.SceneItem::quad(
       1UL,
       viewport,
-      color(245, 247, 250),
+      background,
       @scene.AffineTransform::identity(),
       1.0,
       None,
@@ -571,152 +1274,180 @@ fn Mounted::prepare(
     Ok(item) => items.push(item)
     Err(_) => return Err(adapter_error("background scene rejected"))
   }
+  let mut regions : Array[RegionObservation] = []
+  if is_shell {
+    let base = binding_for(bindings, view.key()).unwrap().id
+    regions = match paint_shell(items, tree, base, colors) {
+      Err(error) => return Err(error)
+      Ok(value) => value
+    }
+  }
+  let card_border = if is_shell && self.theme is Some(_) {
+    theme_color(colors.border)
+  } else {
+    color(166, 171, 178)
+  }
+  let card_fill = if is_shell && self.theme is Some(_) {
+    theme_color(colors.panel)
+  } else {
+    color(245, 247, 250)
+  }
   let observations = []
   for index in 0..<bindings.length() {
     let binding = bindings[index]
-    let bounds = tree.node(binding.id).unwrap().bounds()
-    if binding.view.is_card() {
-      // Flat bindings are preorder: paint both Card quads before descendants.
-      let inner = @primitives.Rect::new(
-        bounds.left() + 1.0,
-        bounds.top() + 1.0,
-        bounds.size().width() - 2.0,
-        bounds.size().height() - 2.0,
-      ).unwrap()
-      for
-        (id, rect, fill) in [
-          (binding.id + 1UL, bounds, color(166, 171, 178)),
-          (binding.id + 2UL, inner, color(245, 247, 250)),
-        ] {
-        match
-          @scene.SceneItem::quad(
-            id,
-            rect,
-            fill,
-            @scene.AffineTransform::identity(),
-            1.0,
-            None,
-          ) {
-          Ok(item) => items.push(item)
-          Err(_) => return Err(adapter_error("native Card paint failed"))
+    if binding.visible {
+      let bounds = match tree.node(binding.id) {
+        Some(node) => node.bounds()
+        None => return Err(adapter_error("visible binding has no layout node"))
+      }
+      if binding.view.is_card() {
+        // Flat bindings are preorder: paint both Card quads before descendants.
+        let inner = @primitives.Rect::new(
+          bounds.left() + 1.0,
+          bounds.top() + 1.0,
+          bounds.size().width() - 2.0,
+          bounds.size().height() - 2.0,
+        ).unwrap()
+        for
+          (id, rect, fill) in [
+            (binding.id + 1UL, bounds, card_border),
+            (binding.id + 2UL, inner, card_fill),
+          ] {
+          match
+            @scene.SceneItem::quad(
+              id,
+              rect,
+              fill,
+              @scene.AffineTransform::identity(),
+              1.0,
+              None,
+            ) {
+            Ok(item) => items.push(item)
+            Err(_) => return Err(adapter_error("native Card paint failed"))
+          }
         }
       }
-    }
-    let mut button = binding.button
-    let mut text = binding.text
-    if binding.view.kind() == @view.Button {
-      let previous = binding.button
-      let model = match previous {
-        Some(old) if old.label() == binding.view.label() =>
-          old.with_bounds(bounds)
-        _ => @button.Button::new(binding.id, bounds, binding.view.label())
+      let mut button = binding.button
+      let mut text = binding.text
+      if binding.view.kind() == @view.Button {
+        let previous = binding.button
+        let model = match previous {
+          Some(old) if old.label() == binding.view.label() =>
+            old.with_bounds(bounds)
+          _ => @button.Button::new(binding.id, bounds, binding.view.label())
+        }
+        let mut model = match model {
+          Err(_) =>
+            return Err(
+              adapter_error(
+                "native Button requires bounds of at least 24 by 24",
+              ),
+            )
+          Ok(value) => value
+        }
+        match previous {
+          Some(old) =>
+            if old.bounds() != bounds ||
+              old.label() != binding.view.label() ||
+              old.is_enabled() == binding.view.disabled() ||
+              old.is_loading() != binding.view.loading() {
+              cancel_pending = true
+            }
+          None => ()
+        }
+        model = model
+          .with_enabled(!binding.view.disabled())
+          .with_loading(binding.view.loading())
+          .with_focus(tree.is_focused(binding.id))
+        if !self.ready ||
+          (match self.current_frame {
+            Some(frame) =>
+              frame.snapshot.viewport() != viewport ||
+              frame.snapshot.scale() != scale
+            None => true
+          }) {
+          model = model.cancel_press()
+        }
+        let palette = match binding.view.button_palette() {
+          Some(token) => Some(token)
+          None =>
+            self.theme.map(theme => {
+              match theme {
+                @theme.Light => @view.Light
+                @theme.Dark => @view.Dark
+              }
+            })
+        }
+        let painted_button = match palette {
+          None => model.paint_items(binding.id + 1UL)
+          Some(token) =>
+            model.paint_items_with_palette(
+              binding.id + 1UL,
+              button_palette(token),
+            )
+        }
+        let paint = match painted_button {
+          Ok(value) => value
+          Err(_) => return Err(adapter_error("native Button paint failed"))
+        }
+        // Reuse GPUI border/fill, replacing only its unmeasured label with the
+        // existing NativeText path and the host's actual measurement callback.
+        items.push(paint[0])
+        items.push(paint[1])
+        // GPUI owns foreground precedence too; choosing it here from View flags
+        // would diverge from the controller when states overlap.
+        match paint[2] {
+          @scene.TextItem(color~, ..) =>
+            text = text.map(text => text.recolored(text.id(), color))
+          _ =>
+            return Err(adapter_error("native Button label paint is not text"))
+        }
+        button = Some(model)
       }
-      let mut model = match model {
-        Err(_) =>
-          return Err(
-            adapter_error("native Button requires bounds of at least 24 by 24"),
-          )
-        Ok(value) => value
-      }
-      match previous {
-        Some(old) =>
-          if old.bounds() != bounds ||
-            old.label() != binding.view.label() ||
-            old.is_enabled() == binding.view.disabled() ||
-            old.is_loading() != binding.view.loading() {
-            cancel_pending = true
+      match text {
+        Some(text) => {
+          let align = if binding.view.kind() == @view.Button {
+            @components.Center
+          } else {
+            @components.Start
           }
+          match text.scene_item(bounds, align) {
+            Err(error) => return Err(error)
+            Ok(item) => items.push(item)
+          }
+        }
         None => ()
       }
-      model = model
-        .with_enabled(!binding.view.disabled())
-        .with_loading(binding.view.loading())
-        .with_focus(tree.is_focused(binding.id))
-      if !self.ready ||
-        (match self.current_frame {
-          Some(frame) =>
-            frame.snapshot.viewport() != viewport ||
-            frame.snapshot.scale() != scale
-          None => true
-        }) {
-        model = model.cancel_press()
-      }
-      let palette = match binding.view.button_palette() {
-        Some(token) => Some(token)
-        None =>
-          self.theme.map(theme => {
-            match theme {
-              @theme.Light => @view.Light
-              @theme.Dark => @view.Dark
-            }
-          })
-      }
-      let painted_button = match palette {
-        None => model.paint_items(binding.id + 1UL)
-        Some(token) =>
-          model.paint_items_with_palette(
-            binding.id + 1UL,
-            button_palette(token),
-          )
-      }
-      let paint = match painted_button {
-        Ok(value) => value
-        Err(_) => return Err(adapter_error("native Button paint failed"))
-      }
-      // Reuse GPUI border/fill, replacing only its unmeasured label with the
-      // existing NativeText path and the host's actual measurement callback.
-      items.push(paint[0])
-      items.push(paint[1])
-      // GPUI owns foreground precedence too; choosing it here from View flags
-      // would diverge from the controller when states overlap.
-      match paint[2] {
-        @scene.TextItem(color~, ..) =>
-          text = text.map(text => text.recolored(text.id(), color))
-        _ => return Err(adapter_error("native Button label paint is not text"))
-      }
-      button = Some(model)
-    }
-    match text {
-      Some(text) => {
-        let align = if binding.view.kind() == @view.Button {
-          @components.Center
+      let label_bounds = binding.text.map(text => {
+        let size = text.intrinsic_size()
+        let x = if binding.view.kind() == @view.Button {
+          bounds.left() + (bounds.size().width() - size.width()) / 2.0
         } else {
-          @components.Start
+          bounds.left()
         }
-        match text.scene_item(bounds, align) {
-          Err(error) => return Err(error)
-          Ok(item) => items.push(item)
-        }
-      }
-      None => ()
+        @primitives.Rect::new(
+          x,
+          bounds.top() + (bounds.size().height() - size.height()) / 2.0,
+          size.width(),
+          size.height(),
+        ).unwrap()
+      })
+      observations.push({
+        binding_id: binding.id,
+        key: binding.view.key(),
+        bounds,
+        label_bounds,
+        pressed: button.map(model => model.is_pressed()).unwrap_or(false),
+        focused: button.map(model => model.is_focused()).unwrap_or(false),
+        hovered: button.map(model => model.is_hovered()).unwrap_or(false),
+        enabled: button.map(model => model.is_enabled()).unwrap_or(false),
+        loading: button.map(model => model.is_loading()).unwrap_or(false),
+        palette: binding.view.button_palette(),
+      })
+      bindings[index] = { ..binding, button, text, }
+    } else {
+      bindings[index] = { ..binding, button: None, text: None, }
     }
-    let label_bounds = binding.text.map(text => {
-      let size = text.intrinsic_size()
-      let x = if binding.view.kind() == @view.Button {
-        bounds.left() + (bounds.size().width() - size.width()) / 2.0
-      } else {
-        bounds.left()
-      }
-      @primitives.Rect::new(
-        x,
-        bounds.top() + (bounds.size().height() - size.height()) / 2.0,
-        size.width(),
-        size.height(),
-      ).unwrap()
-    })
-    observations.push({
-      binding_id: binding.id,
-      key: binding.view.key(),
-      bounds,
-      label_bounds,
-      pressed: button.map(model => model.is_pressed()).unwrap_or(false),
-      focused: button.map(model => model.is_focused()).unwrap_or(false),
-      hovered: button.map(model => model.is_hovered()).unwrap_or(false),
-      enabled: button.map(model => model.is_enabled()).unwrap_or(false),
-      loading: button.map(model => model.is_loading()).unwrap_or(false),
-      palette: binding.view.button_palette(),
-    })
-    bindings[index] = { ..binding, button, text, }
   }
   let snapshot = match
     @scene.SceneSnapshot::new(viewport, scale, [], [], items) {
@@ -733,6 +1464,8 @@ fn Mounted::prepare(
       revision: self.revision + 1UL,
       observations,
       theme: self.theme,
+      shell_mode: mode,
+      regions,
     },
   })
 }
@@ -877,6 +1610,17 @@ pub fn Mounted::callback(self : Mounted, key : @view.NodeKey) -> Activation? {
   if !self.ready || self.is_disposed() {
     return None
   }
+  match binding_for(self.bindings, key) {
+    Some(binding) if binding.visible => ()
+    _ => return None
+  }
+  match self.current_frame {
+    Some(frame) =>
+      if frame.shell_mode() is Some(_) && frame.bounds(key) is None {
+        return None
+      }
+    None => return None
+  }
   self.runtime.token(key).map(token => { token, epoch: self.epoch, })
 }
 
@@ -889,6 +1633,14 @@ pub fn Mounted::activate(self : Mounted, callback : Activation) -> Bool {
     !same_epoch(callback.epoch, self.epoch) {
     return false
   }
+  match self.current_frame {
+    Some(frame) =>
+      if frame.shell_mode() is Some(_) &&
+        frame.bounds(callback.token.key()) is None {
+        return false
+      }
+    None => return false
+  }
   self.runtime.enqueue_activate(callback.token)
 }
 
@@ -897,7 +1649,26 @@ pub fn Mounted::next_action(self : Mounted) -> @view.SemanticAction? {
   if self.busy || !self.ready || !self.window_focused {
     return None
   }
-  self.runtime.next_action()
+  let shell = match self.current_frame {
+    Some(frame) => frame.shell_mode() is Some(_)
+    None => false
+  }
+  if !shell {
+    return self.runtime.next_action()
+  }
+  while self.runtime.next_action() is Some(action) {
+    let visible = match action {
+      @view.Activate(key) =>
+        match self.current_frame {
+          Some(frame) => frame.bounds(key) is Some(_)
+          None => false
+        }
+    }
+    if visible {
+      return Some(action)
+    }
+  }
+  None
 }
 
 ///|
@@ -907,7 +1678,14 @@ pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
   }
   let binding = match binding_for(self.bindings, key) {
     None => return false
-    Some(value) => value
+    Some(value) => if value.visible { value } else { return false }
+  }
+  match self.current_frame {
+    Some(frame) =>
+      if frame.shell_mode() is Some(_) && frame.bounds(key) is None {
+        return false
+      }
+    None => return false
   }
   let token = match binding.token {
     None => return false

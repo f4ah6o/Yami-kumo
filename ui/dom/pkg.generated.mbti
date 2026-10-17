@@ -22,6 +22,7 @@ pub(all) enum DomError {
   RootNotEmpty
   Disposed
   HostTreeChanged
+  InvalidShell
   InvalidView(@runtime.CommitError)
 } derive(Eq, @debug.Debug)
 pub fn DomError::equal(Self, Self) -> Bool
