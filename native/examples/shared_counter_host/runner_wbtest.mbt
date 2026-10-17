@@ -75,3 +75,25 @@ test "theme fixture controls use native navigation key-down only" {
     )
   }
 }
+
+///|
+test "palette trace distinguishes successful unconsumed motion and replay" {
+  let event = @platform.Event::new(
+    @platform.WindowId::new(1L),
+    7L,
+    1.0,
+    @platform.Input(
+      @primitives.PointerMoved(
+        position=@primitives.Point::new(12.0, 34.0).unwrap(),
+      ),
+    ),
+  )
+  assert_eq(
+    palette_event_json(event, false, 5L, 7L),
+    "{\"sequence\":7,\"scale\":1,\"consumed\":false,\"dispatched\":true,\"beforeDispatch\":5,\"afterDispatch\":7,\"kind\":\"move\",\"x\":12,\"y\":34}",
+  )
+  assert_eq(
+    palette_event_json(event, false, 7L, 7L),
+    "{\"sequence\":7,\"scale\":1,\"consumed\":false,\"dispatched\":false,\"beforeDispatch\":7,\"afterDispatch\":7,\"kind\":\"move\",\"x\":12,\"y\":34}",
+  )
+}

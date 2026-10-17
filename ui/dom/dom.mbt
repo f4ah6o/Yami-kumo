@@ -159,6 +159,14 @@ extern "js" fn update_spacing(
   #| }
 
 ///|
+/// Paint-only closed classes; removal restores the unstyled legacy control.
+extern "js" fn update_button_palette(node : DomNode, palette : Int) -> Unit =
+  #| (node, palette) => {
+  #|   node.classList.toggle("yk-ui-button-light", palette === 1);
+  #|   node.classList.toggle("yk-ui-button-dark", palette === 2);
+  #| }
+
+///|
 #external
 priv type ButtonEvents
 
@@ -362,6 +370,7 @@ pub fn mount(
 ///|
 /// Change only the root's scoped palette. No view commit, node replacement,
 /// focus operation or input-controller update is needed for a paint change.
+/// An explicit per-Button palette retains its colors and focus-visible style.
 /// None removes this root's opt-in and restores its original host attributes.
 pub fn DomRoot::set_theme(
   self : DomRoot,
@@ -456,6 +465,16 @@ fn DomRoot::render_node(
     view.loading(),
     view.is_card(),
   )
+  if kind == @core.Button {
+    update_button_palette(
+      mounted.node,
+      match view.button_palette() {
+        None => 0
+        Some(Light) => 1
+        Some(Dark) => 2
+      },
+    )
+  }
   if kind == @core.Row || kind == @core.Column {
     match view.spacing() {
       Some(spacing) =>

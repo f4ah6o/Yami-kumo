@@ -43,6 +43,13 @@ repeat behavior. No third activation controller is introduced.
 | Default action                   | `type=button` never implicitly submits an enclosing form; unavailable/canceled activation defaults are prevented synchronously        | Focused loading Enter/Space is consumed without activation. No form-submit/default-button API exists in this slice                        |
 | Mixed pointer/Space              | Browser default ordering; no universal mixed-input equivalence                                                                        | Existing GPUI may emit one Space activation and one pointer activation                                                                    |
 
+The native Hover row describes delivered motion, not exclusive pointer ownership.
+Routed in-bounds primary down/up also sets the target's hover. Without an
+intervening delivered `PointerMoved`, another Button may retain hover; the next
+delivered motion updates both. This existing native profile applies before and
+after any explicit palette update. See `shared-button-palettes.md` for the
+bounded raw-event evidence and per-control paint oracle.
+
 DOM disabled removes new focus eligibility; it does not promise synchronous
 loss of `document.activeElement`. Chromium 156 retained `activeElement` during
 the observed held-Space disabled transition while activation stayed blocked.

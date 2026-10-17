@@ -171,10 +171,10 @@ browser policy. See GPUI's `docs/shared-ui-host-contract.md` at the pinned sourc
 Row/Column are a bounded flex subset with fixed system-sans text; general themes,
 Box, grids, text editing and IME are not part of this adapter.
 
-The opt-in `Shared counter native proof` workflow uses its own pinned GPUI
+The opt-in `Shared UI native proof` workflow uses its own pinned GPUI
 revision in `tests/shared-ui/gpui-revision.txt` and MoonBit toolchain. Existing
 legacy native jobs keep their old pins and default runners. Linux and Windows
-run four fixed shared fixtures with actual host-delivered pointer input:
+run five fixed shared fixtures with actual host-delivered pointer input:
 plain counter `[0, 1, 2]`, disabled/loading `[0, 0, 0, 1]`, and Card counter
 `[0, 1, 2]`, plus the two-button spacing demo `[0, 1, 1, 2, 2]`. The latter
 measures changed gap/padding, stable bindings and retained focus while the
@@ -183,6 +183,11 @@ and actual focus after each click. The disabled/loading fixture starts disabled,
 only after the first actual primary release, then enabled after the second;
 the third click increments the unchanged model. These test-only props are not
 an alternate model or synthetic Button recognizer.
+The explicit per-Button palette fixture from PR #34 adds the count trace
+`[0, 1, 1, 2, 2, 2]` and records delivered native input alongside accepted frames.
+The separate root Button-theme fixture adds 36 captures, including held input,
+state overlaps, theme changes and cancellation; see
+[shared-button-theme.md](shared-button-theme.md).
 
 The driver retains exact source and GPUI revisions, source hashes, raw build and
 host logs, real completed-frame PPM captures, scene/geometry/action traces and
@@ -190,7 +195,8 @@ teardown. It rejects dirty or changed source, missing phases, incorrect gates,
 blank text regions, unchanged final counter pixels and incomplete destruction.
 Linux input uses an isolated Xvfb/Weston session; Windows input checks the exact
 visible foreground HWND/title. Frame evidence is emitted after completion, once
-per settled phase, never from transient pressed frames. macOS CI builds the same
+per settled phase in the five existing fixtures. The theme fixture deliberately
+captures held pressed states before release. macOS CI builds the same
 bootstrap and runs portable tests, but reports runtime and AX as `not-run`.
 
 ```sh

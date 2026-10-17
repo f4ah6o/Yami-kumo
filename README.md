@@ -226,4 +226,6 @@ entrypoints.
 The [shared Button theme slice](docs/shared-button-theme.md) adds opt-in
 light/dark semantic colors from `ui/theme`, generated scoped CSS, and GPUI
 paint palettes. Theme switching retains the existing keyed Button and input
-controller. AppShell and general layout remain separate roadmap steps.
+controller. Existing per-Button palette selections override the root theme and
+share the same numeric tokens through their compatible API. AppShell and general
+layout remain separate roadmap steps.

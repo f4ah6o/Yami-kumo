@@ -50,6 +50,9 @@ priv struct Observation {
   pressed : Bool
   focused : Bool
   hovered : Bool
+  enabled : Bool
+  loading : Bool
+  palette : @view.ButtonPaletteToken?
 }
 
 ///|
@@ -72,7 +75,7 @@ pub fn Frame::revision(self : Frame) -> UInt64 {
 }
 
 ///|
-/// The colors accepted with this frame, including the legacy default profile.
+/// The accepted root Button theme. Explicit View palettes retain their overrides.
 pub fn Frame::theme(self : Frame) -> @theme.Theme? {
   self.theme
 }
@@ -147,6 +150,39 @@ pub fn Frame::hovered(self : Frame, key : @view.NodeKey) -> Bool {
 }
 
 ///|
+pub fn Frame::enabled(self : Frame, key : @view.NodeKey) -> Bool {
+  for observation in self.observations {
+    if observation.key == key {
+      return observation.enabled
+    }
+  }
+  false
+}
+
+///|
+pub fn Frame::loading(self : Frame, key : @view.NodeKey) -> Bool {
+  for observation in self.observations {
+    if observation.key == key {
+      return observation.loading
+    }
+  }
+  false
+}
+
+///|
+pub fn Frame::button_palette(
+  self : Frame,
+  key : @view.NodeKey,
+) -> @view.ButtonPaletteToken? {
+  for observation in self.observations {
+    if observation.key == key {
+      return observation.palette
+    }
+  }
+  None
+}
+
+///|
 /// One explicit native root/window owner. The common runtime owns semantic
 /// incarnation tokens; the adapter privately owns nonzero, never-reused ID
 /// blocks. One existing GPUI Button owns each Button's interaction state.
@@ -161,6 +197,7 @@ pub struct Mounted {
   priv mut revision : UInt64
   priv mut epoch : Epoch
   priv mut change : Epoch
+  priv mut last_dispatched_input : Int64
   priv mut last_sequence : Int64
   priv mut window_focused : Bool
   priv mut ready : Bool
@@ -184,6 +221,7 @@ pub fn Mounted::new(
     epoch: fresh_epoch(),
     change: fresh_epoch(),
     last_sequence: 0,
+    last_dispatched_input: 0,
     window_focused: true,
     ready: false,
     busy: false,
@@ -192,13 +230,14 @@ pub fn Mounted::new(
 }
 
 ///|
-/// Requested Button colors. Frame::theme observes the last accepted palette.
+/// Requested fallback Button colors. Frame::theme observes the accepted root theme.
 pub fn Mounted::theme(self : Mounted) -> @theme.Theme? {
   self.theme
 }
 
 ///|
-/// Request colors for the next successful commit. None restores legacy paint.
+/// Request fallback colors for the next commit. Explicit View palettes take
+/// precedence; None restores legacy paint for Buttons without an override.
 /// Pending gestures and accepted geometry remain valid across paint changes.
 pub fn Mounted::set_theme(self : Mounted, theme : @theme.Theme?) -> Bool {
   if self.is_disposed() || self.busy {
@@ -279,24 +318,34 @@ fn color(r : Int32, g : Int32, b : Int32) -> @primitives.Color {
 }
 
 ///|
-fn theme_color(value : @theme.Color) -> @primitives.Color {
-  color(value.red(), value.green(), value.blue())
+fn palette_color(
+  token : @view.ButtonPaletteToken,
+  role : @view.ButtonPaintRole,
+) -> @primitives.Color {
+  let value = token.color(role)
+  @primitives.Color::rgba(
+    value.red(),
+    value.green(),
+    value.blue(),
+    value.alpha(),
+  ).unwrap()
 }
 
 ///|
-fn button_palette(theme : @theme.Theme) -> @button.ButtonPaintPalette {
-  let colors = theme.button_colors()
+fn button_palette(
+  token : @view.ButtonPaletteToken,
+) -> @button.ButtonPaintPalette {
   @button.ButtonPaintPalette::new(
-    normal_border=theme_color(colors.normal_border),
-    focused_border=theme_color(colors.focused_border),
-    disabled_border=theme_color(colors.disabled_border),
-    normal_fill=theme_color(colors.normal_fill),
-    hovered_fill=theme_color(colors.hovered_fill),
-    pressed_fill=theme_color(colors.pressed_fill),
-    loading_fill=theme_color(colors.loading_fill),
-    disabled_fill=theme_color(colors.disabled_fill),
-    enabled_foreground=theme_color(colors.enabled_foreground),
-    disabled_foreground=theme_color(colors.disabled_foreground),
+    normal_border=palette_color(token, @view.NormalBorder),
+    focused_border=palette_color(token, @view.FocusedBorder),
+    disabled_border=palette_color(token, @view.DisabledBorder),
+    normal_fill=palette_color(token, @view.NormalFill),
+    hovered_fill=palette_color(token, @view.HoveredFill),
+    pressed_fill=palette_color(token, @view.PressedFill),
+    loading_fill=palette_color(token, @view.LoadingFill),
+    disabled_fill=palette_color(token, @view.DisabledFill),
+    enabled_foreground=palette_color(token, @view.EnabledForeground),
+    disabled_foreground=palette_color(token, @view.DisabledForeground),
   )
 }
 
@@ -437,6 +486,7 @@ fn Mounted::prepare(
       let foreground = if node.kind() == @view.Text {
         color(30, 36, 45)
       } else {
+        // Measurement is color-independent; core resolves paint below.
         color(242, 246, 250)
       }
       match
@@ -591,15 +641,25 @@ fn Mounted::prepare(
         }) {
         model = model.cancel_press()
       }
-      let paint = match
-        (match self.theme {
-          None => model.paint_items(binding.id + 1UL)
-          Some(theme) =>
-            model.paint_items_with_palette(
-              binding.id + 1UL,
-              button_palette(theme),
-            )
-        }) {
+      let palette = match binding.view.button_palette() {
+        Some(token) => Some(token)
+        None =>
+          self.theme.map(theme => {
+            match theme {
+              @theme.Light => @view.Light
+              @theme.Dark => @view.Dark
+            }
+          })
+      }
+      let painted_button = match palette {
+        None => model.paint_items(binding.id + 1UL)
+        Some(token) =>
+          model.paint_items_with_palette(
+            binding.id + 1UL,
+            button_palette(token),
+          )
+      }
+      let paint = match painted_button {
         Ok(value) => value
         Err(_) => return Err(adapter_error("native Button paint failed"))
       }
@@ -652,6 +712,9 @@ fn Mounted::prepare(
       pressed: button.map(model => model.is_pressed()).unwrap_or(false),
       focused: button.map(model => model.is_focused()).unwrap_or(false),
       hovered: button.map(model => model.is_hovered()).unwrap_or(false),
+      enabled: button.map(model => model.is_enabled()).unwrap_or(false),
+      loading: button.map(model => model.is_loading()).unwrap_or(false),
+      palette: binding.view.button_palette(),
     })
     bindings[index] = { ..binding, button, text, }
   }
@@ -923,7 +986,11 @@ pub fn Mounted::handle_event(
         self.invalidate_layout()
         return Ok(false)
       }
-      self.dispatch(input)
+      let result = self.dispatch(input)
+      if result is Ok(_) {
+        self.last_dispatched_input = event.sequence()
+      }
+      result
     }
     _ => Ok(false)
   }
@@ -1008,4 +1075,12 @@ pub fn Mounted::dispose(self : Mounted) -> Unit {
   self.tree = None
   self.current_frame = None
   self.ready = false
+}
+
+///|
+/// Last sequence successfully dispatched through all input admission gates.
+/// Includes unconsumed input (Ok(false)); ignored or failed events do not advance it.
+/// Compare before/after a call to distinguish a newly dispatched event from replay.
+pub fn Mounted::last_dispatched_input_sequence(self : Mounted) -> Int64 {
+  self.last_dispatched_input
 }

@@ -2,6 +2,35 @@
 priv struct ThemeFixture {
   mut model : @shared_button_theme.Model
   mut mounted : @dom.DomRoot?
+  mut palette : @core.ButtonPaletteToken?
+}
+
+///|
+fn ThemeFixture::view_for(
+  self : ThemeFixture,
+  model : @shared_button_theme.Model,
+) -> @core.View {
+  let view = model.view()
+  match self.palette {
+    None => view
+    Some(palette) =>
+      @core.column(
+        view.key(),
+        view.children().map(fn(child) {
+          if child.key() == @core.NodeKey::new("increment") {
+            @core.button_with_palette(
+              child.key(),
+              child.label(),
+              palette,
+              disabled=child.disabled(),
+              loading=child.loading(),
+            )
+          } else {
+            child
+          }
+        }),
+      )
+  }
 }
 
 ///|
@@ -29,19 +58,23 @@ pub fn mount_theme_fixture(id : String, theme_name : String) -> String {
   let fixture : ThemeFixture = {
     model: @shared_button_theme.Model::new().with_theme(theme),
     mounted: None,
+    palette: None,
   }
   match
     @dom.mount(
       id,
-      fixture.model.view(),
+      fixture.view_for(fixture.model),
       fn() {
         match fixture.mounted {
           None => ()
           Some(mounted) =>
             while mounted.next_action() is Some(action) {
+              let previous_theme = fixture.model.theme()
               fixture.model = fixture.model.update(action)
-              mounted.update(fixture.model.view()) |> ignore
-              mounted.set_theme(Some(fixture.model.theme())) |> ignore
+              mounted.update(fixture.view_for(fixture.model)) |> ignore
+              if fixture.model.theme() != previous_theme {
+                mounted.set_theme(Some(fixture.model.theme())) |> ignore
+              }
             }
         }
       },
@@ -103,11 +136,36 @@ pub fn set_theme_fixture_mode(id : String, name : String) -> String {
     None => "missing-fixture"
     Some(fixture) => {
       let next = fixture.model.with_mode(mode)
-      match fixture.mounted.unwrap().update(next.view()) {
+      match fixture.mounted.unwrap().update(fixture.view_for(next)) {
         Err(error) => error_name(error)
         Ok(_) => {
           fixture.model = next
           "updated"
+        }
+      }
+    }
+  }
+}
+
+///|
+#export_name("setThemeFixturePalette")
+pub fn set_theme_fixture_palette(id : String, name : String) -> String {
+  let palette = match name {
+    "none" => None
+    "light" => Some(@core.Light)
+    "dark" => Some(@core.Dark)
+    _ => return "invalid-palette"
+  }
+  match theme_fixtures.get(id) {
+    None => "missing-fixture"
+    Some(fixture) => {
+      let previous = fixture.palette
+      fixture.palette = palette
+      match fixture.mounted.unwrap().update(fixture.view_for(fixture.model)) {
+        Ok(_) => "updated"
+        Err(error) => {
+          fixture.palette = previous
+          error_name(error)
         }
       }
     }

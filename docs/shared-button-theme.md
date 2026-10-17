@@ -5,6 +5,14 @@ The shared source-workspace API supports opt-in `Light` and `Dark` Button colors
 the native adapter maps the same ten slots to GPUI's `ButtonPaintPalette` and
 calls the retained Button's `paint_items_with_palette`.
 
+The per-Button palette API merged in PR #34 remains available with exactly its
+existing RGB values. Its `ButtonPaletteToken.color` now reads `ui/theme`, so
+both APIs share one numeric token table. An explicit `button_with_palette`
+selection takes precedence over a root theme; an ordinary `button` uses the
+root theme when present, otherwise its existing unthemed paint. Dark retains
+the established GPUI standard colors. This selection chooses a palette only;
+GPUI and the browser still own interaction state.
+
 This slice changes Button color and theme selection. AppShell, themes for Text
 or Card, general layout, automatic system appearance, arbitrary custom themes,
 and full YK-05 remain separate work.
@@ -24,7 +32,8 @@ not select a separate foreground priority or add a Button state machine.
 
 DOM uses the browser's existing `:disabled`, `:focus`, `:active`, `:hover`, and
 the existing `aria-busy` attribute. A themed focus border follows `:focus` to
-match GPUI's focused palette slot. Browser focus timing, Enter repeat and
+match GPUI's focused palette slot. Explicit per-Button palettes retain their
+existing `:focus-visible` behavior. Browser focus timing, Enter repeat and
 Space activation remain browser behavior. Native GPUI continues to normalize
 unreachable states, including clearing pressed state when loading or disabled.
 The fixture records those observed booleans instead of fabricating a state.
@@ -52,6 +61,9 @@ descendant. The stylesheet does not add body rules, inline style, a style
 element, document-wide theme state, or a Kumo/Tailwind build dependency.
 Independent mounted roots may select different themes. Existing Kumo
 compatibility CSS and the npm preview's exports/assets are unchanged.
+Root selectors exclude explicit per-Button palette classes, so changing or
+clearing a root theme cannot overwrite a Button's explicit colors or focus
+profile. Removing the explicit selection resumes the current root theme.
 
 ## Native API and commit behavior
 
@@ -65,12 +77,14 @@ The setter records the requested theme and invalidates old prepared work; the
 last accepted frame remains active until a new frame is successfully committed.
 `Mounted::theme()` observes the requested theme; `Frame::theme()` observes the
 accepted one. A failed prepare retains the previously accepted frame and input
-geometry. `set_theme(None)` restores the legacy paint path. Disposed or busy
+geometry. `set_theme(None)` restores the legacy paint path for Buttons without
+an explicit palette. Explicit per-Button selections remain active. Disposed or busy
 roots reject changes.
 
 Theme-only updates preserve the existing GPUI Button, item IDs, binding IDs,
-focus, held input, cancellation and queued semantic actions. `Frame::hovered`
-is an additional read-only observation of the retained controller. No theme
+focus, held input, cancellation and queued semantic actions. Existing
+`Frame::button_palette` continues to observe explicit View metadata, while
+`Frame::theme` observes the accepted root setting. No theme
 configuration is added to the legacy `native/components` API.
 
 The shared proof already pins GPUI at
@@ -102,7 +116,8 @@ pnpm run check:shared-theme
 
 The generator updates only its marked CSS variable region and the fixture's
 token values. It preserves the independently reviewed state table. CI rejects
-stale generated assets. Common tokens and the example compile on JS, native,
+stale generated assets and changes to the established per-Button RGB contract.
+Common tokens and the example compile on JS, native,
 Wasm and WasmGC.
 
 ## Validation and qualification limits
@@ -119,7 +134,8 @@ state, scene colors, framebuffer pixels and activation counts. Linux uses
 XTest through Xvfb/Weston/Wayland; Windows uses Win32 SendInput/D3D11. Each result
 binds the exact clean Yami SHA, GPUI revision, relevant source hashes, actual
 toolchain, command, timing, native logs, scenes and frame artifacts. The theme
-result is separate from the unchanged four historical shared fixtures.
+result is separate from the five existing shared fixtures, including PR #34's
+per-Button palette fixture and its delivered-input trace.
 
 ```sh
 moon test ui/theme examples/shared_button_theme --target all --deny-warn

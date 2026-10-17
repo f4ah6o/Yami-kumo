@@ -457,3 +457,51 @@ test "Card and spacing consumer modes cannot silently override one another" {
     is Err(_),
   )
 }
+
+///|
+test "palette consumer shares one model and preserves metadata through bootstrap" {
+  let app = @shared_counter.NativeCounter::new(
+    @platform.WindowId::new(1L),
+    palette=true,
+  ).unwrap()
+  let initial = render(app)
+  let counts = [0]
+  let tokens = [
+    None,
+    None,
+    Some(@view.Light),
+    Some(@view.Light),
+    Some(@view.Dark),
+    None,
+  ]
+  for index, toggle in [false, true, false, true, true] {
+    let before = render(app)
+    let bounds = if toggle {
+      before.toggle_bounds()
+    } else {
+      before.button_bounds()
+    }
+    let sequence = index.to_int64() * 3L + 1L
+    ignore(app.handle_event(event(sequence, down(bounds))))
+    let held = render(app)
+    assert_eq(held.button_pressed(), !toggle)
+    assert_eq(held.toggle_pressed(), toggle)
+    ignore(app.handle_event(event(sequence + 1L, up(bounds))))
+    assert_true(drain(app))
+    let frame = render(app)
+    counts.push(frame.count())
+    assert_eq(frame.button_palette(), tokens[index + 1])
+    assert_eq(frame.button_binding_id(), initial.button_binding_id())
+    assert_eq(frame.toggle_binding_id(), initial.toggle_binding_id())
+    assert_true(frame.button_bounds() == initial.button_bounds())
+    assert_true(frame.toggle_bounds() == initial.toggle_bounds())
+    assert_eq(frame.button_focused(), !toggle)
+    assert_eq(frame.toggle_focused(), toggle)
+    assert_true(!frame.button_pressed() && !frame.toggle_pressed())
+  }
+  assert_eq(counts, [0, 1, 1, 2, 2, 2])
+  assert_eq(render(app).action_keys(), [
+    "increment", "palette-toggle", "increment", "palette-toggle", "palette-toggle",
+  ])
+  app.dispose()
+}

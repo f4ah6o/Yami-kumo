@@ -49,6 +49,18 @@ for (const tokens of Object.values(themes)) {
     assert.ok(rgb.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255));
   }
 }
+// Root themes share the established per-Button colors without changing that API.
+const explicitPalettes = JSON.parse(
+  readFileSync(new URL('../fixtures/shared-ui/button-palettes.json', import.meta.url), 'utf8'),
+);
+assert.deepEqual(explicitPalettes.roles, slots);
+for (const name of ['Light', 'Dark']) {
+  assert.deepEqual(
+    explicitPalettes[name],
+    slots.map((slot) => themes[name.toLowerCase()][slot]),
+    `standard theme would change the existing ${name} per-Button palette`,
+  );
+}
 const begin = '/* BEGIN GENERATED BUTTON THEME TOKENS */';
 const end = '/* END GENERATED BUTTON THEME TOKENS */';
 const declarations = Object.entries(themes)

@@ -24,6 +24,23 @@ pub fn Model::update(Self, @core.SemanticAction) -> Self
 pub fn Model::value(Self) -> Int
 pub fn Model::view(Self) -> @core.View
 
+pub struct PaletteModel {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn PaletteModel::counter(Self) -> Model
+pub fn PaletteModel::equal(Self, Self) -> Bool
+pub fn PaletteModel::expanded(Self) -> Bool
+pub fn PaletteModel::new() -> Self
+pub fn PaletteModel::not_equal(Self, Self) -> Bool
+pub fn PaletteModel::palette(Self) -> @core.ButtonPaletteToken?
+pub fn PaletteModel::palette_view(Self) -> @core.View
+pub fn PaletteModel::to_repr(Self) -> @debug.Repr
+pub fn PaletteModel::update(Self, @core.SemanticAction) -> Self
+pub fn PaletteModel::update_counter(Self, @core.SemanticAction) -> Self
+pub fn PaletteModel::update_palette(Self, @core.SemanticAction) -> Self
+pub fn PaletteModel::value(Self) -> Int
+pub fn PaletteModel::view(Self) -> @core.View
+
 pub struct SpacingModel {
   // private fields
 } derive(Eq, @debug.Debug)

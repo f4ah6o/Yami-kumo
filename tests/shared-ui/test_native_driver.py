@@ -173,6 +173,7 @@ class MarkerTests(unittest.TestCase):
             "disabled-loading": "counter-disabled-loading",
             "card": "card-counter-two-activations",
             "spacing": "spacing-count-and-toggle",
+            "palette": "palette-count-and-toggle",
         })
         self.assertEqual(set(driver.CONTRACT_PHASES) - set(driver.FIXTURES.values()), {
             "button-interrupted-loading", "button-interrupted-disabled",
@@ -861,17 +862,26 @@ class ThemeOracleTests(unittest.TestCase):
 
     def test_fractional_glyph_coverage_matches_expected_color_without_opaque_pixels(self):
         value = theme_marker()
-        # Actual observed DirectWrite blend at the initial nine-letter label.
-        write_theme_frame(self.directory, value, label_rgb=(41, 48, 65))
+        colors = driver.theme_colors(value, self.contract)
+        # Quantized grayscale coverage, with no opaque pixel. The real Windows
+        # capture that exposed this requirement reached only 89.2% coverage.
+        blend = tuple(round(bg + .89 * (fg - bg))
+                      for fg, bg in zip(colors["foreground"], colors["fill"]))
+        write_theme_frame(self.directory, value, label_rgb=blend)
         _, report = driver.inspect_theme_frame(value, self.directory, self.contract)
         self.assertEqual(report["foregroundPixels"], 15)
-        self.assertGreater(report["maximumForegroundCoverage"], .89)
-        self.assertLess(report["maximumForegroundCoverage"], .90)
+        self.assertAlmostEqual(report["maximumForegroundCoverage"], .89, delta=.005)
         self.assertLess(report["maximumForegroundBlendResidual"], 1)
 
     def test_wrong_hue_faint_glyph_or_accidental_speck_cannot_qualify_label(self):
         value = theme_marker()
-        for rgb, pixels in (((80, 80, 80), 15), ((195, 197, 202), 15), ((15, 23, 42), 1)):
+        colors = driver.theme_colors(value, self.contract)
+        def blend(coverage):
+            return tuple(round(bg + coverage * (fg - bg))
+                         for fg, bg in zip(colors["foreground"], colors["fill"]))
+        strong = blend(.75)
+        wrong_hue = (strong[0], min(255, strong[1] + 40), strong[2])
+        for rgb, pixels in ((wrong_hue, 15), (blend(.25), 15), (colors["foreground"], 1)):
             write_theme_frame(self.directory, value, label_rgb=rgb, label_pixels=pixels)
             with self.subTest(rgb=rgb, pixels=pixels), self.assertRaisesRegex(driver.E2EError, "nontrivial pixels"):
                 driver.inspect_theme_frame(value, self.directory, self.contract)
@@ -1018,6 +1028,16 @@ class LifecycleTests(unittest.TestCase):
 
     def test_wrong_phase_stops_before_another_input(self):
         self.assertEqual(self.exercise(wrong_phase=True), ["launch", "click"])
+
+
+class IsolatedImportTests(unittest.TestCase):
+    def test_path_loaded_driver_is_inert_without_sibling_sys_path(self):
+        code = "import importlib.util; s=importlib.util.spec_from_file_location('isolated_driver', " + repr(str(PATH)) + "); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); assert callable(m.validate_palette_marker)"
+        with tempfile.TemporaryDirectory() as directory:
+            result = subprocess.run([sys.executable, "-I", "-B", "-c", code], cwd=directory,
+                                    capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stdout, "")
 
 
 if __name__ == "__main__":

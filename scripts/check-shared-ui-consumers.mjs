@@ -268,6 +268,22 @@ fn main {
   ensure(@theme.Light.button_colors().entries().length() == 10, "light palette is incomplete")
   ensure(@theme.Dark.button_colors().entries().length() == 10, "dark palette is incomplete")
   theme_runtime.dispose()
+  let palette_runtime = @runtime.Runtime::new()
+  let mut palette_model = @shared_counter.PaletteModel::new()
+  commit(palette_runtime, palette_model.palette_view())
+  let palette_counts = [palette_model.value()]
+  let increment = palette_runtime.token(@core.NodeKey::new("increment")).unwrap()
+  let toggle = palette_runtime.token(@core.NodeKey::new("palette-toggle")).unwrap()
+  for target in [increment, toggle, increment, toggle, toggle] {
+    ensure(palette_runtime.enqueue_activate(target), "palette action rejected")
+    palette_model = palette_model.update_palette(palette_runtime.next_action().unwrap())
+    commit(palette_runtime, palette_model.palette_view())
+    ensure(palette_runtime.is_current(increment) && palette_runtime.is_current(toggle), "palette replaced identity")
+    palette_counts.push(palette_model.value())
+  }
+  emit("palette-count-and-toggle", palette_counts)
+  palette_runtime.dispose()
+
 }
 `;
 
@@ -395,6 +411,7 @@ try {
         'counter-disabled-loading',
         'card-counter-two-activations',
         'spacing-count-and-toggle',
+        'palette-count-and-toggle',
       ],
     );
     for (const { fixtureId, ...observed } of observations) {

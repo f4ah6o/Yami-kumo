@@ -14,10 +14,17 @@ const slots = new Set([
   'disabled-foreground',
 ]);
 const rootSelector = (theme) => `.yk-ui-root[data-yk-theme='${theme}']`;
-const scope = `:where(${rootSelector('light')}, ${rootSelector('dark')}) .yk-ui-button`;
+const scope = `:where(${rootSelector('light')}, ${rootSelector('dark')}) .yk-ui-button:not(.yk-ui-button-light):not(.yk-ui-button-dark)`;
 const buttonSelectors = new Set(
   ['', ':hover', ':active', ':focus', "[aria-busy='true']", ':disabled'].map(
     (state) => scope + state,
+  ),
+);
+const explicitButtonSelectors = new Set(
+  ['light', 'dark'].flatMap((theme) =>
+    ['', ':hover', ':active', ':focus-visible', "[aria-busy='true']", ':disabled'].map(
+      (state) => `.yk-ui-button-${theme}${state}`,
+    ),
   ),
 );
 const normalize = (selector) => selector.trim().replace(/\s+/g, ' ').replaceAll('"', "'");
@@ -26,6 +33,7 @@ export function checkSharedStylesheetScope(css) {
   const sheet = postcss.parse(css);
   const themes = [];
   const buttons = [];
+  const explicitButtons = [];
   for (const rule of sheet.nodes) {
     if (rule.type === 'comment') continue;
     assert.equal(rule.type, 'rule', 'shared CSS cannot import or introduce global at-rules');
@@ -52,6 +60,19 @@ export function checkSharedStylesheetScope(css) {
         themes.push(selector);
         continue;
       }
+      if (explicitButtonSelectors.has(selector)) {
+        for (const declaration of rule.nodes) {
+          assert.equal(declaration.type, 'decl');
+          assert.equal(Boolean(declaration.important), false);
+          assert.ok(
+            ['border-color', 'background-color', 'color'].includes(declaration.prop),
+            declaration.prop,
+          );
+          assert.match(declaration.value, /^rgb\(\d+, \d+, \d+\)$/);
+        }
+        explicitButtons.push(selector);
+        continue;
+      }
       assert.ok(
         buttonSelectors.has(selector),
         `unscoped or unsupported shared selector: ${selector}`,
@@ -71,4 +92,5 @@ export function checkSharedStylesheetScope(css) {
   }
   assert.deepEqual(themes.sort(), [rootSelector('dark'), rootSelector('light')]);
   assert.deepEqual(buttons.sort(), [...buttonSelectors].sort());
+  assert.deepEqual(explicitButtons.sort(), [...explicitButtonSelectors].sort());
 }

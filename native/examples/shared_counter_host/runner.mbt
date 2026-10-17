@@ -72,6 +72,8 @@ priv struct Proof {
   mut frame_index : Int32
   mut last_payload : String?
   mut last_phase : Int32
+  events : Array[String]
+  mut frame_trace : String
 }
 
 ///|
@@ -90,6 +92,7 @@ pub fn run(
     Some("card") => "card"
     Some("spacing") => "spacing"
     Some("theme") => "theme"
+    Some("palette") => "palette"
     Some("disabled-loading") if e2e => "disabled-loading"
     _ => return Err(runner_error("invalid shared counter fixture"))
   }
@@ -135,6 +138,7 @@ pub fn run(
       disabled=fixture == "disabled-loading",
       card=fixture == "card",
       spacing=fixture == "spacing",
+      palette=fixture == "palette",
     ) {
     Err(error) => {
       let _ = host.destroy_window(window)
@@ -177,6 +181,8 @@ fn run_loop(
     frame_index: 0,
     last_payload: None,
     last_phase: -1,
+    events: [],
+    frame_trace: "",
   }
   let mut pending : @shared_counter.CounterFrame? = None
   let mut current : @shared_counter.CounterFrame? = None
@@ -198,9 +204,19 @@ fn run_loop(
         }
         sequence = value.sequence()
         // Even non-input events reach the adapter's window/sequence lifetime gate.
-        match app.handle_event(value) {
+        let before_dispatch = app.last_dispatched_input_sequence()
+        let consumed = match app.handle_event(value) {
           Err(error) => return Err(error)
-          Ok(_) => ()
+          Ok(value) => value
+        }
+        if e2e && fixture == "palette" {
+          if proof.events.length() >= 4096 {
+            return Err(runner_error("palette event trace limit exceeded"))
+          }
+          let after_dispatch = app.last_dispatched_input_sequence()
+          proof.events.push(
+            palette_event_json(value, consumed, before_dispatch, after_dispatch),
+          )
         }
         match value.kind() {
           @platform.Created => dirty = true
@@ -260,7 +276,11 @@ fn run_loop(
                     ),
                     Some(frame),
                   ) =>
-                    if fixture == "spacing" && proof.phase % 2 == 1 {
+                    if (fixture == "spacing" && proof.phase % 2 == 1) ||
+                      (
+                        fixture == "palette" &&
+                        (proof.phase == 1 || proof.phase >= 3)
+                      ) {
                       frame.toggle_bounds().contains(position)
                     } else {
                       frame.button_bounds().contains(position)
@@ -348,6 +368,12 @@ fn run_loop(
         Err(error) => return Err(error)
         Ok(value) => value
       }
+      if e2e && fixture == "palette" {
+        // Freeze before presentation: later completion events cannot relabel this scene.
+        proof.frame_trace = "\"inputTrace\":{\"revision\":\{frame.revision()},\"throughSequence\":\{sequence},\"events\":[" +
+          proof.events.join(",") +
+          "]},"
+      }
       match host.present(window, frame.snapshot()) {
         Err(error) => return Err(error)
         Ok(_) => ()
@@ -371,14 +397,18 @@ fn run_loop(
     return Err(runner_error("host window destruction timed out"))
   }
   if e2e {
-    let expected_phase = if fixture == "spacing" {
+    let expected_phase = if fixture == "palette" {
+      5
+    } else if fixture == "spacing" {
       4
     } else if fixture != "disabled-loading" {
       2
     } else {
       3
     }
-    let expected_actions = if fixture == "spacing" {
+    let expected_actions = if fixture == "palette" {
+      5
+    } else if fixture == "spacing" {
       4
     } else if fixture != "disabled-loading" {
       2
@@ -442,7 +472,9 @@ fn publish(
     actions.write_string("\"Activate\"")
   }
   actions.write_string("]")
-  let spacing_payload = if proof.fixture == "spacing" {
+  let spacing_payload = if proof.fixture == "palette" {
+    palette_json(frame) + proof.frame_trace
+  } else if proof.fixture == "spacing" {
     spacing_json(frame)
   } else {
     ""
@@ -510,4 +542,65 @@ fn spacing_json(frame : @shared_counter.CounterFrame) -> String {
   }
   keys.write_string("]")
   "\"spacing\":{\"expanded\":\{frame.expanded()},\"stack\":\{rect_json(frame.stack_bounds())},\"row\":\{rect_json(frame.row_bounds())},\"cardLabel\":\{rect_json(frame.card_label_bounds())},\"toggle\":\{rect_json(frame.toggle_bounds())},\"toggleLabel\":\{rect_json(frame.toggle_label_bounds())},\"togglePressed\":\{frame.toggle_pressed()},\"toggleFocused\":\{frame.toggle_focused()},\"buttonId\":\{frame.button_binding_id()},\"toggleId\":\{frame.toggle_binding_id()},\"actionKeys\":\{keys.to_string()}},"
+}
+
+///|
+/// All observations come from the accepted frame, never subsequent live input.
+fn palette_json(frame : @shared_counter.CounterFrame) -> String {
+  let token = match frame.button_palette() {
+    None => "none"
+    Some(Light) => "light"
+    Some(Dark) => "dark"
+  }
+  let toggle_token = match frame.toggle_palette() {
+    None => "none"
+    Some(Light) => "light"
+    Some(Dark) => "dark"
+  }
+  let keys = StringBuilder()
+  keys.write_string("[")
+  for index, key in frame.action_keys() {
+    if index > 0 {
+      keys.write_string(",")
+    }
+    keys.write_string("\"" + escape_json(key) + "\"")
+  }
+  keys.write_string("]")
+  "\"palette\":{\"token\":\"\{token}\",\"toggleToken\":\"\{toggle_token}\",\"hovered\":\{frame.button_hovered()},\"toggleEnabled\":\{frame.toggle_enabled()},\"toggleLoading\":\{frame.toggle_loading()},\"toggleHovered\":\{frame.toggle_hovered()},\"togglePressed\":\{frame.toggle_pressed()},\"toggleFocused\":\{frame.toggle_focused()},\"toggle\":\{rect_json(frame.toggle_bounds())},\"toggleLabel\":\{rect_json(frame.toggle_label_bounds())},\"buttonId\":\{frame.button_binding_id()},\"toggleId\":\{frame.toggle_binding_id()},\"revision\":\{frame.revision()},\"actionKeys\":\{keys.to_string()}},"
+}
+
+///|
+fn palette_event_json(
+  event : @platform.Event,
+  consumed : Bool,
+  before_dispatch : Int64,
+  after_dispatch : Int64,
+) -> String {
+  let dispatched = after_dispatch == event.sequence() &&
+    after_dispatch != before_dispatch
+  let detail = match event.kind() {
+    @platform.Input(@primitives.PointerMoved(position~)) =>
+      "\"kind\":\"move\",\"x\":\{position.x()},\"y\":\{position.y()}"
+    @platform.Input(
+      @primitives.PointerButtonPressed(
+        position~,
+        button=@primitives.Primary,
+        ..
+      )
+    ) => "\"kind\":\"primary-down\",\"x\":\{position.x()},\"y\":\{position.y()}"
+    @platform.Input(
+      @primitives.PointerButtonReleased(
+        position~,
+        button=@primitives.Primary,
+        ..
+      )
+    ) => "\"kind\":\"primary-up\",\"x\":\{position.x()},\"y\":\{position.y()}"
+    @platform.Input(_) => "\"kind\":\"other-input\""
+    @platform.FocusChanged(focused) =>
+      "\"kind\":\"focus\",\"focused\":\{focused}"
+    _ => "\"kind\":\"other-window\""
+  }
+  "{\"sequence\":\{event.sequence()},\"scale\":\{event.scale()},\"consumed\":\{consumed},\"dispatched\":\{dispatched},\"beforeDispatch\":\{before_dispatch},\"afterDispatch\":\{after_dispatch}," +
+  detail +
+  "}"
 }

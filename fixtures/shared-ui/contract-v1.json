@@ -43,6 +43,13 @@
       "expected": {
         "counts": [0, 1, 1, 2, 2]
       }
+    },
+    {
+      "id": "palette-count-and-toggle",
+      "description": "Explicit per-Button None, Light, Dark, None paint changes through one common model; stable identity and paint evidence are separate from domain counts.",
+      "expected": {
+        "counts": [0, 1, 1, 2, 2, 2]
+      }
     }
   ]
 }

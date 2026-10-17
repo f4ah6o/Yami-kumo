@@ -15,7 +15,10 @@ test "standard themes expose complete distinct opaque RGB palettes" {
       for channel in [color.red(), color.green(), color.blue()] {
         assert_true(channel >= 0 && channel <= 255)
       }
-      assert_eq(color.css(), "rgb(\{color.red()}, \{color.green()}, \{color.blue()})")
+      assert_eq(
+        color.css(),
+        "rgb(\{color.red()}, \{color.green()}, \{color.blue()})",
+      )
     }
   }
 }

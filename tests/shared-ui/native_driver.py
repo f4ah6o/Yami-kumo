@@ -30,11 +30,12 @@ ROOT = Path(__file__).resolve().parents[2]
 # Only these declared fixtures are driven with actual native host pointer input.
 # Additional Button contracts are validated below, but portable event tests must
 # never be presented as native-window/keyboard qualification.
-FIXTURES = {"counter": "counter-two-activations", "disabled-loading": "counter-disabled-loading", "card": "card-counter-two-activations", "spacing": "spacing-count-and-toggle"}
+FIXTURES = {"counter": "counter-two-activations", "disabled-loading": "counter-disabled-loading", "card": "card-counter-two-activations", "spacing": "spacing-count-and-toggle", "palette": "palette-count-and-toggle"}
 CONTRACT_PHASES = {
     "counter-two-activations": 3,
     "card-counter-two-activations": 3,
     "spacing-count-and-toggle": 5,
+    "palette-count-and-toggle": 6,
     "counter-disabled-loading": 4,
     "button-interrupted-loading": 6,
     "button-interrupted-disabled": 6,
@@ -44,7 +45,7 @@ COMMON_PATHS = ("ui/core", "ui/runtime", "ui/theme", "examples/shared_counter", 
 BOUND_PATHS = (*COMMON_PATHS, "native/ui", "native/examples/shared_counter",
                "native/examples/shared_counter_host", "tests/shared-ui", "tests/native-ui/drive_native_ui.py",
                "styles/shared-ui.css", "fixtures/shared-ui", "tools/theme_tokens", "scripts/generate-shared-theme.mjs",
-               "docs/shared-card.md", "docs/shared-stack-spacing.md")
+               "docs/shared-card.md", "docs/shared-stack-spacing.md", "docs/shared-button-palettes.md")
 
 THEME_SLOTS = {"normal_border", "focused_border", "disabled_border", "normal_fill", "hovered_fill",
                "pressed_fill", "loading_fill", "disabled_fill", "enabled_foreground", "disabled_foreground"}
@@ -112,6 +113,21 @@ def _load_legacy() -> Any:
 
 # The imported module has a __main__ guard. No process, GUI, input, or build runs
 # during either import. In particular, no macOS input helper is ever called here.
+def _load_palette() -> Any:
+    # The provenance script loads this driver by path from another directory.
+    # Resolve the sibling explicitly rather than relying on sys.path or cwd.
+    spec = importlib.util.spec_from_file_location("_yami_palette_oracle", Path(__file__).with_name("palette_oracle.py"))
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load palette oracle")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+palette = _load_palette()
+validate_palette_marker = palette.validate_palette_marker
+validate_palette_sequence = palette.validate_palette_sequence
+inspect_palette_pixels = palette.inspect_palette_pixels
 native = _load_legacy()
 E2EError = native.E2EError
 
@@ -189,7 +205,7 @@ def validate_marker(marker: dict[str, Any], fixture: str, phase: int,
         raise E2EError("settled phase cannot have a pressed button")
     if type(marker.get("releases")) is not int or marker["releases"] != phase:
         raise E2EError("phase must follow exactly one actual primary release per click")
-    if marker.get("actions") != ["Activate"] * (phase if fixture == "spacing" else count):
+    if marker.get("actions") != ["Activate"] * (phase if fixture in ("spacing", "palette") else count):
         raise E2EError("accepted action trace disagrees with the contract count")
     scale = _number(marker.get("scale"), "scale", positive=True)
     root = _bounds(marker.get("root"), "root")
@@ -203,13 +219,15 @@ def validate_marker(marker: dict[str, Any], fixture: str, phase: int,
         raise E2EError("marker must contain canonical scene object and items")
     texts = [item.get("text") for item in scene["items"] if isinstance(item, dict)
              and item.get("kind") in ("text", "text_run")]
-    labels = (f"Count: {count}", "Increment", "Shared <stack>", "Spacing", "Fixed Card") if fixture == "spacing" else (f"Count: {count}", "Increment", "Shared counter")
+    labels = (f"Count: {count}", "Increment", "Shared <stack>", "Spacing", "Fixed Card") if fixture == "spacing" else ((f"Count: {count}", "Increment", "Shared palette", "Palette") if fixture == "palette" else (f"Count: {count}", "Increment", "Shared counter"))
     if any(texts.count(text) != 1 for text in labels):
         raise E2EError("canonical scene is missing or duplicates shared counter text")
     if _bounds(scene.get("viewport"), "scene.viewport") != root:
         raise E2EError("scene viewport disagrees with root bounds")
     if _number(scene.get("scale"), "scene.scale", positive=True) != scale:
         raise E2EError("scene scale disagrees with native scale")
+    if fixture == "palette":
+        validate_palette_marker(marker, phase)
     if fixture == "spacing":
         validate_spacing_geometry(marker, phase)
     if fixture == "card":
@@ -403,7 +421,8 @@ def inspect_frame(marker: dict[str, Any], directory: Path) -> tuple[Any, dict[st
         toggle_pixels = native._foreground_count(image, _bounds(marker["spacing"]["toggleLabel"], "toggleLabel"), scale)
         if toggle_pixels <= 0:
             raise E2EError("spacing toggle label has no contrasting pixels")
-    return image, {"toggleLabelPixels": toggle_pixels, "cardPixels": card_pixels, "path": str(path), "sha256": digest(path), "width": image.width,
+    palette_pixels = inspect_palette_pixels(image, marker) if marker["fixture"] == "palette" else None
+    return image, {"palettePixels": palette_pixels, "toggleLabelPixels": toggle_pixels, "cardPixels": card_pixels, "path": str(path), "sha256": digest(path), "width": image.width,
                    "height": image.height, "scale": scale, "counterPixels": counter_pixels,
                    "buttonLabelPixels": label_pixels, "buttonPixels": button_pixels}
 
@@ -411,6 +430,8 @@ def inspect_frame(marker: dict[str, Any], directory: Path) -> tuple[Any, dict[st
 def inspect_frame_sequence(markers: list[dict[str, Any]], directory: Path) -> dict[str, Any]:
     images, reports, paths = [], [], set()
     spacing = bool(markers) and markers[0]["fixture"] == "spacing"
+    if markers and markers[0]["fixture"] == "palette":
+        validate_palette_sequence(markers)
     if spacing:
         validate_spacing_sequence(markers)
     for marker in markers:
@@ -797,6 +818,8 @@ def run_fixture(args: argparse.Namespace, fixture: str, counts: list[int], execu
         for phase in range(1, len(counts)):
             previous = trace["presented"][-1]
             target = previous
+            if fixture == "palette" and phase in (2, 4, 5):
+                target = previous | {"button": previous["palette"]["toggle"]}
             if fixture == "spacing" and SPACING_ACTIONS[phase - 1] == "spacing-toggle":
                 target = previous | {"button": previous["spacing"]["toggle"]}
             native._send_click(args.platform, target, click_args)

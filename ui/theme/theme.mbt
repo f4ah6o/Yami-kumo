@@ -61,30 +61,32 @@ pub fn Theme::name(self : Theme) -> String {
 ///|
 pub fn Theme::button_colors(self : Theme) -> ButtonColors {
   match self {
-    Light => {
-      normal_border: rgb(100, 116, 139),
-      focused_border: rgb(29, 78, 216),
-      disabled_border: rgb(148, 163, 184),
-      normal_fill: rgb(255, 255, 255),
-      hovered_fill: rgb(241, 245, 249),
-      pressed_fill: rgb(226, 232, 240),
-      loading_fill: rgb(219, 234, 254),
-      disabled_fill: rgb(241, 245, 249),
-      enabled_foreground: rgb(15, 23, 42),
-      disabled_foreground: rgb(100, 116, 139),
-    }
-    Dark => {
-      normal_border: rgb(148, 163, 184),
-      focused_border: rgb(96, 165, 250),
-      disabled_border: rgb(71, 85, 105),
-      normal_fill: rgb(30, 41, 59),
-      hovered_fill: rgb(51, 65, 85),
-      pressed_fill: rgb(71, 85, 105),
-      loading_fill: rgb(30, 58, 138),
-      disabled_fill: rgb(15, 23, 42),
-      enabled_foreground: rgb(248, 250, 252),
-      disabled_foreground: rgb(148, 163, 184),
-    }
+    Light =>
+      {
+        normal_border: rgb(130, 146, 164),
+        focused_border: rgb(35, 110, 210),
+        disabled_border: rgb(184, 190, 198),
+        normal_fill: rgb(245, 248, 252),
+        hovered_fill: rgb(226, 237, 250),
+        pressed_fill: rgb(206, 224, 245),
+        loading_fill: rgb(232, 237, 244),
+        disabled_fill: rgb(238, 240, 243),
+        enabled_foreground: rgb(25, 43, 62),
+        disabled_foreground: rgb(120, 128, 139),
+      }
+    Dark =>
+      {
+        normal_border: rgb(102, 126, 150),
+        focused_border: rgb(98, 170, 255),
+        disabled_border: rgb(100, 106, 114),
+        normal_fill: rgb(42, 71, 101),
+        hovered_fill: rgb(48, 91, 137),
+        pressed_fill: rgb(35, 77, 119),
+        loading_fill: rgb(55, 70, 88),
+        disabled_fill: rgb(47, 52, 60),
+        enabled_foreground: rgb(242, 246, 250),
+        disabled_foreground: rgb(166, 171, 178),
+      }
   }
 }
 

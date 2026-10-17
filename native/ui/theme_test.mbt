@@ -47,6 +47,32 @@ fn button_theme_slots(theme : @theme.Theme) -> Array[@theme.Color] {
 }
 
 ///|
+fn theme_override_view(palette : @view.ButtonPaletteToken?) -> @view.View {
+  let explicit = @view.NodeKey::new("explicit")
+  @view.row(@view.NodeKey::new("theme-root"), [
+    @view.button(@view.NodeKey::new("inherited"), "Inherited"),
+    match palette {
+      Some(token) => @view.button_with_palette(explicit, "Explicit", token)
+      None => @view.button(explicit, "Explicit")
+    },
+  ])
+}
+
+///|
+fn assert_button_theme_colors(
+  frame : @ui.Frame,
+  key : @view.NodeKey,
+  border : @theme.Color,
+  fill : @theme.Color,
+  foreground : @theme.Color,
+) -> Unit raise {
+  let id = frame.binding_id(key).unwrap()
+  assert_theme_color(theme_item_color(frame, id + 1UL), border)
+  assert_theme_color(theme_item_color(frame, id + 2UL), fill)
+  assert_theme_color(theme_item_color(frame, id + 3UL), foreground)
+}
+
+///|
 test "both themes cover all 32 overlapping input and gate requests with fixed role expectations" {
   // A disabled/loading transition clears in-flight input in GPUI. Keeping the
   // expected results explicit prevents the test from copying paint branches.
@@ -330,9 +356,19 @@ test "unset theme restores the exact legacy scene and setters reject reentrancy 
     assert_true(mounted.set_theme(Some(theme)))
     let themed = render(mounted)
     assert_eq(themed.theme(), Some(theme))
-    assert_true(
-      themed.snapshot().canonical_json() != legacy.snapshot().canonical_json(),
-    )
+    assert_eq(themed.binding_id(key()), legacy.binding_id(key()))
+    match theme {
+      @theme.Light =>
+        assert_true(
+          themed.snapshot().canonical_json() !=
+          legacy.snapshot().canonical_json(),
+        )
+      @theme.Dark =>
+        assert_eq(
+          themed.snapshot().canonical_json(),
+          legacy.snapshot().canonical_json(),
+        )
+    }
   }
   assert_true(mounted.set_theme(None))
   let restored = render(mounted)
@@ -355,4 +391,113 @@ test "unset theme restores the exact legacy scene and setters reject reentrancy 
   assert_true(!mounted.set_theme(Some(@theme.Light)))
   assert_eq(mounted.theme(), None)
   assert_true(mounted.frame() is None)
+}
+
+///|
+test "per-Button palette overrides root theme and removing it resumes fallback without replacing held input" {
+  let mounted = @ui.Mounted::new(
+    @platform.WindowId::new(1L),
+    theme=Some(@theme.Dark),
+  )
+  let explicit = @view.NodeKey::new("explicit")
+  let inherited = @view.NodeKey::new("inherited")
+  let light = @theme.Light.button_colors()
+  let dark = @theme.Dark.button_colors()
+  let view = theme_override_view(Some(@view.Light))
+  let first = render(mounted, view~)
+  let callback = mounted.callback(explicit).unwrap()
+  assert_eq(first.theme(), Some(@theme.Dark))
+  assert_eq(first.button_palette(explicit), Some(@view.Light))
+  assert_eq(first.button_palette(inherited), None)
+  assert_button_theme_colors(
+    first,
+    explicit,
+    light.normal_border,
+    light.normal_fill,
+    light.enabled_foreground,
+  )
+  assert_button_theme_colors(
+    first,
+    inherited,
+    dark.normal_border,
+    dark.normal_fill,
+    dark.enabled_foreground,
+  )
+  assert_true(mounted.focus(explicit))
+  ignore(mounted.handle_event(event(1L, key_down(@primitives.Space))).unwrap())
+  let held = render(mounted, view~)
+  let explicit_id = first.binding_id(explicit).unwrap()
+  assert_true(held.pressed(explicit))
+  assert_true(held.focused(explicit))
+  assert_true(mounted.set_theme(Some(@theme.Light)))
+  let light_root = render(mounted, view~)
+  assert_eq(light_root.theme(), Some(@theme.Light))
+  assert_button_theme_colors(
+    light_root,
+    inherited,
+    light.normal_border,
+    light.normal_fill,
+    light.enabled_foreground,
+  )
+  for offset in [1UL, 2UL, 3UL] {
+    assert_true(
+      theme_item_color(light_root, explicit_id + offset) ==
+      theme_item_color(held, explicit_id + offset),
+    )
+  }
+  assert_true(mounted.set_theme(None))
+  let no_root_theme = render(mounted, view~)
+  assert_eq(no_root_theme.theme(), None)
+  assert_eq(no_root_theme.button_palette(explicit), Some(@view.Light))
+  assert_button_theme_colors(
+    no_root_theme,
+    explicit,
+    light.focused_border,
+    light.pressed_fill,
+    light.enabled_foreground,
+  )
+  assert_button_theme_colors(
+    no_root_theme,
+    inherited,
+    dark.normal_border,
+    dark.normal_fill,
+    dark.enabled_foreground,
+  )
+  assert_true(mounted.set_theme(Some(@theme.Dark)))
+  let removed = render(mounted, view=theme_override_view(None))
+  assert_eq(removed.theme(), Some(@theme.Dark))
+  assert_eq(removed.button_palette(explicit), None)
+  assert_button_theme_colors(
+    removed,
+    explicit,
+    dark.focused_border,
+    dark.pressed_fill,
+    dark.enabled_foreground,
+  )
+  for frame in [light_root, no_root_theme, removed] {
+    assert_eq(frame.binding_id(explicit), first.binding_id(explicit))
+    assert_eq(frame.binding_id(inherited), first.binding_id(inherited))
+    assert_true(frame.bounds(explicit) == first.bounds(explicit))
+    assert_true(frame.label_bounds(explicit) == first.label_bounds(explicit))
+    assert_true(frame.focused(explicit))
+    assert_true(frame.pressed(explicit))
+    assert_true(frame.enabled(explicit))
+    assert_true(!frame.loading(explicit))
+  }
+  assert_true(mounted.set_theme(None))
+  let legacy = render(mounted, view=theme_override_view(None))
+  assert_eq(legacy.theme(), None)
+  assert_eq(legacy.button_palette(explicit), None)
+  assert_eq(
+    legacy.snapshot().canonical_json(),
+    removed.snapshot().canonical_json(),
+  )
+  assert_eq(mounted.last_dispatched_input_sequence(), 1L)
+  assert_true(mounted.activate(callback))
+  assert_eq(mounted.next_action(), Some(@view.Activate(explicit)))
+  assert_eq(mounted.next_action(), None)
+  ignore(mounted.handle_event(event(2L, key_up(@primitives.Space))).unwrap())
+  assert_eq(mounted.last_dispatched_input_sequence(), 2L)
+  assert_eq(mounted.next_action(), Some(@view.Activate(explicit)))
+  assert_eq(mounted.next_action(), None)
 }

@@ -1,0 +1,47 @@
+{
+  "scope": "opt-in per-Button opaque paint only",
+  "base": "340a321afa9fb2f440879c4a242a4359f9dd7971",
+  "roles": [
+    "normal_border",
+    "focused_border",
+    "disabled_border",
+    "normal_fill",
+    "hovered_fill",
+    "pressed_fill",
+    "loading_fill",
+    "disabled_fill",
+    "enabled_foreground",
+    "disabled_foreground"
+  ],
+  "Light": [
+    [130, 146, 164],
+    [35, 110, 210],
+    [184, 190, 198],
+    [245, 248, 252],
+    [226, 237, 250],
+    [206, 224, 245],
+    [232, 237, 244],
+    [238, 240, 243],
+    [25, 43, 62],
+    [120, 128, 139]
+  ],
+  "Dark": [
+    [102, 126, 150],
+    [98, 170, 255],
+    [100, 106, 114],
+    [42, 71, 101],
+    [48, 91, 137],
+    [35, 77, 119],
+    [55, 70, 88],
+    [47, 52, 60],
+    [242, 246, 250],
+    [166, 171, 178]
+  ],
+  "alpha": 255,
+  "API": "ButtonPaletteToken Light/Dark, ButtonPaintRole, opaque ButtonPaletteColor, button_with_palette, View.button_palette",
+  "model": "PaletteModel composes one unchanged SpacingModel",
+  "fixture": "counts [0,1,1,2,2,2]; increment,Light,increment,Dark,None",
+  "geometry": "unchanged; native focus inset and browser focus-visible profiles distinct",
+  "actualEvidence": "same accepted frame state snapshot and canonical scene bound to completed-frame capture; no RGB state inference",
+  "legacy": "None DOM/native unchanged; no pin/compiler/dependency/Model/SpacingModel changes"
+}
