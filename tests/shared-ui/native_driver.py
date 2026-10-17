@@ -87,7 +87,10 @@ THEME_PHASES = [dict(name=name, theme=theme, mode=mode, hovered=hovered, focused
     ("dark-pointer-disabled-cancel", "dark", "disabled", False, False, False, 2, ["key-d"]),
     ("light-pointer-disabled-cancel", "light", "disabled", False, False, False, 2, ["key-t"]),
     ("light-pointer-gate-restored", "light", "normal", False, False, False, 2, ["key-n"]),
-    ("light-stale-pointer-release", "light", "normal", False, False, False, 2, ["pointer-up"]),
+    # Windows can refresh hover when capture is released; an explicit exit and
+    # re-entry gives both hosts the same observed hover while count stays fixed.
+    ("light-stale-pointer-release", "light", "normal", True, False, False, 2,
+     ["pointer-up", "move-outside", "move-inside"]),
     ("light-fresh-activation", "light", "normal", True, True, False, 3, ["move-inside", "pointer-down", "pointer-up"]),
     ("dark-retained-focus-hover", "dark", "normal", True, True, False, 3, ["key-t"]),
     ("dark-pointer-before-outside", "dark", "normal", True, True, True, 3, ["pointer-down"]),

@@ -824,7 +824,9 @@ class ThemeOracleTests(unittest.TestCase):
 
     def test_lost_held_input_focus_or_cancelled_release_activation_is_rejected(self):
         for phase, updates in ((8, {"pressed": False}), (11, {"focused": False}), (25, {"count": 3}),
-                               (30, {"actionKeys": ["increment"] * 3}), (34, {"pressed": True}), (0, {"count": False})):
+                               (30, {"actionKeys": ["increment"] * 3}), (30, {"hovered": False}),
+                               (30, {"focused": True}), (30, {"pressed": True}),
+                               (34, {"pressed": True}), (0, {"count": False})):
             with self.subTest(phase=phase), self.assertRaises(driver.E2EError):
                 driver.validate_theme_marker(theme_marker(phase) | updates, phase, self.contract)
 
