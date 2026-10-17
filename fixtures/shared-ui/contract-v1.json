@@ -29,6 +29,11 @@
       "expected": {
         "counts": [0, 0, 0, 1, 1, 2]
       }
+    },
+    {
+      "id": "card-counter-two-activations",
+      "description": "Fixed noninteractive Card around the unchanged common counter: measured insets and gaps, real nested Button actions and focus. Geometry is retained separately from the domain counts.",
+      "expected": { "counts": [0, 1, 2] }
     }
   ]
 }

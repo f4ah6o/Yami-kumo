@@ -295,3 +295,42 @@ test "measurement callback cannot reenter model drain and disposal prevents publ
   assert_true(app.count() is Err(_))
   assert_eq(app.actions().length(), 1)
 }
+
+///|
+test "Card bootstrap keeps one model and decorated view through actual adapter updates" {
+  let app = @shared_counter.NativeCounter::new(
+    @platform.WindowId::new(1L),
+    card=true,
+  ).unwrap()
+  let trace = []
+  for index in 0..<3 {
+    let frame = render(app)
+    trace.push(frame.count())
+    assert_eq(frame.heading_bounds().left() - frame.card_bounds().left(), 17.0)
+    assert_eq(frame.heading_bounds().top() - frame.card_bounds().top(), 17.0)
+    assert_eq(
+      frame.button_bounds().top() - frame.counter_bounds().bottom(),
+      12.0,
+    )
+    assert_eq(
+      frame.card_bounds().bottom() - frame.button_bounds().bottom(),
+      17.0,
+    )
+    if index > 0 {
+      assert_true(frame.button_focused())
+    }
+    if index < 2 {
+      let sequence = index.to_int64() * 2L + 1L
+      ignore(app.handle_event(event(sequence, down(frame.button_bounds()))))
+      ignore(app.handle_event(event(sequence + 1L, up(frame.button_bounds()))))
+      assert_true(drain(app))
+    }
+  }
+  assert_eq(trace, [0, 1, 2])
+  app.set_mode(false, true, 640.0, 480.0, 1.0, measure).unwrap()
+  let frame = render(app)
+  assert_true(frame.button_loading())
+  assert_eq(frame.heading_bounds().left() - frame.card_bounds().left(), 17.0)
+  assert_eq(app.count().unwrap(), 2)
+  app.dispose()
+}

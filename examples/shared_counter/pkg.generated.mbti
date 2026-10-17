@@ -14,6 +14,7 @@ import {
 pub struct Model {
   // private fields
 } derive(Eq, @debug.Debug)
+pub fn Model::card_view(Self) -> @core.View
 pub fn Model::equal(Self, Self) -> Bool
 pub fn Model::new() -> Self
 pub fn Model::not_equal(Self, Self) -> Bool

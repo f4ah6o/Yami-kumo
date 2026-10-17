@@ -29,11 +29,14 @@ fn Counter::test_view(self : Counter, view : @core.View) -> @core.View {
   }
   match view.kind() {
     Text | Button => view
-    Column =>
-      @core.column(
-        view.key(),
-        view.children().map(fn(child) { self.test_view(child) }),
-      )
+    Column => {
+      let children = view.children().map(fn(child) { self.test_view(child) })
+      if view.is_card() {
+        @core.card(view.key(), children)
+      } else {
+        @core.column(view.key(), children)
+      }
+    }
     Row =>
       @core.row(
         view.key(),
@@ -44,7 +47,15 @@ fn Counter::test_view(self : Counter, view : @core.View) -> @core.View {
 
 ///|
 fn Counter::view(self : Counter) -> @core.View {
-  let view = self.test_view(self.model.view())
+  let common = if self.mode == "card" || self.mode == "nested-card" {
+    self.model.card_view()
+  } else {
+    self.model.view()
+  }
+  let view = self.test_view(common)
+  if self.mode == "nested-card" {
+    return @core.card(@core.NodeKey::new("outer-card"), [view])
+  }
   if self.mode == "nested-a" {
     @core.column(@core.NodeKey::new("ancestor-a"), [
       @core.column(@core.NodeKey::new("ancestor-b"), [view]),

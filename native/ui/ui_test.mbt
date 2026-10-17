@@ -717,3 +717,68 @@ test "removed and retyped held buttons cannot activate a freshly focused replace
     mounted.dispose()
   }
 }
+
+///|
+test "Card insets gaps paint identity and noninteractive nesting" {
+  let key = @view.NodeKey::new("card")
+  let child = @view.NodeKey::new("child")
+  let label = @view.NodeKey::new("label")
+  let children = [@view.text(label, "<Card & text>"), @view.button(child, "Go")]
+  let mount = @ui.Mounted::new(@platform.WindowId::new(1L))
+  let frame = mount
+    .commit(@view.card(key, children), 800.0, 600.0, 1.0, measure)
+    .unwrap()
+  let outer = frame.bounds(key).unwrap()
+  let first = frame.bounds(label).unwrap()
+  let last = frame.bounds(child).unwrap()
+  assert_eq(first.left() - outer.left(), 17.0)
+  assert_eq(first.top() - outer.top(), 17.0)
+  assert_eq(outer.right() - first.right(), 17.0)
+  assert_eq(outer.bottom() - last.bottom(), 17.0)
+  assert_eq(last.top() - first.bottom(), 12.0)
+  let items = frame.snapshot().items()
+  match items[1] {
+    @scene.QuadItem(bounds~, color~, ..) => {
+      assert_true(bounds == outer)
+      assert_eq(color.red(), 166)
+      assert_eq(color.green(), 171)
+      assert_eq(color.blue(), 178)
+    }
+    _ => abort("Card outer border quad missing")
+  }
+  match items[2] {
+    @scene.QuadItem(bounds~, color~, ..) => {
+      assert_eq(bounds.left() - outer.left(), 1.0)
+      assert_eq(bounds.top() - outer.top(), 1.0)
+      assert_eq(outer.right() - bounds.right(), 1.0)
+      assert_eq(outer.bottom() - bounds.bottom(), 1.0)
+      assert_eq(color.red(), 245)
+      assert_eq(color.green(), 247)
+      assert_eq(color.blue(), 250)
+    }
+    _ => abort("Card interior quad missing")
+  }
+
+  assert_true(!mount.focus(key))
+  assert_true(mount.focus(child))
+  assert_true(!mount.activate(mount.callback(key).unwrap()))
+  ignore(mount.handle_event(event(1L, key_down(@primitives.Space))))
+  let same = mount
+    .commit(@view.card(key, children), 800.0, 600.0, 1.0, measure)
+    .unwrap()
+  assert_true(same.focused(child))
+  assert_true(same.pressed(child))
+  ignore(mount.handle_event(event(2L, key_up(@primitives.Space))))
+  assert_eq(mount.next_action(), Some(@view.Activate(child)))
+  let nested = @view.card(@view.NodeKey::new("outer"), [
+    @view.card(key, children),
+  ])
+  let frame = mount.commit(nested, 800.0, 600.0, 1.0, measure).unwrap()
+  assert_eq(
+    frame.bounds(key).unwrap().left() -
+    frame.bounds(@view.NodeKey::new("outer")).unwrap().left(),
+    17.0,
+  )
+  assert_true(frame.focused(child))
+  assert_true(frame.snapshot().items().length() > 4)
+}

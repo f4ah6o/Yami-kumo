@@ -8,6 +8,8 @@ import {
 // Values
 pub fn button(NodeKey, String, disabled? : Bool, loading? : Bool) -> View
 
+pub fn card(NodeKey, Array[View]) -> View
+
 pub fn column(NodeKey, Array[View]) -> View
 
 pub fn row(NodeKey, Array[View]) -> View
@@ -58,6 +60,7 @@ pub struct View {
 pub fn View::children(Self) -> Array[Self]
 pub fn View::disabled(Self) -> Bool
 pub fn View::equal(Self, Self) -> Bool
+pub fn View::is_card(Self) -> Bool
 pub fn View::key(Self) -> NodeKey
 pub fn View::kind(Self) -> NodeKind
 pub fn View::label(Self) -> String

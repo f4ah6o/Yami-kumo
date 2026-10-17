@@ -37,3 +37,30 @@ test "constructors preserve semantic kind and literal label" {
   assert_eq(@core.row(key, []).kind(), @core.Row)
   assert_eq(@core.column(key, []).kind(), @core.Column)
 }
+
+///|
+test "Card is an additive noninteractive immutable Column decoration" {
+  let key = @core.NodeKey::new("card")
+  let literal = @core.text(@core.NodeKey::new("literal"), "<b>& literal")
+  let children = [literal]
+  let card = @core.card(key, children)
+  children.clear()
+  assert_eq(card.kind(), @core.Column)
+  assert_true(card.is_card())
+  assert_true(!@core.column(key, [literal]).is_card())
+  assert_eq(card.children(), [literal])
+  card.children().clear()
+  assert_eq(card.children()[0].label(), "<b>& literal")
+  assert_eq(card.label(), "")
+  assert_true(!card.disabled() && !card.loading())
+  // Deliberately exhaustive: existing consumers must remain source-compatible.
+  assert_eq(
+    match card.kind() {
+      @core.Text => 0
+      @core.Button => 1
+      @core.Column => 2
+      @core.Row => 3
+    },
+    2,
+  )
+}

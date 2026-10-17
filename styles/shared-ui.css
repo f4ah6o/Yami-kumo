@@ -1,4 +1,4 @@
-/* Optional layout-only styles for the additive shared UI source-workspace API. */
+/* Explicit opt-in shared UI styles; required for the fixed Card geometry. */
 .yk-ui-column,
 .yk-ui-row {
   display: flex;
@@ -10,4 +10,14 @@
 
 .yk-ui-row {
   flex-direction: row;
+}
+
+/* Fixed Card contract only. Existing Row/Column spacing is unchanged. */
+.yk-ui-card {
+  box-sizing: border-box;
+  border: 1px solid rgb(166, 171, 178);
+  border-radius: 0;
+  padding: 16px;
+  gap: 12px;
+  background: rgb(245, 247, 250);
 }

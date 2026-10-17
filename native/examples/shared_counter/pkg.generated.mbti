@@ -25,8 +25,10 @@ pub fn CounterFrame::button_label_bounds(Self) -> @primitives.Rect
 pub fn CounterFrame::button_loading(Self) -> Bool
 pub fn CounterFrame::button_pressed(Self) -> Bool
 pub fn CounterFrame::canonical_scene(Self) -> String
+pub fn CounterFrame::card_bounds(Self) -> @primitives.Rect
 pub fn CounterFrame::count(Self) -> Int
 pub fn CounterFrame::counter_bounds(Self) -> @primitives.Rect
+pub fn CounterFrame::heading_bounds(Self) -> @primitives.Rect
 pub fn CounterFrame::revision(Self) -> UInt64
 pub fn CounterFrame::root_bounds(Self) -> @primitives.Rect
 pub fn CounterFrame::snapshot(Self) -> @scene.SceneSnapshot
@@ -41,7 +43,7 @@ pub fn NativeCounter::drain_one(Self, Double, Double, Double, (String, Double) -
 pub fn NativeCounter::handle_event(Self, @platform.Event) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn NativeCounter::invalidate_layout(Self) -> Unit
 pub fn NativeCounter::model_revision(Self) -> Result[UInt64, @diagnostics.FrameworkError]
-pub fn NativeCounter::new(@platform.WindowId, disabled? : Bool, loading? : Bool) -> Result[Self, @diagnostics.FrameworkError]
+pub fn NativeCounter::new(@platform.WindowId, card? : Bool, disabled? : Bool, loading? : Bool) -> Result[Self, @diagnostics.FrameworkError]
 pub fn NativeCounter::render(Self, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[CounterFrame, @diagnostics.FrameworkError]
 pub fn NativeCounter::set_mode(Self, Bool, Bool, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Unit, @diagnostics.FrameworkError]
 
