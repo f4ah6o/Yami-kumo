@@ -222,3 +222,8 @@ consumers. This does not introduce a new native renderer or qualify the full
 four-platform roadmap, IME, external accessibility, or registry distribution.
 Existing HTML, native components and npm preview remain separate supported
 entrypoints.
+
+The [shared Button theme slice](docs/shared-button-theme.md) adds opt-in
+light/dark semantic colors from `ui/theme`, generated scoped CSS, and GPUI
+paint palettes. Theme switching retains the existing keyed Button and input
+controller. AppShell and general layout remain separate roadmap steps.

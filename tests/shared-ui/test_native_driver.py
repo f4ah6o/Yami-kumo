@@ -581,6 +581,8 @@ class SourceBindingTests(unittest.TestCase):
                                ("fixtures/shared-ui/contract-v1.json", "contract"),
                                ("ui/core/view.mbt", "common view"),
                                ("ui/runtime/runtime.mbt", "common runtime"),
+                               ("ui/theme/theme.mbt", "semantic theme"),
+                               ("examples/shared_button_theme/model.mbt", "common theme fixture"),
                                ("examples/shared_counter/counter.mbt", "common model")):
             path = self.root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -600,7 +602,7 @@ class SourceBindingTests(unittest.TestCase):
         raise AssertionError(args)
 
     def test_spacing_sources_styles_and_contract_doc_are_provenance_bound(self):
-        for path in ("ui/core", "ui/runtime", "examples/shared_counter", "styles/shared-ui.css",
+        for path in ("ui/core", "ui/runtime", "ui/theme", "examples/shared_counter", "examples/shared_button_theme", "styles/shared-ui.css",
                      "tests/shared-ui", "fixtures/shared-ui", "docs/shared-card.md", "docs/shared-stack-spacing.md"):
             self.assertIn(path, driver.BOUND_PATHS)
 
@@ -741,6 +743,163 @@ class StreamTests(unittest.TestCase):
         output._line.return_value = "YAMI_NATIVE_UI_PRESENTED not-json\n"
         with self.assertRaisesRegex(driver.E2EError, "malformed"):
             driver.MarkerStream(output).next(1)
+
+
+def theme_marker(phase=0):
+    expected = driver.THEME_PHASES[phase]
+    value = {key: expected[key] for key in ("theme", "mode", "hovered", "focused", "pressed", "count")}
+    value.update({"fixture": "theme", "phase": phase, "value": expected["count"],
+                  "enabled": expected["mode"] not in ("disabled", "disabled-loading"),
+                  "loading": expected["mode"] in ("loading", "disabled-loading"),
+                  "actionKeys": ["increment"] * expected["count"], "buttonId": 10, "toggleId": 20,
+                  "revision": phase + 1, "inputSequence": phase * 4, "windowId": 1, "title": "theme-test-window",
+                  "root": {"x": 0, "y": 0, "width": 160, "height": 140},
+                  "button": {"x": 20, "y": 40, "width": 110, "height": 28},
+                  "buttonLabel": {"x": 36, "y": 48, "width": 80, "height": 12},
+                  "counter": {"x": 20, "y": 20, "width": 90, "height": 14},
+                  "heading": {"x": 20, "y": 4, "width": 110, "height": 14},
+                  "toggle": {"x": 20, "y": 80, "width": 110, "height": 28},
+                  "toggleLabel": {"x": 36, "y": 88, "width": 80, "height": 12}, "scale": 1.0,
+                  "frame": {"path": f"frame-{phase}.ppm", "width": 160, "height": 140, "scale": 1.0}})
+    colors = driver.theme_colors(value, driver.load_theme_contract())
+    inset = 2 if value["focused"] else 1
+    def color(rgb):
+        return dict(zip(("red", "green", "blue", "alpha"), [*rgb, 255]))
+    value["scene"] = {"viewport": value["root"].copy(), "scale": 1.0, "items": [
+        {"id": 2, "kind": "text", "text": "Shared Button theme"},
+        {"id": 3, "kind": "text", "text": f"Count: {value['count']}"},
+        {"id": 11, "kind": "quad", "bounds": value["button"].copy(), "color": color(colors["border"])},
+        {"id": 12, "kind": "quad", "bounds": {"x": 20 + inset, "y": 40 + inset,
+                                                "width": 110 - 2 * inset, "height": 28 - 2 * inset}, "color": color(colors["fill"])},
+        {"id": 13, "kind": "text_run", "text": "Increment", "color": color(colors["foreground"])},
+        {"id": 23, "kind": "text", "text": "Toggle theme"},
+    ]}
+    return value
+
+
+def write_theme_frame(directory, value, *, blank_label=False, counter_value=None):
+    width, height = 160, 140
+    pixels = bytearray(bytes((245, 247, 250)) * width * height)
+    def pixel(x, y, rgb):
+        offset = (y * width + x) * 3
+        pixels[offset:offset + 3] = bytes(rgb)
+    for item in value["scene"]["items"]:
+        if item["kind"] == "quad":
+            bounds = item["bounds"]
+            rgb = [item["color"][key] for key in ("red", "green", "blue")]
+            for y in range(bounds["y"], bounds["y"] + bounds["height"]):
+                for x in range(bounds["x"], bounds["x"] + bounds["width"]):
+                    pixel(x, y, rgb)
+    if not blank_label:
+        foreground = driver.theme_colors(value, driver.load_theme_contract())["foreground"]
+        for x in range(40, 55):
+            pixel(x, 53, foreground)
+    count = value["count"] if counter_value is None else counter_value
+    for x in range(22, 24 + count):
+        pixel(x, 25, (0, 0, 0))
+    path = directory / value["frame"]["path"]
+    path.write_bytes(f"P6\n{width} {height}\n255\n".encode() + pixels)
+
+
+class ThemeOracleTests(unittest.TestCase):
+    """Synthetic protocol/PPM negative controls are never host qualification."""
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.directory = Path(self.temporary.name)
+        self.contract = driver.load_theme_contract()
+
+    def sequence(self):
+        values = [theme_marker(phase) for phase in range(len(driver.THEME_PHASES))]
+        for value in values:
+            write_theme_frame(self.directory, value)
+        return values
+
+    def test_all_36_host_phases_have_exact_state_colors_identity_and_counter_pixels(self):
+        report = driver.inspect_theme_sequence(self.sequence(), self.directory, self.contract)
+        self.assertEqual(len(report["captures"]), 36)
+        self.assertEqual(report["acceptedActivations"], 4)
+        self.assertTrue(report["themeOnlyHeldInputPreserved"])
+        self.assertTrue(report["staleGateReleasesCancelled"])
+
+    def test_lost_held_input_focus_or_cancelled_release_activation_is_rejected(self):
+        for phase, updates in ((8, {"pressed": False}), (11, {"focused": False}), (25, {"count": 3}),
+                               (30, {"actionKeys": ["increment"] * 3}), (34, {"pressed": True}), (0, {"count": False})):
+            with self.subTest(phase=phase), self.assertRaises(driver.E2EError):
+                driver.validate_theme_marker(theme_marker(phase) | updates, phase, self.contract)
+
+    def test_missing_phase_or_reused_capture_cannot_qualify(self):
+        values = self.sequence()
+        with self.assertRaisesRegex(driver.E2EError, "every one"):
+            driver.inspect_theme_sequence(values[:-1], self.directory, self.contract)
+        values[2]["frame"]["path"] = values[1]["frame"]["path"]
+        with self.assertRaises(driver.E2EError):
+            driver.inspect_theme_sequence(values, self.directory, self.contract)
+
+    def test_scene_color_wrong_label_wrong_order_and_detached_paint_are_rejected(self):
+        for mutate in (lambda v: v["scene"]["items"][2]["color"].update(red=1),
+                       lambda v: v["scene"]["items"][4].update(text="wrong"),
+                       lambda v: v["scene"]["items"][3]["bounds"].update(width=99),
+                       lambda v: v["scene"]["items"].reverse(),
+                       lambda v: v["scene"]["items"].append({"id": 11, "kind": "quad"})):
+            value = theme_marker(8)
+            mutate(value)
+            with self.assertRaises(driver.E2EError):
+                driver.validate_theme_marker(value, 8, self.contract)
+
+    def test_correct_scene_with_stale_theme_pixels_or_blank_foreground_fails(self):
+        initial, dark = theme_marker(), theme_marker(1)
+        write_theme_frame(self.directory, initial)
+        (self.directory / dark["frame"]["path"]).write_bytes((self.directory / initial["frame"]["path"]).read_bytes())
+        with self.assertRaisesRegex(driver.E2EError, "actual border pixels"):
+            driver.inspect_theme_frame(dark, self.directory, self.contract)
+        write_theme_frame(self.directory, dark, blank_label=True)
+        with self.assertRaisesRegex(driver.E2EError, "semantic foreground"):
+            driver.inspect_theme_frame(dark, self.directory, self.contract)
+
+    def test_identity_replacement_with_consistent_scene_cannot_pass_sequence(self):
+        values = self.sequence()
+        values[5]["buttonId"] += 100
+        for item in values[5]["scene"]["items"][2:5]:
+            item["id"] += 100
+        driver.validate_theme_marker(values[5], 5, self.contract)
+        with self.assertRaisesRegex(driver.E2EError, "retained identity"):
+            driver.inspect_theme_sequence(values, self.directory, self.contract)
+
+    def test_replayed_event_sequence_and_gate_changed_counter_pixels_fail(self):
+        values = self.sequence()
+        values[25]["inputSequence"] = values[24]["inputSequence"]
+        with self.assertRaisesRegex(driver.E2EError, "advancing actual input"):
+            driver.inspect_theme_sequence(values, self.directory, self.contract)
+        values[25] = theme_marker(25)
+        write_theme_frame(self.directory, values[25], counter_value=3)
+        with self.assertRaisesRegex(driver.E2EError, "actual counter pixels"):
+            driver.inspect_theme_sequence(values, self.directory, self.contract)
+
+    def test_duplicate_state_missing_token_or_coerced_rgb_contract_is_rejected(self):
+        changes = [lambda c: c["states"].__setitem__(0, c["states"][1]),
+                   lambda c: c["themes"]["light"].pop("focused_border"),
+                   lambda c: c["themes"]["dark"].__setitem__("normal_border", [True, 0, 0])]
+        path = self.directory / "invalid-contract.json"
+        for change in changes:
+            contract = copy.deepcopy(self.contract)
+            change(contract)
+            path.write_text(json.dumps(contract))
+            with self.assertRaises(driver.E2EError):
+                driver.load_theme_contract(path)
+
+    def test_theme_linux_input_targets_owned_client_geometry_and_keeps_down_up_separate(self):
+        args = argparse.Namespace(linux_origin_x=3, linux_origin_y=5)
+        with patch.object(driver.subprocess, "run") as run:
+            for op in ("move-inside", "pointer-down", "key-t", "pointer-up"):
+                driver.send_theme_input("linux", op, theme_marker(), args)
+            self.assertEqual([call.args[0] for call in run.call_args_list], [
+                ["xdotool", "mousemove", "--sync", "78", "59"],
+                ["xdotool", "mousedown", "1"], ["xdotool", "key", "Prior"], ["xdotool", "mouseup", "1"]])
+        with patch.object(driver.subprocess, "run", side_effect=AssertionError("input forbidden")):
+            for platform, operation in (("macos", "pointer-down"), ("linux", "unknown")):
+                with self.assertRaises(driver.E2EError):
+                    driver.send_theme_input(platform, operation, theme_marker(), args)
 
 
 class LifecycleTests(unittest.TestCase):

@@ -16,3 +16,62 @@ test "presentation gate discards one obsolete completion and waits for new geome
 test "protocol JSON escaping preserves literals and control characters" {
   assert_eq(escape_json("a\"\\\n\t\u0001"), "a\\\"\\\\\\n\\t\\u0001")
 }
+
+///|
+test "theme fixture controls use native navigation key-down only" {
+  for
+    (key, command) in [
+      (@primitives.PageUp, "t"),
+      (@primitives.PageDown, "c"),
+      (@primitives.Home, "n"),
+      (@primitives.End, "d"),
+      (@primitives.ArrowUp, "l"),
+      (@primitives.ArrowDown, "b"),
+      (@primitives.ArrowLeft, "f"),
+    ] {
+    assert_eq(
+      theme_control_key(
+        @primitives.KeyPressed(
+          key~,
+          modifiers=@primitives.Modifiers::none(),
+          repeat=false,
+        ),
+      ),
+      Some(command),
+    )
+    assert_eq(
+      theme_control_key(
+        @primitives.KeyPressed(
+          key~,
+          modifiers=@primitives.Modifiers::none(),
+          repeat=true,
+        ),
+      ),
+      None,
+    )
+    assert_eq(
+      theme_control_key(
+        @primitives.KeyReleased(key~, modifiers=@primitives.Modifiers::none()),
+      ),
+      None,
+    )
+  }
+  for
+    key in [
+      @primitives.Space,
+      @primitives.Enter,
+      @primitives.Tab,
+      @primitives.Character("c"),
+    ] {
+    assert_eq(
+      theme_control_key(
+        @primitives.KeyPressed(
+          key~,
+          modifiers=@primitives.Modifiers::none(),
+          repeat=false,
+        ),
+      ),
+      None,
+    )
+  }
+}

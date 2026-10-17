@@ -32,8 +32,10 @@ jobs:
       - name: Check shared pure packages on every compiler target
         run: |
           moon check --target all --deny-warn
-          moon test ui/core ui/runtime examples/shared_counter --target all --deny-warn
-          moon test ui/core ui/runtime examples/shared_counter --target all --deny-warn --release
+          moon test ui/core ui/runtime ui/theme examples/shared_counter examples/shared_button_theme --target all --deny-warn
+          moon test ui/core ui/runtime ui/theme examples/shared_counter examples/shared_button_theme --target all --deny-warn --release
+      - name: Verify common Button theme tokens and generated scoped CSS
+        run: pnpm run check:shared-theme
       - name: Verify independent JS and native source consumers
         run: node scripts/check-shared-ui-consumers.mjs _build/shared-ui-consumers
       - name: Install the test browser

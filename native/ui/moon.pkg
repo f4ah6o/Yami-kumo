@@ -8,6 +8,7 @@ import {
   "f4ah6o/gpui/scene",
   "f4ah6o/yami_kumo/ui/core" @view,
   "f4ah6o/yami_kumo/ui/runtime",
+  "f4ah6o/yami_kumo/ui/theme",
   "f4ah6o/yami_kumo_native/components",
 }
 
@@ -20,4 +21,5 @@ import {
   "f4ah6o/gpui/text_layout",
   "f4ah6o/yami_kumo/examples/shared_counter" @model,
   "f4ah6o/yami_kumo/ui/core" @view,
+  "f4ah6o/yami_kumo/ui/theme",
 } for "test"

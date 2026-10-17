@@ -70,3 +70,63 @@
 .yk-ui-padding-24 {
   padding: 24px;
 }
+
+/* BEGIN GENERATED BUTTON THEME TOKENS */
+.yk-ui-root[data-yk-theme='light'] {
+  --yk-button-normal-border: rgb(100, 116, 139);
+  --yk-button-focused-border: rgb(29, 78, 216);
+  --yk-button-disabled-border: rgb(148, 163, 184);
+  --yk-button-normal-fill: rgb(255, 255, 255);
+  --yk-button-hovered-fill: rgb(241, 245, 249);
+  --yk-button-pressed-fill: rgb(226, 232, 240);
+  --yk-button-loading-fill: rgb(219, 234, 254);
+  --yk-button-disabled-fill: rgb(241, 245, 249);
+  --yk-button-enabled-foreground: rgb(15, 23, 42);
+  --yk-button-disabled-foreground: rgb(100, 116, 139);
+}
+
+.yk-ui-root[data-yk-theme='dark'] {
+  --yk-button-normal-border: rgb(148, 163, 184);
+  --yk-button-focused-border: rgb(96, 165, 250);
+  --yk-button-disabled-border: rgb(71, 85, 105);
+  --yk-button-normal-fill: rgb(30, 41, 59);
+  --yk-button-hovered-fill: rgb(51, 65, 85);
+  --yk-button-pressed-fill: rgb(71, 85, 105);
+  --yk-button-loading-fill: rgb(30, 58, 138);
+  --yk-button-disabled-fill: rgb(15, 23, 42);
+  --yk-button-enabled-foreground: rgb(248, 250, 252);
+  --yk-button-disabled-foreground: rgb(148, 163, 184);
+}
+/* END GENERATED BUTTON THEME TOKENS */
+
+/* Only explicit shared roots and their owned buttons consume theme colors. */
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark']) .yk-ui-button {
+  border-color: var(--yk-button-normal-border);
+  background-color: var(--yk-button-normal-fill);
+  color: var(--yk-button-enabled-foreground);
+}
+
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark']) .yk-ui-button:hover {
+  background-color: var(--yk-button-hovered-fill);
+}
+
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark']) .yk-ui-button:active {
+  background-color: var(--yk-button-pressed-fill);
+}
+
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark']) .yk-ui-button:focus {
+  border-color: var(--yk-button-focused-border);
+}
+
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark'])
+  .yk-ui-button[aria-busy='true'] {
+  background-color: var(--yk-button-loading-fill);
+}
+
+/* Gate precedence follows the existing GPUI paint contract; input stays native. */
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark'])
+  .yk-ui-button:disabled {
+  border-color: var(--yk-button-disabled-border);
+  background-color: var(--yk-button-disabled-fill);
+  color: var(--yk-button-disabled-foreground);
+}

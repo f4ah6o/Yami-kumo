@@ -9,6 +9,7 @@ import {
   "f4ah6o/gpui/text_layout",
   "f4ah6o/yami_kumo/ui/core",
   "f4ah6o/yami_kumo/ui/runtime",
+  "f4ah6o/yami_kumo/ui/theme",
 }
 
 // Values
@@ -26,11 +27,13 @@ pub struct Frame {
 pub fn Frame::binding_id(Self, @core.NodeKey) -> UInt64?
 pub fn Frame::bounds(Self, @core.NodeKey) -> @primitives.Rect?
 pub fn Frame::focused(Self, @core.NodeKey) -> Bool
+pub fn Frame::hovered(Self, @core.NodeKey) -> Bool
 pub fn Frame::label_bounds(Self, @core.NodeKey) -> @primitives.Rect?
 pub fn Frame::pressed(Self, @core.NodeKey) -> Bool
 pub fn Frame::revision(Self) -> UInt64
 pub fn Frame::root_bounds(Self) -> @primitives.Rect
 pub fn Frame::snapshot(Self) -> @scene.SceneSnapshot
+pub fn Frame::theme(Self) -> @theme.Theme?
 
 pub struct Mounted {
   // private fields
@@ -44,11 +47,13 @@ pub fn Mounted::frame(Self) -> Frame?
 pub fn Mounted::handle_event(Self, @platform.Event) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn Mounted::invalidate_layout(Self) -> Unit
 pub fn Mounted::is_disposed(Self) -> Bool
-pub fn Mounted::new(@platform.WindowId) -> Self
+pub fn Mounted::new(@platform.WindowId, theme? : @theme.Theme?) -> Self
 pub fn Mounted::next_action(Self) -> @core.SemanticAction?
 pub fn Mounted::next_focus_result(Self) -> @runtime.FocusResult?
 pub fn Mounted::publish(Self, Prepared) -> Result[Frame, @diagnostics.FrameworkError]
+pub fn Mounted::set_theme(Self, @theme.Theme?) -> Bool
 pub fn Mounted::stage(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Prepared, @diagnostics.FrameworkError]
+pub fn Mounted::theme(Self) -> @theme.Theme?
 pub fn Mounted::view(Self) -> @core.View?
 
 pub struct Prepared {

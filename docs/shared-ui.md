@@ -11,11 +11,15 @@ inherited from the legacy Kumo API and what remains a separate contract.
 - `ui/runtime`: root-wide key validation, opaque root/incarnation ownership,
   atomic commits, queued activation, per-button disabled/loading cancellation,
   observed focus results and idempotent disposal.
+- `ui/theme`: light/dark semantic Button colors shared by generated CSS and
+  GPUI paint palettes; see [shared-button-theme.md](shared-button-theme.md).
 - `examples/shared_counter`: one pure model/view/update, imported unchanged by
   standalone JS/native source consumers, the DOM bootstrap, and the App/Entity native bootstrap.
 - `ui/dom`: explicit mount into an empty element, keyed text spans and native buttons,
   keyed updates, root overlap rejection, retained focus and owned cleanup.
 - `styles/shared-ui.css`: scoped row/column rules and required fixed Card geometry, without Kumo.
+- `examples/shared_button_theme`: one immutable Button-theme fixture model,
+  imported unchanged by DOM and native host runners.
 - `native/ui`: explicit GPUI Text/Button/Column/Row adapter with private native IDs,
   common lifetime tokens, staged geometry/scene publication and one GPUI Button
   controller per live Button.
@@ -220,4 +224,6 @@ existing GPUI Canvas backend and legacy native Button controllers are unchanged.
 The additive closed-token Row/Column gap/padding API and shared two-button demo
 are specified in [shared-stack-spacing.md](shared-stack-spacing.md). Legacy
 constructors and fixed Card geometry remain unchanged. This does not qualify
-theme, AppShell, general layout or full YK-05.
+AppShell, general layout or full YK-05. The separate
+[Button theme slice](shared-button-theme.md) adds opt-in light/dark Button
+colors and verifies theme switching without replacing the existing controller.

@@ -89,6 +89,7 @@ pub fn run(
     Some("counter") => "counter"
     Some("card") => "card"
     Some("spacing") => "spacing"
+    Some("theme") => "theme"
     Some("disabled-loading") if e2e => "disabled-loading"
     _ => return Err(runner_error("invalid shared counter fixture"))
   }
@@ -120,6 +121,9 @@ pub fn run(
   let title = match @env.get_env_var("YAMI_NATIVE_UI_WINDOW_TITLE") {
     Some(value) if value.length() > 0 => value
     _ => "Yami-kumo Shared Counter"
+  }
+  if fixture == "theme" {
+    return run_theme(host, platform, measure, capture, e2e, directory, title)
   }
   let window = match host.create_window(title, 800.0, 600.0) {
     Err(error) => return Err(error)

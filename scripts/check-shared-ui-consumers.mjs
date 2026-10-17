@@ -34,7 +34,13 @@ if (process.argv[2]) {
 const temporary = mkdtempSync(join(os.tmpdir(), 'yami-shared-ui-consumers-'));
 const slash = (path) => path.split(sep).join('/');
 const hash = (data) => createHash('sha256').update(data).digest('hex');
-const packages = ['ui/core', 'ui/runtime', 'examples/shared_counter'];
+const packages = [
+  'ui/core',
+  'ui/runtime',
+  'ui/theme',
+  'examples/shared_counter',
+  'examples/shared_button_theme',
+];
 const commonPackages = packages.map((name) => `f4ah6o/yami_kumo/${name}`);
 const forbiddenPublic =
   /\b(?:HTMLElement|ReactNode|JSValue|WindowHandle|SceneSnapshot)\b|@(?:gpui|dom)\.|#external\b/;
@@ -48,6 +54,7 @@ const sourceNames = [
   'moon.mod',
   'scripts/check-shared-ui-consumers.mjs',
   'fixtures/shared-ui/contract-v1.json',
+  'fixtures/shared-ui/button-theme-v1.json',
   ...packages.flatMap((dir) =>
     readdirSync(join(root, dir))
       .filter((name) => name.endsWith('.mbt') || name.endsWith('.mbti') || name === 'moon.pkg')
@@ -234,6 +241,33 @@ fn main {
   }
   emit("spacing-count-and-toggle", spacing_counts)
   spacing_runtime.dispose()
+  let theme_runtime = @runtime.Runtime::new()
+  let theme_model = @shared_button_theme.Model::new()
+  commit(theme_runtime, theme_model.view())
+  let themed_increment = theme_runtime.token(@core.NodeKey::new("increment")).unwrap()
+  let themed_toggle = theme_runtime.token(@core.NodeKey::new("theme-toggle")).unwrap()
+  ensure(theme_runtime.enqueue_activate(themed_increment), "themed increment rejected")
+  let dark = theme_model.with_theme(@theme.Dark)
+  ensure(theme_model.theme() == @theme.Light, "theme update mutated old model")
+  ensure(dark.view() == theme_model.view(), "theme changed keyed view")
+  commit(theme_runtime, dark.view())
+  ensure(theme_runtime.is_current(themed_increment), "theme replaced increment identity")
+  ensure(theme_runtime.is_current(themed_toggle), "theme replaced toggle identity")
+  let incremented = dark.update(theme_runtime.next_action().unwrap())
+  ensure(incremented.value() == 1, "theme lost queued action")
+  ensure(incremented.theme() == @theme.Dark, "activation lost theme")
+  for mode in [@shared_button_theme.Disabled, @shared_button_theme.Loading, @shared_button_theme.DisabledLoading] {
+    let gated = incremented.with_mode(mode)
+    commit(theme_runtime, gated.view())
+    ensure(!theme_runtime.enqueue_activate(themed_increment), "theme bypassed gate")
+    ensure(theme_runtime.enqueue_activate(themed_toggle), "theme toggle rejected")
+    let light = gated.update(theme_runtime.next_action().unwrap())
+    ensure(light.theme() == @theme.Light, "theme toggle did not update shared model")
+    ensure(light.mode() == mode && light.value() == 1, "theme switch changed model props")
+  }
+  ensure(@theme.Light.button_colors().entries().length() == 10, "light palette is incomplete")
+  ensure(@theme.Dark.button_colors().entries().length() == 10, "dark palette is incomplete")
+  theme_runtime.dispose()
 }
 `;
 
