@@ -1,6 +1,27 @@
 ///|
 priv struct Epoch {
   mut live : Bool
+  mut marker : Bool
+}
+
+///|
+fn fresh_epoch() -> Epoch {
+  { live: true, marker: false, }
+}
+
+///|
+/// UI-owner-thread only. No callbacks, suspension or user code can run between
+/// these marker accesses. Restore both original markers before returning;
+/// comparing either live or disposed epochs never changes their liveness.
+/// physical_equal is only an optimization hint, not a semantic identity test.
+fn same_epoch(left : Epoch, right : Epoch) -> Bool {
+  let left_marker = left.marker
+  let right_marker = right.marker
+  left.marker = !right_marker
+  let same = right.marker != right_marker
+  left.marker = left_marker
+  right.marker = right_marker
+  same
 }
 
 ///|
@@ -99,6 +120,7 @@ pub fn Frame::focused(self : Frame, key : @view.NodeKey) -> Bool {
 /// One explicit native root/window owner. The common runtime owns semantic
 /// incarnation tokens; the adapter privately owns nonzero, never-reused ID
 /// blocks. One existing GPUI Button owns each Button's interaction state.
+/// All access and capability comparisons are confined to the owning UI thread.
 pub struct Mounted {
   priv window : @platform.WindowId
   priv runtime : @runtime.Runtime
@@ -125,8 +147,8 @@ pub fn Mounted::new(window : @platform.WindowId) -> Mounted {
     current_frame: None,
     next_id: 8,
     revision: 0,
-    epoch: { live: true, },
-    change: { live: true, },
+    epoch: fresh_epoch(),
+    change: fresh_epoch(),
     last_sequence: 0,
     window_focused: true,
     ready: false,
@@ -540,7 +562,7 @@ pub fn Mounted::stage(
     Ok(value) => value
   }
   // Measurement is caller code and can dispose/invalidate this root.
-  if self.is_disposed() || !physical_equal(change, self.change) {
+  if self.is_disposed() || !same_epoch(change, self.change) {
     return Err(adapter_error("native root changed during preparation"))
   }
   Ok({ view, candidate, change, })
@@ -556,7 +578,7 @@ pub fn Mounted::publish(
 ) -> Result[Frame, @diagnostics.FrameworkError] {
   if self.is_disposed() ||
     self.busy ||
-    !physical_equal(prepared.change, self.change) {
+    !same_epoch(prepared.change, self.change) {
     return Err(adapter_error("stale, foreign or disposed native preparation"))
   }
   match self.runtime.commit(prepared.view) {
@@ -580,7 +602,7 @@ pub fn Mounted::publish(
   self.next_id = candidate.next_id
   self.revision = candidate.frame.revision
   self.ready = true
-  self.change = { live: true, }
+  self.change = fresh_epoch()
   Ok(candidate.frame)
 }
 
@@ -603,7 +625,7 @@ pub fn Mounted::commit(
 ///|
 fn Mounted::cancel_pending(self : Mounted) -> Unit {
   self.epoch.live = false
-  self.epoch = { live: true, }
+  self.epoch = fresh_epoch()
   while self.runtime.next_action() is Some(_) {
 
   }
@@ -631,7 +653,7 @@ fn Mounted::sync_focus(self : Mounted) -> Unit {
 ///|
 /// A resize/scale event makes old geometry unusable until a successful commit.
 pub fn Mounted::invalidate_layout(self : Mounted) -> Unit {
-  self.change = { live: true, }
+  self.change = fresh_epoch()
   self.cancel_pending()
   for index in 0..<self.bindings.length() {
     let binding = self.bindings[index]
@@ -658,7 +680,7 @@ pub fn Mounted::activate(self : Mounted, callback : Activation) -> Bool {
     !self.ready ||
     !self.window_focused ||
     !callback.epoch.live ||
-    !physical_equal(callback.epoch, self.epoch) {
+    !same_epoch(callback.epoch, self.epoch) {
     return false
   }
   self.runtime.enqueue_activate(callback.token)
@@ -698,7 +720,7 @@ pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
     Ok(next) => {
       self.tree = Some(next)
       self.sync_focus()
-      self.change = { live: true, }
+      self.change = fresh_epoch()
       @view.Focused
     }
   }
@@ -726,7 +748,7 @@ pub fn Mounted::handle_event(
     return Ok(false)
   }
   self.last_sequence = event.sequence()
-  self.change = { live: true, }
+  self.change = fresh_epoch()
   match event.kind() {
     @platform.Destroyed | @platform.CloseRequested | @platform.ExitRequested => {
       self.dispose()
@@ -836,7 +858,7 @@ fn Mounted::dispatch(
 
 ///|
 pub fn Mounted::dispose(self : Mounted) -> Unit {
-  self.change = { live: true, }
+  self.change = fresh_epoch()
   self.epoch.live = false
   self.runtime.dispose()
   self.bindings = []

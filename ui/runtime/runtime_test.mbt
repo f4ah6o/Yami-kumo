@@ -285,3 +285,45 @@ test "dispose is idempotent and clears queues and rejects later callbacks" {
   assert_true(!newer.is_current(a))
   assert_true(!newer.enqueue_activate(a))
 }
+
+///|
+test "token identity is symmetric stable and independent of identical roots or disposal" {
+  let first = @runtime.Runtime::new()
+  let second = @runtime.Runtime::new()
+  let view = tree([button("a")])
+  assert_eq(first.commit(view), Ok(()))
+  assert_eq(second.commit(view), Ok(()))
+  let a = token(first, "a")
+  let copied = a
+  let b = token(second, "a")
+  assert_eq(a.key(), b.key())
+  assert_eq(first.view(), second.view())
+  for _ in 0..<3 {
+    assert_true(a == a && a == copied && copied == a)
+    assert_true(a != b && b != a)
+    assert_true(first.is_current(copied) && second.is_current(b))
+    assert_true(!first.is_current(b) && !second.is_current(a))
+    assert_true(!first.enqueue_activate(b) && !second.enqueue_activate(a))
+  }
+  let first_request = focus(first, copied)
+  let copied_request = first_request
+  let second_request = focus(second, b)
+  assert_true(!second.complete_focus(first_request, @core.Focused))
+  assert_true(!first.complete_focus(second_request, @core.Focused))
+  assert_true(first.complete_focus(copied_request, @core.Focused))
+  assert_true(!first.complete_focus(first_request, @core.Focused))
+  assert_true(second.complete_focus(second_request, @core.Focused))
+  assert_eq(first.next_focus_result().unwrap().outcome(), @core.Focused)
+  assert_eq(second.next_focus_result().unwrap().outcome(), @core.Focused)
+  first.dispose()
+  for _ in 0..<3 {
+    assert_true(a == copied && copied == a)
+    assert_true(a != b && b != a)
+    assert_true(!first.is_current(copied))
+    assert_true(second.is_current(b))
+    assert_true(!second.enqueue_activate(copied))
+  }
+  second.dispose()
+  assert_true(a == copied && copied == a)
+  assert_true(a != b && b != a)
+}

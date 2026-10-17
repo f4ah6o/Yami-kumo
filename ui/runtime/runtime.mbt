@@ -1,13 +1,29 @@
 ///|
-/// A mutable allocation makes physical identity portable across JS/native.
 /// Private capabilities avoid global counters, overflow and caller-forged IDs.
+/// Identity uses observable mutable aliasing, independently of live state.
 priv struct Identity {
   mut live : Bool
+  mut marker : Bool
 }
 
 ///|
 fn fresh_identity() -> Identity {
-  { live: true, }
+  { live: true, marker: false, }
+}
+
+///|
+/// UI-owner-thread only. No callbacks, suspension or user code can run between
+/// these marker accesses. Restore both original markers before returning;
+/// comparing either live or disposed capabilities never changes their liveness.
+/// physical_equal is only an optimization hint, not a semantic identity test.
+fn same_identity(left : Identity, right : Identity) -> Bool {
+  let left_marker = left.marker
+  let right_marker = right.marker
+  left.marker = !right_marker
+  let same = right.marker != right_marker
+  left.marker = left_marker
+  right.marker = right_marker
+  same
 }
 
 ///|
@@ -21,8 +37,8 @@ pub struct InstanceToken {
 
 ///|
 pub impl Eq for InstanceToken with fn equal(self, other) {
-  physical_equal(self.root, other.root) &&
-  physical_equal(self.instance, other.instance)
+  same_identity(self.root, other.root) &&
+  same_identity(self.instance, other.instance)
 }
 
 ///|
@@ -98,6 +114,7 @@ priv struct PendingFocusResult {
 /// Bounded keyed lifecycle runtime. It owns instance/request lifetime, not the
 /// application's model. Host callbacks only enqueue; the application explicitly
 /// drains actions and commits its next view, so callbacks cannot reenter update.
+/// All access and token comparisons are confined to the owning UI thread.
 pub struct Runtime {
   priv root : Identity
   priv mut tree : @core.View?
@@ -232,7 +249,7 @@ pub fn Runtime::token(self : Runtime, key : @core.NodeKey) -> InstanceToken? {
 ///|
 pub fn Runtime::is_current(self : Runtime, token : InstanceToken) -> Bool {
   if self.is_disposed() ||
-    !physical_equal(self.root, token.root) ||
+    !same_identity(self.root, token.root) ||
     !token.instance.live {
     return false
   }
@@ -279,7 +296,7 @@ pub fn Runtime::next_action(self : Runtime) -> @core.SemanticAction? {
     let pending = self.actions.remove(0)
     match self.active_entry(pending.token) {
       Some(entry) if available_button(entry) &&
-        physical_equal(entry.gate, pending.gate) =>
+        same_identity(entry.gate, pending.gate) =>
         return Some(@core.Activate(pending.token.key))
       _ => ()
     }
@@ -330,10 +347,10 @@ pub fn Runtime::complete_focus(
   }
   match self.active_entry(request.target) {
     Some(entry) if available_button(entry) &&
-      physical_equal(entry.gate, request.gate) => {
+      same_identity(entry.gate, request.gate) => {
       let mut owned = false
       for pending in self.focus_requests {
-        if physical_equal(pending.request, request.request) {
+        if same_identity(pending.request, request.request) {
           owned = true
         }
       }
@@ -357,7 +374,7 @@ pub fn Runtime::next_focus_result(self : Runtime) -> FocusResult? {
     let pending = self.focus_results.remove(0)
     match self.active_entry(pending.request.target) {
       Some(entry) if available_button(entry) &&
-        physical_equal(entry.gate, pending.request.gate) =>
+        same_identity(entry.gate, pending.request.gate) =>
         return Some({
           key: pending.request.target.key,
           outcome: pending.outcome,
