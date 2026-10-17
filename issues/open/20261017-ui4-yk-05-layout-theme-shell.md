@@ -1,8 +1,9 @@
 # YK-05 — 制限付き共通layout・標準theme・AppShell
 
-状態：部分実装候補／closed-token Row・Column gap/padding限定slice／theme・AppShell・一般layout・YK-05全体は未完了。
+状態：部分実装候補／closed-token Row・Column gap/paddingと共通Button色token・light/dark切替の限定slice／AppShell・一般layout・YK-05全体は未完了。
 限定契約と検証境界は [shared-stack-spacing.md](../../docs/shared-stack-spacing.md) を参照。
 この更新自体は実ブラウザ・Native windowの新candidate合格を意味しない。
+Button themeのAPI、既存controllerの再利用、検証profileは [shared-button-theme.md](../../docs/shared-button-theme.md) を参照。
 作成日：2026-10-17 JST。
 作業先：`f4ah6o/Yami-kumo`。段階：M2。依存：YK-04。
 
@@ -59,3 +60,9 @@ and evidence requirements. None preserves legacy behavior. No global/system
 appearance, Card theme, AppShell or general layout expansion is included.
 Final-head CI and independent actual-artifact review are required before this
 slice is qualified; the broader unchecked acceptance criteria remain open.
+
+The root Button-theme slice builds on the per-Button API merged in PR #34.
+Its numeric colors move into `ui/theme` without changing that API's RGB values;
+explicit per-Button selections override a mounted root's theme. The shared root
+fixture covers held input, gates and theme changes on both adapters. Its own
+final-candidate runtime evidence is required; the broader YK-05 scope stays open.

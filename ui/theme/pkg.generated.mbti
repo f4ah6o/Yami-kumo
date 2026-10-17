@@ -1,0 +1,53 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "f4ah6o/yami_kumo/ui/theme"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub struct ButtonColors {
+  normal_border : Color
+  focused_border : Color
+  disabled_border : Color
+  normal_fill : Color
+  hovered_fill : Color
+  pressed_fill : Color
+  loading_fill : Color
+  disabled_fill : Color
+  enabled_foreground : Color
+  disabled_foreground : Color
+} derive(Eq, @debug.Debug)
+pub fn ButtonColors::entries(Self) -> Array[(String, Color)]
+pub fn ButtonColors::equal(Self, Self) -> Bool
+pub fn ButtonColors::not_equal(Self, Self) -> Bool
+pub fn ButtonColors::to_repr(Self) -> @debug.Repr
+
+pub struct Color {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn Color::blue(Self) -> Int
+pub fn Color::css(Self) -> String
+pub fn Color::equal(Self, Self) -> Bool
+pub fn Color::green(Self) -> Int
+pub fn Color::not_equal(Self, Self) -> Bool
+pub fn Color::red(Self) -> Int
+pub fn Color::to_repr(Self) -> @debug.Repr
+
+pub(all) enum Theme {
+  Light
+  Dark
+} derive(Eq, @debug.Debug)
+pub fn Theme::button_colors(Self) -> ButtonColors
+pub fn Theme::equal(Self, Self) -> Bool
+pub fn Theme::name(Self) -> String
+pub fn Theme::not_equal(Self, Self) -> Bool
+pub fn Theme::to_repr(Self) -> @debug.Repr
+
+// Type aliases
+
+// Traits

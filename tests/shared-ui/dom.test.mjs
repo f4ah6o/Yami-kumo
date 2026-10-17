@@ -12,7 +12,9 @@ import { validateResult, validateArtifacts, validateGate } from './evidence.mjs'
 import { exerciseButtonStates } from './button-states.mjs';
 import { exerciseCard } from './card.mjs';
 import { exerciseSpacing } from './spacing.mjs';
+import { exerciseTheme } from './theme.mjs';
 import { exercisePalette } from './palette.mjs';
+import { exerciseThemePaletteOverride } from './theme-palette.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const bundle = resolve(
@@ -27,8 +29,10 @@ const sourcePaths = [
   'ui/core',
   'ui/runtime',
   'ui/dom',
+  'ui/theme',
   'examples/shared_counter',
   'examples/shared_counter_dom',
+  'examples/shared_button_theme',
   'styles/shared-ui.css',
   'fixtures/shared-ui',
   'tests/shared-ui',
@@ -75,6 +79,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
   const compiled = await readFile(bundle);
   const css = await readFile(resolve(root, 'styles/shared-ui.css'));
   const fixtureCss = await readFile(resolve(root, 'tests/shared-ui/spacing-fixture.css'));
+  const themeFixture = await readFile(resolve(root, 'fixtures/shared-ui/button-theme-v1.json'));
   const boundSources = await sourceHashes();
   const server = createServer((request, response) => {
     const route = request.url;
@@ -463,7 +468,13 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     await exerciseSpacing(page, observe, (name) =>
       page.screenshot({ path: resolve(output, name) }),
     );
+    await exerciseTheme(page, observe, JSON.parse(themeFixture), (name) =>
+      page.screenshot({ path: resolve(output, name) }),
+    );
     await exercisePalette(page, observe, (name) =>
+      page.screenshot({ path: resolve(output, name) }),
+    );
+    await exerciseThemePaletteOverride(page, observe, JSON.parse(themeFixture), (name) =>
       page.screenshot({ path: resolve(output, name) }),
     );
     assert.deepEqual(errors, []);
@@ -485,6 +496,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     assert.deepEqual(await sourceHashes(), boundSources, 'source changed during browser fixture');
     await writeFile(resolve(output, 'shared-ui.css'), css);
     await writeFile(resolve(output, 'spacing-fixture.css'), fixtureCss);
+    await writeFile(resolve(output, 'button-theme-v1.json'), themeFixture);
     await writeFile(
       resolve(output, 'source-provenance.json'),
       JSON.stringify(
@@ -494,6 +506,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
           sourceSha256: boundSources,
           servedCssSha256: hash(css),
           servedFixtureCssSha256: hash(fixtureCss),
+          themeFixtureSha256: hash(themeFixture),
           compiledBridgeSha256: hash(compiled),
         },
         null,
@@ -509,10 +522,14 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       'spacing-3.png',
       'spacing-4.png',
       'spacing-fixed.png',
+      'theme-light.png',
+      'theme-dark.png',
+      'theme-explicit-override.png',
       'trace.json',
       'counter.png',
       'shared-ui.css',
       'spacing-fixture.css',
+      'button-theme-v1.json',
       'source-provenance.json',
     ])
       artifacts.push({ path, sha256: hash(await readFile(resolve(output, path))) });
@@ -588,7 +605,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
         {
           status: 'pass',
           scope:
-            'Chromium DOM Text/Button/Card/stack/palette bounded fixtures and root lifecycle only',
+            'Chromium DOM Text/Button/Card/stack, explicit palette and scoped root theme fixtures with root lifecycle',
           startedAt,
           finishedAt,
           candidateSha: git('rev-parse', 'HEAD'),

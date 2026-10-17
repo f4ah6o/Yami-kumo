@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import test from 'node:test';
+import { checkSharedStylesheetScope } from './theme-stylesheet.mjs';
 const source = readFileSync(
   process.env.SHARED_UI_SPACING_SOURCE || new URL('../../ui/dom/dom.mbt', import.meta.url),
   'utf8',
@@ -35,13 +36,7 @@ test('production spacing stylesheet has only scoped selectors and exact token de
     /\/\*[\s\S]*?\*\//g,
     '',
   );
-  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    for (const selector of match[1].trim().split(/\s*,\s*/))
-      assert.match(
-        selector,
-        /^\.yk-ui-[a-z0-9-]+$|^\.yk-ui-button-(?:light|dark)(?::hover|:active|:focus-visible|:disabled|\[aria-busy=['"]true['"]\])$/,
-      );
-  }
+  checkSharedStylesheetScope(css);
   for (const value of [0, 4, 8, 12, 16, 24]) {
     for (const property of ['gap', 'padding']) {
       assert.match(

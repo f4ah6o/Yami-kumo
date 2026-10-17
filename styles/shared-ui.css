@@ -71,6 +71,70 @@
   padding: 24px;
 }
 
+/* BEGIN GENERATED BUTTON THEME TOKENS */
+.yk-ui-root[data-yk-theme='light'] {
+  --yk-button-normal-border: rgb(130, 146, 164);
+  --yk-button-focused-border: rgb(35, 110, 210);
+  --yk-button-disabled-border: rgb(184, 190, 198);
+  --yk-button-normal-fill: rgb(245, 248, 252);
+  --yk-button-hovered-fill: rgb(226, 237, 250);
+  --yk-button-pressed-fill: rgb(206, 224, 245);
+  --yk-button-loading-fill: rgb(232, 237, 244);
+  --yk-button-disabled-fill: rgb(238, 240, 243);
+  --yk-button-enabled-foreground: rgb(25, 43, 62);
+  --yk-button-disabled-foreground: rgb(120, 128, 139);
+}
+
+.yk-ui-root[data-yk-theme='dark'] {
+  --yk-button-normal-border: rgb(102, 126, 150);
+  --yk-button-focused-border: rgb(98, 170, 255);
+  --yk-button-disabled-border: rgb(100, 106, 114);
+  --yk-button-normal-fill: rgb(42, 71, 101);
+  --yk-button-hovered-fill: rgb(48, 91, 137);
+  --yk-button-pressed-fill: rgb(35, 77, 119);
+  --yk-button-loading-fill: rgb(55, 70, 88);
+  --yk-button-disabled-fill: rgb(47, 52, 60);
+  --yk-button-enabled-foreground: rgb(242, 246, 250);
+  --yk-button-disabled-foreground: rgb(166, 171, 178);
+}
+/* END GENERATED BUTTON THEME TOKENS */
+
+/* Explicit Button palettes own their colors and focus-visible behavior. */
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark'])
+  .yk-ui-button:not(.yk-ui-button-light):not(.yk-ui-button-dark) {
+  border-color: var(--yk-button-normal-border);
+  background-color: var(--yk-button-normal-fill);
+  color: var(--yk-button-enabled-foreground);
+}
+
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark'])
+  .yk-ui-button:not(.yk-ui-button-light):not(.yk-ui-button-dark):hover {
+  background-color: var(--yk-button-hovered-fill);
+}
+
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark'])
+  .yk-ui-button:not(.yk-ui-button-light):not(.yk-ui-button-dark):active {
+  background-color: var(--yk-button-pressed-fill);
+}
+
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark'])
+  .yk-ui-button:not(.yk-ui-button-light):not(.yk-ui-button-dark):focus {
+  border-color: var(--yk-button-focused-border);
+}
+
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark'])
+  .yk-ui-button:not(.yk-ui-button-light):not(.yk-ui-button-dark)[aria-busy='true'] {
+  background-color: var(--yk-button-loading-fill);
+}
+
+/* Gate precedence follows the existing GPUI paint contract; input stays native. */
+:where(.yk-ui-root[data-yk-theme='light'], .yk-ui-root[data-yk-theme='dark'])
+  .yk-ui-button:not(.yk-ui-button-light):not(.yk-ui-button-dark):disabled {
+  border-color: var(--yk-button-disabled-border);
+  background-color: var(--yk-button-disabled-fill);
+  color: var(--yk-button-disabled-foreground);
+}
+
 /* Per-Button paint only. State recognition remains browser-owned. */
 .yk-ui-button-light {
   border-color: rgb(130, 146, 164);

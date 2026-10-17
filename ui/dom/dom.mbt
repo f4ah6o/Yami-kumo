@@ -50,6 +50,55 @@ extern "js" fn accepts_events(root : DomNode, node : DomNode) -> Bool =
   #| (root, node) => root.isConnected && root.contains(node)
 
 ///|
+#external
+priv type RootThemeState
+
+///|
+extern "js" fn root_theme_state(root : DomNode) -> RootThemeState =
+  #| (root) => ({
+  #|   previousName: root.getAttribute("data-yk-theme"),
+  #|   previousClass: root.classList.contains("yk-ui-root"),
+  #|   previousClassAttribute: root.hasAttribute("class"),
+  #|   current: null
+  #| })
+
+///|
+extern "js" fn root_theme_unchanged(state : RootThemeState, root : DomNode) -> Bool =
+  #| (state, root) => state.current === null ||
+  #|   (root.getAttribute("data-yk-theme") === state.current && root.classList.contains("yk-ui-root"))
+
+///|
+extern "js" fn apply_root_theme(
+  state : RootThemeState,
+  root : DomNode,
+  name : String,
+) -> Unit =
+  #| (state, root, name) => {
+  #|   if (name !== "") {
+  #|     if (state.current === null) {
+  #|       state.previousName = root.getAttribute("data-yk-theme");
+  #|       state.previousClass = root.classList.contains("yk-ui-root");
+  #|       state.previousClassAttribute = root.hasAttribute("class");
+  #|     }
+  #|     root.classList.add("yk-ui-root");
+  #|     root.setAttribute("data-yk-theme", name);
+  #|     state.current = name;
+  #|     return;
+  #|   }
+  #|   if (state.current === null) return;
+  #|   // A host edit is no longer ours to overwrite during teardown.
+  #|   if (root.getAttribute("data-yk-theme") === state.current) {
+  #|     if (state.previousName === null) root.removeAttribute("data-yk-theme");
+  #|     else root.setAttribute("data-yk-theme", state.previousName);
+  #|   }
+  #|   if (!state.previousClass) {
+  #|     root.classList.remove("yk-ui-root");
+  #|     if (!state.previousClassAttribute && root.getAttribute("class") === "") root.removeAttribute("class");
+  #|   }
+  #|   state.current = null;
+  #| }
+
+///|
 extern "js" fn create_node(
   kind : Int,
   key : String,
@@ -60,7 +109,10 @@ extern "js" fn create_node(
   #|   const node = document.createElement(kind === 0 ? "span" : kind === 1 ? "button" : "div");
   #|   node.setAttribute("data-yk-key", key);
   #|   if (kind === 0 || kind === 1) {
-  #|     if (kind === 1) node.type = "button";
+  #|     if (kind === 1) {
+  #|       node.type = "button";
+  #|       node.className = "yk-ui-button";
+  #|     }
   #|     node.textContent = label;
   #|   } else {
   #|     node.className = kind === 2 ? "yk-ui-column" : "yk-ui-row";
@@ -262,6 +314,7 @@ priv struct MountedNode {
 /// The application owns its model; this object owns only host nodes/lifetimes.
 pub struct DomRoot {
   priv root : DomNode
+  priv root_theme : RootThemeState
   priv runtime : @runtime.Runtime
   priv nodes : Map[String, MountedNode]
   priv scheduled : Ref[Bool]
@@ -275,6 +328,7 @@ pub fn mount(
   root_id : String,
   view : @core.View,
   on_actions : () -> Unit,
+  theme~ : @theme.Theme? = None,
 ) -> Result[DomRoot, DomError] {
   if !document_available() {
     return Err(MissingDocument)
@@ -291,18 +345,57 @@ pub fn mount(
   }
   let mounted : DomRoot = {
     root,
+    root_theme: root_theme_state(root),
     runtime: @runtime.Runtime::new(),
     nodes: {},
     scheduled: Ref(false),
     on_actions,
   }
   match mounted.update(view) {
-    Ok(_) => Ok(mounted)
+    Ok(_) =>
+      match mounted.set_theme(theme) {
+        Ok(_) => Ok(mounted)
+        Err(error) => {
+          mounted.dispose()
+          Err(error)
+        }
+      }
     Err(error) => {
       mounted.dispose()
       Err(error)
     }
   }
+}
+
+///|
+/// Change only the root's scoped palette. No view commit, node replacement,
+/// focus operation or input-controller update is needed for a paint change.
+/// An explicit per-Button palette retains its colors and focus-visible style.
+/// None removes this root's opt-in and restores its original host attributes.
+pub fn DomRoot::set_theme(
+  self : DomRoot,
+  theme : @theme.Theme?,
+) -> Result[Unit, DomError] {
+  if self.runtime.is_disposed() {
+    return Err(Disposed)
+  }
+  for _, mounted in self.nodes {
+    if !contains_node(self.root, mounted.node) {
+      return Err(HostTreeChanged)
+    }
+  }
+  if !root_theme_unchanged(self.root_theme, self.root) {
+    return Err(HostTreeChanged)
+  }
+  apply_root_theme(
+    self.root_theme,
+    self.root,
+    match theme {
+      Some(theme) => theme.name()
+      None => ""
+    },
+  )
+  Ok(())
 }
 
 ///|
@@ -495,6 +588,7 @@ pub fn DomRoot::dispose(self : DomRoot) -> Unit {
     remove_owned_node(self.root, mounted.node)
   }
   self.nodes.clear()
+  apply_root_theme(self.root_theme, self.root, "")
   release_root(roots, self.root)
 }
 

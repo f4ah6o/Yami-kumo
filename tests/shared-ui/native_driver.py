@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Opt-in real Linux/Windows shared-counter evidence; importing is inert.
 
-This driver proves the bounded shared-ui-contract/v1 pointer fixtures. It does
-not establish general DOM/native parity, keyboard/IME behavior or accessibility.
+This driver proves the bounded shared-ui-contract/v1 pointer fixtures and the
+shared Button theme's real pointer/Space trace. It does not establish general
+DOM/native parity, full keyboard/IME behavior or accessibility.
 Host input and pixel decoding use the existing native-ui helpers. Unit tests
 exercise this oracle with explicitly synthetic data, never host input.
 """
@@ -40,10 +41,63 @@ CONTRACT_PHASES = {
     "button-interrupted-disabled": 6,
 }
 SHA = re.compile(r"[0-9a-f]{40}\Z")
-COMMON_PATHS = ("ui/core", "ui/runtime", "examples/shared_counter")
+COMMON_PATHS = ("ui/core", "ui/runtime", "ui/theme", "examples/shared_counter", "examples/shared_button_theme")
 BOUND_PATHS = (*COMMON_PATHS, "native/ui", "native/examples/shared_counter",
                "native/examples/shared_counter_host", "tests/shared-ui", "tests/native-ui/drive_native_ui.py",
-               "styles/shared-ui.css", "fixtures/shared-ui", "docs/shared-card.md", "docs/shared-stack-spacing.md", "docs/shared-button-palettes.md")
+               "styles/shared-ui.css", "fixtures/shared-ui", "tools/theme_tokens", "scripts/generate-shared-theme.mjs",
+               "docs/shared-card.md", "docs/shared-stack-spacing.md", "docs/shared-button-palettes.md")
+
+THEME_SLOTS = {"normal_border", "focused_border", "disabled_border", "normal_fill", "hovered_fill",
+               "pressed_fill", "loading_fill", "disabled_fill", "enabled_foreground", "disabled_foreground"}
+THEME_FLAGS = ("disabled", "loading", "focused", "hovered", "pressed")
+THEME_CONTROL_KEYS = {"key-t": ("Prior", 0x21), "key-c": ("Next", 0x22),
+                      "key-n": ("Home", 0x24), "key-d": ("End", 0x23),
+                      "key-l": ("Up", 0x26), "key-b": ("Down", 0x28), "key-f": ("Left", 0x25)}
+# These are observations of a fixed host-input trace, never controller logic.
+# Gate transitions clear GPUI hover; Chromium's raw :hover can remain set.
+THEME_PHASES = [dict(name=name, theme=theme, mode=mode, hovered=hovered, focused=focused,
+                     pressed=pressed, count=count, inputs=inputs)
+                for name, theme, mode, hovered, focused, pressed, count, inputs in [
+    ("light-normal", "light", "normal", False, False, False, 0, []),
+    ("dark-normal", "dark", "normal", False, False, False, 0, ["key-t"]),
+    ("dark-hover", "dark", "normal", True, False, False, 0, ["move-inside"]),
+    ("light-hover", "light", "normal", True, False, False, 0, ["key-t"]),
+    ("light-focus-hover", "light", "normal", True, True, False, 0, ["key-f"]),
+    ("dark-focus-hover", "dark", "normal", True, True, False, 0, ["key-t"]),
+    ("dark-focus", "dark", "normal", False, True, False, 0, ["move-outside"]),
+    ("dark-space-held", "dark", "normal", False, True, True, 0, ["space-down"]),
+    ("light-space-held", "light", "normal", False, True, True, 0, ["key-t"]),
+    ("light-space-activation", "light", "normal", False, True, False, 1, ["space-up"]),
+    ("light-pointer-held", "light", "normal", True, True, True, 1, ["move-inside", "pointer-down"]),
+    ("dark-pointer-held", "dark", "normal", True, True, True, 1, ["key-t"]),
+    ("dark-pointer-activation", "dark", "normal", True, True, False, 2, ["pointer-up"]),
+    ("dark-loading-focus", "dark", "loading", False, True, False, 2, ["key-l"]),
+    ("light-loading-focus", "light", "loading", False, True, False, 2, ["key-t"]),
+    ("light-disabled-loading", "light", "disabled-loading", False, False, False, 2, ["key-b"]),
+    ("dark-disabled-loading", "dark", "disabled-loading", False, False, False, 2, ["key-t"]),
+    ("dark-disabled", "dark", "disabled", False, False, False, 2, ["key-d"]),
+    ("light-disabled", "light", "disabled", False, False, False, 2, ["key-t"]),
+    ("light-reenabled", "light", "normal", False, False, False, 2, ["key-n"]),
+    ("light-refocused", "light", "normal", False, True, False, 2, ["key-f"]),
+    ("light-space-before-gate", "light", "normal", False, True, True, 2, ["space-down"]),
+    ("light-space-loading-cancel", "light", "loading", False, True, False, 2, ["key-l"]),
+    ("dark-space-loading-cancel", "dark", "loading", False, True, False, 2, ["key-t"]),
+    ("dark-space-gate-restored", "dark", "normal", False, True, False, 2, ["key-n"]),
+    ("dark-stale-space-release", "dark", "normal", False, True, False, 2, ["space-up"]),
+    ("dark-pointer-before-gate", "dark", "normal", True, True, True, 2, ["move-inside", "pointer-down"]),
+    ("dark-pointer-disabled-cancel", "dark", "disabled", False, False, False, 2, ["key-d"]),
+    ("light-pointer-disabled-cancel", "light", "disabled", False, False, False, 2, ["key-t"]),
+    ("light-pointer-gate-restored", "light", "normal", False, False, False, 2, ["key-n"]),
+    # Windows can refresh hover when capture is released; an explicit exit and
+    # re-entry gives both hosts the same observed hover while count stays fixed.
+    ("light-stale-pointer-release", "light", "normal", True, False, False, 2,
+     ["pointer-up", "move-outside", "move-inside"]),
+    ("light-fresh-activation", "light", "normal", True, True, False, 3, ["move-inside", "pointer-down", "pointer-up"]),
+    ("dark-retained-focus-hover", "dark", "normal", True, True, False, 3, ["key-t"]),
+    ("dark-pointer-before-outside", "dark", "normal", True, True, True, 3, ["pointer-down"]),
+    ("light-outside-cancel", "light", "normal", False, True, False, 3, ["move-outside", "key-t", "pointer-up"]),
+    ("light-final-activation", "light", "normal", True, True, False, 4, ["move-inside", "pointer-down", "pointer-up"]),
+]]
 
 
 def _load_legacy() -> Any:
@@ -412,6 +466,199 @@ def inspect_frame_sequence(markers: list[dict[str, Any]], directory: Path) -> di
     return {"captures": reports, "changedCounterPixels": changed}
 
 
+def load_theme_contract(path: Path = ROOT / "fixtures/shared-ui/button-theme-v1.json") -> dict[str, Any]:
+    contract = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(contract, dict) or contract.get("version") != "shared-button-theme/v1":
+        raise E2EError("unsupported shared Button theme contract")
+    themes = contract.get("themes")
+    if not isinstance(themes, dict) or set(themes) != {"light", "dark"}:
+        raise E2EError("theme contract requires exact light and dark palettes")
+    for palette in themes.values():
+        if not isinstance(palette, dict) or set(palette) != THEME_SLOTS:
+            raise E2EError("theme contract requires all ten semantic color slots")
+        for rgb in palette.values():
+            if not isinstance(rgb, list) or len(rgb) != 3 or any(type(c) is not int or not 0 <= c <= 255 for c in rgb):
+                raise E2EError("theme color must be an opaque RGB triple")
+    states = contract.get("states")
+    if not isinstance(states, list) or len(states) != 32:
+        raise E2EError("theme contract requires all 32 state combinations")
+    seen = set()
+    for state in states:
+        if not isinstance(state, dict) or set(state) != set(THEME_FLAGS) | {"border", "fill", "foreground"}:
+            raise E2EError("theme state schema changed")
+        if any(type(state[k]) is not bool for k in THEME_FLAGS):
+            raise E2EError("theme state flags must be booleans")
+        key = tuple(state[k] for k in THEME_FLAGS)
+        if key in seen:
+            raise E2EError("duplicate theme state expectation")
+        seen.add(key)
+        for field in ("border", "fill", "foreground"):
+            if state[field] not in THEME_SLOTS or not state[field].endswith("_" + field):
+                raise E2EError("theme state refers to an invalid paint slot")
+    return contract
+
+
+def theme_colors(marker: dict[str, Any], contract: dict[str, Any]) -> dict[str, list[int]]:
+    flags = {"disabled": not marker["enabled"], **{name: marker[name] for name in THEME_FLAGS[1:]}}
+    matched = [state for state in contract["states"] if all(state[key] == value for key, value in flags.items())]
+    if len(matched) != 1:
+        raise E2EError("native Button state has no unique shared paint expectation")
+    return {field: contract["themes"][marker["theme"]][matched[0][field]]
+            for field in ("border", "fill", "foreground")}
+
+
+def validate_theme_marker(marker: dict[str, Any], phase: int, contract: dict[str, Any], *,
+                          complete: bool = False) -> None:
+    if not isinstance(marker, dict) or marker.get("fixture") != "theme":
+        raise E2EError("theme marker does not identify the launched fixture")
+    if type(marker.get("phase")) is not int or marker["phase"] != phase or not 0 <= phase < len(THEME_PHASES):
+        raise E2EError("theme marker skipped, duplicated or changed its exact capture phase")
+    expected = THEME_PHASES[phase]
+    for field in ("theme", "mode", "hovered", "focused", "pressed", "count"):
+        if type(marker.get(field)) is not type(expected[field]) or marker[field] != expected[field]:
+            raise E2EError(f"theme phase {phase} {expected['name']} has unexpected {field}: {marker.get(field)!r}")
+    for field, value in (("enabled", expected["mode"] not in ("disabled", "disabled-loading")),
+                         ("loading", expected["mode"] in ("loading", "disabled-loading")),
+                         ("value", expected["count"])):
+        if type(marker.get(field)) is not type(value) or marker[field] != value:
+            raise E2EError(f"theme {field} does not match common fixture props")
+    if marker.get("actionKeys") != ["increment"] * expected["count"]:
+        raise E2EError("theme trace has lost, duplicated or redirected semantic activation")
+    for field in ("buttonId", "toggleId", "revision", "windowId"):
+        if type(marker.get(field)) is not int or marker[field] <= 0:
+            raise E2EError(f"theme {field} must be a positive native identity")
+    if marker["buttonId"] == marker["toggleId"]:
+        raise E2EError("theme Buttons must have distinct identities")
+    if type(marker.get("inputSequence")) is not int or marker["inputSequence"] < 0:
+        raise E2EError("theme host input sequence is invalid")
+    if not isinstance(marker.get("title"), str) or not marker["title"]:
+        raise E2EError("theme marker has no uniquely bound window title")
+    scale = _number(marker.get("scale"), "theme.scale", positive=True)
+    root = _bounds(marker.get("root"), "root")
+    if root[:2] != (0.0, 0.0):
+        raise E2EError("theme root must have frame-local origin")
+    for field in ("button", "buttonLabel", "counter", "heading", "toggle", "toggleLabel"):
+        _inside(_bounds(marker.get(field), field), root, field)
+    _inside(_bounds(marker["buttonLabel"], "buttonLabel"), _bounds(marker["button"], "button"), "buttonLabel")
+    _inside(_bounds(marker["toggleLabel"], "toggleLabel"), _bounds(marker["toggle"], "toggle"), "toggleLabel")
+    scene = marker.get("scene")
+    if not isinstance(scene, dict) or not isinstance(scene.get("items"), list):
+        raise E2EError("theme marker requires a canonical scene")
+    if _bounds(scene.get("viewport"), "scene.viewport") != root or _number(scene.get("scale"), "scene.scale", positive=True) != scale:
+        raise E2EError("theme scene viewport or scale disagrees with its host")
+    items = scene["items"]
+    if any(not isinstance(item, dict) for item in items):
+        raise E2EError("theme scene item must be an object")
+    ids = [item.get("id") for item in items]
+    if any(type(value) is not int or value <= 0 for value in ids) or len(set(ids)) != len(ids):
+        raise E2EError("theme scene IDs must be unique positive integers")
+    texts = [item.get("text") for item in items if item.get("kind") in ("text", "text_run")]
+    if any(texts.count(value) != 1 for value in ("Shared Button theme", "Increment", "Toggle theme", f"Count: {marker['count']}")):
+        raise E2EError("theme canonical scene lost or duplicated common fixture text")
+    binding = marker["buttonId"]
+    paint = []
+    for offset, kind in ((1, "quad"), (2, "quad"), (3, "text")):
+        matches = [item for item in items if item["id"] == binding + offset]
+        if len(matches) != 1 or (matches[0].get("kind") not in ("text", "text_run") if kind == "text" else matches[0].get("kind") != kind):
+            raise E2EError("theme scene does not use the retained GPUI Button paint IDs")
+        paint.append(matches[0])
+    if [items.index(item) for item in paint] != list(range(items.index(paint[0]), items.index(paint[0]) + 3)):
+        raise E2EError("theme border, fill and measured text order changed")
+    expected_colors = theme_colors(marker, contract)
+    for item, field in zip(paint, ("border", "fill", "foreground")):
+        rgb = expected_colors[field]
+        if item.get("color") != dict(zip(("red", "green", "blue", "alpha"), [*rgb, 255])):
+            raise E2EError(f"theme scene {field} differs from shared semantic tokens")
+    x, y, width, height = _bounds(marker["button"], "button")
+    inset = 2 if marker["focused"] else 1
+    if _bounds(paint[0].get("bounds"), "border") != (x, y, width, height):
+        raise E2EError("theme border is detached from the retained Button")
+    if _bounds(paint[1].get("bounds"), "fill") != (x + inset, y + inset, width - 2 * inset, height - 2 * inset):
+        raise E2EError("theme fill no longer has the GPUI focus inset")
+    if paint[2].get("text") != "Increment":
+        raise E2EError("theme foreground is not the actual Button label")
+    frame = marker.get("frame")
+    if not isinstance(frame, dict) or not isinstance(frame.get("path"), str) or not frame["path"]:
+        raise E2EError("theme observation requires a retained PPM path")
+    if any(type(frame.get(k)) is not int or frame[k] <= 0 for k in ("width", "height")):
+        raise E2EError("theme capture dimensions must be positive integers")
+    if _number(frame.get("scale"), "frame.scale", positive=True) != scale:
+        raise E2EError("theme capture scale disagrees with native scale")
+    if abs(root[2] * scale - frame["width"]) > 1 or abs(root[3] * scale - frame["height"]) > 1:
+        raise E2EError("theme capture dimensions disagree with its scene")
+    if complete and marker.get("destroyed") is not True:
+        raise E2EError("theme completion requires actual window destruction")
+
+
+def inspect_theme_frame(marker: dict[str, Any], directory: Path, contract: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+    path = native._read_ppm_path(marker["frame"], directory, f"theme phase {marker['phase']}")
+    image = native.read_ppm(path)
+    if (image.width, image.height) != (marker["frame"]["width"], marker["frame"]["height"]):
+        raise E2EError("theme PPM dimensions differ from native capture metadata")
+    colors, scale = theme_colors(marker, contract), marker["scale"]
+    x, y, w, h = _bounds(marker["button"], "button")
+    samples = [("border", x + w / 2, y + .5), ("border", x + .5, y + h / 2),
+               ("border", x + w - .5, y + h / 2), ("border", x + w / 2, y + h - .5),
+               ("fill", x + 4, y + h / 2)]
+    observed = []
+    for slot, px, py in samples:
+        actual = list(image.pixel(int(px * scale), int(py * scale)))
+        if len(actual) != 3 or any(abs(a - b) > 2 for a, b in zip(actual, colors[slot])):
+            raise E2EError(f"theme actual {slot} pixels differ from shared tokens at phase {marker['phase']}")
+        observed.append({"slot": slot, "rgb": actual})
+    region = native._region_pixels(image, _bounds(marker["buttonLabel"], "buttonLabel"), scale)
+    # Fractional glyph origins need not produce an opaque foreground pixel.
+    # Test the expected foreground/fill blend instead of weakening scene RGB.
+    delta = [a - b for a, b in zip(colors["foreground"], colors["fill"])]
+    magnitude = sum(channel * channel for channel in delta)
+    if magnitude == 0:
+        raise E2EError("theme Button foreground has no contrast against fill")
+    covered = []
+    for pixel in region:
+        coverage = sum((actual - background) * channel
+                       for actual, background, channel in zip(pixel, colors["fill"], delta)) / magnitude
+        residual = max(abs(actual - (background + coverage * channel))
+                       for actual, background, channel in zip(pixel, colors["fill"], delta))
+        if .5 <= coverage <= 1.01 and residual <= 2:
+            covered.append((coverage, residual))
+    # A few accidental colored pixels cannot qualify this nine-letter label.
+    if len(covered) < 8:
+        raise E2EError("theme Button label lacks nontrivial pixels matching its semantic foreground blend")
+    counter_pixels = native._foreground_count(image, _bounds(marker["counter"], "counter"), scale)
+    if counter_pixels <= 0:
+        raise E2EError("theme fixture count has no visible text pixels")
+    return image, {"path": str(path), "sha256": digest(path), "width": image.width, "height": image.height,
+                   "scale": scale, "samples": observed, "foregroundPixels": len(covered),
+                   "maximumForegroundCoverage": max(value[0] for value in covered),
+                   "maximumForegroundBlendResidual": max(value[1] for value in covered), "counterPixels": counter_pixels}
+
+
+def inspect_theme_sequence(markers: list[dict[str, Any]], directory: Path, contract: dict[str, Any]) -> dict[str, Any]:
+    if len(markers) != len(THEME_PHASES):
+        raise E2EError("theme proof requires every one of the 36 host capture phases")
+    images, reports, paths = [], [], set()
+    for phase, marker in enumerate(markers):
+        validate_theme_marker(marker, phase, contract)
+        for field in ("buttonId", "toggleId", "windowId", "title", "root", "button", "buttonLabel", "counter", "heading", "toggle", "toggleLabel", "scale"):
+            if marker[field] != markers[0][field]:
+                raise E2EError(f"theme switch changed retained identity or geometry: {field}")
+        if phase and (marker["inputSequence"] <= markers[phase - 1]["inputSequence"] or marker["revision"] <= markers[phase - 1]["revision"]):
+            raise E2EError("theme captures must follow advancing actual input and frame revisions")
+        image, report = inspect_theme_frame(marker, directory, contract)
+        if report["path"] in paths:
+            raise E2EError("theme phases must retain distinct PPM captures")
+        paths.add(report["path"])
+        images.append(image)
+        reports.append(report)
+        if phase:
+            changed = native._changed_pixels(images[phase - 1], image, _bounds(marker["counter"], "counter"), marker["scale"])
+            if (changed > 0) != (marker["count"] != markers[phase - 1]["count"]):
+                raise E2EError("theme/cancellation/activation disagrees with actual counter pixels")
+    return {"captures": reports, "acceptedActivations": markers[-1]["count"],
+            "bindingPreserved": True, "themeOnlyHeldInputPreserved": True,
+            "staleGateReleasesCancelled": True, "outsideReleaseCancelled": True}
+
+
 def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -621,6 +868,154 @@ def run_fixture(args: argparse.Namespace, fixture: str, counts: list[int], execu
         _write(directory / "trace.json", trace)
 
 
+def send_theme_input(platform: str, operation: str, marker: dict[str, Any], args: argparse.Namespace) -> None:
+    allowed = {"move-inside", "move-outside", "pointer-down", "pointer-up", "space-down", "space-up",
+               "key-t", "key-n", "key-d", "key-l", "key-b", "key-f", "key-c"}
+    if operation not in allowed or platform not in ("linux", "windows"):
+        raise E2EError("unknown or unsupported native theme input")
+    x, y, width, height = _bounds(marker["button"], "button")
+    px, py = x + width / 2, y + height / 2
+    if operation == "move-outside":
+        rx, ry, rw, rh = _bounds(marker["root"], "root")
+        px, py = rx + rw - 16, ry + rh - 16
+    if platform == "linux":
+        if operation.startswith("move-"):
+            # --sync waits for movement even when the pointer is already here.
+            # The following exact capture phase validates delivered host state.
+            command = ["xdotool", "mousemove", str(args.linux_origin_x + round(px * marker["scale"])),
+                       str(args.linux_origin_y + round(py * marker["scale"]))]
+        elif operation.startswith("pointer-"):
+            command = ["xdotool", "mousedown" if operation.endswith("down") else "mouseup", "1"]
+        elif operation.startswith("space-"):
+            command = ["xdotool", "keydown" if operation.endswith("down") else "keyup", "space"]
+        else:
+            command = ["xdotool", "key", THEME_CONTROL_KEYS[operation][0]]
+        subprocess.run(command, check=True, timeout=10)
+        return
+    hwnd, user32, types = native._windows_window(args.window_title)
+    ctypes, wintypes, POINT, INPUT, MOUSEINPUT, KEYBDINPUT = types
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    if pid.value != args.sample_pid:
+        raise E2EError("theme SendInput window does not belong to the launched native process")
+    if user32.GetForegroundWindow() != hwnd:
+        native._windows_focus(user32, hwnd)
+    native._require_foreground(user32, hwnd)
+    if operation.startswith("move-"):
+        origin = POINT(0, 0)
+        rect = wintypes.RECT()
+        if not user32.ClientToScreen(hwnd, ctypes.byref(origin)) or not user32.GetClientRect(hwnd, ctypes.byref(rect)):
+            raise E2EError("theme native client coordinate lookup failed")
+        dpi = int(user32.GetDpiForWindow(hwnd))
+        if dpi <= 0 or abs(dpi / 96 - marker["scale"]) > .01:
+            raise E2EError("theme native scale differs from the actual HWND DPI")
+        target_x, target_y = round(px * marker["scale"]), round(py * marker["scale"])
+        if not 0 <= target_x < rect.right or not 0 <= target_y < rect.bottom:
+            raise E2EError("theme input point is outside the owned native client area")
+        if not user32.SetCursorPos(origin.x + target_x, origin.y + target_y):
+            raise E2EError("theme SetCursorPos failed")
+        return
+    if operation.startswith("pointer-"):
+        events = [INPUT(type=0, mi=MOUSEINPUT(0, 0, 0, 0x0002 if operation.endswith("down") else 0x0004, 0, 0))]
+    elif operation.startswith("space-"):
+        events = [INPUT(type=1, ki=KEYBDINPUT(0x20, 0, 0 if operation.endswith("down") else 0x0002, 0, 0))]
+    else:
+        vk = THEME_CONTROL_KEYS[operation][1]
+        events = [INPUT(type=1, ki=KEYBDINPUT(vk, 0, flag, 0, 0)) for flag in (0, 0x0002)]
+    native._windows_send_input(user32, types, events)
+
+
+def run_theme_fixture(args: argparse.Namespace, contract: dict[str, Any], executable: Path,
+                      workspace: Path, evidence: Path, env: dict[str, str]) -> dict[str, Any]:
+    directory = evidence / "theme"
+    directory.mkdir()
+    title = f"{args.window_title} [theme-{uuid.uuid4().hex}]"
+    child_env = env | {"YAMI_NATIVE_UI_E2E": "1", "GPUI_NATIVE_E2E": "1", "YAMI_SHARED_UI_FIXTURE": "theme",
+                       "YAMI_NATIVE_UI_WINDOW_TITLE": title, "YAMI_NATIVE_UI_EVIDENCE_DIR": str(directory)}
+    process, output, input_args = None, None, None
+    trace: dict[str, Any] = {"fixture": "theme", "windowTitle": title, "status": "fail", "presented": [], "inputs": []}
+    try:
+        process = subprocess.Popen([str(executable)], cwd=workspace, env=child_env, stdin=subprocess.DEVNULL,
+                                   stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                   encoding="utf-8", errors="replace", bufsize=1)
+        output = native.ProcessOutput(process, directory / "native-ui.log")
+        stream = MarkerStream(output)
+        initial = {}
+        for _ in range(2):
+            name, marker = stream.next(args.startup_timeout)
+            if name not in ("YAMI_NATIVE_UI_READY", "YAMI_NATIVE_UI_PRESENTED") or name in initial:
+                raise E2EError("theme requires unique initial READY and PRESENTED")
+            validate_theme_marker(marker, 0, contract)
+            initial[name] = marker
+        ready = initial["YAMI_NATIVE_UI_READY"]
+        if ready != initial["YAMI_NATIVE_UI_PRESENTED"] or ready["title"] != title:
+            raise E2EError("theme initial markers disagree or do not bind this unique process")
+        trace["ready"] = ready
+        trace["presented"].append(ready)
+        inspect_theme_frame(ready, directory, contract)
+        input_args = argparse.Namespace(**vars(args))
+        input_args.window_title, input_args.sample_pid = title, process.pid
+        for phase, expected in enumerate(THEME_PHASES[1:], 1):
+            previous = trace["presented"][-1]
+            for operation in [*expected["inputs"], "key-c"]:
+                event = {"phase": phase, "operation": operation, "status": "pending"}
+                trace["inputs"].append(event)
+                send_theme_input(args.platform, operation, previous, input_args)
+                event["status"] = "sent"
+            name, marker = stream.next(args.marker_timeout)
+            if name != "YAMI_NATIVE_UI_PRESENTED":
+                raise E2EError("theme capture request did not produce PRESENTED")
+            validate_theme_marker(marker, phase, contract)
+            inspect_theme_frame(marker, directory, contract)
+            trace["presented"].append(marker)
+        trace["pixels"] = inspect_theme_sequence(trace["presented"], directory, contract)
+        native._send_escape(args.platform, input_args)
+        name, complete = stream.next(args.marker_timeout)
+        if name != "YAMI_NATIVE_UI_COMPLETE":
+            raise E2EError("theme Escape did not produce COMPLETE")
+        validate_theme_marker(complete, len(THEME_PHASES) - 1, contract, complete=True)
+        if {key: value for key, value in complete.items() if key != "destroyed"} != trace["presented"][-1]:
+            raise E2EError("theme COMPLETE differs from the last captured frame")
+        trace["complete"] = complete
+        trace["exitCode"] = process.wait(timeout=10)
+        if trace["exitCode"] != 0:
+            raise E2EError(f"theme native sample exited with status {trace['exitCode']}")
+        output._reader.join(timeout=2)
+        if output._reader.is_alive():
+            raise E2EError("theme stdout did not close after process exit")
+        while not output.lines.empty():
+            try:
+                line = output._line(.1)
+            except E2EError as error:
+                if "exited before required marker" not in str(error):
+                    raise
+                break
+            if line.startswith("YAMI_NATIVE_UI_"):
+                raise E2EError("unexpected theme marker after COMPLETE")
+        trace["status"] = "pass"
+        return trace
+    except (E2EError, OSError, ValueError, subprocess.SubprocessError) as error:
+        trace["error"] = str(error)
+        raise
+    finally:
+        if process is not None:
+            if process.poll() is None and input_args is not None and trace["presented"]:
+                try:
+                    for operation in ("pointer-up", "space-up"):
+                        send_theme_input(args.platform, operation, trace["presented"][-1], input_args)
+                    trace["heldInputCleanup"] = "released"
+                except (E2EError, OSError, subprocess.SubprocessError) as error:
+                    trace["heldInputCleanup"] = str(error)
+            trace["cleanup"] = native._stop_owned_sample(process)
+        if output is not None:
+            output._reader.join(timeout=2)
+            output.drain()
+            output.close()
+        _write(directory / "trace.json", trace)
+
+
 def _artifacts(evidence: Path, paths: list[Path]) -> list[dict[str, str]]:
     artifacts = []
     for path in paths:
@@ -637,7 +1032,8 @@ def drive(args: argparse.Namespace) -> int:
     started = _timestamp()
     evidence = args.evidence_dir.resolve()
     evidence.mkdir(parents=True, exist_ok=True)
-    protected = (*FIXTURES, "results.json", "provenance.json", "shared-native-report.json",
+    scenario = getattr(args, "scenario", "shared")
+    protected = (*FIXTURES, "theme", "results.json", "theme-results.json", "provenance.json", "shared-native-report.json",
                  "native-build.log", "toolchain.log")
     if any((evidence / name).exists() for name in protected):
         raise E2EError("refusing to overwrite existing shared native evidence")
@@ -647,7 +1043,8 @@ def drive(args: argparse.Namespace) -> int:
             raise E2EError("aggregate log must be a fresh, separate file in the evidence root")
     env = os.environ.copy()
     report: dict[str, Any] = {"status": "fail", "platform": args.platform, "startedAt": started,
-                             "scope": "shared counter real-host pointer runtime and retained pixels only",
+                             "scope": "bounded shared real-host inputs, common fixture colors and retained pixels",
+                             "scenario": scenario,
                              "fixtures": []}
     try:
         preflight(args.platform, env)
@@ -655,6 +1052,9 @@ def drive(args: argparse.Namespace) -> int:
             if not math.isfinite(value) or value <= 0:
                 raise E2EError("timeouts must be finite positive numbers")
         contract = load_contract()
+        if scenario not in ("shared", "theme", "all"):
+            raise E2EError("unknown shared native scenario")
+        theme_contract = load_theme_contract() if scenario in ("theme", "all") else None
         gpui = Path(env["YAMI_NATIVE_GPUI_ROOT"]).resolve()
         provenance = bind_sources(ROOT, gpui, args.candidate_sha)
         workspace = Path(env["YAMI_NATIVE_WORKSPACE_ROOT"]).resolve()
@@ -674,9 +1074,13 @@ def drive(args: argparse.Namespace) -> int:
             provenance["binarySha256"] = digest(executable)
             provenance["command"] = args.command
             _write(evidence / "provenance.json", provenance)
-            for fixture in FIXTURES:
-                report["fixtures"].append(run_fixture(args, fixture, expected_counts(contract, fixture),
-                                                      executable, workspace, evidence, env))
+            if scenario in ("theme", "all"):
+                assert theme_contract is not None
+                report["theme"] = run_theme_fixture(args, theme_contract, executable, workspace, evidence, env)
+            if scenario in ("shared", "all"):
+                for fixture in FIXTURES:
+                    report["fixtures"].append(run_fixture(args, fixture, expected_counts(contract, fixture),
+                                                          executable, workspace, evidence, env))
             final_binding = bind_sources(ROOT, gpui, args.candidate_sha)
             if any(provenance.get(key) != value for key, value in final_binding.items()):
                 raise E2EError("source binding changed during host execution")
@@ -699,11 +1103,33 @@ def drive(args: argparse.Namespace) -> int:
                             "capability": "supported", "status": "pass", "command": args.command,
                             "exitCode": 0, "artifacts": _artifacts(evidence, paths), "profileDifferences": [],
                             "observed": {"counts": [marker["count"] for marker in trace["presented"]]}})
-        _write(evidence / "results.json", results)
+        if scenario in ("shared", "all"):
+            _write(evidence / "results.json", results)
+        if "theme" in report:
+            trace = report["theme"]
+            directory = evidence / "theme"
+            paths = shared_paths + [directory / "native-ui.log", directory / "trace.json"]
+            paths += [Path(item["path"]) for item in trace["pixels"]["captures"]]
+            _write(evidence / "theme-results.json", {
+                "contractVersion": "shared-button-theme/v1", "fixtureId": "shared-button-theme-host",
+                "candidateSha": args.candidate_sha, "sourceDirty": False, "status": "pass", "exitCode": 0,
+                "startedAt": started, "finishedAt": finished, "profile": {"platform": args.platform,
+                "backend": "gpui-native", "target": "native", "layer": "runtime", "os": host_platform.platform(),
+                "arch": host_platform.machine(), "toolchain": version.stdout.strip()},
+                "dependencies": {"gpuiRevision": provenance["gpuiRevision"], "binarySha256": provenance["binarySha256"]},
+                "artifacts": _artifacts(evidence, paths), "phaseNames": [phase["name"] for phase in THEME_PHASES],
+                "observed": {"counts": [marker["count"] for marker in trace["presented"]],
+                             "themes": [marker["theme"] for marker in trace["presented"]],
+                             "states": [{key: marker[key] for key in ("enabled", "loading", "focused", "hovered", "pressed")}
+                                        for marker in trace["presented"]],
+                             "buttonIds": [marker["buttonId"] for marker in trace["presented"]]},
+                "profileDifferences": ["GPUI clears hover on loading/disabled; browser :hover may remain",
+                                       "native focus uses GPUI focus API; browser focus timing remains browser-owned"],
+                "unverified": ["macOS real host input and GPU", "accessibility and IME"]})
         report.update({"status": "pass", "finishedAt": finished, "candidateSha": args.candidate_sha,
                        "inputDelivery": "XTest in isolated Xvfb/Weston" if args.platform == "linux"
                        else "Win32 SendInput to uniquely titled foreground HWND"})
-        print(f"Shared native counter proof passed: {evidence / 'results.json'}", flush=True)
+        print(f"Shared native {scenario} proof passed: {evidence / 'shared-native-report.json'}", flush=True)
         return 0
     except (E2EError, OSError, ValueError, subprocess.SubprocessError) as error:
         report.update({"error": str(error), "finishedAt": _timestamp()})
@@ -714,13 +1140,14 @@ def drive(args: argparse.Namespace) -> int:
         if args.log is not None:
             args.log.parent.mkdir(parents=True, exist_ok=True)
             content = "".join(f"=== {fixture} ===\n" + (evidence / fixture / "native-ui.log").read_text(encoding="utf-8")
-                              for fixture in FIXTURES if (evidence / fixture / "native-ui.log").is_file())
+                              for fixture in (*FIXTURES, "theme") if (evidence / fixture / "native-ui.log").is_file())
             args.log.write_text(content, encoding="utf-8")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--platform", choices=("linux", "windows"), required=True)
+    parser.add_argument("--scenario", choices=("shared", "theme", "all"), default="all")
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--candidate-sha", required=True)
     parser.add_argument("--log", type=Path)

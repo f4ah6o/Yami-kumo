@@ -1,4 +1,4 @@
-name: Shared counter native proof
+name: Shared UI native proof
 
 on:
   push:
@@ -119,7 +119,7 @@ jobs:
             libxkbcommon-dev libpango1.0-dev libfontconfig1-dev weston xvfb xauth xdotool
           moon version --all
 
-      - name: Run shared adapter tests and all five real Wayland shared fixtures
+      - name: Run shared adapter tests, five fixtures and Button theme on real Wayland
         shell: bash
         env:
           GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
@@ -185,7 +185,7 @@ jobs:
           where.exe cl
           moon version --all
 
-      - name: Run shared adapter tests and all five SendInput shared fixtures
+      - name: Run shared adapter tests, five fixtures and Button theme with SendInput
         shell: pwsh
         env:
           GPUI_SOURCE: ${{ github.workspace }}\gpui.mbt
@@ -246,7 +246,7 @@ jobs:
           xcrun --find clang
           moon version --all
 
-      - name: Build GPUI test hooks and run macOS portable tests
+      - name: Build GPUI hooks and macOS portable tests (real-host theme input unverified)
         shell: bash
         env:
           GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt

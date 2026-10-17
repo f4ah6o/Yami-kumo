@@ -2,6 +2,8 @@ import {
   "f4ah6o/yami_kumo/ui/core",
   "f4ah6o/yami_kumo/ui/dom",
   "f4ah6o/yami_kumo/examples/shared_counter",
+  "f4ah6o/yami_kumo/examples/shared_button_theme",
+  "f4ah6o/yami_kumo/ui/theme",
 }
 
 supported_targets = "js"
