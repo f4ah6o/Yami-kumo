@@ -327,3 +327,24 @@ test "token identity is symmetric stable and independent of identical roots or d
   assert_true(a == copied && copied == a)
   assert_true(a != b && b != a)
 }
+
+///|
+test "Button flags share activation gate while loading retains no new common focus admission" {
+  let runtime = @runtime.Runtime::new()
+  assert_eq(runtime.commit(tree([button("save")])), Ok(()))
+  let saved = token(runtime, "save")
+  for flags in [(true, false), (false, true), (true, true)] {
+    assert_true(runtime.enqueue_activate(saved))
+    assert_eq(
+      runtime.commit(tree([button("save", disabled=flags.0, loading=flags.1)])),
+      Ok(()),
+    )
+    assert_true(runtime.is_current(saved))
+    assert_true(!runtime.enqueue_activate(saved))
+    assert_true(runtime.request_focus(saved) is Err(@runtime.Unavailable))
+    assert_eq(runtime.commit(tree([button("save")])), Ok(()))
+    assert_true(runtime.next_action() is None)
+    assert_true(runtime.request_focus(saved) is Ok(_))
+  }
+  runtime.dispose()
+}

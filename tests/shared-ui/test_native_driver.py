@@ -152,10 +152,29 @@ class MarkerTests(unittest.TestCase):
             changed = copy.deepcopy(original)
             changed["fixtures"][0]["expected"]["counts"][0] = False
             variants.append(changed)
+            for fixture_id in ("button-interrupted-loading", "button-interrupted-disabled"):
+                changed = copy.deepcopy(original)
+                next(item for item in changed["fixtures"] if item["id"] == fixture_id)["expected"]["counts"][0] = False
+                variants.append(changed)
+            changed = copy.deepcopy(original)
+            changed["fixtures"][-1]["id"] = "unknown"
+            variants.append(changed)
+            changed = copy.deepcopy(original)
+            changed["fixtures"][-1]["id"] = changed["fixtures"][0]["id"]
+            variants.append(changed)
             for value in variants:
                 path.write_text(json.dumps(value))
                 with self.assertRaises(driver.E2EError):
                     driver.load_contract(path)
+
+    def test_new_button_contracts_do_not_expand_real_native_input_claims(self):
+        self.assertEqual(driver.FIXTURES, {
+            "counter": "counter-two-activations",
+            "disabled-loading": "counter-disabled-loading",
+        })
+        self.assertEqual(set(driver.CONTRACT_PHASES) - set(driver.FIXTURES.values()), {
+            "button-interrupted-loading", "button-interrupted-disabled",
+        })
 
 
 class PixelTests(unittest.TestCase):

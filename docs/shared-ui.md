@@ -80,8 +80,11 @@ Use real `click` as the DOM activation input. Pointer, keyboard and accessibilit
 activation therefore share one browser-native route; the adapter never emits a
 second Activate from keydown/keyup. Disabled uses the native disabled property.
 Loading sets `aria-busy` and `aria-disabled`, preserves the existing node/focus,
-and rejects activation in the common runtime. Loading does not create a new
-keyboard controller or establish universal DOM/native keyboard equivalence.
+and rejects activation at the DOM boundary and common runtime. A gate change
+also cancels observed pending browser input before re-enable can revive it.
+The cancellation-only listeners do not generate activation. See the
+[bounded Button state contract](shared-button-states.md) for focus-visible, hover,
+label, repeat, default-action and interruption fixtures and profile differences.
 
 A focus request and its host observation are separate. `mounted.focus(key)`
 reports whether the DOM actually focused that current button; the corresponding

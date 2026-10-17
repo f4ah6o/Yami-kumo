@@ -1,6 +1,8 @@
 # YK-04 — Button/Text/Cardの共通部品契約と全状態
 
-状態：proposed／実装未着手／製品テスト未実行／Yami-kumo mainへ計画ドラフト登録。
+状態：部分実装候補／Button状態契約・fixtureの限定slice／Text・Card・M2全体は未完了。
+Buttonの現行契約・profile差・証拠境界は [shared-button-states.md](../../docs/shared-button-states.md) を参照。
+この更新自体は実ブラウザ・Native windowの新candidate合格を意味しない。
 作成日：2026-10-17 JST。
 作業先：`f4ah6o/Yami-kumo`。段階：M2。依存：YK-02, YK-03。
 

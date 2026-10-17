@@ -15,6 +15,7 @@ import {
   "f4ah6o/gpui/diagnostics",
   "f4ah6o/gpui/platform",
   "f4ah6o/gpui/primitives",
+  "f4ah6o/gpui/scene",
   "f4ah6o/gpui/text",
   "f4ah6o/gpui/text_layout",
   "f4ah6o/yami_kumo/ui/core" @view,
