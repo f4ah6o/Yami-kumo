@@ -334,3 +334,126 @@ test "Card bootstrap keeps one model and decorated view through actual adapter u
   assert_eq(app.count().unwrap(), 2)
   app.dispose()
 }
+
+///|
+test "shared spacing consumer drives count toggle count toggle with stable bindings and focus" {
+  let app = @shared_counter.NativeCounter::new(
+    @platform.WindowId::new(1L),
+    spacing=true,
+  ).unwrap()
+  let initial = render(app)
+  let increment_id = initial.button_binding_id()
+  let toggle_id = initial.toggle_binding_id()
+  assert_true(increment_id != toggle_id)
+  let counts = [initial.count()]
+  let expanded = [initial.expanded()]
+  let initial_revision = app.model_revision().unwrap()
+  for index in 0..<4 {
+    let frame = render(app)
+    let is_toggle = index % 2 == 1
+    let bounds = if is_toggle {
+      frame.toggle_bounds()
+    } else {
+      frame.button_bounds()
+    }
+    let sequence = index.to_int64() * 2L + 1L
+    ignore(app.handle_event(event(sequence, down(bounds))))
+    let held = render(app)
+    assert_true(
+      if is_toggle {
+        held.toggle_pressed()
+      } else {
+        held.button_pressed()
+      },
+    )
+    // An unchanged-geometry repaint retains the existing Button's held state.
+    assert_eq(held.button_binding_id(), increment_id)
+    assert_eq(held.toggle_binding_id(), toggle_id)
+    ignore(app.handle_event(event(sequence + 1L, up(bounds))))
+    assert_true(drain(app))
+    assert_false(drain(app))
+    let after = render(app)
+    counts.push(after.count())
+    expanded.push(after.expanded())
+    assert_eq(after.button_binding_id(), increment_id)
+    assert_eq(after.toggle_binding_id(), toggle_id)
+    assert_eq(after.button_focused(), !is_toggle)
+    assert_eq(after.toggle_focused(), is_toggle)
+    assert_false(after.button_pressed())
+    assert_false(after.toggle_pressed())
+    if index == 1 {
+      assert_true(after.button_bounds() != initial.button_bounds())
+      assert_true(after.toggle_bounds() != initial.toggle_bounds())
+    }
+  }
+  let final_frame = render(app)
+  assert_eq(counts, [0, 1, 1, 2, 2])
+  assert_eq(expanded, [false, false, true, true, false])
+  assert_eq(final_frame.action_keys(), [
+    "increment", "spacing-toggle", "increment", "spacing-toggle",
+  ])
+  assert_true(final_frame.button_bounds() == initial.button_bounds())
+  assert_true(final_frame.toggle_bounds() == initial.toggle_bounds())
+  assert_eq(app.model_revision().unwrap(), initial_revision + 4UL)
+  final_frame.action_keys().clear()
+  assert_eq(final_frame.action_keys().length(), 4)
+  app.dispose()
+}
+
+///|
+test "spacing consumer observations follow intrinsic union gaps padding and fixed Card" {
+  let app = @shared_counter.NativeCounter::new(
+    @platform.WindowId::new(1L),
+    spacing=true,
+  ).unwrap()
+  for phase in 0..<2 {
+    let frame = render(app)
+    let outer = frame.stack_bounds()
+    let row = frame.row_bounds()
+    let heading = frame.heading_bounds()
+    let count = frame.counter_bounds()
+    let button = frame.button_bounds()
+    let toggle = frame.toggle_bounds()
+    let card = frame.card_bounds()
+    let label = frame.card_label_bounds()
+    let outer_gap = if phase == 0 { 0.0 } else { 12.0 }
+    let outer_padding = if phase == 0 { 4.0 } else { 16.0 }
+    let inner_gap = if phase == 0 { 4.0 } else { 16.0 }
+    let inner_padding = if phase == 0 { 0.0 } else { 8.0 }
+    assert_eq(heading.left() - outer.left(), outer_padding)
+    assert_eq(heading.top() - outer.top(), outer_padding)
+    assert_eq(count.top() - heading.bottom(), outer_gap)
+    assert_eq(row.top() - count.bottom(), outer_gap)
+    assert_eq(card.top() - row.bottom(), outer_gap)
+    assert_eq(outer.bottom() - card.bottom(), outer_padding)
+    // The row is the widest direct child; other children remain intrinsic.
+    assert_eq(outer.right() - row.right(), outer_padding)
+    assert_eq(button.left() - row.left(), inner_padding)
+    assert_eq(button.top() - row.top(), inner_padding)
+    assert_eq(toggle.left() - button.right(), inner_gap)
+    assert_eq(row.right() - toggle.right(), inner_padding)
+    assert_eq(row.bottom() - button.bottom(), inner_padding)
+    assert_eq(label.left() - card.left(), 17.0)
+    assert_eq(label.top() - card.top(), 17.0)
+    assert_eq(card.right() - label.right(), 17.0)
+    assert_eq(card.bottom() - label.bottom(), 17.0)
+    if phase == 0 {
+      ignore(app.handle_event(event(1L, down(toggle))))
+      ignore(app.handle_event(event(2L, up(toggle))))
+      assert_true(drain(app))
+    }
+  }
+  app.dispose()
+}
+
+///|
+test "Card and spacing consumer modes cannot silently override one another" {
+  assert_true(
+    @shared_counter.NativeCounter::new(
+      @platform.WindowId::new(1L),
+      card=true,
+      spacing=true,
+    )
+    is Err(_),
+  )
+}

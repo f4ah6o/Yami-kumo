@@ -1,0 +1,6 @@
+/* Test-host constraint only. Production shared-ui.css sets no width/alignment. */
+#spacing-root,
+#fixed-spacing-root,
+#empty-spacing-root {
+  display: inline-flex;
+}

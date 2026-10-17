@@ -170,9 +170,11 @@ Box, grids, text editing and IME are not part of this adapter.
 The opt-in `Shared counter native proof` workflow uses its own pinned GPUI
 revision in `tests/shared-ui/gpui-revision.txt` and MoonBit toolchain. Existing
 legacy native jobs keep their old pins and default runners. Linux and Windows
-run three fixed shared fixtures with actual host-delivered pointer input:
+run four fixed shared fixtures with actual host-delivered pointer input:
 plain counter `[0, 1, 2]`, disabled/loading `[0, 0, 0, 1]`, and Card counter
-`[0, 1, 2]`. Card additionally checks measured content insets/gaps, border paint
+`[0, 1, 2]`, plus the two-button spacing demo `[0, 1, 1, 2, 2]`. The latter
+measures changed gap/padding, stable bindings and retained focus while the
+common application model toggles spacing. Card additionally checks measured content insets/gaps, border paint
 and actual focus after each click. The disabled/loading fixture starts disabled, advances to loading
 only after the first actual primary release, then enabled after the second;
 the third click increments the unchanged model. These test-only props are not
@@ -212,3 +214,10 @@ Dialog, external accessibility and packaged distribution are later gates.
 Browser coverage in this slice is Chromium only; Firefox, WebKit, actual Safari,
 real IME and assistive technology require their own measured profiles. The
 existing GPUI Canvas backend and legacy native Button controllers are unchanged.
+
+## Explicit stack-spacing slice
+
+The additive closed-token Row/Column gap/padding API and shared two-button demo
+are specified in [shared-stack-spacing.md](shared-stack-spacing.md). Legacy
+constructors and fixed Card geometry remain unchanged. This does not qualify
+theme, AppShell, general layout or full YK-05.

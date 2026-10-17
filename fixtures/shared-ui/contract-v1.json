@@ -33,7 +33,16 @@
     {
       "id": "card-counter-two-activations",
       "description": "Fixed noninteractive Card around the unchanged common counter: measured insets and gaps, real nested Button actions and focus. Geometry is retained separately from the domain counts.",
-      "expected": { "counts": [0, 1, 2] }
+      "expected": {
+        "counts": [0, 1, 2]
+      }
+    },
+    {
+      "id": "spacing-count-and-toggle",
+      "description": "Shared two-button demo increments and toggles closed stack spacing tokens while retaining identity/focus; geometry is retained separately.",
+      "expected": {
+        "counts": [0, 1, 1, 2, 2]
+      }
     }
   ]
 }

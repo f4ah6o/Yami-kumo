@@ -93,6 +93,20 @@ extern "js" fn update_node(
   #| }
 
 ///|
+/// Closed token classes only: no inline style, stylesheet injection or coercion.
+extern "js" fn update_spacing(
+  node : DomNode,
+  gap : Int,
+  padding : Int,
+) -> Unit =
+  #| (node, gap, padding) => {
+  #|   for (const value of [0, 4, 8, 12, 16, 24]) {
+  #|     node.classList.toggle(`yk-ui-gap-${value}`, gap === value);
+  #|     node.classList.toggle(`yk-ui-padding-${value}`, padding === value);
+  #|   }
+  #| }
+
+///|
 #external
 priv type ButtonEvents
 
@@ -350,6 +364,17 @@ fn DomRoot::render_node(
     view.loading(),
     view.is_card(),
   )
+  if kind == @core.Row || kind == @core.Column {
+    match view.spacing() {
+      Some(spacing) =>
+        update_spacing(
+          mounted.node,
+          spacing.gap().pixels().to_int(),
+          spacing.padding().pixels().to_int(),
+        )
+      None => update_spacing(mounted.node, -1, -1)
+    }
+  }
   // Place parents before children. A retained former descendant can become an
   // ancestor in the next tree; detach its old ancestry before moving children.
   position_child(parent, mounted.node, index)

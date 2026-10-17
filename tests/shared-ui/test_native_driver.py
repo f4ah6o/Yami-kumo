@@ -172,6 +172,7 @@ class MarkerTests(unittest.TestCase):
             "counter": "counter-two-activations",
             "disabled-loading": "counter-disabled-loading",
             "card": "card-counter-two-activations",
+            "spacing": "spacing-count-and-toggle",
         })
         self.assertEqual(set(driver.CONTRACT_PHASES) - set(driver.FIXTURES.values()), {
             "button-interrupted-loading", "button-interrupted-disabled",
@@ -256,6 +257,227 @@ class CardGeometryTests(unittest.TestCase):
             changed[offset:offset+3] = bytes((0,0,0))
             with self.subTest(point=(x,y)), self.assertRaises(driver.E2EError):
                 driver.inspect_card_pixels(driver.native.PPM(200,200,bytes(changed)),value)
+
+
+SPACING_COUNTS = [0, 1, 1, 2, 2]
+
+
+def spacing_marker(phase=0, **updates):
+    """Synthetic font-independent geometry, never retained native evidence."""
+    expanded = phase in (2, 3)
+    pad, gap, row_pad, row_gap = (16, 12, 8, 16) if expanded else (4, 0, 0, 4)
+    def rect(x, y, width, height):
+        return {"x": x, "y": y, "width": width, "height": height}
+    left, top = 24 + pad, 24 + pad
+    row_width, row_height = 60 + 50 + row_gap + row_pad * 2, 20 + row_pad * 2
+    heading = rect(left, top, 80, 10)
+    counter = rect(left, top + 10 + gap, 50, 10)
+    row = rect(left, counter["y"] + 10 + gap, row_width, row_height)
+    button = rect(left + row_pad, row["y"] + row_pad, 60, 20)
+    toggle = rect(button["x"] + 60 + row_gap, button["y"], 50, 20)
+    card = rect(left, row["y"] + row_height + gap, 94, 44)
+    card_label = rect(left + 17, card["y"] + 17, 60, 10)
+    stack = rect(24, 24, row_width + pad * 2, card["y"] + 44 + pad - 24)
+    root = rect(0, 0, 300, 300)
+    count = SPACING_COUNTS[phase]
+    value = {"fixture": "spacing", "phase": phase, "count": count, "value": count,
+             "enabled": True, "loading": False, "pressed": False, "focused": phase in (1, 3),
+             "releases": phase, "actions": ["Activate"] * phase, "root": root, "scale": 1.0,
+             "title": "test-window", "heading": heading, "counter": counter, "button": button,
+             "buttonLabel": rect(button["x"] + 4, button["y"] + 4, 50, 10), "card": card,
+             "spacing": {"expanded": expanded, "stack": stack, "row": row, "cardLabel": card_label,
+                         "toggle": toggle, "toggleLabel": rect(toggle["x"] + 4, toggle["y"] + 4, 40, 10),
+                         "togglePressed": False, "toggleFocused": phase in (2, 4),
+                         "buttonId": 40, "toggleId": 48,
+                         "actionKeys": ["increment", "spacing-toggle", "increment", "spacing-toggle"][:phase]},
+             "scene": {"schema_version": 1, "viewport": root.copy(), "scale": 1.0, "items": [
+                 {"kind": "quad", "id": 1, "bounds": root.copy(), "color": {"red":255,"green":255,"blue":255,"alpha":255}},
+                 {"kind": "text", "id": 19, "text": "Shared <stack>"},
+                 {"kind": "text", "id": 27, "text": f"Count: {count}"},
+                 {"kind": "text_run", "id": 43, "text": "Increment"},
+                 {"kind": "text_run", "id": 51, "text": "Spacing"},
+                 {"kind": "quad", "id": 57, "bounds": card.copy(), "color": {"red":166,"green":171,"blue":178,"alpha":255}},
+                 {"kind": "quad", "id": 58, "bounds": rect(card["x"]+1, card["y"]+1, 92, 42), "color": {"red":245,"green":247,"blue":250,"alpha":255}},
+                 {"kind": "text", "id": 67, "text": "Fixed Card"}]},
+             "frame": {"path": f"frame-{phase}.ppm", "width": 300, "height": 300, "scale": 1.0}}
+    value.update(updates)
+    return value
+
+
+def write_spacing_frame(directory, value, *, count=None, toggle_label=True, card_paint=True):
+    pixels = bytearray(b"\xff\xff\xff" * (300 * 300))
+    def pixel(x, y, color):
+        offset = (y * 300 + x) * 3
+        pixels[offset:offset+3] = bytes(color)
+    def fill(bounds, color):
+        for y in range(bounds["y"], bounds["y"] + bounds["height"]):
+            for x in range(bounds["x"], bounds["x"] + bounds["width"]):
+                pixel(x, y, color)
+    for button in (value["button"], value["spacing"]["toggle"]):
+        fill(button, (80, 80, 80))
+    labels = [value["buttonLabel"]]
+    if toggle_label:
+        labels.append(value["spacing"]["toggleLabel"])
+    for label in labels:
+        pixel(label["x"]+2, label["y"]+2, (255,255,255))
+    counter = value["counter"]
+    pixel(counter["x"]+3+(value["count"] if count is None else count), counter["y"]+3, (0,0,0))
+    if card_paint:
+        card = value["card"]
+        fill(card, (166,171,178))
+        fill({"x":card["x"]+1,"y":card["y"]+1,"width":card["width"]-2,"height":card["height"]-2}, (245,247,250))
+    path = directory / value["frame"]["path"]
+    path.write_bytes(b"P6\n300 300\n255\n" + pixels)
+    return path
+
+
+class SpacingTests(unittest.TestCase):
+    def test_all_five_model_pointer_geometry_and_identity_phases(self):
+        markers = [spacing_marker(phase) for phase in range(5)]
+        contract = driver.load_contract()
+        self.assertEqual(driver.expected_counts(contract, "spacing"), SPACING_COUNTS)
+        for phase, value in enumerate(markers):
+            driver.validate_marker(value, "spacing", phase, SPACING_COUNTS, presented=True)
+        driver.validate_spacing_sequence(markers)
+
+    def test_missing_extra_and_mistyped_spacing_schema_rejected(self):
+        for key in driver.SPACING_KEYS:
+            value = spacing_marker(); del value["spacing"][key]
+            with self.subTest(missing=key), self.assertRaises(driver.E2EError):
+                driver.validate_spacing_geometry(value, 0)
+        for change in ({"gap":0}, {"expanded":0}, {"buttonId":True}, {"buttonId":0},
+                       {"toggleId":40}, {"togglePressed":1}, {"toggleFocused":0}):
+            value = spacing_marker(); value["spacing"].update(change)
+            with self.subTest(change=change), self.assertRaises(driver.E2EError):
+                driver.validate_spacing_geometry(value, 0)
+
+    def test_outer_row_all_union_insets_and_ordered_gaps_are_required(self):
+        for phase in (0, 2):
+            original = spacing_marker(phase)
+            # Mutate each edge of each explicit stack, each direct-child gap,
+            # and each fixed Card edge. These must not pass on declared tokens.
+            locations = [("spacing", "stack", axis) for axis in ("x", "y", "width", "height")]
+            locations += [("spacing", "row", axis) for axis in ("x", "y", "width", "height")]
+            locations += [("spacing", "toggle", "x"), ("spacing", "cardLabel", "x"), ("spacing", "cardLabel", "y")]
+            locations += [(None, key, "y") for key in ("counter", "card")]
+            locations += [(None, "card", axis) for axis in ("x", "width", "height")]
+            for group, key, axis in locations:
+                value = copy.deepcopy(original)
+                (value[group][key] if group else value[key])[axis] += 3
+                with self.subTest(phase=phase, group=group, key=key, axis=axis), self.assertRaises(driver.E2EError):
+                    driver.validate_spacing_geometry(value, phase)
+
+    def test_tolerance_is_fixed_at_one_logical_pixel(self):
+        value = spacing_marker()
+        value["spacing"]["stack"]["width"] += 1
+        driver.validate_spacing_geometry(value, 0)
+        value["spacing"]["stack"]["width"] += .01
+        with self.assertRaises(driver.E2EError):
+            driver.validate_spacing_geometry(value, 0)
+        self.assertEqual(driver.GEOMETRY_TOLERANCE, 1.0)
+
+    def test_model_action_focus_and_scene_binding_identity_are_required(self):
+        for phase in range(5):
+            for change in ({"expanded": not (phase in (2, 3))}, {"actionKeys": ["increment"]*4},
+                           {"togglePressed": True}, {"toggleFocused": phase not in (2, 4)},
+                           {"buttonId": 41}, {"toggleId": 49}):
+                value = spacing_marker(phase); value["spacing"].update(change)
+                with self.subTest(phase=phase, change=change), self.assertRaises(driver.E2EError):
+                    driver.validate_spacing_geometry(value, phase)
+            value = spacing_marker(phase); value["focused"] = not value["focused"]
+            with self.assertRaises(driver.E2EError):
+                driver.validate_spacing_geometry(value, phase)
+        markers = [spacing_marker(phase) for phase in range(5)]
+        markers[2]["spacing"]["buttonId"] = 72
+        next(item for item in markers[2]["scene"]["items"] if item.get("text") == "Increment")["id"] = 75
+        driver.validate_spacing_geometry(markers[2], 2)  # Locally valid replacement still fails identity retention.
+        with self.assertRaisesRegex(driver.E2EError, "stable native Button"):
+            driver.validate_spacing_sequence(markers)
+
+    def test_card_paint_remains_fixed_and_descendant_ordered(self):
+        for mutation in (lambda v: v["scene"]["items"][5]["color"].update(red=0),
+                         lambda v: v["scene"]["items"][6]["bounds"].update(width=90),
+                         lambda v: v["scene"]["items"].insert(0, v["scene"]["items"].pop()),
+                         lambda v: v["scene"]["items"][6].update(id=57)):
+            value = spacing_marker(); mutation(value)
+            with self.assertRaises(driver.E2EError):
+                driver.validate_spacing_geometry(value, 0)
+
+    def test_translated_count_rasters_and_fresh_visible_toggle_and_card(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            markers = [spacing_marker(phase) for phase in range(5)]
+            for value in markers:
+                write_spacing_frame(directory, value)
+            proof = driver.inspect_frame_sequence(markers, directory)
+            self.assertEqual(proof["changedCounterPixels"], 2)
+            self.assertEqual(len(proof["captures"]), 5)
+            write_spacing_frame(directory, markers[2], count=0)
+            with self.assertRaisesRegex(driver.E2EError, "spacing-only"):
+                driver.inspect_frame_sequence(markers, directory)
+            write_spacing_frame(directory, markers[2])
+            write_spacing_frame(directory, markers[3], count=1)
+            with self.assertRaisesRegex(driver.E2EError, "spacing increment"):
+                driver.inspect_frame_sequence(markers, directory)
+            for options in ({"toggle_label":False}, {"card_paint":False}):
+                write_spacing_frame(directory, markers[0], **options)
+                with self.subTest(options=options), self.assertRaises(driver.E2EError):
+                    driver.inspect_frame(markers[0], directory)
+
+    def test_only_five_phases_with_restored_collapsed_geometry_qualify(self):
+        with self.assertRaises(driver.E2EError):
+            driver.validate_spacing_sequence([spacing_marker(phase) for phase in range(4)])
+        markers = [spacing_marker(phase) for phase in range(5)]
+        markers[-1]["spacing"]["stack"]["width"] += 1  # Locally within tolerance, not restored.
+        with self.assertRaisesRegex(driver.E2EError, "restore"):
+            driver.validate_spacing_sequence(markers)
+
+    def test_mocked_host_click_routing_uses_each_latest_button_rectangle(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence = Path(temporary)
+            args = argparse.Namespace(platform="linux", window_title="test-window", startup_timeout=1,
+                                      marker_timeout=1, linux_origin_x=0, linux_origin_y=0)
+            process = Mock(pid=123, stdout=None)
+            process.wait.return_value = 0
+            process.poll.return_value = 0
+            output = Mock(events=[], lines=queue.Queue())
+            output._reader.is_alive.return_value = False
+            markers = [spacing_marker(phase) for phase in range(5)]
+            calls = []
+            title = None
+            def launch(command, **kwargs):
+                nonlocal title
+                title = kwargs["env"]["YAMI_NATIVE_UI_WINDOW_TITLE"]
+                self.assertEqual(kwargs["env"]["YAMI_SHARED_UI_FIXTURE"], "spacing")
+                for value in markers:
+                    value["title"] = title
+                return process
+            def create_output(owned, path):
+                path.write_text("Synthetic mocked marker stream; not host evidence.\n")
+                for value in markers:
+                    write_spacing_frame(path.parent, value)
+                output.events.extend([("YAMI_NATIVE_UI_PRESENTED", markers[0]), ("YAMI_NATIVE_UI_READY", markers[0])])
+                return output
+            def click(platform, target, click_args):
+                phase = len(calls) + 1
+                previous = markers[phase - 1]
+                expected = previous["spacing"]["toggle"] if phase in (2, 4) else previous["button"]
+                self.assertEqual(target["button"], expected)
+                self.assertEqual(click_args.sample_pid, 123)
+                calls.append(copy.deepcopy(target["button"]))
+                output.events.append(("YAMI_NATIVE_UI_PRESENTED", markers[phase]))
+            def escape(platform, click_args):
+                output.events.append(("YAMI_NATIVE_UI_COMPLETE", markers[-1] | {"destroyed":True}))
+            with patch.object(driver.subprocess, "Popen", side_effect=launch), \
+                 patch.object(driver.native, "ProcessOutput", side_effect=create_output), \
+                 patch.object(driver.native, "_send_click", side_effect=click), \
+                 patch.object(driver.native, "_send_escape", side_effect=escape):
+                trace = driver.run_fixture(args, "spacing", SPACING_COUNTS, Path("owned-binary"), Path("workspace"), evidence, {})
+            self.assertEqual(trace["status"], "pass")
+            self.assertEqual(len(calls), 4)
+            self.assertNotEqual(calls[0], calls[2])
+            self.assertNotEqual(calls[1], calls[3])
+            self.assertEqual(trace["cleanup"], {"state":"already-exited", "reaped":True, "returnCode":0})
 
 
 class PixelTests(unittest.TestCase):
@@ -376,6 +598,11 @@ class SourceBindingTests(unittest.TestCase):
         if args[0] == "ls-files":
             return "\0".join(self.files) + "\0"
         raise AssertionError(args)
+
+    def test_spacing_sources_styles_and_contract_doc_are_provenance_bound(self):
+        for path in ("ui/core", "ui/runtime", "examples/shared_counter", "styles/shared-ui.css",
+                     "tests/shared-ui", "fixtures/shared-ui", "docs/shared-card.md", "docs/shared-stack-spacing.md"):
+            self.assertIn(path, driver.BOUND_PATHS)
 
     def test_clean_candidate_and_dependency_bind_exact_common_source_hashes(self):
         with patch.object(driver, "_git", side_effect=self.git):

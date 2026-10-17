@@ -21,3 +21,52 @@
   gap: 12px;
   background: rgb(245, 247, 250);
 }
+
+/* Explicit plain-stack tokens only; legacy spacing and fixed Card are unchanged. */
+.yk-ui-gap-0 {
+  gap: 0px;
+}
+
+.yk-ui-padding-0 {
+  padding: 0px;
+}
+
+.yk-ui-gap-4 {
+  gap: 4px;
+}
+
+.yk-ui-padding-4 {
+  padding: 4px;
+}
+
+.yk-ui-gap-8 {
+  gap: 8px;
+}
+
+.yk-ui-padding-8 {
+  padding: 8px;
+}
+
+.yk-ui-gap-12 {
+  gap: 12px;
+}
+
+.yk-ui-padding-12 {
+  padding: 12px;
+}
+
+.yk-ui-gap-16 {
+  gap: 16px;
+}
+
+.yk-ui-padding-16 {
+  padding: 16px;
+}
+
+.yk-ui-gap-24 {
+  gap: 24px;
+}
+
+.yk-ui-padding-24 {
+  padding: 24px;
+}
