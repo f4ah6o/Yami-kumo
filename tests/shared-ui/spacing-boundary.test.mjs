@@ -37,7 +37,10 @@ test('production spacing stylesheet has only scoped selectors and exact token de
   );
   for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     for (const selector of match[1].trim().split(/\s*,\s*/))
-      assert.match(selector, /^\.yk-ui-[a-z0-9-]+$/);
+      assert.match(
+        selector,
+        /^\.yk-ui-[a-z0-9-]+$|^\.yk-ui-button-(?:light|dark)(?::hover|:active|:focus-visible|:disabled|\[aria-busy=['"]true['"]\])$/,
+      );
   }
   for (const value of [0, 4, 8, 12, 16, 24]) {
     for (const property of ['gap', 'padding']) {

@@ -49,6 +49,10 @@ priv struct Observation {
   label_bounds : @primitives.Rect?
   pressed : Bool
   focused : Bool
+  hovered : Bool
+  enabled : Bool
+  loading : Bool
+  palette : @view.ButtonPaletteToken?
 }
 
 ///|
@@ -129,6 +133,49 @@ pub fn Frame::focused(self : Frame, key : @view.NodeKey) -> Bool {
 }
 
 ///|
+pub fn Frame::hovered(self : Frame, key : @view.NodeKey) -> Bool {
+  for observation in self.observations {
+    if observation.key == key {
+      return observation.hovered
+    }
+  }
+  false
+}
+
+///|
+pub fn Frame::enabled(self : Frame, key : @view.NodeKey) -> Bool {
+  for observation in self.observations {
+    if observation.key == key {
+      return observation.enabled
+    }
+  }
+  false
+}
+
+///|
+pub fn Frame::loading(self : Frame, key : @view.NodeKey) -> Bool {
+  for observation in self.observations {
+    if observation.key == key {
+      return observation.loading
+    }
+  }
+  false
+}
+
+///|
+pub fn Frame::button_palette(
+  self : Frame,
+  key : @view.NodeKey,
+) -> @view.ButtonPaletteToken? {
+  for observation in self.observations {
+    if observation.key == key {
+      return observation.palette
+    }
+  }
+  None
+}
+
+///|
 /// One explicit native root/window owner. The common runtime owns semantic
 /// incarnation tokens; the adapter privately owns nonzero, never-reused ID
 /// blocks. One existing GPUI Button owns each Button's interaction state.
@@ -143,6 +190,7 @@ pub struct Mounted {
   priv mut revision : UInt64
   priv mut epoch : Epoch
   priv mut change : Epoch
+  priv mut last_dispatched_input : Int64
   priv mut last_sequence : Int64
   priv mut window_focused : Bool
   priv mut ready : Bool
@@ -162,6 +210,7 @@ pub fn Mounted::new(window : @platform.WindowId) -> Mounted {
     epoch: fresh_epoch(),
     change: fresh_epoch(),
     last_sequence: 0,
+    last_dispatched_input: 0,
     window_focused: true,
     ready: false,
     busy: false,
@@ -233,6 +282,38 @@ fn flatten(
 ///|
 fn color(r : Int32, g : Int32, b : Int32) -> @primitives.Color {
   @primitives.Color::rgba(r, g, b, 255).unwrap()
+}
+
+///|
+fn palette_color(
+  token : @view.ButtonPaletteToken,
+  role : @view.ButtonPaintRole,
+) -> @primitives.Color {
+  let value = token.color(role)
+  @primitives.Color::rgba(
+    value.red(),
+    value.green(),
+    value.blue(),
+    value.alpha(),
+  ).unwrap()
+}
+
+///|
+fn button_palette(
+  token : @view.ButtonPaletteToken,
+) -> @button.ButtonPaintPalette {
+  @button.ButtonPaintPalette::new(
+    normal_border=palette_color(token, @view.NormalBorder),
+    focused_border=palette_color(token, @view.FocusedBorder),
+    disabled_border=palette_color(token, @view.DisabledBorder),
+    normal_fill=palette_color(token, @view.NormalFill),
+    hovered_fill=palette_color(token, @view.HoveredFill),
+    pressed_fill=palette_color(token, @view.PressedFill),
+    loading_fill=palette_color(token, @view.LoadingFill),
+    disabled_fill=palette_color(token, @view.DisabledFill),
+    enabled_foreground=palette_color(token, @view.EnabledForeground),
+    disabled_foreground=palette_color(token, @view.DisabledForeground),
+  )
 }
 
 ///|
@@ -371,9 +452,8 @@ fn Mounted::prepare(
     let text = if node.kind() == @view.Text || node.kind() == @view.Button {
       let foreground = if node.kind() == @view.Text {
         color(30, 36, 45)
-      } else if node.disabled() {
-        color(166, 171, 178)
       } else {
+        // Measurement is color-independent; core resolves paint below.
         color(242, 246, 250)
       }
       match
@@ -490,6 +570,7 @@ fn Mounted::prepare(
       }
     }
     let mut button = binding.button
+    let mut resolved_text = binding.text
     if binding.view.kind() == @view.Button {
       let previous = binding.button
       let model = match previous {
@@ -527,7 +608,15 @@ fn Mounted::prepare(
         }) {
         model = model.cancel_press()
       }
-      let paint = match model.paint_items(binding.id + 1UL) {
+      let painted_button = match binding.view.button_palette() {
+        None => model.paint_items(binding.id + 1UL)
+        Some(token) =>
+          model.paint_items_with_palette(
+            binding.id + 1UL,
+            button_palette(token),
+          )
+      }
+      let paint = match painted_button {
         Ok(value) => value
         Err(_) => return Err(adapter_error("native Button paint failed"))
       }
@@ -535,9 +624,18 @@ fn Mounted::prepare(
       // existing NativeText path and the host's actual measurement callback.
       items.push(paint[0])
       items.push(paint[1])
+      // Core owns foreground resolution, including gate precedence. Recolor only
+      // after its full paint validation; retain host measurement and text origin.
+      match paint[2] {
+        @scene.TextItem(color~, ..) =>
+          resolved_text = binding.text.map(text => {
+            text.recolored(binding.id + 3UL, color)
+          })
+        _ => return Err(adapter_error("native Button label paint missing"))
+      }
       button = Some(model)
     }
-    match binding.text {
+    match resolved_text {
       Some(text) => {
         let align = if binding.view.kind() == @view.Button {
           @components.Center
@@ -572,6 +670,10 @@ fn Mounted::prepare(
       label_bounds,
       pressed: button.map(model => model.is_pressed()).unwrap_or(false),
       focused: button.map(model => model.is_focused()).unwrap_or(false),
+      hovered: button.map(model => model.is_hovered()).unwrap_or(false),
+      enabled: button.map(model => model.is_enabled()).unwrap_or(false),
+      loading: button.map(model => model.is_loading()).unwrap_or(false),
+      palette: binding.view.button_palette(),
     })
     bindings[index] = { ..binding, button, }
   }
@@ -838,7 +940,11 @@ pub fn Mounted::handle_event(
         self.invalidate_layout()
         return Ok(false)
       }
-      self.dispatch(input)
+      let result = self.dispatch(input)
+      if result is Ok(_) {
+        self.last_dispatched_input = event.sequence()
+      }
+      result
     }
     _ => Ok(false)
   }
@@ -923,4 +1029,12 @@ pub fn Mounted::dispose(self : Mounted) -> Unit {
   self.tree = None
   self.current_frame = None
   self.ready = false
+}
+
+///|
+/// Last sequence successfully dispatched through all input admission gates.
+/// Includes unconsumed input (Ok(false)); ignored or failed events do not advance it.
+/// Compare before/after a call to distinguish a newly dispatched event from replay.
+pub fn Mounted::last_dispatched_input_sequence(self : Mounted) -> Int64 {
+  self.last_dispatched_input
 }

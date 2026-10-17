@@ -25,8 +25,12 @@ pub struct Frame {
 }
 pub fn Frame::binding_id(Self, @core.NodeKey) -> UInt64?
 pub fn Frame::bounds(Self, @core.NodeKey) -> @primitives.Rect?
+pub fn Frame::button_palette(Self, @core.NodeKey) -> @core.ButtonPaletteToken?
+pub fn Frame::enabled(Self, @core.NodeKey) -> Bool
 pub fn Frame::focused(Self, @core.NodeKey) -> Bool
+pub fn Frame::hovered(Self, @core.NodeKey) -> Bool
 pub fn Frame::label_bounds(Self, @core.NodeKey) -> @primitives.Rect?
+pub fn Frame::loading(Self, @core.NodeKey) -> Bool
 pub fn Frame::pressed(Self, @core.NodeKey) -> Bool
 pub fn Frame::revision(Self) -> UInt64
 pub fn Frame::root_bounds(Self) -> @primitives.Rect
@@ -44,6 +48,7 @@ pub fn Mounted::frame(Self) -> Frame?
 pub fn Mounted::handle_event(Self, @platform.Event) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn Mounted::invalidate_layout(Self) -> Unit
 pub fn Mounted::is_disposed(Self) -> Bool
+pub fn Mounted::last_dispatched_input_sequence(Self) -> Int64
 pub fn Mounted::new(@platform.WindowId) -> Self
 pub fn Mounted::next_action(Self) -> @core.SemanticAction?
 pub fn Mounted::next_focus_result(Self) -> @runtime.FocusResult?

@@ -70,3 +70,60 @@
 .yk-ui-padding-24 {
   padding: 24px;
 }
+
+/* Per-Button paint only. State recognition remains browser-owned. */
+.yk-ui-button-light {
+  border-color: rgb(130, 146, 164);
+  background-color: rgb(245, 248, 252);
+  color: rgb(25, 43, 62);
+}
+
+.yk-ui-button-light:hover {
+  background-color: rgb(226, 237, 250);
+}
+
+.yk-ui-button-light:active {
+  background-color: rgb(206, 224, 245);
+}
+
+.yk-ui-button-light[aria-busy='true'] {
+  background-color: rgb(232, 237, 244);
+}
+
+.yk-ui-button-light:focus-visible {
+  border-color: rgb(35, 110, 210);
+}
+
+.yk-ui-button-light:disabled {
+  border-color: rgb(184, 190, 198);
+  background-color: rgb(238, 240, 243);
+  color: rgb(120, 128, 139);
+}
+
+.yk-ui-button-dark {
+  border-color: rgb(102, 126, 150);
+  background-color: rgb(42, 71, 101);
+  color: rgb(242, 246, 250);
+}
+
+.yk-ui-button-dark:hover {
+  background-color: rgb(48, 91, 137);
+}
+
+.yk-ui-button-dark:active {
+  background-color: rgb(35, 77, 119);
+}
+
+.yk-ui-button-dark[aria-busy='true'] {
+  background-color: rgb(55, 70, 88);
+}
+
+.yk-ui-button-dark:focus-visible {
+  border-color: rgb(98, 170, 255);
+}
+
+.yk-ui-button-dark:disabled {
+  border-color: rgb(100, 106, 114);
+  background-color: rgb(47, 52, 60);
+  color: rgb(166, 171, 178);
+}

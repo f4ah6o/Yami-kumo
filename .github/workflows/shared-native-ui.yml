@@ -53,6 +53,8 @@ jobs:
             moon test "$YAMI_NATIVE_MODULE_ROOT/ui" "$YAMI_NATIVE_MODULE_ROOT/examples/shared_counter" --target all --deny-warn --no-parallelize
             moon test "$YAMI_NATIVE_MODULE_ROOT/ui" "$YAMI_NATIVE_MODULE_ROOT/examples/shared_counter" --target all --deny-warn --no-parallelize --release
             python3 "$YAMI_NATIVE_YAMI_ROOT/tests/shared-ui/test_native_driver.py"
+            python3 "$YAMI_NATIVE_YAMI_ROOT/tests/shared-ui/test_palette_oracle.py"
+            YAMI_PALETTE_CONTROL_EVIDENCE="$YAMI_NATIVE_UI_EVIDENCE_DIR/palette-controls" python3 "$YAMI_NATIVE_YAMI_ROOT/tests/shared-ui/palette-native-controls.py"
             python3 "$YAMI_NATIVE_YAMI_ROOT/scripts/shared_native_ui_provenance.py"
           ' 2>&1 | tee "$YAMI_NATIVE_UI_EVIDENCE_DIR/portable-tests.log"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -117,7 +119,7 @@ jobs:
             libxkbcommon-dev libpango1.0-dev libfontconfig1-dev weston xvfb xauth xdotool
           moon version --all
 
-      - name: Run shared adapter tests and all four real Wayland shared fixtures
+      - name: Run shared adapter tests and all five real Wayland shared fixtures
         shell: bash
         env:
           GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
@@ -183,7 +185,7 @@ jobs:
           where.exe cl
           moon version --all
 
-      - name: Run shared adapter tests and all four SendInput shared fixtures
+      - name: Run shared adapter tests and all five SendInput shared fixtures
         shell: pwsh
         env:
           GPUI_SOURCE: ${{ github.workspace }}\gpui.mbt

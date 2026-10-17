@@ -391,3 +391,24 @@ test "spacing changes preserve tokens queued actions and eligible focus" {
   assert_true(runtime.is_current(root))
   assert_true(runtime.is_current(original))
 }
+
+///|
+test "palette changes retain runtime identity pending focus and queued action" {
+  let runtime = @runtime.Runtime::new()
+  ignore(runtime.commit(button("paint")).unwrap())
+  let initial = token(runtime, "paint")
+  let request = focus(runtime, initial)
+  assert_true(runtime.enqueue_activate(initial))
+  for palette in [@core.Light, @core.Dark] {
+    ignore(
+      runtime
+      .commit(@core.button_with_palette(key("paint"), "paint", palette))
+      .unwrap(),
+    )
+    assert_true(runtime.is_current(initial))
+    assert_true(token(runtime, "paint") == initial)
+  }
+  ignore(runtime.commit(button("paint")).unwrap())
+  assert_true(runtime.complete_focus(request, @core.Focused))
+  assert_eq(runtime.next_action(), Some(@core.Activate(key("paint"))))
+}

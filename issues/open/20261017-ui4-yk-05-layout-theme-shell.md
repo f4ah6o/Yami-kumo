@@ -49,3 +49,13 @@ Row/Columnなどの共通レイアウトをDOM/CSSとGPUIへ対応付ける。�
 - [Y-README: Yami-kumo: 現在の構成と対応範囲](https://github.com/f4ah6o/Yami-kumo/blob/7a2c088934e2104e48b9f58b23724c2160520202/README.md)
 - [Y-NPM: Yami-kumo: npm previewの利用・配布契約](https://github.com/f4ah6o/Yami-kumo/blob/7a2c088934e2104e48b9f58b23724c2160520202/npm/README.md)
 - [G-README: gpui.mbt: パッケージと現在の対応範囲](https://github.com/gpui-mbt/gpui.mbt/blob/a99e111a37c0ac98bd847e9ea493c78589207875/README.md)
+
+## 2026-10-17 bounded palette consumer candidate
+
+Additive per-Button `Light`/`Dark` metadata and a common palette-toggle model
+are implemented in this candidate; see `docs/shared-button-palettes.md` for the
+exact opaque roles, unchanged geometry/identity contract, host-state differences,
+and evidence requirements. None preserves legacy behavior. No global/system
+appearance, Card theme, AppShell or general layout expansion is included.
+Final-head CI and independent actual-artifact review are required before this
+slice is qualified; the broader unchecked acceptance criteria remain open.

@@ -12,6 +12,7 @@ import { validateResult, validateArtifacts, validateGate } from './evidence.mjs'
 import { exerciseButtonStates } from './button-states.mjs';
 import { exerciseCard } from './card.mjs';
 import { exerciseSpacing } from './spacing.mjs';
+import { exercisePalette } from './palette.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const bundle = resolve(
@@ -33,6 +34,7 @@ const sourcePaths = [
   'tests/shared-ui',
   'docs/shared-card.md',
   'docs/shared-stack-spacing.md',
+  'docs/shared-button-palettes.md',
 ];
 async function sourceHashes() {
   const paths = git('ls-files', '-z', '--', ...sourcePaths)
@@ -92,7 +94,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     } else if (route === '/') {
       response.setHeader('Content-Type', 'text/html');
       response.end(
-        '<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="/shared.css"><link rel="stylesheet" href="/spacing-fixture.css"><title>Shared UI counter proof</title></head><body><main id="root-a"></main><section id="root-b"></section><section id="occupied"><p>Existing content</p></section><section id="spacing-root"></section><section id="fixed-spacing-root"></section><aside id="unrelated">Unrelated host</aside></body></html>',
+        '<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="/shared.css"><link rel="stylesheet" href="/spacing-fixture.css"><title>Shared UI counter proof</title></head><body><main id="root-a"></main><section id="root-b"></section><section id="occupied"><p>Existing content</p></section><section id="palette-root"></section><section id="spacing-root"></section><section id="fixed-spacing-root"></section><aside id="unrelated">Unrelated host</aside></body></html>',
       );
     } else {
       response.writeHead(404);
@@ -461,6 +463,9 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     await exerciseSpacing(page, observe, (name) =>
       page.screenshot({ path: resolve(output, name) }),
     );
+    await exercisePalette(page, observe, (name) =>
+      page.screenshot({ path: resolve(output, name) }),
+    );
     assert.deepEqual(errors, []);
     await page.screenshot({ path: resolve(output, 'counter.png') });
     await page.evaluate(() => {
@@ -497,6 +502,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
     );
     const artifacts = [];
     for (const path of [
+      ...Array.from({ length: 6 }, (_, i) => `palette-${i}.png`),
       'spacing-0.png',
       'spacing-1.png',
       'spacing-2.png',
@@ -527,6 +533,7 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       'button-interrupted-disabled',
       'card-counter-two-activations',
       'spacing-count-and-toggle',
+      'palette-count-and-toggle',
     ].map((fixtureId) => ({
       schemaVersion: 'shared-ui-result/v1',
       contractVersion: 'shared-ui-contract/v1',
@@ -580,7 +587,8 @@ test('real DOM counter preserves keyed identity and isolates root lifetime', asy
       JSON.stringify(
         {
           status: 'pass',
-          scope: 'Chromium DOM Text/Button/Card fixed geometry and root lifecycle only',
+          scope:
+            'Chromium DOM Text/Button/Card/stack/palette bounded fixtures and root lifecycle only',
           startedAt,
           finishedAt,
           candidateSha: git('rev-parse', 'HEAD'),
