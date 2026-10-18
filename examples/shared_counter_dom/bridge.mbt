@@ -61,6 +61,7 @@ fn Counter::test_view(self : Counter, view : @core.View) -> @core.View {
         None => @core.row(view.key(), children)
       }
     }
+    AppShell => view
   }
 }
 
@@ -109,6 +110,7 @@ fn error_name(error : @dom.DomError) -> String {
     RootNotEmpty => "root-not-empty"
     Disposed => "disposed"
     HostTreeChanged => "host-tree-changed"
+    InvalidShell => "invalid-shell"
     InvalidView(_) => "invalid-view"
   }
 }

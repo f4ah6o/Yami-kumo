@@ -9,6 +9,7 @@ pub struct NativeCounter {
   priv spacing : Bool
   priv palette : Bool
   priv card : Bool
+  priv shell : Bool
   priv mut disabled : Bool
   priv mut loading : Bool
   priv mut draining : Bool
@@ -94,11 +95,15 @@ pub fn NativeCounter::new(
   card~ : Bool = false,
   spacing~ : Bool = false,
   palette~ : Bool = false,
+  shell~ : Bool = false,
   disabled~ : Bool = false,
   loading~ : Bool = false,
 ) -> Result[NativeCounter, @diagnostics.FrameworkError] {
   if (card && spacing) || (palette && (card || spacing)) {
     return Err(counter_error("Card and spacing fixtures cannot be combined"))
+  }
+  if shell && (card || spacing || palette) {
+    return Err(counter_error("Shell cannot be combined with other view fixtures"))
   }
   let app = match @app.App::new() {
     Err(error) => return Err(error)
@@ -119,6 +124,7 @@ pub fn NativeCounter::new(
     card,
     spacing,
     palette,
+    shell,
     disabled,
     loading,
     draining: false,
@@ -142,11 +148,81 @@ pub fn NativeCounter::model_revision(
 }
 
 ///|
+/// Queue one semantic activation of the main increment through the retained
+/// common callback. The host loop drains the action through the normal path.
+pub fn NativeCounter::activate_increment(
+  self : NativeCounter,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  if self.disposed || self.draining {
+    return Ok(false)
+  }
+  match self.mount.callback(@view.NodeKey::new("increment")) {
+    None => Ok(false)
+    Some(callback) => Ok(self.mount.activate(callback))
+  }
+}
+
+///|
 /// Copied observations of actions actually applied to the App-owned model.
 pub fn NativeCounter::actions(
   self : NativeCounter,
 ) -> Array[@view.SemanticAction] {
   self.actions.copy()
+}
+
+///|
+fn shell_slot(view : @view.View, region : @view.ShellRegion) -> @view.View? {
+  for child in view.children() {
+    if child.shell_region() == Some(region) {
+      return Some(child)
+    }
+  }
+  None
+}
+
+///|
+/// Rebuild the shell with bounded adapter gates applied to its slot contents.
+/// The application still owns the state and labels.
+fn shell_mode_view(
+  view : @view.View,
+  disabled : Bool,
+  loading : Bool,
+) -> @view.View {
+  let state = view.shell().unwrap()
+  let brand = match shell_slot(view, @view.Brand) {
+    Some(child) => mode_view(child, disabled, loading)
+    None => return view
+  }
+  let main = match shell_slot(view, @view.Main) {
+    Some(child) => mode_view(child, disabled, loading)
+    None => return view
+  }
+  fn transformed(region : @view.ShellRegion) -> @view.View? {
+    match shell_slot(view, region) {
+      Some(child) => Some(mode_view(child, disabled, loading))
+      None => None
+    }
+  }
+  @view.app_shell(
+    view.key(),
+    brand,
+    main,
+    navigation_trigger?=transformed(@view.NavigationTrigger),
+    global_search?=transformed(@view.GlobalSearch),
+    header_actions?=transformed(@view.HeaderActions),
+    account_menu?=transformed(@view.AccountMenu),
+    rail?=transformed(@view.Rail),
+    sidebar?=transformed(@view.Sidebar),
+    tabs?=transformed(@view.Tabs),
+    context_panel?=transformed(@view.ContextPanel),
+    bottom_bar?=transformed(@view.BottomBar),
+    sidebar_collapsed=state.sidebar_collapsed(),
+    mobile_sidebar_open=state.mobile_sidebar_open(),
+    context_panel_open=state.context_panel_open(),
+    primary_navigation_label=state.primary_navigation_label(),
+    workspace_navigation_label=state.workspace_navigation_label(),
+    context_panel_label=state.context_panel_label(),
+  )
 }
 
 ///|
@@ -188,6 +264,7 @@ fn mode_view(view : @view.View, disabled : Bool, loading : Bool) -> @view.View {
       }
     }
     @view.Text => view
+    @view.AppShell => shell_mode_view(view, disabled, loading)
   }
 }
 
@@ -293,7 +370,9 @@ fn NativeCounter::apply_action(
 ) -> Result[Bool, @diagnostics.FrameworkError] {
   let next = match
     self.app.read(self.state, model => {
-      if self.palette {
+      if self.shell {
+        model.update_shell(action)
+      } else if self.palette {
         model.update_palette(action)
       } else if self.spacing {
         model.update(action)
@@ -432,7 +511,9 @@ fn NativeCounter::common_view(
   self : NativeCounter,
   model : @model.PaletteModel,
 ) -> @view.View {
-  if self.palette {
+  if self.shell {
+    model.shell_view()
+  } else if self.palette {
     model.palette_view()
   } else if self.spacing {
     model.view()
@@ -448,6 +529,19 @@ pub fn CounterFrame::card_bounds(self : CounterFrame) -> @primitives.Rect {
   self.frame
   .bounds(@view.NodeKey::new(if self.spacing { "preview" } else { "counter" }))
   .unwrap()
+}
+
+///|
+pub fn CounterFrame::shell_mode(self : CounterFrame) -> @view.ShellMode? {
+  self.frame.shell_mode()
+}
+
+///|
+pub fn CounterFrame::shell_region_bounds(
+  self : CounterFrame,
+  region : @view.ShellRegion,
+) -> @primitives.Rect? {
+  self.frame.region_bounds(region)
 }
 
 ///|

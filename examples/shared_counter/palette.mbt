@@ -3,11 +3,18 @@
 pub struct PaletteModel {
   priv spacing : SpacingModel
   priv palette : @core.ButtonPaletteToken?
+  priv sidebar_open : Bool
+  priv context_open : Bool
 } derive(Eq, @debug.Debug)
 
 ///|
 pub fn PaletteModel::new() -> PaletteModel {
-  { spacing: SpacingModel::new(), palette: None, }
+  {
+    spacing: SpacingModel::new(),
+    palette: None,
+    sidebar_open: false,
+    context_open: false,
+  }
 }
 
 ///|

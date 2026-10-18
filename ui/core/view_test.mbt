@@ -60,6 +60,7 @@ test "Card is an additive noninteractive immutable Column decoration" {
       @core.Button => 1
       @core.Column => 2
       @core.Row => 3
+      @core.AppShell => 4
     },
     2,
   )

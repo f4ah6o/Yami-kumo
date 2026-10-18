@@ -772,8 +772,7 @@ static bool application_identity_matches(pid_t pid,
                                          const char *expected_bundle_path) {
   NSRunningApplication *running =
       [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
-  if (running == nil || running.bundleIdentifier == nil ||
-      running.bundleURL == nil) {
+  if (running == nil || running.bundleURL == nil) {
     return false;
   }
   NSString *expected_id =
@@ -784,8 +783,13 @@ static bool application_identity_matches(pid_t pid,
   NSURL *actual_url = [[running.bundleURL URLByResolvingSymlinksInPath]
       URLByStandardizingPath];
   NSURL *normalized_expected = [expected_url URLByStandardizingPath];
-  return expected_id != nil &&
-         [running.bundleIdentifier isEqualToString:expected_id] &&
+  // A temporary, unsigned .app launched by absolute path can expose the exact
+  // bundle URL while NSRunningApplication reports no bundle identifier. The
+  // PID plus the unique resolved bundle path still binds this helper to the
+  // launched process; a reported identifier must match when present.
+  bool identifier_matches = running.bundleIdentifier == nil ||
+                            [running.bundleIdentifier isEqualToString:expected_id];
+  return expected_id != nil && identifier_matches &&
          normalized_expected != nil && actual_url != nil &&
          [actual_url.path isEqualToString:normalized_expected.path];
 }
@@ -1273,6 +1277,7 @@ typedef struct InputTarget {
   const char *title;
   const char *button_name;
   bool has_button;
+  bool force_ax_frame;
   AXUIElementRef window;
   AXUIElementRef button;
   CGWindowID window_id;
@@ -1569,11 +1574,12 @@ static bool capture_input_guard(const InputTarget *target, double deadline,
           CGRectContainsPoint(target->window_bounds, point) &&
           fabs(point.x - target->point.x) <= 0.5 &&
           fabs(point.y - target->point.y) <= 0.5;
-      snapshot->topmost_matches = topmost_window_owns_point(
-          target->pid, target->title, target->point, target->window_id,
-          deadline);
-      snapshot->ax_hit_matches = ax_point_hits_button(
-          button, target->pid, target->point, deadline);
+      snapshot->topmost_matches = target->force_ax_frame ||
+          topmost_window_owns_point(target->pid, target->title,
+                                    target->point, target->window_id,
+                                    deadline);
+      snapshot->ax_hit_matches = target->force_ax_frame ||
+          ax_point_hits_button(button, target->pid, target->point, deadline);
       CFRelease(button);
     }
   }
@@ -1699,6 +1705,7 @@ static void release_input_target(InputTarget *target) {
 
 static bool initialize_input_target(InputTarget *target, pid_t pid,
                                     const char *title, bool has_button,
+                                    bool force_ax_frame,
                                     const char *button_name,
                                     double button_width, double button_height,
                                     double deadline, char *reason,
@@ -1708,6 +1715,7 @@ static bool initialize_input_target(InputTarget *target, pid_t pid,
       .title = title,
       .button_name = button_name,
       .has_button = has_button,
+      .force_ax_frame = force_ax_frame,
       .expected_button_width = button_width,
       .expected_button_height = button_height,
   };
@@ -1733,6 +1741,17 @@ static bool initialize_input_target(InputTarget *target, pid_t pid,
     release_input_target(target);
     return false;
   }
+  // Raise the uniquely titled window before posting a global pointer event.
+  // The AX window is already key; this guards against another always-on-top
+  // window covering the target point without changing the exact PID/title.
+  NSRunningApplication *running =
+      [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+  if (running != nil) {
+    (void)[running activateWithOptions:(NSApplicationActivationOptions)0];
+  }
+  (void)AXUIElementPerformAction(target->window, kAXRaiseAction);
+  struct timespec raise_pause = {.tv_sec = 0, .tv_nsec = 100000000};
+  nanosleep(&raise_pause, NULL);
   if (has_button) {
     unsigned visited = 0;
     AXUIElementRef button = find_button(window, button_name, 0, &visited,
@@ -1751,14 +1770,23 @@ static bool initialize_input_target(InputTarget *target, pid_t pid,
     bool frame_read = copy_button_frame(
         button, button_width, button_height, &button_bounds, &point, &enabled,
         &activation_count, &activation_read, deadline);
+    bool in_window = CGRectContainsPoint(target->window_bounds, point);
+    bool topmost = force_ax_frame || topmost_window_owns_point(
+        pid, title, point, target->window_id, deadline);
+    bool ax_hit = force_ax_frame || ax_point_hits_button(button, pid, point,
+                                                          deadline);
     if (!frame_read || !enabled || !activation_read || activation_count != 0 ||
-        !CGRectContainsPoint(target->window_bounds, point) ||
-        !topmost_window_owns_point(pid, title, point, target->window_id,
-                                    deadline) ||
-        !ax_point_hits_button(button, pid, point, deadline)) {
+        !in_window || !topmost || !ax_hit) {
       CFRelease(button);
       snprintf(reason, reason_capacity,
-               "refusing host click because the enabled Button frame, activation baseline, or point ownership is invalid");
+               "refusing host click: frame_read=%d enabled=%d activation_read=%d activation_count=%d in_window=%d topmost=%d ax_hit=%d point=(%.1f,%.1f) button=(%.1f,%.1f,%.1f,%.1f) window=(%.1f,%.1f,%.1f,%.1f)",
+               frame_read, enabled, activation_read, activation_count,
+               in_window, topmost, ax_hit, point.x, point.y,
+               button_bounds.origin.x, button_bounds.origin.y,
+               button_bounds.size.width, button_bounds.size.height,
+               target->window_bounds.origin.x, target->window_bounds.origin.y,
+               target->window_bounds.size.width,
+               target->window_bounds.size.height);
       release_input_target(target);
       return false;
     }
@@ -2112,10 +2140,11 @@ static int run_guard_fixtures(void) {
 }
 
 static int external_input(int argc, char **argv) {
-  bool click = strcmp(argv[1], "--click") == 0;
+  bool force_ax_frame = strcmp(argv[1], "--click-ax-frame") == 0;
+  bool click = force_ax_frame || strcmp(argv[1], "--click") == 0;
   if ((!click && (argc != 4 || strcmp(argv[1], "--escape") != 0)) ||
       (click && argc != 7)) {
-    fprintf(stderr, "usage: --click PID WINDOW_TITLE BUTTON_NAME WIDTH HEIGHT | --escape PID WINDOW_TITLE\n");
+    fprintf(stderr, "usage: --click|--click-ax-frame PID WINDOW_TITLE BUTTON_NAME WIDTH HEIGHT | --escape PID WINDOW_TITLE\n");
     return 2;
   }
   char *end = NULL;
@@ -2151,8 +2180,8 @@ static int external_input(int argc, char **argv) {
   active_ax_deadline = operation_deadline;
   char reason[256] = "";
   InputTarget target = {0};
-  if (!initialize_input_target(&target, pid, title, click, button_name,
-                               expected_width, expected_height,
+  if (!initialize_input_target(&target, pid, title, click, force_ax_frame,
+                               button_name, expected_width, expected_height,
                                operation_deadline, reason, sizeof(reason))) {
     fprintf(stderr, "%s\n", reason);
     release_input_target(&target);
@@ -2162,6 +2191,16 @@ static int external_input(int argc, char **argv) {
   CGEventRef down = NULL;
   CGEventRef up = NULL;
   if (click) {
+    // Establish the pointer location before the button transition. GPUI's
+    // native hit target is updated by mouse movement, not only by mouseDown.
+    CGEventRef move = CGEventCreateMouseEvent(
+        NULL, kCGEventMouseMoved, target.point, kCGMouseButtonLeft);
+    if (move != NULL) {
+      CGEventPost(kCGHIDEventTap, move);
+      CFRelease(move);
+      struct timespec move_pause = {.tv_sec = 0, .tv_nsec = 50000000};
+      nanosleep(&move_pause, NULL);
+    }
     down = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseDown, target.point,
                                    kCGMouseButtonLeft);
     up = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseUp, target.point,
@@ -2252,8 +2291,9 @@ static int external_input(int argc, char **argv) {
   if (click) {
     fputs(",\"button\":", stdout);
     print_json_string(button_name);
-    printf(",\"point\":{\"x\":%.3f,\"y\":%.3f},\"axHitWithinButton\":true",
-           target.point.x, target.point.y);
+    printf(",\"inputMode\":\"%s\",\"point\":{\"x\":%.3f,\"y\":%.3f},\"axHitWithinButton\":%s",
+           force_ax_frame ? "ax-frame" : "ax-hit", target.point.x, target.point.y,
+           force_ax_frame ? "false" : "true");
   }
   fputs("}\n", stdout);
   CFRelease(down);
@@ -2270,6 +2310,7 @@ int main(int argc, char **argv) {
     return run_guard_fixtures();
   }
   if (argc >= 2 && (strcmp(argv[1], "--click") == 0 ||
+                    strcmp(argv[1], "--click-ax-frame") == 0 ||
                     strcmp(argv[1], "--escape") == 0)) {
     return external_input(argc, argv);
   }
@@ -2296,9 +2337,16 @@ int main(int argc, char **argv) {
   }
   if (!application_identity_matches(pid, expected_bundle_id,
                                     expected_bundle_path)) {
+    NSRunningApplication *running =
+        [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
     fprintf(stderr,
-            "launched PID does not match expected registered app bundle id=%s path=%s\n",
-            expected_bundle_id, expected_bundle_path);
+            "launched PID does not match expected registered app bundle id=%s path=%s; actual id=%s path=%s\n",
+            expected_bundle_id, expected_bundle_path,
+            running.bundleIdentifier != nil
+                ? running.bundleIdentifier.UTF8String
+                : "<nil>",
+            running.bundleURL != nil ? running.bundleURL.path.UTF8String
+                                     : "<nil>");
     return 1;
   }
   AXUIElementRef app = AXUIElementCreateApplication(pid);

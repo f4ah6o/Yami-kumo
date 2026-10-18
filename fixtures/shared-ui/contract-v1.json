@@ -50,6 +50,34 @@
       "expected": {
         "counts": [0, 1, 1, 2, 2, 2]
       }
+    },
+    {
+      "id": "shell-counter-two-activations",
+      "description": "Shared AppShell pointer fixture requested at the wide size; the observed mode and region visibility are validated against the actual host content width, since compositors may clamp window requests.",
+      "expected": {
+        "counts": [0, 1, 2]
+      }
+    },
+    {
+      "id": "shell-compact-counter-two-activations",
+      "description": "Shared AppShell pointer fixture requested at the compact size; the observed mode and region visibility are validated against the actual host content width.",
+      "expected": {
+        "counts": [0, 1, 2]
+      }
+    },
+    {
+      "id": "shell-visible-wide",
+      "description": "Shared AppShell render-only fixture requested at the wide size; the visible host window presents the observed mode and regions before any activation.",
+      "expected": {
+        "counts": [0]
+      }
+    },
+    {
+      "id": "shell-visible-compact",
+      "description": "Shared AppShell render-only fixture requested at the compact size; the visible host window presents the observed mode and regions before any activation.",
+      "expected": {
+        "counts": [0]
+      }
     }
   ]
 }

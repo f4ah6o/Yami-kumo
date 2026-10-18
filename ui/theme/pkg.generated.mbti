@@ -38,6 +38,20 @@ pub fn Color::not_equal(Self, Self) -> Bool
 pub fn Color::red(Self) -> Int
 pub fn Color::to_repr(Self) -> @debug.Repr
 
+pub struct ShellColors {
+  background : Color
+  panel : Color
+  subtle : Color
+  border : Color
+  strong_border : Color
+  text : Color
+  muted : Color
+} derive(Eq, @debug.Debug)
+pub fn ShellColors::entries(Self) -> Array[(String, Color)]
+pub fn ShellColors::equal(Self, Self) -> Bool
+pub fn ShellColors::not_equal(Self, Self) -> Bool
+pub fn ShellColors::to_repr(Self) -> @debug.Repr
+
 pub(all) enum Theme {
   Light
   Dark
@@ -46,6 +60,7 @@ pub fn Theme::button_colors(Self) -> ButtonColors
 pub fn Theme::equal(Self, Self) -> Bool
 pub fn Theme::name(Self) -> String
 pub fn Theme::not_equal(Self, Self) -> Bool
+pub fn Theme::shell_colors(Self) -> ShellColors
 pub fn Theme::to_repr(Self) -> @debug.Repr
 
 // Type aliases

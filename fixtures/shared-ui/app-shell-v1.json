@@ -1,0 +1,48 @@
+{
+  "version": "shared-app-shell/v1",
+  "breakpoint": 820,
+  "regions": [
+    "brand",
+    "navigation-trigger",
+    "global-search",
+    "header-actions",
+    "account-menu",
+    "rail",
+    "sidebar",
+    "tabs",
+    "main",
+    "context-panel",
+    "bottom-bar"
+  ],
+  "geometry": {
+    "header": 60,
+    "rail": 58,
+    "sidebar": 240,
+    "contextPanel": 288,
+    "tabs": 45,
+    "bottomBar": 32,
+    "mainPadding": 24,
+    "compactSidebar": 240,
+    "compactContext": 200
+  },
+  "themes": {
+    "light": {
+      "background": [238, 240, 242],
+      "panel": [255, 255, 255],
+      "subtle": [245, 246, 247],
+      "border": [217, 221, 226],
+      "strong_border": [199, 204, 210],
+      "text": [23, 25, 28],
+      "muted": [109, 116, 125]
+    },
+    "dark": {
+      "background": [15, 18, 22],
+      "panel": [23, 27, 33],
+      "subtle": [30, 36, 43],
+      "border": [43, 51, 60],
+      "strong_border": [58, 67, 77],
+      "text": [238, 242, 246],
+      "muted": [163, 173, 184]
+    }
+  }
+}

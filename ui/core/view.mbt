@@ -21,6 +21,7 @@ pub(all) enum NodeKind {
   Button
   Column
   Row
+  AppShell
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -36,6 +37,8 @@ pub struct View {
   priv card : Bool
   priv spacing : StackSpacing?
   priv button_palette : ButtonPaletteToken?
+  priv region : ShellRegion?
+  priv shell : ShellState?
   priv children : Array[View]
 } derive(Eq, @debug.Debug)
 
@@ -50,6 +53,8 @@ pub fn text(key : NodeKey, value : String) -> View {
     card: false,
     spacing: None,
     button_palette: None,
+    region: None,
+    shell: None,
     children: [],
   }
 }
@@ -76,6 +81,8 @@ pub fn button(
     card: false,
     spacing: None,
     button_palette: None,
+    region: None,
+    shell: None,
     children: [],
   }
 }
@@ -91,6 +98,8 @@ pub fn column(key : NodeKey, children : Array[View]) -> View {
     card: false,
     spacing: None,
     button_palette: None,
+    region: None,
+    shell: None,
     children: children.copy(),
   }
 }
@@ -106,6 +115,8 @@ pub fn row(key : NodeKey, children : Array[View]) -> View {
     card: false,
     spacing: None,
     button_palette: None,
+    region: None,
+    shell: None,
     children: children.copy(),
   }
 }

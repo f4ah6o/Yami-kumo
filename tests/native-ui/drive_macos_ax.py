@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import plistlib
@@ -68,6 +69,8 @@ def drive(args: argparse.Namespace) -> int:
             "YAMI_NATIVE_UI_WINDOW_TITLE": run_title,
         }
     )
+    if args.fixture:
+        env["YAMI_SHARED_UI_FIXTURE"] = args.fixture
     workspace_root = env.get("YAMI_NATIVE_WORKSPACE_ROOT")
     if not workspace_root:
         raise E2EError("YAMI_NATIVE_WORKSPACE_ROOT must be set by native_ui_workspace.sh")
@@ -79,14 +82,29 @@ def drive(args: argparse.Namespace) -> int:
     process: subprocess.Popen[str] | None = None
     output: ProcessOutput | None = None
     try:
-        run_command, runtime_target = _build_native_sample(
+        shared_driver_path = Path(__file__).resolve().parents[1] / "shared-ui" / "native_driver.py"
+        shared_spec = importlib.util.spec_from_file_location(
+            "_yami_shared_ax_build_driver", shared_driver_path
+        )
+        if shared_spec is None or shared_spec.loader is None:
+            raise E2EError("cannot load the shared native build plan")
+        shared_driver = importlib.util.module_from_spec(shared_spec)
+        sys.modules[shared_spec.name] = shared_driver
+        shared_spec.loader.exec_module(shared_driver)
+        runtime_target = tempfile.TemporaryDirectory(
+            prefix="yami-native-ax-build-", dir=workspace_path
+        )
+        executable = shared_driver.build_sample(
             args.command,
             "macos",
             workspace_path,
             module_root,
+            Path(runtime_target.name),
             evidence_dir,
             env,
+            600,
         )
+        run_command = [str(executable)]
         bundle_id = f"org.f4ah6o.yami-kumo.native-ax.{uuid.uuid4().hex}"
         app_bundle = Path(runtime_target.name) / "YamiNativeAX.app"
         app_contents = app_bundle / "Contents"
@@ -106,6 +124,24 @@ def drive(args: argparse.Namespace) -> int:
                 },
                 plist_file,
             )
+        lsregister = Path(
+            "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+        )
+        if lsregister.is_file():
+            registered = subprocess.run(
+                [str(lsregister), "-f", str(app_bundle)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
+            (evidence_dir / "macos-ax-lsregister.log").write_text(
+                registered.stdout, encoding="utf-8"
+            )
+            if registered.returncode != 0:
+                raise E2EError("LaunchServices registration of the AX app bundle failed")
         print(f"Launching registered native sample: {app_executable}", flush=True)
         process = subprocess.Popen(
             [str(app_executable), *run_command[1:]],
@@ -131,7 +167,7 @@ def drive(args: argparse.Namespace) -> int:
                 str(client_path),
                 str(process.pid),
                 run_title,
-                "Click me",
+                args.button_name,
                 bundle_id,
                 str(app_bundle),
             ],
@@ -233,6 +269,8 @@ def main() -> int:
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--log", type=Path, required=True)
     parser.add_argument("--window-title", default="Yami-kumo Native UI")
+    parser.add_argument("--button-name", default="Click me")
+    parser.add_argument("--fixture", default=None)
     parser.add_argument("--startup-timeout", type=float, default=240.0)
     parser.add_argument("--client-timeout", type=float, default=45.0)
     parser.add_argument("--marker-timeout", type=float, default=45.0)

@@ -6,6 +6,10 @@ import {
 }
 
 // Values
+pub const SHELL_COMPACT_MAX_WIDTH : Double = 820.0
+
+pub fn app_shell(NodeKey, View, View, navigation_trigger? : View, global_search? : View, header_actions? : View, account_menu? : View, rail? : View, sidebar? : View, tabs? : View, context_panel? : View, bottom_bar? : View, sidebar_collapsed? : Bool, mobile_sidebar_open? : Bool, context_panel_open? : Bool, primary_navigation_label? : String, workspace_navigation_label? : String, context_panel_label? : String) -> View
+
 pub fn button(NodeKey, String, disabled? : Bool, loading? : Bool) -> View
 
 pub fn button_with_palette(NodeKey, String, ButtonPaletteToken, disabled? : Bool, loading? : Bool) -> View
@@ -84,6 +88,7 @@ pub(all) enum NodeKind {
   Button
   Column
   Row
+  AppShell
 } derive(Eq, @debug.Debug)
 pub fn NodeKind::equal(Self, Self) -> Bool
 pub fn NodeKind::not_equal(Self, Self) -> Bool
@@ -95,6 +100,47 @@ pub(all) enum SemanticAction {
 pub fn SemanticAction::equal(Self, Self) -> Bool
 pub fn SemanticAction::not_equal(Self, Self) -> Bool
 pub fn SemanticAction::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ShellMode {
+  Wide
+  Compact
+} derive(Eq, @debug.Debug)
+pub fn ShellMode::equal(Self, Self) -> Bool
+pub fn ShellMode::for_width(Double) -> Self
+pub fn ShellMode::not_equal(Self, Self) -> Bool
+pub fn ShellMode::to_repr(Self) -> @debug.Repr
+
+pub(all) enum ShellRegion {
+  Brand
+  NavigationTrigger
+  GlobalSearch
+  HeaderActions
+  AccountMenu
+  Rail
+  Sidebar
+  Tabs
+  Main
+  ContextPanel
+  BottomBar
+} derive(Eq, @debug.Debug)
+pub fn ShellRegion::equal(Self, Self) -> Bool
+pub fn ShellRegion::name(Self) -> String
+pub fn ShellRegion::not_equal(Self, Self) -> Bool
+pub fn ShellRegion::to_repr(Self) -> @debug.Repr
+pub fn ShellRegion::visible(Self, ShellState, ShellMode) -> Bool
+
+pub struct ShellState {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn ShellState::context_panel_label(Self) -> String
+pub fn ShellState::context_panel_open(Self) -> Bool
+pub fn ShellState::equal(Self, Self) -> Bool
+pub fn ShellState::mobile_sidebar_open(Self) -> Bool
+pub fn ShellState::not_equal(Self, Self) -> Bool
+pub fn ShellState::primary_navigation_label(Self) -> String
+pub fn ShellState::sidebar_collapsed(Self) -> Bool
+pub fn ShellState::to_repr(Self) -> @debug.Repr
+pub fn ShellState::workspace_navigation_label(Self) -> String
 
 pub(all) enum SpacingToken {
   Zero
@@ -127,11 +173,14 @@ pub fn View::children(Self) -> Array[Self]
 pub fn View::disabled(Self) -> Bool
 pub fn View::equal(Self, Self) -> Bool
 pub fn View::is_card(Self) -> Bool
+pub fn View::is_shell(Self) -> Bool
 pub fn View::key(Self) -> NodeKey
 pub fn View::kind(Self) -> NodeKind
 pub fn View::label(Self) -> String
 pub fn View::loading(Self) -> Bool
 pub fn View::not_equal(Self, Self) -> Bool
+pub fn View::shell(Self) -> ShellState?
+pub fn View::shell_region(Self) -> ShellRegion?
 pub fn View::spacing(Self) -> StackSpacing?
 pub fn View::to_repr(Self) -> @debug.Repr
 

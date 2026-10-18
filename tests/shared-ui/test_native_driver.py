@@ -65,12 +65,14 @@ class ImportTests(unittest.TestCase):
                 imported.main(["--help"])
             self.assertEqual(exit.exception.code, 0)
 
-    def test_macos_cli_is_rejected_before_any_runtime(self):
-        with patch("subprocess.Popen", side_effect=AssertionError("host launched")), \
-             patch("sys.stderr", new=io.StringIO()):
-            with self.assertRaises(SystemExit):
+    def test_macos_cli_is_accepted_without_starting_a_runtime(self):
+        with patch.object(driver, "drive", return_value=0) as run:
+            self.assertEqual(
                 driver.main(["--platform", "macos", "--candidate-sha", CANDIDATE,
-                             "--evidence-dir", "/unused"])
+                             "--evidence-dir", "/unused"]),
+                0,
+            )
+        self.assertEqual(run.call_args.args[0].platform, "macos")
 
 
 class MarkerTests(unittest.TestCase):
@@ -174,10 +176,67 @@ class MarkerTests(unittest.TestCase):
             "card": "card-counter-two-activations",
             "spacing": "spacing-count-and-toggle",
             "palette": "palette-count-and-toggle",
+            "shell": "shell-counter-two-activations",
+            "shell-compact": "shell-compact-counter-two-activations",
+            "shell-visible": "shell-visible-wide",
+            "shell-visible-compact": "shell-visible-compact",
         })
         self.assertEqual(set(driver.CONTRACT_PHASES) - set(driver.FIXTURES.values()), {
             "button-interrupted-loading", "button-interrupted-disabled",
         })
+
+
+def shell_marker(fixture="shell", phase=0):
+    value = marker(phase=phase)
+    value.update(fixture=fixture, buttonName="Increment")
+    root = {"x": 0, "y": 0, "width": 1000 if fixture == "shell" else 700, "height": 700}
+    main = {"x": 307 if fixture == "shell" else 8, "y": 69, "width": 690 if fixture == "shell" else 684, "height": 600}
+    brand = {"x": 8, "y": 8, "width": 100, "height": 40}
+    button = {"x": main["x"] + 20, "y": main["y"] + 20, "width": 100, "height": 34}
+    label = {"x": button["x"] + 4, "y": button["y"] + 4, "width": 80, "height": 20}
+    counter = {"x": main["x"] + 10, "y": main["y"] + 10, "width": 300, "height": 150}
+    regions = {"brand": brand, "navigationTrigger": None if fixture == "shell" else {"x": 108, "y": 8, "width": 62, "height": 34},
+               "globalSearch": {"x": 200, "y": 8, "width": 300, "height": 34},
+               "headerActions": {"x": 800, "y": 8, "width": 120, "height": 34},
+               "accountMenu": {"x": 930, "y": 8, "width": 60, "height": 34},
+               "rail": {"x": 8, "y": 69, "width": 58, "height": 600} if fixture == "shell" else None,
+               "sidebar": {"x": 66, "y": 69, "width": 240, "height": 600} if fixture == "shell" else None,
+               "tabs": {"x": main["x"], "y": 69, "width": main["width"], "height": 45},
+               "main": main, "contextPanel": None,
+               "bottomBar": {"x": 0, "y": 668, "width": root["width"], "height": 32}}
+    value.update({"enabled": True, "loading": False, "focused": phase > 0,
+                  "root": root, "button": button, "buttonLabel": label, "counter": counter,
+                  "shell": {"mode": "wide" if fixture == "shell" else "compact", "regions": regions}})
+    value["scene"]["viewport"] = root.copy()
+    value["scene"]["items"][2]["text"] = "Shared AppShell"
+    value["frame"].update(width=root["width"], height=root["height"])
+    return value
+
+
+class ShellMarkerTests(unittest.TestCase):
+    def check(self, value, fixture, phase):
+        driver.validate_marker(value, fixture, phase, [0, 1, 2], presented=True)
+
+    def test_shell_modes_and_regions_are_explicit(self):
+        for fixture in ("shell", "shell-compact"):
+            for phase in range(3):
+                self.check(shell_marker(fixture, phase), fixture, phase)
+
+    def test_wrong_mode_missing_region_or_misplaced_button_is_rejected(self):
+        for updates in ({"mode": "compact"}, {"regions": {}},
+                        {"regions": {"main": None}}):
+            value = shell_marker("shell", 1)
+            if "mode" in updates:
+                value["shell"]["mode"] = updates["mode"]
+            elif "regions" in updates:
+                value["shell"]["regions"] = updates["regions"]
+            with self.subTest(updates=updates), self.assertRaises(driver.E2EError):
+                self.check(value, "shell", 1)
+        value = shell_marker("shell", 1)
+        value["button"]["x"] = 0
+        value["button"]["y"] = 0
+        with self.assertRaises(driver.E2EError):
+            self.check(value, "shell", 1)
 
 
 def card_marker():

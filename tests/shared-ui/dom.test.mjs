@@ -39,6 +39,7 @@ const sourcePaths = [
   'docs/shared-card.md',
   'docs/shared-stack-spacing.md',
   'docs/shared-button-palettes.md',
+  'docs/shared-app-shell.md',
 ];
 async function sourceHashes() {
   const paths = git('ls-files', '-z', '--', ...sourcePaths)

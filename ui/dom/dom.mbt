@@ -47,7 +47,8 @@ extern "js" fn contains_node(root : DomNode, node : DomNode) -> Bool =
 
 ///|
 extern "js" fn accepts_events(root : DomNode, node : DomNode) -> Bool =
-  #| (root, node) => root.isConnected && root.contains(node)
+  #| (root, node) => root.isConnected && root.contains(node) &&
+  #|   node.getClientRects().length > 0
 
 ///|
 #external
@@ -63,7 +64,10 @@ extern "js" fn root_theme_state(root : DomNode) -> RootThemeState =
   #| })
 
 ///|
-extern "js" fn root_theme_unchanged(state : RootThemeState, root : DomNode) -> Bool =
+extern "js" fn root_theme_unchanged(
+  state : RootThemeState,
+  root : DomNode,
+) -> Bool =
   #| (state, root) => state.current === null ||
   #|   (root.getAttribute("data-yk-theme") === state.current && root.classList.contains("yk-ui-root"))
 
@@ -99,6 +103,113 @@ extern "js" fn apply_root_theme(
   #| }
 
 ///|
+#external
+priv type ShellNodes
+
+///|
+/// Build the fixed semantic skeleton once per mounted shell. Optional wrappers
+/// stay in the DOM and are hidden with data-present=false so slot identity and
+/// wrapper order never depend on the current open state.
+extern "js" fn create_shell_nodes(shell : DomNode) -> ShellNodes =
+  #| (shell) => {
+  #|   const make = (tag, cls) => {
+  #|     const node = document.createElement(tag);
+  #|     node.className = cls;
+  #|     node.setAttribute("data-present", "false");
+  #|     return node;
+  #|   };
+  #|   const header = make("header", "yk-ui-topbar");
+  #|   const brandGroup = make("div", "yk-ui-brand-group");
+  #|   const navigationTrigger = make("div", "yk-ui-navigation-trigger");
+  #|   const globalSearch = make("div", "yk-ui-global-search");
+  #|   const headerEnd = make("div", "yk-ui-header-end");
+  #|   const headerActions = make("div", "yk-ui-header-actions");
+  #|   const accountMenu = make("div", "yk-ui-account-menu");
+  #|   const rail = make("nav", "yk-ui-rail");
+  #|   const sidebar = make("aside", "yk-ui-sidebar");
+  #|   const workspace = make("section", "yk-ui-workspace");
+  #|   const mainColumn = make("div", "yk-ui-main-column");
+  #|   const tabs = make("nav", "yk-ui-tabs");
+  #|   const main = make("main", "yk-ui-main");
+  #|   const context = make("aside", "yk-ui-context-panel");
+  #|   const bottom = make("footer", "yk-ui-bottom-bar");
+  #|   header.setAttribute("data-present", "true");
+  #|   brandGroup.setAttribute("data-present", "true");
+  #|   headerEnd.setAttribute("data-present", "false");
+  #|   workspace.setAttribute("data-present", "true");
+  #|   mainColumn.setAttribute("data-present", "true");
+  #|   main.setAttribute("data-present", "true");
+  #|   brandGroup.append(navigationTrigger);
+  #|   header.append(brandGroup, globalSearch, headerEnd);
+  #|   headerEnd.append(headerActions, accountMenu);
+  #|   mainColumn.append(tabs, main);
+  #|   workspace.append(rail, sidebar, mainColumn, context);
+  #|   shell.append(header, workspace, bottom);
+  #|   return {
+  #|     header, brandGroup, navigationTrigger, globalSearch, headerEnd,
+  #|     headerActions, accountMenu, rail, sidebar, workspace, mainColumn,
+  #|     tabs, main, context, bottom,
+  #|   };
+  #| }
+
+///|
+extern "js" fn shell_wrapper(nodes : ShellNodes, name : String) -> DomNode =
+  #| (nodes, name) => nodes[name]
+
+///|
+extern "js" fn update_shell_nodes(
+  nodes : ShellNodes,
+  has_navigation_trigger : Bool,
+  has_global_search : Bool,
+  has_header_actions : Bool,
+  has_account_menu : Bool,
+  has_rail : Bool,
+  has_sidebar : Bool,
+  has_tabs : Bool,
+  has_context_panel : Bool,
+  has_bottom_bar : Bool,
+  sidebar_collapsed : Bool,
+  mobile_sidebar_open : Bool,
+  context_panel_open : Bool,
+  primary_label : String,
+  workspace_label : String,
+  context_label : String,
+) -> Unit =
+  #| (nodes, hasNavigationTrigger, hasGlobalSearch, hasHeaderActions,
+  #|   hasAccountMenu, hasRail, hasSidebar, hasTabs, hasContextPanel,
+  #|   hasBottomBar, sidebarCollapsed, mobileSidebarOpen, contextPanelOpen,
+  #|   primaryLabel, workspaceLabel, contextLabel) => {
+  #|   const present = (node, value) => node.setAttribute("data-present", value ? "true" : "false");
+  #|   present(nodes.navigationTrigger, hasNavigationTrigger);
+  #|   present(nodes.globalSearch, hasGlobalSearch);
+  #|   present(nodes.headerActions, hasHeaderActions);
+  #|   present(nodes.accountMenu, hasAccountMenu);
+  #|   present(nodes.headerEnd, hasHeaderActions || hasAccountMenu);
+  #|   present(nodes.rail, hasRail);
+  #|   present(nodes.sidebar, hasSidebar);
+  #|   present(nodes.tabs, hasTabs);
+  #|   present(nodes.context, hasContextPanel);
+  #|   present(nodes.bottom, hasBottomBar);
+  #|   const shell = nodes.header.parentNode;
+  #|   shell.setAttribute("data-has-rail", hasRail ? "true" : "false");
+  #|   shell.setAttribute("data-has-sidebar", hasSidebar ? "true" : "false");
+  #|   shell.setAttribute("data-sidebar-collapsed", sidebarCollapsed ? "true" : "false");
+  #|   shell.setAttribute("data-mobile-sidebar-open", mobileSidebarOpen ? "true" : "false");
+  #|   shell.setAttribute("data-has-context-panel", hasContextPanel ? "true" : "false");
+  #|   shell.setAttribute("data-context-panel-open", contextPanelOpen ? "true" : "false");
+  #|   shell.setAttribute("data-has-bottom-bar", hasBottomBar ? "true" : "false");
+  #|   shell.setAttribute("data-has-tabs", hasTabs ? "true" : "false");
+  #|   nodes.rail.setAttribute("aria-label", primaryLabel);
+  #|   nodes.sidebar.setAttribute("aria-label", workspaceLabel);
+  #|   nodes.context.setAttribute("aria-label", contextLabel);
+  #|   nodes.tabs.setAttribute("aria-label", "Workspace tabs");
+  #| }
+
+///|
+extern "js" fn node_visible(node : DomNode) -> Bool =
+  #| (node) => !!node && node.isConnected && node.getClientRects().length > 0
+
+///|
 extern "js" fn create_node(
   kind : Int,
   key : String,
@@ -108,14 +219,15 @@ extern "js" fn create_node(
   #|   // One element per semantic child keeps adjacent Text views distinct flex items.
   #|   const node = document.createElement(kind === 0 ? "span" : kind === 1 ? "button" : "div");
   #|   node.setAttribute("data-yk-key", key);
-  #|   if (kind === 0 || kind === 1) {
-  #|     if (kind === 1) {
-  #|       node.type = "button";
-  #|       node.className = "yk-ui-button";
-  #|     }
+  #|   if (kind === 0) {
+  #|     node.className = "yk-ui-text";
+  #|     node.textContent = label;
+  #|   } else if (kind === 1) {
+  #|     node.type = "button";
+  #|     node.className = "yk-ui-button";
   #|     node.textContent = label;
   #|   } else {
-  #|     node.className = kind === 2 ? "yk-ui-column" : "yk-ui-row";
+  #|     node.className = kind === 2 ? "yk-ui-column" : kind === 3 ? "yk-ui-row" : "yk-ui-shell";
   #|   }
   #|   return node;
   #| }
@@ -278,14 +390,15 @@ extern "js" fn active_element() -> DomNode =
 ///|
 extern "js" fn restore_focus(root : DomNode, node : DomNode) -> Unit =
   #| (root, node) => {
-  #|   if (node && root.contains(node) && !node.disabled && document.activeElement !== node &&
-  #|       typeof node.focus === "function") node.focus({preventScroll: true});
+  #|   if (node && root.contains(node) && node.getClientRects().length > 0 && !node.disabled &&
+  #|       document.activeElement !== node && typeof node.focus === "function") node.focus({preventScroll: true});
   #| }
 
 ///|
 extern "js" fn focus_observed(root : DomNode, node : DomNode) -> Bool =
   #| (root, node) => {
-  #|   if (!root.isConnected || !root.contains(node) || node.disabled || typeof node.focus !== "function") return false;
+  #|   if (!root.isConnected || !root.contains(node) || node.getClientRects().length === 0 ||
+  #|       node.disabled || typeof node.focus !== "function") return false;
   #|   node.focus({preventScroll: true});
   #|   return document.activeElement === node;
   #| }
@@ -299,6 +412,7 @@ pub(all) enum DomError {
   RootNotEmpty
   Disposed
   HostTreeChanged
+  InvalidShell
   InvalidView(@runtime.CommitError)
 } derive(Eq, @debug.Debug)
 
@@ -307,6 +421,7 @@ priv struct MountedNode {
   token : @runtime.InstanceToken
   node : DomNode
   events : ButtonEvents?
+  shell : ShellNodes?
 }
 
 ///|
@@ -318,6 +433,7 @@ pub struct DomRoot {
   priv runtime : @runtime.Runtime
   priv nodes : Map[String, MountedNode]
   priv scheduled : Ref[Bool]
+  priv mut shell_root : Bool
   priv on_actions : () -> Unit
 }
 
@@ -349,6 +465,7 @@ pub fn mount(
     runtime: @runtime.Runtime::new(),
     nodes: {},
     scheduled: Ref(false),
+    shell_root: false,
     on_actions,
   }
   match mounted.update(view) {
@@ -405,6 +522,7 @@ fn kind_number(kind : @core.NodeKind) -> Int {
     Button => 1
     Column => 2
     Row => 3
+    AppShell => 4
   }
 }
 
@@ -432,7 +550,7 @@ fn DomRoot::render_node(
   let key = view.key().value()
   let kind = view.kind()
   let token = self.runtime.token(view.key()).unwrap()
-  let mounted = match self.nodes.get(key) {
+  let mut mounted = match self.nodes.get(key) {
     Some(existing) => existing
     None => {
       let node = create_node(kind_number(kind), key, view.label())
@@ -447,7 +565,7 @@ fn DomRoot::render_node(
       } else {
         None
       }
-      let item = { token, node, events, }
+      let item = { token, node, events, shell: None, }
       self.nodes.set(key, item)
       item
     }
@@ -489,12 +607,128 @@ fn DomRoot::render_node(
   // Place parents before children. A retained former descendant can become an
   // ancestor in the next tree; detach its old ancestry before moving children.
   position_child(parent, mounted.node, index)
+  if kind == @core.AppShell {
+    let shell = match mounted.shell {
+      Some(nodes) => nodes
+      None => {
+        let nodes = create_shell_nodes(mounted.node)
+        mounted = { ..mounted, shell: Some(nodes), }
+        self.nodes.set(key, mounted)
+        nodes
+      }
+    }
+    let children = view.children()
+    let mut has_navigation_trigger = false
+    let mut has_global_search = false
+    let mut has_header_actions = false
+    let mut has_account_menu = false
+    let mut has_rail = false
+    let mut has_sidebar = false
+    let mut has_tabs = false
+    let mut has_context_panel = false
+    let mut has_bottom_bar = false
+    for child in children {
+      match child.shell_region() {
+        Some(NavigationTrigger) => has_navigation_trigger = true
+        Some(GlobalSearch) => has_global_search = true
+        Some(HeaderActions) => has_header_actions = true
+        Some(AccountMenu) => has_account_menu = true
+        Some(Rail) => has_rail = true
+        Some(Sidebar) => has_sidebar = true
+        Some(Tabs) => has_tabs = true
+        Some(ContextPanel) => has_context_panel = true
+        Some(BottomBar) => has_bottom_bar = true
+        Some(_) | None => ()
+      }
+    }
+    let state = view.shell().unwrap()
+    update_shell_nodes(
+      shell,
+      has_navigation_trigger,
+      has_global_search,
+      has_header_actions,
+      has_account_menu,
+      has_rail,
+      has_sidebar,
+      has_tabs,
+      has_context_panel,
+      has_bottom_bar,
+      state.sidebar_collapsed(),
+      state.mobile_sidebar_open(),
+      state.context_panel_open(),
+      state.primary_navigation_label(),
+      state.workspace_navigation_label(),
+      state.context_panel_label(),
+    )
+    for child in children {
+      match child.shell_region() {
+        Some(region) => {
+          let (target, child_index) = match region {
+            Brand =>
+              (
+                shell_wrapper(shell, "brandGroup"),
+                if has_navigation_trigger {
+                  1
+                } else {
+                  0
+                },
+              )
+            NavigationTrigger => (shell_wrapper(shell, "brandGroup"), 0)
+            GlobalSearch => (shell_wrapper(shell, "globalSearch"), 0)
+            HeaderActions => (shell_wrapper(shell, "headerActions"), 0)
+            AccountMenu => (shell_wrapper(shell, "accountMenu"), 0)
+            Rail => (shell_wrapper(shell, "rail"), 0)
+            Sidebar => (shell_wrapper(shell, "sidebar"), 0)
+            Tabs => (shell_wrapper(shell, "tabs"), 0)
+            Main => (shell_wrapper(shell, "main"), 0)
+            ContextPanel => (shell_wrapper(shell, "context"), 0)
+            BottomBar => (shell_wrapper(shell, "bottom"), 0)
+          }
+          self.render_node(child, target, child_index)
+        }
+        None => ()
+      }
+    }
+    return
+  }
   let children = view.children()
   for child_index = 0
       child_index < children.length()
       child_index = child_index + 1 {
     self.render_node(children[child_index], mounted.node, child_index)
   }
+}
+
+///|
+/// A shell owns the root; nested shells and shell children without a region are
+/// rejected before any runtime/DOM state changes. Non-shell roots remain valid.
+fn validate_shell_tree(
+  view : @core.View,
+  depth : Int,
+) -> Result[Unit, DomError] {
+  if view.kind() == @core.AppShell {
+    if depth != 0 {
+      return Err(InvalidShell)
+    }
+    for child in view.children() {
+      match child.shell_region() {
+        None => return Err(InvalidShell)
+        Some(_) => ()
+      }
+      match validate_shell_tree(child, depth + 1) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+    }
+  } else {
+    for child in view.children() {
+      match validate_shell_tree(child, depth + 1) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+    }
+  }
+  Ok(())
 }
 
 ///|
@@ -507,6 +741,10 @@ pub fn DomRoot::update(
   if self.runtime.is_disposed() {
     return Err(Disposed)
   }
+  match validate_shell_tree(view, 0) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
   for _, mounted in self.nodes {
     if !contains_node(self.root, mounted.node) {
       return Err(HostTreeChanged)
@@ -516,6 +754,7 @@ pub fn DomRoot::update(
     Err(error) => return Err(InvalidView(error))
     Ok(_) => ()
   }
+  self.shell_root = view.is_shell()
   let focused = active_element()
   let removed : Array[String] = []
   for key, mounted in self.nodes {
@@ -538,7 +777,22 @@ pub fn DomRoot::update(
 
 ///|
 pub fn DomRoot::next_action(self : DomRoot) -> @core.SemanticAction? {
-  self.runtime.next_action()
+  if !self.shell_root {
+    return self.runtime.next_action()
+  }
+  while self.runtime.next_action() is Some(action) {
+    let visible = match action {
+      Activate(key) =>
+        match self.nodes.get(key.value()) {
+          Some(mounted) => node_visible(mounted.node)
+          None => false
+        }
+    }
+    if visible {
+      return Some(action)
+    }
+  }
+  None
 }
 
 ///|

@@ -33,8 +33,10 @@ pub fn Frame::hovered(Self, @core.NodeKey) -> Bool
 pub fn Frame::label_bounds(Self, @core.NodeKey) -> @primitives.Rect?
 pub fn Frame::loading(Self, @core.NodeKey) -> Bool
 pub fn Frame::pressed(Self, @core.NodeKey) -> Bool
+pub fn Frame::region_bounds(Self, @core.ShellRegion) -> @primitives.Rect?
 pub fn Frame::revision(Self) -> UInt64
 pub fn Frame::root_bounds(Self) -> @primitives.Rect
+pub fn Frame::shell_mode(Self) -> @core.ShellMode?
 pub fn Frame::snapshot(Self) -> @scene.SceneSnapshot
 pub fn Frame::theme(Self) -> @theme.Theme?
 

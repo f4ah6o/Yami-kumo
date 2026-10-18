@@ -32,11 +32,39 @@ fn main {
   let capture : @shared_counter_host.FrameCapture = fn(window) {
     @testing.capture_frame(host, window)
   }
+  let publish : @shared_counter_host.ShellAXPublish = fn(
+    window,
+    existing_binding,
+    snapshot,
+  ) {
+    host.publish_button_accessibility(
+      window,
+      existing_binding,
+      @mac_host.ButtonAccessibilitySnapshot::new(
+        snapshot.name(),
+        snapshot.bounds(),
+        snapshot.enabled(),
+        snapshot.loading(),
+        snapshot.focused(),
+        snapshot.activations(),
+      ),
+    )
+  }
+  let revoke : @shared_counter_host.ShellAXRevoke = fn(window, token) {
+    host.revoke_button_accessibility(window, token)
+  }
+  let take_request : @shared_counter_host.ShellAXTakeRequest = fn(window) {
+    host.take_button_accessibility_request(window)
+  }
+  let accessibility_port = @shared_counter_host.ShellAXPort::new(
+    publish, revoke, take_request,
+  )
   let result = @shared_counter_host.run(
     host,
     @shared_counter_host.Macos,
     macos_measure,
     capture,
+    accessibility_port=Some(accessibility_port),
   )
   let stopped = host.stop()
   match result {

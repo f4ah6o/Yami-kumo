@@ -227,5 +227,12 @@ The [shared Button theme slice](docs/shared-button-theme.md) adds opt-in
 light/dark semantic colors from `ui/theme`, generated scoped CSS, and GPUI
 paint palettes. Theme switching retains the existing keyed Button and input
 controller. Existing per-Button palette selections override the root theme and
-share the same numeric tokens through their compatible API. AppShell and general
-layout remain separate roadmap steps.
+share the same numeric tokens through their compatible API.
+
+The [bounded shared AppShell slice](docs/shared-app-shell.md) adds brand/main
+plus optional navigation, header, rail, sidebar, tabs, context and bottom
+regions. DOM emits semantic wrappers and scoped CSS; GPUI lays out the same
+regions with the common breakpoint and theme tokens. Compact mode is a stacked
+panel layout. Visible-window shell execution, drawer overlays, general layout,
+TextField/IME, Dialog, accessibility and packaged distribution remain later
+gates.

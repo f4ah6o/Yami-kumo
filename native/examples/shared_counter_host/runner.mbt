@@ -13,6 +13,138 @@ pub type FrameCapture = (@platform.WindowId) -> Result[
 ]
 
 ///|
+/// A copied macOS AX projection for the one shared-shell main Button.
+pub struct ShellAXSnapshot {
+  priv name : String
+  priv bounds : @primitives.Rect
+  priv enabled : Bool
+  priv loading : Bool
+  priv focused : Bool
+  priv activations : Int32
+}
+
+///|
+pub fn ShellAXSnapshot::new(
+  name : String,
+  bounds : @primitives.Rect,
+  enabled : Bool,
+  loading : Bool,
+  focused : Bool,
+  activations : Int32,
+) -> ShellAXSnapshot {
+  { name, bounds, enabled, loading, focused, activations, }
+}
+
+///|
+pub fn ShellAXSnapshot::name(self : ShellAXSnapshot) -> String {
+  self.name
+}
+
+///|
+pub fn ShellAXSnapshot::bounds(self : ShellAXSnapshot) -> @primitives.Rect {
+  self.bounds
+}
+
+///|
+pub fn ShellAXSnapshot::enabled(self : ShellAXSnapshot) -> Bool {
+  self.enabled
+}
+
+///|
+pub fn ShellAXSnapshot::loading(self : ShellAXSnapshot) -> Bool {
+  self.loading
+}
+
+///|
+pub fn ShellAXSnapshot::focused(self : ShellAXSnapshot) -> Bool {
+  self.focused
+}
+
+///|
+pub fn ShellAXSnapshot::activations(self : ShellAXSnapshot) -> Int32 {
+  self.activations
+}
+
+///|
+pub type ShellAXPublish = (
+  @platform.WindowId,
+  Int64,
+  ShellAXSnapshot,
+) -> Result[Int64, @diagnostics.FrameworkError]
+
+///|
+pub type ShellAXRevoke = (@platform.WindowId, Int64) -> Result[
+  Unit,
+  @diagnostics.FrameworkError,
+]
+
+///|
+pub type ShellAXTakeRequest = (@platform.WindowId) -> Result[
+  Int64?,
+  @diagnostics.FrameworkError,
+]
+
+///|
+/// Optional macOS AX transport for the shared shell's main Button. The shared
+/// runner owns the snapshot and semantic action; the platform only publishes,
+/// revokes, and returns opaque tokens.
+pub struct ShellAXPort {
+  priv publish : ShellAXPublish
+  priv revoke : ShellAXRevoke
+  priv take_request : ShellAXTakeRequest
+}
+
+///|
+pub fn ShellAXPort::new(
+  publish : ShellAXPublish,
+  revoke : ShellAXRevoke,
+  take_request : ShellAXTakeRequest,
+) -> ShellAXPort {
+  { publish, revoke, take_request, }
+}
+
+///|
+fn sync_shell_ax(
+  port : ShellAXPort,
+  window : @platform.WindowId,
+  frame : @shared_counter.CounterFrame,
+  activations : Int32,
+  existing : Int64?,
+) -> Result[Int64?, @diagnostics.FrameworkError] {
+  let snapshot = ShellAXSnapshot::new(
+    "Increment",
+    frame.button_bounds(),
+    frame.button_enabled(),
+    frame.button_loading(),
+    frame.button_focused(),
+    activations,
+  )
+  match (port.publish)(
+    window,
+    match existing {
+      Some(value) => value
+      None => Int64::from_int(0)
+    },
+    snapshot,
+  ) {
+    Err(error) => Err(error)
+    Ok(token) => Ok(Some(token))
+  }
+}
+
+///|
+fn revoke_shell_ax(
+  port : ShellAXPort,
+  window : @platform.WindowId,
+  binding : Int64?,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  match binding {
+    None => Ok(())
+    Some(token) => (port.revoke)(window, token)
+  }
+}
+
+///|
 extern "C" fn flush_stdout() -> Unit = "yami_shared_ui_flush_stdout"
 
 ///|
@@ -84,8 +216,10 @@ pub fn run(
   platform : NativePlatform,
   measure : @components.TextMeasure,
   capture : FrameCapture,
+  accessibility_port? : ShellAXPort? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let e2e = @env.get_env_var("YAMI_NATIVE_UI_E2E") == Some("1")
+  let ax_e2e = @env.get_env_var("YAMI_NATIVE_UI_AX_E2E") == Some("1")
   let fixture = match @env.get_env_var("YAMI_SHARED_UI_FIXTURE") {
     None => "counter"
     Some("counter") => "counter"
@@ -93,6 +227,10 @@ pub fn run(
     Some("spacing") => "spacing"
     Some("theme") => "theme"
     Some("palette") => "palette"
+    Some("shell") => "shell"
+    Some("shell-compact") => "shell-compact"
+    Some("shell-visible") => "shell-visible"
+    Some("shell-visible-compact") => "shell-visible-compact"
     Some("disabled-loading") if e2e => "disabled-loading"
     _ => return Err(runner_error("invalid shared counter fixture"))
   }
@@ -128,7 +266,12 @@ pub fn run(
   if fixture == "theme" {
     return run_theme(host, platform, measure, capture, e2e, directory, title)
   }
-  let window = match host.create_window(title, 800.0, 600.0) {
+  let (width, height) = match fixture {
+    "shell" | "shell-visible" => (1000.0, 700.0)
+    "shell-compact" | "shell-visible-compact" => (700.0, 700.0)
+    _ => (800.0, 600.0)
+  }
+  let window = match host.create_window(title, width, height) {
     Err(error) => return Err(error)
     Ok(value) => value
   }
@@ -139,6 +282,8 @@ pub fn run(
       card=fixture == "card",
       spacing=fixture == "spacing",
       palette=fixture == "palette",
+      shell=fixture == "shell" || fixture == "shell-compact" ||
+        fixture == "shell-visible" || fixture == "shell-visible-compact",
     ) {
     Err(error) => {
       let _ = host.destroy_window(window)
@@ -147,7 +292,18 @@ pub fn run(
     Ok(value) => value
   }
   let result = run_loop(
-    host, window, app, platform, measure, capture, e2e, fixture, directory, title,
+    host,
+    window,
+    app,
+    platform,
+    measure,
+    capture,
+    e2e,
+    fixture,
+    directory,
+    title,
+    accessibility_port,
+    ax_e2e,
   )
   app.dispose()
   match result {
@@ -171,6 +327,8 @@ fn run_loop(
   fixture : String,
   directory : String?,
   title : String,
+  accessibility_port : ShellAXPort?,
+  ax_e2e : Bool,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let gate = PresentationGate::{ rendered: false, pending_stale: false, }
   let proof = Proof::{
@@ -191,8 +349,58 @@ fn run_loop(
   let mut destroyed = false
   let mut sequence : Int64 = 0
   let mut ticks = 0
+  let mut ax_binding : Int64? = None
+  let mut ax_ready = false
   while !destroyed && (!e2e || ticks < 4000) {
     ticks += 1
+    match accessibility_port {
+      Some(port) =>
+        match (port.take_request)(window) {
+          Err(error) => return Err(error)
+          Ok(None) => ()
+          Ok(Some(token)) =>
+            match ax_binding {
+              Some(binding) if binding == token =>
+                match app.activate_increment() {
+                  Err(error) => return Err(error)
+                  Ok(false) => ()
+                  Ok(true) => {
+                    let (width, height, scale) = match
+                      host.window_metrics(window) {
+                      Err(error) => return Err(error)
+                      Ok(value) => value
+                    }
+                    let mut drained = 0
+                    while true {
+                      match app.drain_one(width, height, scale, measure) {
+                        Err(error) => return Err(error)
+                        Ok(false) => break
+                        Ok(true) => {
+                          proof.actions += 1
+                          drained += 1
+                          if drained > 32 {
+                            return Err(
+                              runner_error("unbounded shared action queue"),
+                            )
+                          }
+                        }
+                      }
+                    }
+                    if drained > 0 {
+                      proof.phase = proof.actions
+                      gate.invalidate(pending is Some(_))
+                      if pending is Some(_) {
+                        app.invalidate_layout()
+                      }
+                      dirty = true
+                    }
+                  }
+                }
+              _ => ()
+            }
+        }
+      None => ()
+    }
     let event = match host.next_event(timeout_ms=16) {
       Err(error) => return Err(error)
       Ok(value) => value
@@ -208,6 +416,23 @@ fn run_loop(
         let consumed = match app.handle_event(value) {
           Err(error) => return Err(error)
           Ok(value) => value
+        }
+        if @env.get_env_var("YAMI_NATIVE_UI_DEBUG_INPUT") == Some("1") {
+          let detail = match value.kind() {
+            @platform.Input(@primitives.PointerButtonPressed(position~, ..)) =>
+              "down x=\{position.x()} y=\{position.y()}"
+            @platform.Input(@primitives.PointerButtonReleased(position~, ..)) =>
+              "up x=\{position.x()} y=\{position.y()}"
+            @platform.Input(@primitives.PointerMoved(position~)) =>
+              "move x=\{position.x()} y=\{position.y()}"
+            @platform.Input(@primitives.KeyPressed(..)) => "key-down"
+            @platform.Input(@primitives.KeyReleased(..)) => "key-up"
+            @platform.Input(_) => "other-input"
+            _ => "window"
+          }
+          println(
+            "YAMI_DEBUG_INPUT seq=\{value.sequence()} consumed=\{consumed} \{detail}",
+          )
         }
         if e2e && fixture == "palette" {
           if proof.events.length() >= 4096 {
@@ -348,12 +573,30 @@ fn run_loop(
             }
           @platform.CloseRequested | @platform.ExitRequested => {
             closing = true
+            match accessibility_port {
+              Some(port) =>
+                match revoke_shell_ax(port, window, ax_binding) {
+                  Err(error) => return Err(error)
+                  Ok(_) => ax_binding = None
+                }
+              None => ()
+            }
             match host.destroy_window(window) {
               Err(error) => return Err(error)
               Ok(_) => ()
             }
           }
-          @platform.Destroyed => destroyed = true
+          @platform.Destroyed => {
+            match accessibility_port {
+              Some(port) =>
+                match revoke_shell_ax(port, window, ax_binding) {
+                  Err(error) => return Err(error)
+                  Ok(_) => ax_binding = None
+                }
+              None => ()
+            }
+            destroyed = true
+          }
           @platform.Wake | @platform.Moved(..) => ()
         }
       }
@@ -381,6 +624,34 @@ fn run_loop(
       dirty = false
       gate.rendered = true
       current = Some(frame)
+      match accessibility_port {
+        Some(port) =>
+          ax_binding = match
+            sync_shell_ax(
+              port,
+              window,
+              frame,
+              if ax_e2e {
+                proof.actions
+              } else {
+                0
+              },
+              ax_binding,
+            ) {
+            Err(error) => return Err(error)
+            Ok(value) => value
+          }
+        None => ()
+      }
+      if ax_e2e && !ax_ready {
+        emit(
+          "YAMI_NATIVE_UI_AX_READY",
+          "{\"windowId\":\{window.value()},\"title\":\"" +
+          escape_json(title) +
+          "\",\"buttonId\":\{frame.button_binding_id()}}",
+        )
+        ax_ready = true
+      }
       if platform is Macos {
         if e2e {
           match publish(window, frame, capture, directory, title, proof) {
@@ -396,8 +667,18 @@ fn run_loop(
   if !destroyed {
     return Err(runner_error("host window destruction timed out"))
   }
-  if e2e {
-    let expected_phase = if fixture == "palette" {
+  if ax_e2e {
+    emit(
+      "YAMI_NATIVE_UI_AX_COMPLETE",
+      "{\"count\":\{proof.actions},\"value\":\{proof.actions},\"destroyed\":true,\"windowId\":\{window.value()}}",
+    )
+  }
+  if e2e && !ax_e2e {
+    let render_only = fixture == "shell-visible" ||
+      fixture == "shell-visible-compact"
+    let expected_phase = if render_only {
+      0
+    } else if fixture == "palette" {
       5
     } else if fixture == "spacing" {
       4
@@ -406,7 +687,9 @@ fn run_loop(
     } else {
       3
     }
-    let expected_actions = if fixture == "palette" {
+    let expected_actions = if render_only {
+      0
+    } else if fixture == "palette" {
       5
     } else if fixture == "spacing" {
       4
@@ -430,6 +713,45 @@ fn run_loop(
     }
   }
   Ok(())
+}
+
+///|
+fn shell_json(frame : @shared_counter.CounterFrame) -> String {
+  let mode = match frame.shell_mode() {
+    Some(@view.Wide) => "wide"
+    Some(@view.Compact) => "compact"
+    None => "none"
+  }
+  let regions = StringBuilder()
+  regions.write_string("{")
+  let entries : Array[(String, @view.ShellRegion)] = [
+    ("brand", @view.Brand),
+    ("navigationTrigger", @view.NavigationTrigger),
+    ("globalSearch", @view.GlobalSearch),
+    ("headerActions", @view.HeaderActions),
+    ("accountMenu", @view.AccountMenu),
+    ("rail", @view.Rail),
+    ("sidebar", @view.Sidebar),
+    ("tabs", @view.Tabs),
+    ("main", @view.Main),
+    ("contextPanel", @view.ContextPanel),
+    ("bottomBar", @view.BottomBar),
+  ]
+  for index, entry in entries {
+    let (name, region) = entry
+    if index > 0 {
+      regions.write_string(",")
+    }
+    regions.write_string("\"" + name + "\":")
+    regions.write_string(
+      match frame.shell_region_bounds(region) {
+        Some(rect) => rect_json(rect)
+        None => "null"
+      },
+    )
+  }
+  regions.write_string("}")
+  "\"shell\":{\"mode\":\"" + mode + "\",\"regions\":" + regions.to_string() + "},"
 }
 
 ///|
@@ -480,8 +802,8 @@ fn publish(
     ""
   }
   // Store a JSON object tail so completion can add destroyed without reparsing.
-  let payload = spacing_payload +
-    "\"fixture\":\"\{proof.fixture}\",\"phase\":\{proof.phase},\"count\":\{frame.count()},\"value\":\{frame.count()},\"enabled\":\{frame.button_enabled()},\"loading\":\{frame.button_loading()},\"pressed\":\{frame.button_pressed()},\"focused\":\{frame.button_focused()},\"releases\":\{proof.releases},\"actions\":\{actions.to_string()},\"windowId\":\{window.value()},\"title\":\"\{escape_json(title)}\",\"button\":\{rect_json(frame.button_bounds())},\"buttonLabel\":\{rect_json(frame.button_label_bounds())},\"counter\":\{rect_json(frame.counter_bounds())},\"card\":\{rect_json(frame.card_bounds())},\"heading\":\{rect_json(frame.heading_bounds())},\"root\":\{rect_json(frame.root_bounds())},\"scale\":\{captured.scale()},\"scene\":\{frame.snapshot().canonical_json()},\"frame\":{\"path\":\"\{escape_json(path)}\",\"width\":\{captured.width()},\"height\":\{captured.height()},\"scale\":\{captured.scale()}}}"
+  let payload = spacing_payload + shell_json(frame) +
+    "\"fixture\":\"\{proof.fixture}\",\"phase\":\{proof.phase},\"count\":\{frame.count()},\"value\":\{frame.count()},\"enabled\":\{frame.button_enabled()},\"loading\":\{frame.button_loading()},\"pressed\":\{frame.button_pressed()},\"focused\":\{frame.button_focused()},\"releases\":\{proof.releases},\"actions\":\{actions.to_string()},\"windowId\":\{window.value()},\"title\":\"\{escape_json(title)}\",\"buttonName\":\"Increment\",\"inputMode\":\"ax-frame\",\"button\":\{rect_json(frame.button_bounds())},\"buttonLabel\":\{rect_json(frame.button_label_bounds())},\"counter\":\{rect_json(frame.counter_bounds())},\"card\":\{rect_json(frame.card_bounds())},\"heading\":\{rect_json(frame.heading_bounds())},\"root\":\{rect_json(frame.root_bounds())},\"scale\":\{captured.scale()},\"scene\":\{frame.snapshot().canonical_json()},\"frame\":{\"path\":\"\{escape_json(path)}\",\"width\":\{captured.width()},\"height\":\{captured.height()},\"scale\":\{captured.scale()}}}"
   emit("YAMI_NATIVE_UI_PRESENTED", "{" + payload)
   if proof.last_payload is None {
     emit("YAMI_NATIVE_UI_READY", "{" + payload)
