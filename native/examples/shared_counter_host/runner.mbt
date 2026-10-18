@@ -417,6 +417,23 @@ fn run_loop(
           Err(error) => return Err(error)
           Ok(value) => value
         }
+        if @env.get_env_var("YAMI_NATIVE_UI_DEBUG_INPUT") == Some("1") {
+          let detail = match value.kind() {
+            @platform.Input(@primitives.PointerButtonPressed(position~, ..)) =>
+              "down x=\{position.x()} y=\{position.y()}"
+            @platform.Input(@primitives.PointerButtonReleased(position~, ..)) =>
+              "up x=\{position.x()} y=\{position.y()}"
+            @platform.Input(@primitives.PointerMoved(position~)) =>
+              "move x=\{position.x()} y=\{position.y()}"
+            @platform.Input(@primitives.KeyPressed(..)) => "key-down"
+            @platform.Input(@primitives.KeyReleased(..)) => "key-up"
+            @platform.Input(_) => "other-input"
+            _ => "window"
+          }
+          println(
+            "YAMI_DEBUG_INPUT seq=\{value.sequence()} consumed=\{consumed} \{detail}",
+          )
+        }
         if e2e && fixture == "palette" {
           if proof.events.length() >= 4096 {
             return Err(runner_error("palette event trace limit exceeded"))
