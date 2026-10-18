@@ -422,16 +422,18 @@ def validate_shell_marker(marker: dict[str, Any], fixture: str) -> None:
         for name in ("navigationTrigger", "contextPanel"):
             if regions[name] is not None:
                 raise E2EError(f"wide shell region {name} must be absent")
-        expected_size = (1000, 700)
+        expected_width = 1000
     else:
         for name in ("rail", "sidebar", "contextPanel"):
             if regions[name] is not None:
                 raise E2EError(f"compact shell region {name} must be absent")
         if not isinstance(regions["navigationTrigger"], dict):
             raise E2EError("compact shell navigation trigger is missing")
-        expected_size = (700, 700)
+        expected_width = 700
     root = _bounds(marker.get("root"), "root")
-    if abs(root[2] - expected_size[0]) > 1 or abs(root[3] - expected_size[1]) > 1:
+    # The fixture size is an outer window request; macOS content height excludes
+    # the title bar. Width and the positive content envelope are the portable facts.
+    if abs(root[2] - expected_width) > 1 or root[3] <= 0 or root[3] > 700:
         raise E2EError("shell root dimensions disagree with the fixture window")
     main = _bounds(regions["main"], "shell.main")
     brand = _bounds(regions["brand"], "shell.brand")
