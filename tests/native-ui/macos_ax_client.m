@@ -772,8 +772,7 @@ static bool application_identity_matches(pid_t pid,
                                          const char *expected_bundle_path) {
   NSRunningApplication *running =
       [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
-  if (running == nil || running.bundleIdentifier == nil ||
-      running.bundleURL == nil) {
+  if (running == nil || running.bundleURL == nil) {
     return false;
   }
   NSString *expected_id =
@@ -784,8 +783,13 @@ static bool application_identity_matches(pid_t pid,
   NSURL *actual_url = [[running.bundleURL URLByResolvingSymlinksInPath]
       URLByStandardizingPath];
   NSURL *normalized_expected = [expected_url URLByStandardizingPath];
-  return expected_id != nil &&
-         [running.bundleIdentifier isEqualToString:expected_id] &&
+  // A temporary, unsigned .app launched by absolute path can expose the exact
+  // bundle URL while NSRunningApplication reports no bundle identifier. The
+  // PID plus the unique resolved bundle path still binds this helper to the
+  // launched process; a reported identifier must match when present.
+  bool identifier_matches = running.bundleIdentifier == nil ||
+                            [running.bundleIdentifier isEqualToString:expected_id];
+  return expected_id != nil && identifier_matches &&
          normalized_expected != nil && actual_url != nil &&
          [actual_url.path isEqualToString:normalized_expected.path];
 }
