@@ -627,7 +627,17 @@ fn run_loop(
       match accessibility_port {
         Some(port) =>
           ax_binding = match
-            sync_shell_ax(port, window, frame, proof.actions, ax_binding) {
+            sync_shell_ax(
+              port,
+              window,
+              frame,
+              if ax_e2e {
+                proof.actions
+              } else {
+                0
+              },
+              ax_binding,
+            ) {
             Err(error) => return Err(error)
             Ok(value) => value
           }
