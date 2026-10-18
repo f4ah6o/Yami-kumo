@@ -39,7 +39,11 @@ atomically if empty or duplicated.
 
 - `width <= 820.0` is `Compact`.
 - `width > 820.0` is `Wide`.
-- The scoped CSS uses `@media (max-width: 820px)`.
+- The mounted shell is a CSS container (`container-type: inline-size`) and the
+  compact rules use `@container yk-shell (max-width: 820px)`. The breakpoint
+  therefore follows the shell's own width, not the browser viewport; an
+  embedded 700px shell is compact inside a wide page. The outer line is an inset
+  box-shadow so it does not reduce the query width.
 - A shell must be the root View. Nested shells are rejected before a commit.
 - The mounted DOM root must have a definite size; the shell fills it with
   `width: 100%` and `height: 100%`.

@@ -63,6 +63,7 @@ const shellSelector = (selector) =>
 
 function checkDeclarations(rule) {
   for (const declaration of rule.nodes) {
+    if (declaration.type === 'comment') continue;
     assert.equal(declaration.type, 'decl');
     assert.equal(Boolean(declaration.important), false);
   }
@@ -77,9 +78,13 @@ export function checkSharedStylesheetScope(css) {
   const visit = (rule, insideMedia = false) => {
     if (rule.type === 'comment') return;
     if (rule.type === 'atrule') {
-      assert.equal(rule.name, 'media', 'shared CSS cannot import or introduce global at-rules');
-      assert.equal(normalize(rule.params), '(max-width: 820px)');
-      assert.equal(insideMedia, false, 'nested media queries are unsupported');
+      assert.equal(
+        rule.name,
+        'container',
+        'compact layout must query the mounted shell, not the viewport',
+      );
+      assert.equal(normalize(rule.params), 'yk-shell (max-width: 820px)');
+      assert.equal(insideMedia, false, 'nested conditional rules are unsupported');
       for (const child of rule.nodes) visit(child, true);
       return;
     }

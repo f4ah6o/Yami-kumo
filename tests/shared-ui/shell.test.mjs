@@ -19,6 +19,14 @@ const cssRgb = (rgb) => `rgb(${rgb.join(', ')})`;
 async function withPage(run) {
   const compiled = await readFile(bundle);
   const css = await readFile(resolve(root, 'styles/shared-ui.css'));
+  const fixtureCss = [
+    '#shell-root { width: 1000px; height: 700px; }',
+    '#shell-root[data-fixture-width="700"] { width: 700px; }',
+    '#shell-root[data-fixture-width="820"] { width: 820px; }',
+    '#shell-root[data-fixture-width="821"] { width: 821px; }',
+    '#shell-second { width: 700px; height: 700px; }',
+    '#shell-minimal { width: 1000px; height: 700px; }',
+  ].join('\n');
   const server = createServer((request, response) => {
     response.setHeader(
       'Content-Security-Policy',
@@ -30,10 +38,13 @@ async function withPage(run) {
     } else if (request.url === '/shared.css') {
       response.setHeader('Content-Type', 'text/css');
       response.end(css);
+    } else if (request.url === '/fixture.css') {
+      response.setHeader('Content-Type', 'text/css');
+      response.end(fixtureCss);
     } else {
       response.setHeader('Content-Type', 'text/html');
       response.end(
-        '<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="/shared.css"><title>Shared AppShell proof</title></head><body><main id="shell-root" style="width:100%;height:700px"></main><section id="shell-second" style="width:700px;height:700px"></section><section id="occupied"><p>Existing content</p></section><aside id="unrelated">Unrelated host</aside></body></html>',
+        '<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="/shared.css"><link rel="stylesheet" href="/fixture.css"><title>Shared AppShell proof</title></head><body><main id="shell-root"></main><section id="shell-second"></section><section id="shell-minimal"></section><section id="occupied"><p>Existing content</p></section><aside id="unrelated">Unrelated host</aside></body></html>',
       );
     }
   });
@@ -76,6 +87,12 @@ const bounds = (page, selector) =>
 
 const display = (page, selector) =>
   page.evaluate((value) => getComputedStyle(document.querySelector(value)).display, selector);
+
+const setShellWidth = (page, width) =>
+  page.evaluate(async (value) => {
+    document.querySelector('#shell-root').dataset.fixtureWidth = String(value);
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  }, width);
 
 test('shared AppShell renders semantic regions and fills the wide layout', async () => {
   await withPage(async (page, errors) => {
@@ -156,7 +173,7 @@ test('shared AppShell renders semantic regions and fills the wide layout', async
 test('shared AppShell stacks optional regions at the compact breakpoint', async () => {
   await withPage(async (page) => {
     assert.equal(await page.evaluate(() => api.mountShell('shell-root', 'light')), 'mounted');
-    await page.setViewportSize({ width: contract.breakpoint, height: 700 });
+    await setShellWidth(page, contract.breakpoint);
     assert.equal(await display(page, '.yk-ui-rail'), 'none');
     assert.equal(await display(page, '.yk-ui-navigation-trigger'), 'block');
     assert.equal(await display(page, '.yk-ui-sidebar'), 'none');
@@ -180,6 +197,52 @@ test('shared AppShell stacks optional regions at the compact breakpoint', async 
     assert.equal(context.height, contract.geometry.compactContext);
     assert.equal(await page.evaluate(() => api.shellSidebarOpen('shell-root')), true);
     assert.equal(await page.evaluate(() => api.shellContextOpen('shell-root')), true);
+  });
+});
+
+test('shared AppShell uses the shell width rather than the viewport', async () => {
+  await withPage(async (page) => {
+    assert.equal(await page.evaluate(() => api.mountShell('shell-second', 'light')), 'mounted');
+    assert.equal(await page.evaluate(() => window.innerWidth), 1100);
+    assert.equal((await bounds(page, '#shell-second .yk-ui-shell')).width, 700);
+    assert.equal(await display(page, '#shell-second .yk-ui-rail'), 'none');
+    assert.equal(await display(page, '#shell-second .yk-ui-navigation-trigger'), 'block');
+    assert.equal(await display(page, '#shell-second .yk-ui-sidebar'), 'none');
+    assert.equal((await bounds(page, '#shell-second .yk-ui-main')).width, 700);
+  });
+});
+
+test('shared AppShell switches exactly at the 820px shell boundary', async () => {
+  await withPage(async (page) => {
+    assert.equal(await page.evaluate(() => api.mountShell('shell-root', 'light')), 'mounted');
+    await setShellWidth(page, contract.breakpoint);
+    assert.equal(await page.evaluate(() => window.innerWidth), 1100);
+    assert.equal(await display(page, '.yk-ui-rail'), 'none');
+    assert.equal(await display(page, '.yk-ui-navigation-trigger'), 'block');
+    await setShellWidth(page, contract.breakpoint + 1);
+    assert.equal(await page.evaluate(() => window.innerWidth), 1100);
+    assert.equal(await display(page, '.yk-ui-rail'), 'flex');
+    assert.equal(await display(page, '.yk-ui-navigation-trigger'), 'none');
+  });
+});
+
+test('shared AppShell omits empty header-end flex space', async () => {
+  await withPage(async (page) => {
+    assert.equal(await page.evaluate(() => api.mountShellMinimal('shell-minimal')), 'mounted');
+    assert.equal(await display(page, '#shell-minimal .yk-ui-header-end'), 'none');
+    assert.equal(await display(page, '#shell-minimal .yk-ui-header-actions'), 'none');
+    assert.equal(await display(page, '#shell-minimal .yk-ui-account-menu'), 'none');
+    assert.equal(
+      await page.evaluate(() =>
+        document.querySelector('#shell-minimal .yk-ui-header-end').getAttribute('data-present'),
+      ),
+      'false',
+    );
+    const shell = await bounds(page, '#shell-minimal .yk-ui-shell');
+    const search = await bounds(page, '#shell-minimal .yk-ui-global-search');
+    assert.ok(search.width > shell.width / 2);
+    assert.ok(search.right >= shell.right - 16);
+    assert.equal(await page.evaluate(() => api.disposeMinimalShell('shell-minimal')), undefined);
   });
 });
 
@@ -208,7 +271,7 @@ test('shared AppShell keeps visible identity and rejects hidden focus and queued
       await page.evaluate(() => document.activeElement.getAttribute('data-yk-key')),
       'increment',
     );
-    await page.setViewportSize({ width: 700, height: 700 });
+    await setShellWidth(page, 700);
     assert.equal(
       await page.evaluate(() => api.shellAction('shell-root', 'toggle-sidebar')),
       'updated',

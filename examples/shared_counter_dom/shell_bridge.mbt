@@ -134,3 +134,43 @@ pub fn dispose_shell(id : String) -> Unit {
     }
   }
 }
+
+///|
+let minimal_shells : Map[String, @dom.DomRoot] = Map([])
+
+///|
+/// Bounded parity fixture: brand + global search + main, with no header-end
+/// slots. The empty header-end group must not consume flex space.
+#export_name("mountShellMinimal")
+pub fn mount_shell_minimal(id : String) -> String {
+  if minimal_shells.contains(id) {
+    return "already-mounted"
+  }
+  let view = @core.app_shell(
+    @core.NodeKey::new("minimal-shell"),
+    @core.text(@core.NodeKey::new("minimal-brand"), "Brand"),
+    @core.column(@core.NodeKey::new("minimal-main"), [
+      @core.text(@core.NodeKey::new("minimal-value"), "Value"),
+    ]),
+    global_search=@core.text(@core.NodeKey::new("minimal-search"), "Search"),
+  )
+  match @dom.mount(id, view, fn() {}) {
+    Err(error) => error_name(error)
+    Ok(mounted) => {
+      minimal_shells.set(id, mounted)
+      "mounted"
+    }
+  }
+}
+
+///|
+#export_name("disposeMinimalShell")
+pub fn dispose_minimal_shell(id : String) -> Unit {
+  match minimal_shells.get(id) {
+    None => ()
+    Some(mounted) => {
+      mounted.dispose()
+      minimal_shells.remove(id) |> ignore
+    }
+  }
+}

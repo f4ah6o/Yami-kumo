@@ -135,7 +135,7 @@ extern "js" fn create_shell_nodes(shell : DomNode) -> ShellNodes =
   #|   const bottom = make("footer", "yk-ui-bottom-bar");
   #|   header.setAttribute("data-present", "true");
   #|   brandGroup.setAttribute("data-present", "true");
-  #|   headerEnd.setAttribute("data-present", "true");
+  #|   headerEnd.setAttribute("data-present", "false");
   #|   workspace.setAttribute("data-present", "true");
   #|   mainColumn.setAttribute("data-present", "true");
   #|   main.setAttribute("data-present", "true");
@@ -184,6 +184,7 @@ extern "js" fn update_shell_nodes(
   #|   present(nodes.globalSearch, hasGlobalSearch);
   #|   present(nodes.headerActions, hasHeaderActions);
   #|   present(nodes.accountMenu, hasAccountMenu);
+  #|   present(nodes.headerEnd, hasHeaderActions || hasAccountMenu);
   #|   present(nodes.rail, hasRail);
   #|   present(nodes.sidebar, hasSidebar);
   #|   present(nodes.tabs, hasTabs);

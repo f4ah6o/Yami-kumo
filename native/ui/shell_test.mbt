@@ -37,6 +37,29 @@ test "shared shell lays out wide regions and hides compact-only controls" {
 }
 
 ///|
+test "shared shell omits empty header end slots" {
+  let mounted = shell_mount()
+  let view = @view.app_shell(
+    @view.NodeKey::new("minimal-shell"),
+    @view.text(@view.NodeKey::new("minimal-brand"), "Brand"),
+    @view.column(@view.NodeKey::new("minimal-main"), [
+      @view.text(@view.NodeKey::new("minimal-value"), "Value"),
+    ]),
+    global_search=@view.text(@view.NodeKey::new("minimal-search"), "Search"),
+  )
+  let frame = mounted.commit(view, 1000.0, 700.0, 1.0, measure).unwrap()
+  assert_true(frame.region_bounds(@view.HeaderActions) is None)
+  assert_true(frame.region_bounds(@view.AccountMenu) is None)
+  assert_true(frame.region_bounds(@view.Brand) is Some(_))
+  assert_true(frame.region_bounds(@view.GlobalSearch) is Some(_))
+  assert_true(frame.region_bounds(@view.Main) is Some(_))
+  let brand = frame.region_bounds(@view.Brand).unwrap()
+  let search = frame.region_bounds(@view.GlobalSearch).unwrap()
+  assert_true(brand.right() <= search.left())
+  assert_true(search.right() >= 980.0)
+}
+
+///|
 test "shared shell compact mode stacks open sidebar and context" {
   let mounted = shell_mount()
   let initial = @model.PaletteModel::new()
