@@ -132,9 +132,33 @@ visibility, theme retention, slot identity, hidden focus rejection, nested-shell
 rejection and queued activation. They run with the same pinned GPUI workspace as
 the other shared native tests.
 
-**Not claimed:** visible Linux/Windows/macOS shell windows, physical pointer or
-keyboard input on a shell fixture, external accessibility, IME, TextField,
+### macOS visible-window and external-AX evidence
+
+Local macOS host evidence was executed against runtime candidate
+`b493a7350ce83caaac15a2e691f9a9428001fc15` and pinned GPUI
+`4c2e525f02c00a9c1a560152a914f523a4c2fe47`:
+
+- `scripts/native_ui_macos.sh --shared-counter-render-proof` launched the
+  visible native window and captured the wide and compact shell frames. Both
+  render-only contract fixtures passed, including region bounds, root size,
+  Button enclosure and captured text pixels.
+- `scripts/native_ui_macos.sh --shared-counter-ax-proof` launched the shared
+  shell as a registered temporary `.app`, performed
+  `AXUIElementPerformAction(kAXPressAction)` on the published `Increment`
+  Button, observed the model count change from `0` to `1`, and closed the
+  window. The AX report confirms the exact PID/title and the completed action.
+- The local evidence directories are
+  `_build/native-ui/macos-shared-render/` and
+  `_build/native-ui/macos-shared-ax-final/`. They are generated artifacts and
+  are not committed.
+- The synthetic global-pointer path was attempted with the published AX frame.
+  The event was posted, but the model did not change; therefore pointer input
+  remains **NOT RUN / not qualified**. Physical hardware input cannot be
+  automated by this harness.
+
+**Not claimed:** visible Linux/Windows shell windows, physical pointer or
+keyboard input on a shell fixture, a complete shell AX tree, IME, TextField,
 Dialog, drawer animation/scrim/focus trap, general layout and packaged
-distribution. Browser coverage here is Chromium; Firefox/WebKit/Safari need
-their own profiles. Passing build or portable tests is not a native visible
-window proof.
+distribution. The macOS AX result covers only the main `Increment` Button and
+is local, not CI, evidence. Browser coverage here is Chromium;
+Firefox/WebKit/Safari need their own profiles.

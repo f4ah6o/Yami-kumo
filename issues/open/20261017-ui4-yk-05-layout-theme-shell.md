@@ -87,3 +87,23 @@ accessibility, IME/TextField, Dialog, drawer overlays and general layout remain
 unimplemented or not-run.** Final-head CI and independent actual-artifact review
 are required before this slice is qualified; no broader YK-05 acceptance
 criterion is closed by this note.
+
+## 2026-10-18 local macOS visible-window/AX evidence
+
+Runtime candidate `b493a7350ce83caaac15a2e691f9a9428001fc15` against pinned
+GPUI `4c2e525f02c00a9c1a560152a914f523a4c2fe47`:
+
+- `--shared-counter-render-proof`: PASS for wide and compact visible native
+  windows; both render-only fixtures captured frames and validated shell region
+  bounds, root width/content envelope, Button/heading/counter enclosure and
+  contrasting pixels.
+- `--shared-counter-ax-proof`: PASS. `AXUIElementPerformAction(kAXPressAction)`
+  reached the published main `Increment` Button, changed the App Entity count
+  from 0 to 1, and the client closed/destroyed the exact window.
+- `--shared-counter-ui-proof`: **NOT RUN / not qualified**. A global CGEvent
+  click at the published AX frame was posted but did not change the model; the
+  synthetic pointer path remains open. Physical hardware input is not
+  automatable by the harness.
+
+This is local macOS evidence, not CI, not Linux/Windows, and only covers the
+main Button AX element. No broader YK-05 acceptance criterion is closed.

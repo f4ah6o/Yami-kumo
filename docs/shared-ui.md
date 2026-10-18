@@ -225,10 +225,12 @@ this slice does not claim to fix hover after an unreported window exit.
 The bounded YK-03 adapter is present, but macOS visible-window execution remains
 unqualified. Compiling a portable consumer or macOS bootstrap is not a native
 GUI pass. M1 is not complete without all required platform evidence. The
-bounded AppShell slice adds semantic regions and portable native layout, but
-visible-window shell execution, drawer overlays, general layout, Input/TextField,
-composition, Dialog, external accessibility and packaged distribution are later
-gates. Browser coverage in this slice is Chromium only; Firefox, WebKit, actual
+bounded AppShell slice adds semantic regions and portable native layout. A
+local macOS host run additionally verified visible wide/compact shell rendering
+and AXPress on the main Increment Button; Linux/Windows visible windows,
+synthetic shell pointer input, a complete shell AX tree, drawer overlays,
+general layout, Input/TextField, composition, Dialog and packaged distribution
+remain later gates. Browser coverage in this slice is Chromium only; Firefox, WebKit, actual
 Safari, real IME and assistive technology require their own measured profiles.
 The existing GPUI Canvas backend and legacy native Button controllers are
 unchanged.
