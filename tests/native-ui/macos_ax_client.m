@@ -1741,6 +1741,17 @@ static bool initialize_input_target(InputTarget *target, pid_t pid,
     release_input_target(target);
     return false;
   }
+  // Raise the uniquely titled window before posting a global pointer event.
+  // The AX window is already key; this guards against another always-on-top
+  // window covering the target point without changing the exact PID/title.
+  NSRunningApplication *running =
+      [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
+  if (running != nil) {
+    (void)[running activateWithOptions:(NSApplicationActivationOptions)0];
+  }
+  (void)AXUIElementPerformAction(target->window, kAXRaiseAction);
+  struct timespec raise_pause = {.tv_sec = 0, .tv_nsec = 100000000};
+  nanosleep(&raise_pause, NULL);
   if (has_button) {
     unsigned visited = 0;
     AXUIElementRef button = find_button(window, button_name, 0, &visited,
