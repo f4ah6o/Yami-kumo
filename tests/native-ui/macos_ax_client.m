@@ -1273,6 +1273,7 @@ typedef struct InputTarget {
   const char *title;
   const char *button_name;
   bool has_button;
+  bool force_ax_frame;
   AXUIElementRef window;
   AXUIElementRef button;
   CGWindowID window_id;
@@ -1569,11 +1570,12 @@ static bool capture_input_guard(const InputTarget *target, double deadline,
           CGRectContainsPoint(target->window_bounds, point) &&
           fabs(point.x - target->point.x) <= 0.5 &&
           fabs(point.y - target->point.y) <= 0.5;
-      snapshot->topmost_matches = topmost_window_owns_point(
-          target->pid, target->title, target->point, target->window_id,
-          deadline);
-      snapshot->ax_hit_matches = ax_point_hits_button(
-          button, target->pid, target->point, deadline);
+      snapshot->topmost_matches = target->force_ax_frame ||
+          topmost_window_owns_point(target->pid, target->title,
+                                    target->point, target->window_id,
+                                    deadline);
+      snapshot->ax_hit_matches = target->force_ax_frame ||
+          ax_point_hits_button(button, target->pid, target->point, deadline);
       CFRelease(button);
     }
   }
@@ -1709,6 +1711,7 @@ static bool initialize_input_target(InputTarget *target, pid_t pid,
       .title = title,
       .button_name = button_name,
       .has_button = has_button,
+      .force_ax_frame = force_ax_frame,
       .expected_button_width = button_width,
       .expected_button_height = button_height,
   };
