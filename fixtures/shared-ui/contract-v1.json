@@ -53,28 +53,28 @@
     },
     {
       "id": "shell-counter-two-activations",
-      "description": "Shared AppShell wide fixture: one common model and brand/main/rail/sidebar/header regions increment once per accepted semantic Activate; shell geometry and region visibility are recorded separately.",
+      "description": "Shared AppShell pointer fixture requested at the wide size; the observed mode and region visibility are validated against the actual host content width, since compositors may clamp window requests.",
       "expected": {
         "counts": [0, 1, 2]
       }
     },
     {
       "id": "shell-compact-counter-two-activations",
-      "description": "Shared AppShell compact fixture at the 820px boundary with stacked optional regions hidden by default; the same common model increments once per accepted semantic Activate.",
+      "description": "Shared AppShell pointer fixture requested at the compact size; the observed mode and region visibility are validated against the actual host content width.",
       "expected": {
         "counts": [0, 1, 2]
       }
     },
     {
       "id": "shell-visible-wide",
-      "description": "Shared AppShell wide render-only fixture: the visible native window presents brand/main/rail/sidebar/header regions before any host activation.",
+      "description": "Shared AppShell render-only fixture requested at the wide size; the visible host window presents the observed mode and regions before any activation.",
       "expected": {
         "counts": [0]
       }
     },
     {
       "id": "shell-visible-compact",
-      "description": "Shared AppShell compact render-only fixture at the 820px boundary: the visible native window presents stacked/absent optional regions before any host activation.",
+      "description": "Shared AppShell render-only fixture requested at the compact size; the visible host window presents the observed mode and regions before any activation.",
       "expected": {
         "counts": [0]
       }
