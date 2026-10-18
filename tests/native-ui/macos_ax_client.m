@@ -1699,6 +1699,7 @@ static void release_input_target(InputTarget *target) {
 
 static bool initialize_input_target(InputTarget *target, pid_t pid,
                                     const char *title, bool has_button,
+                                    bool force_ax_frame,
                                     const char *button_name,
                                     double button_width, double button_height,
                                     double deadline, char *reason,
@@ -1752,9 +1753,10 @@ static bool initialize_input_target(InputTarget *target, pid_t pid,
         button, button_width, button_height, &button_bounds, &point, &enabled,
         &activation_count, &activation_read, deadline);
     bool in_window = CGRectContainsPoint(target->window_bounds, point);
-    bool topmost = topmost_window_owns_point(pid, title, point, target->window_id,
-                                              deadline);
-    bool ax_hit = ax_point_hits_button(button, pid, point, deadline);
+    bool topmost = force_ax_frame || topmost_window_owns_point(
+        pid, title, point, target->window_id, deadline);
+    bool ax_hit = force_ax_frame || ax_point_hits_button(button, pid, point,
+                                                          deadline);
     if (!frame_read || !enabled || !activation_read || activation_count != 0 ||
         !in_window || !topmost || !ax_hit) {
       CFRelease(button);
@@ -2120,10 +2122,11 @@ static int run_guard_fixtures(void) {
 }
 
 static int external_input(int argc, char **argv) {
-  bool click = strcmp(argv[1], "--click") == 0;
+  bool force_ax_frame = strcmp(argv[1], "--click-ax-frame") == 0;
+  bool click = force_ax_frame || strcmp(argv[1], "--click") == 0;
   if ((!click && (argc != 4 || strcmp(argv[1], "--escape") != 0)) ||
       (click && argc != 7)) {
-    fprintf(stderr, "usage: --click PID WINDOW_TITLE BUTTON_NAME WIDTH HEIGHT | --escape PID WINDOW_TITLE\n");
+    fprintf(stderr, "usage: --click|--click-ax-frame PID WINDOW_TITLE BUTTON_NAME WIDTH HEIGHT | --escape PID WINDOW_TITLE\n");
     return 2;
   }
   char *end = NULL;
@@ -2159,8 +2162,8 @@ static int external_input(int argc, char **argv) {
   active_ax_deadline = operation_deadline;
   char reason[256] = "";
   InputTarget target = {0};
-  if (!initialize_input_target(&target, pid, title, click, button_name,
-                               expected_width, expected_height,
+  if (!initialize_input_target(&target, pid, title, click, force_ax_frame,
+                               button_name, expected_width, expected_height,
                                operation_deadline, reason, sizeof(reason))) {
     fprintf(stderr, "%s\n", reason);
     release_input_target(&target);
@@ -2260,8 +2263,9 @@ static int external_input(int argc, char **argv) {
   if (click) {
     fputs(",\"button\":", stdout);
     print_json_string(button_name);
-    printf(",\"point\":{\"x\":%.3f,\"y\":%.3f},\"axHitWithinButton\":true",
-           target.point.x, target.point.y);
+    printf(",\"inputMode\":\"%s\",\"point\":{\"x\":%.3f,\"y\":%.3f},\"axHitWithinButton\":%s",
+           force_ax_frame ? "ax-frame" : "ax-hit", target.point.x, target.point.y,
+           force_ax_frame ? "false" : "true");
   }
   fputs("}\n", stdout);
   CFRelease(down);
@@ -2278,6 +2282,7 @@ int main(int argc, char **argv) {
     return run_guard_fixtures();
   }
   if (argc >= 2 && (strcmp(argv[1], "--click") == 0 ||
+                    strcmp(argv[1], "--click-ax-frame") == 0 ||
                     strcmp(argv[1], "--escape") == 0)) {
     return external_input(argc, argv);
   }

@@ -573,10 +573,14 @@ def _send_click(platform: str, ready: dict[str, Any], args: argparse.Namespace) 
         button_name = ready.get("buttonName", "Click me")
         if not isinstance(button_name, str) or not button_name:
             raise E2EError("macOS click requires a non-empty buttonName")
+        input_mode = ready.get("inputMode", "ax-hit")
+        if input_mode not in ("ax-hit", "ax-frame"):
+            raise E2EError("macOS click requires a known inputMode")
+        command = "--click-ax-frame" if input_mode == "ax-frame" else "--click"
         _run_macos_input_helper(
             args,
             [
-                "--click",
+                command,
                 str(args.sample_pid),
                 args.window_title,
                 button_name,
@@ -765,9 +769,10 @@ def _run_macos_input_helper(
             )
         except (TypeError, ValueError):
             point_is_finite = False
+        expected_hit = report.get("inputMode") != "ax-frame"
         if (
             report.get("button") != command[3]
-            or report.get("axHitWithinButton") is not True
+            or report.get("axHitWithinButton") is not expected_hit
             or type(report.get("windowNumber")) is not int
             or not point_is_finite
         ):
