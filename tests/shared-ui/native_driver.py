@@ -520,9 +520,14 @@ def inspect_frame_sequence(markers: list[dict[str, Any]], directory: Path) -> di
         paths.add(report["path"])
         images.append(image)
         reports.append(report)
-        stable = ("root", "scale") if spacing else ("root", "counter", "button", "buttonLabel", "scale")
-        if marker["fixture"] == "card":
-            stable += ("card", "heading")
+        if marker["fixture"] in ("shell", "shell-compact", "shell-visible", "shell-visible-compact"):
+            # The shell counter is an intrinsic text column; "Count: 1" can be
+            # narrower than "Count: 0" with proportional host fonts.
+            stable = ("root", "button", "buttonLabel", "scale")
+        else:
+            stable = ("root", "scale") if spacing else ("root", "counter", "button", "buttonLabel", "scale")
+            if marker["fixture"] == "card":
+                stable += ("card", "heading")
         for key in stable:
             if marker[key] != markers[0][key]:
                 raise E2EError(f"{key} changed between settled phase captures")
