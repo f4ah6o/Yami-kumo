@@ -2312,9 +2312,16 @@ int main(int argc, char **argv) {
   }
   if (!application_identity_matches(pid, expected_bundle_id,
                                     expected_bundle_path)) {
+    NSRunningApplication *running =
+        [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
     fprintf(stderr,
-            "launched PID does not match expected registered app bundle id=%s path=%s\n",
-            expected_bundle_id, expected_bundle_path);
+            "launched PID does not match expected registered app bundle id=%s path=%s; actual id=%s path=%s\n",
+            expected_bundle_id, expected_bundle_path,
+            running.bundleIdentifier != nil
+                ? running.bundleIdentifier.UTF8String
+                : "<nil>",
+            running.bundleURL != nil ? running.bundleURL.path.UTF8String
+                                     : "<nil>");
     return 1;
   }
   AXUIElementRef app = AXUIElementCreateApplication(pid);
