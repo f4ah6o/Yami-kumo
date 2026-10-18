@@ -90,7 +90,7 @@ criterion is closed by this note.
 
 ## 2026-10-18 local macOS visible-window/AX evidence
 
-Runtime candidate `22b699e` against pinned
+Runtime candidate `fba3cd1` against pinned
 GPUI `4c2e525f02c00a9c1a560152a914f523a4c2fe47`:
 
 - `--shared-counter-render-proof`: PASS for wide and compact visible native
@@ -106,7 +106,7 @@ GPUI `4c2e525f02c00a9c1a560152a914f523a4c2fe47`:
   required because macOS AX hit testing does not return the custom GPUI element;
   the exact PID/title, enabled Button, activation baseline and point-in-window
   checks remain.
-- CI run `7dc51cf`: the shared `ubuntu-wayland` and `windows-d3d11` jobs passed
+- CI run `fba3cd1`: the shared `ubuntu-wayland` and `windows-d3d11` jobs passed
   with the shell pointer/render fixtures. Linux clamps the outer window to
   `800x600`, so the observed compact mode/regions are validated against the
   actual content width. This is XTest/SendInput synthetic host input, not

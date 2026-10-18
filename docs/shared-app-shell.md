@@ -139,7 +139,7 @@ the other shared native tests.
 ### macOS visible-window and external-AX evidence
 
 Local macOS host evidence was executed against runtime candidate
-`22b699e` and pinned GPUI
+`fba3cd1` and pinned GPUI
 `4c2e525f02c00a9c1a560152a914f523a4c2fe47`:
 
 - `scripts/native_ui_macos.sh --shared-counter-render-proof` launched the
@@ -152,9 +152,9 @@ Local macOS host evidence was executed against runtime candidate
   Button, observed the model count change from `0` to `1`, and closed the
   window. The AX report confirms the exact PID/title and the completed action.
 - The local evidence directories are
-  `_build/native-ui/macos-shared-render-22b699e/`,
-  `_build/native-ui/macos-shared-input-final2/` and
-  `_build/native-ui/macos-shared-ax-22b699e/`. They are generated artifacts and
+  `_build/native-ui/macos-shared-render-fba3cd1/`,
+  `_build/native-ui/macos-shared-input-fba3cd1b/` and
+  `_build/native-ui/macos-shared-ax-fba3cd1b/`. They are generated artifacts and
   are not committed.
 - `scripts/native_ui_macos.sh --shared-counter-ui-proof` **passed** for the
   wide and compact shell fixtures. Guarded global CGEvent mouse move/down/up at
@@ -164,7 +164,7 @@ Local macOS host evidence was executed against runtime candidate
   custom GPUI element; it still requires the exact frontmost PID/title, an
   enabled AX Button, the activation baseline and a point inside the visible
   window.
-- CI at `7dc51cf` passed the shared native `ubuntu-wayland` and
+- CI at `fba3cd1` passed the shared native `ubuntu-wayland` and
   `windows-d3d11` jobs with the shell pointer/render fixtures. The Linux
   compositor clamps the outer window request to `800x600`, so the driver
   validates the observed compact mode and region set against the actual content
