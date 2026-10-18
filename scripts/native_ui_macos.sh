@@ -3,13 +3,13 @@ set -eu
 
 mode=${1:---ui-proof}
 if [ "$#" -gt 1 ]; then
-  echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-ax-proof]" >&2
+  echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-render-proof|--shared-counter-ax-proof]" >&2
   exit 2
 fi
 case "$mode" in
-  --ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-ax-proof) ;;
+  --ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-render-proof|--shared-counter-ax-proof) ;;
   *)
-    echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-ax-proof]" >&2
+    echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-render-proof|--shared-counter-ax-proof]" >&2
     exit 2
     ;;
 esac
@@ -87,6 +87,21 @@ if [ "$mode" = "--shared-counter-ui-proof" ]; then
     --platform macos \
     --scenario shared \
     --fixtures shell,shell-compact \
+    --evidence-dir "$evidence_dir" \
+    --log "$evidence_dir/native-ui.log" \
+    --candidate-sha "$YAMI_SHARED_UI_CANDIDATE_SHA" \
+    -- moon run "$yami_root/native/examples/shared_counter/macos" --target native
+  exit 0
+fi
+
+if [ "$mode" = "--shared-counter-render-proof" ]; then
+  : "${YAMI_SHARED_UI_CANDIDATE_SHA:?exact candidate SHA is required}"
+  sh "$yami_root/scripts/native_ui_workspace.sh" \
+    sh "$yami_root/scripts/shared_native_ui_tests.sh"
+  run_macos_python_driver "$yami_root/tests/shared-ui/native_driver.py" \
+    --platform macos \
+    --scenario shared \
+    --fixtures shell-visible,shell-visible-compact \
     --evidence-dir "$evidence_dir" \
     --log "$evidence_dir/native-ui.log" \
     --candidate-sha "$YAMI_SHARED_UI_CANDIDATE_SHA" \

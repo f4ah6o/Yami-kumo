@@ -64,6 +64,20 @@
       "expected": {
         "counts": [0, 1, 2]
       }
+    },
+    {
+      "id": "shell-visible-wide",
+      "description": "Shared AppShell wide render-only fixture: the visible native window presents brand/main/rail/sidebar/header regions before any host activation.",
+      "expected": {
+        "counts": [0]
+      }
+    },
+    {
+      "id": "shell-visible-compact",
+      "description": "Shared AppShell compact render-only fixture at the 820px boundary: the visible native window presents stacked/absent optional regions before any host activation.",
+      "expected": {
+        "counts": [0]
+      }
     }
   ]
 }

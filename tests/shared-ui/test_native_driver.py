@@ -178,6 +178,8 @@ class MarkerTests(unittest.TestCase):
             "palette": "palette-count-and-toggle",
             "shell": "shell-counter-two-activations",
             "shell-compact": "shell-compact-counter-two-activations",
+            "shell-visible": "shell-visible-wide",
+            "shell-visible-compact": "shell-visible-compact",
         })
         self.assertEqual(set(driver.CONTRACT_PHASES) - set(driver.FIXTURES.values()), {
             "button-interrupted-loading", "button-interrupted-disabled",

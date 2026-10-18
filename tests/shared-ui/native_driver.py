@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parents[2]
 # Only these declared fixtures are driven with actual native host pointer input.
 # Additional Button contracts are validated below, but portable event tests must
 # never be presented as native-window/keyboard qualification.
-FIXTURES = {"counter": "counter-two-activations", "disabled-loading": "counter-disabled-loading", "card": "card-counter-two-activations", "spacing": "spacing-count-and-toggle", "palette": "palette-count-and-toggle", "shell": "shell-counter-two-activations", "shell-compact": "shell-compact-counter-two-activations"}
+FIXTURES = {"counter": "counter-two-activations", "disabled-loading": "counter-disabled-loading", "card": "card-counter-two-activations", "spacing": "spacing-count-and-toggle", "palette": "palette-count-and-toggle", "shell": "shell-counter-two-activations", "shell-compact": "shell-compact-counter-two-activations", "shell-visible": "shell-visible-wide", "shell-visible-compact": "shell-visible-compact"}
 CONTRACT_PHASES = {
     "counter-two-activations": 3,
     "card-counter-two-activations": 3,
@@ -38,6 +38,8 @@ CONTRACT_PHASES = {
     "palette-count-and-toggle": 6,
     "shell-counter-two-activations": 3,
     "shell-compact-counter-two-activations": 3,
+    "shell-visible-wide": 1,
+    "shell-visible-compact": 1,
     "counter-disabled-loading": 4,
     "button-interrupted-loading": 6,
     "button-interrupted-disabled": 6,
@@ -225,7 +227,7 @@ def validate_marker(marker: dict[str, Any], fixture: str, phase: int,
         labels = (f"Count: {count}", "Increment", "Shared <stack>", "Spacing", "Fixed Card")
     elif fixture == "palette":
         labels = (f"Count: {count}", "Increment", "Shared palette", "Palette")
-    elif fixture in ("shell", "shell-compact"):
+    elif fixture in ("shell", "shell-compact", "shell-visible", "shell-visible-compact"):
         labels = (f"Count: {count}", "Increment", "Shared AppShell")
     else:
         labels = (f"Count: {count}", "Increment", "Shared counter")
@@ -243,7 +245,7 @@ def validate_marker(marker: dict[str, Any], fixture: str, phase: int,
         validate_card_geometry(marker)
         if phase > 0 and marker["focused"] is not True:
             raise E2EError("Card nested Button lost actual pointer focus")
-    if fixture in ("shell", "shell-compact"):
+    if fixture in ("shell", "shell-compact", "shell-visible", "shell-visible-compact"):
         validate_shell_marker(marker, fixture)
     if presented or complete:
         frame = marker.get("frame")
@@ -403,7 +405,7 @@ def validate_shell_marker(marker: dict[str, Any], fixture: str) -> None:
     shell = marker.get("shell")
     if not isinstance(shell, dict) or set(shell) != {"mode", "regions"}:
         raise E2EError("shell marker is missing its mode/regions observation")
-    expected_mode = "wide" if fixture == "shell" else "compact"
+    expected_mode = "wide" if fixture in ("shell", "shell-visible") else "compact"
     if shell.get("mode") != expected_mode:
         raise E2EError(f"shell mode must be {expected_mode}")
     regions = shell.get("regions")
@@ -499,6 +501,9 @@ def inspect_frame(marker: dict[str, Any], directory: Path) -> tuple[Any, dict[st
 
 
 def inspect_frame_sequence(markers: list[dict[str, Any]], directory: Path) -> dict[str, Any]:
+    if len(markers) == 1:
+        _, report = inspect_frame(markers[0], directory)
+        return {"captures": [report], "changedCounterPixels": 0}
     images, reports, paths = [], [], set()
     spacing = bool(markers) and markers[0]["fixture"] == "spacing"
     if markers and markers[0]["fixture"] == "palette":
@@ -888,7 +893,9 @@ def run_fixture(args: argparse.Namespace, fixture: str, counts: list[int], execu
         inspect_frame(initial, directory)  # Refuse input until the initial frame has pixels.
         click_args = argparse.Namespace(**vars(args))
         click_args.window_title, click_args.sample_pid = title, process.pid
-        for phase in range(1, len(counts)):
+        render_only = fixture in ("shell-visible", "shell-visible-compact")
+        phases = [] if render_only else range(1, len(counts))
+        for phase in phases:
             previous = trace["presented"][-1]
             target = previous
             if fixture == "palette" and phase in (2, 4, 5):

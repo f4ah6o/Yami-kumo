@@ -229,6 +229,8 @@ pub fn run(
     Some("palette") => "palette"
     Some("shell") => "shell"
     Some("shell-compact") => "shell-compact"
+    Some("shell-visible") => "shell-visible"
+    Some("shell-visible-compact") => "shell-visible-compact"
     Some("disabled-loading") if e2e => "disabled-loading"
     _ => return Err(runner_error("invalid shared counter fixture"))
   }
@@ -265,8 +267,8 @@ pub fn run(
     return run_theme(host, platform, measure, capture, e2e, directory, title)
   }
   let (width, height) = match fixture {
-    "shell" => (1000.0, 700.0)
-    "shell-compact" => (700.0, 700.0)
+    "shell" | "shell-visible" => (1000.0, 700.0)
+    "shell-compact" | "shell-visible-compact" => (700.0, 700.0)
     _ => (800.0, 600.0)
   }
   let window = match host.create_window(title, width, height) {
@@ -280,7 +282,8 @@ pub fn run(
       card=fixture == "card",
       spacing=fixture == "spacing",
       palette=fixture == "palette",
-      shell=fixture == "shell" || fixture == "shell-compact",
+      shell=fixture == "shell" || fixture == "shell-compact" ||
+        fixture == "shell-visible" || fixture == "shell-visible-compact",
     ) {
     Err(error) => {
       let _ = host.destroy_window(window)
@@ -644,7 +647,11 @@ fn run_loop(
     )
   }
   if e2e && !ax_e2e {
-    let expected_phase = if fixture == "palette" {
+    let render_only = fixture == "shell-visible" ||
+      fixture == "shell-visible-compact"
+    let expected_phase = if render_only {
+      0
+    } else if fixture == "palette" {
       5
     } else if fixture == "spacing" {
       4
@@ -653,7 +660,9 @@ fn run_loop(
     } else {
       3
     }
-    let expected_actions = if fixture == "palette" {
+    let expected_actions = if render_only {
+      0
+    } else if fixture == "palette" {
       5
     } else if fixture == "spacing" {
       4
