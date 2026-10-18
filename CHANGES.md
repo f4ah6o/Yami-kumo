@@ -19,8 +19,9 @@
 - Added the additive shared AppShell region model, DOM semantic wrappers, GPUI
   flex layout, compact stacked layout, shell surface/text/Card theme tokens, and
   bounded DOM/native tests. Local macOS visible wide/compact rendering and
-  AXPress on the main Increment Button passed; synthetic shell pointer input,
-  Linux/Windows visible windows and a complete shell AX tree remain unverified.
+  AXPress on the main Increment Button passed; CI also passed Linux Wayland and
+  Windows SendInput shell pointer/render fixtures. macOS CGEvent pointer input,
+  physical hardware input and a complete shell AX tree remain unverified.
 - Added a focused Mooncakes archive and package README for installing the pure MoonBit module `f4ah6o/yami_kumo`.
 - Added a pure MoonBit module for safe HTML rendering, the semantic AppShell, and a pinned subset of Kumo Button, Input, Text, and LayerCard components.
 - Added a canonical parity gallery that mounts real React Kumo and the compiled MoonBit renderer independently across component matrices and interaction states.

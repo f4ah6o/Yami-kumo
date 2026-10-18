@@ -151,14 +151,19 @@ Local macOS host evidence was executed against runtime candidate
   `_build/native-ui/macos-shared-render-final/` and
   `_build/native-ui/macos-shared-ax-run-final/`. They are generated artifacts and
   are not committed.
-- The synthetic global-pointer path was attempted with the published AX frame.
-  The event was posted, but the model did not change; therefore pointer input
-  remains **NOT RUN / not qualified**. Physical hardware input cannot be
-  automated by this harness.
+- The synthetic macOS global-pointer path was attempted with the published AX
+  frame. The event was posted, but the model did not change; therefore macOS
+  CGEvent pointer input remains **NOT RUN / not qualified**.
+- CI at `7dc51cf` passed the shared native `ubuntu-wayland` and
+  `windows-d3d11` jobs with the shell pointer/render fixtures. The Linux
+  compositor clamps the outer window request to `800x600`, so the driver
+  validates the observed compact mode and region set against the actual content
+  width. Windows ran its host-clamped wide/compact fixtures. This is synthetic
+  XTest/SendInput host input, not physical hardware.
+- Physical hardware input cannot be automated by this harness.
 
-**Not claimed:** visible Linux/Windows shell windows, physical pointer or
-keyboard input on a shell fixture, a complete shell AX tree, IME, TextField,
-Dialog, drawer animation/scrim/focus trap, general layout and packaged
-distribution. The macOS AX result covers only the main `Increment` Button and
-is local, not CI, evidence. Browser coverage here is Chromium;
+**Not claimed:** physical hardware input, a complete shell AX tree, IME,
+TextField, Dialog, drawer animation/scrim/focus trap, general layout and
+packaged distribution. The macOS AX result covers only the main `Increment`
+Button and is local, not CI, evidence. Browser coverage here is Chromium;
 Firefox/WebKit/Safari need their own profiles.

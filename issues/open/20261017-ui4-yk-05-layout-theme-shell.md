@@ -100,10 +100,15 @@ GPUI `4c2e525f02c00a9c1a560152a914f523a4c2fe47`:
 - `--shared-counter-ax-proof`: PASS. `AXUIElementPerformAction(kAXPressAction)`
   reached the published main `Increment` Button, changed the App Entity count
   from 0 to 1, and the client closed/destroyed the exact window.
-- `--shared-counter-ui-proof`: **NOT RUN / not qualified**. A global CGEvent
-  click at the published AX frame was posted but did not change the model; the
-  synthetic pointer path remains open. Physical hardware input is not
-  automatable by the harness.
+- `--shared-counter-ui-proof`: **NOT RUN / not qualified on macOS**. A global
+  CGEvent click at the published AX frame was posted but did not change the
+  model; the macOS synthetic pointer path remains open.
+- CI run `7dc51cf`: the shared `ubuntu-wayland` and `windows-d3d11` jobs passed
+  with the shell pointer/render fixtures. Linux clamps the outer window to
+  `800x600`, so the observed compact mode/regions are validated against the
+  actual content width. This is XTest/SendInput synthetic host input, not
+  physical hardware.
 
-This is local macOS evidence, not CI, not Linux/Windows, and only covers the
-main Button AX element. No broader YK-05 acceptance criterion is closed.
+The macOS evidence is local and covers only the main Button AX element. The CI
+result covers Linux/Windows synthetic input at host-clamped widths. No broader
+YK-05 acceptance criterion is closed.
