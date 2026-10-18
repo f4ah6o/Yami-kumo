@@ -135,7 +135,7 @@ the other shared native tests.
 ### macOS visible-window and external-AX evidence
 
 Local macOS host evidence was executed against runtime candidate
-`b493a7350ce83caaac15a2e691f9a9428001fc15` and pinned GPUI
+`cb3aa5a` and pinned GPUI
 `4c2e525f02c00a9c1a560152a914f523a4c2fe47`:
 
 - `scripts/native_ui_macos.sh --shared-counter-render-proof` launched the
@@ -148,8 +148,8 @@ Local macOS host evidence was executed against runtime candidate
   Button, observed the model count change from `0` to `1`, and closed the
   window. The AX report confirms the exact PID/title and the completed action.
 - The local evidence directories are
-  `_build/native-ui/macos-shared-render/` and
-  `_build/native-ui/macos-shared-ax-final/`. They are generated artifacts and
+  `_build/native-ui/macos-shared-render-final/` and
+  `_build/native-ui/macos-shared-ax-run-final/`. They are generated artifacts and
   are not committed.
 - The synthetic global-pointer path was attempted with the published AX frame.
   The event was posted, but the model did not change; therefore pointer input

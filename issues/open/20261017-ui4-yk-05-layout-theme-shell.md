@@ -90,7 +90,7 @@ criterion is closed by this note.
 
 ## 2026-10-18 local macOS visible-window/AX evidence
 
-Runtime candidate `b493a7350ce83caaac15a2e691f9a9428001fc15` against pinned
+Runtime candidate `cb3aa5a` against pinned
 GPUI `4c2e525f02c00a9c1a560152a914f523a4c2fe47`:
 
 - `--shared-counter-render-proof`: PASS for wide and compact visible native
