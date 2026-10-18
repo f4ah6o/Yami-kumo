@@ -1751,21 +1751,21 @@ static bool initialize_input_target(InputTarget *target, pid_t pid,
     bool frame_read = copy_button_frame(
         button, button_width, button_height, &button_bounds, &point, &enabled,
         &activation_count, &activation_read, deadline);
+    bool in_window = CGRectContainsPoint(target->window_bounds, point);
+    bool topmost = topmost_window_owns_point(pid, title, point, target->window_id,
+                                              deadline);
+    bool ax_hit = ax_point_hits_button(button, pid, point, deadline);
     if (!frame_read || !enabled || !activation_read || activation_count != 0 ||
-        !CGRectContainsPoint(target->window_bounds, point) ||
-        !topmost_window_owns_point(pid, title, point, target->window_id,
-                                    deadline) ||
-        !ax_point_hits_button(button, pid, point, deadline)) {
+        !in_window || !topmost || !ax_hit) {
       CFRelease(button);
       snprintf(reason, reason_capacity,
-               "refusing host click: frame_read=%d enabled=%d activation_read=%d activation_count=%d in_window=%d topmost=%d ax_hit=%d point=(%.1f,%.1f) window=(%.1f,%.1f,%.1f,%.1f)",
+               "refusing host click: frame_read=%d enabled=%d activation_read=%d activation_count=%d in_window=%d topmost=%d ax_hit=%d point=(%.1f,%.1f) button=(%.1f,%.1f,%.1f,%.1f) window=(%.1f,%.1f,%.1f,%.1f)",
                frame_read, enabled, activation_read, activation_count,
-               CGRectContainsPoint(target->window_bounds, point),
-               topmost_window_owns_point(pid, title, point, target->window_id,
-                                         deadline),
-               ax_point_hits_button(button, pid, point, deadline),
-               point.x, point.y, target->window_bounds.origin.x,
-               target->window_bounds.origin.y, target->window_bounds.size.width,
+               in_window, topmost, ax_hit, point.x, point.y,
+               button_bounds.origin.x, button_bounds.origin.y,
+               button_bounds.size.width, button_bounds.size.height,
+               target->window_bounds.origin.x, target->window_bounds.origin.y,
+               target->window_bounds.size.width,
                target->window_bounds.size.height);
       release_input_target(target);
       return false;
