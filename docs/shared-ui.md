@@ -226,12 +226,12 @@ The bounded YK-03 adapter is present, but macOS visible-window execution remains
 unqualified. Compiling a portable consumer or macOS bootstrap is not a native
 GUI pass. M1 is not complete without all required platform evidence. The
 bounded AppShell slice adds semantic regions and portable native layout. A
-local macOS host run additionally verified visible wide/compact shell rendering
-and AXPress on the main Increment Button; CI also passed Linux Wayland and
-Windows SendInput shell pointer/render fixtures at host-clamped widths. macOS
-CGEvent pointer input, a complete shell AX tree, physical hardware input,
-drawer overlays, general layout, Input/TextField, composition, Dialog and
-packaged distribution remain later gates. Browser coverage in this slice is Chromium only; Firefox, WebKit, actual
+local macOS host run additionally verified visible wide/compact shell rendering,
+CGEvent pointer activation and AXPress on the main Increment Button; CI also
+passed Linux Wayland and Windows SendInput shell pointer/render fixtures at
+host-clamped widths. A complete shell AX tree, physical hardware input, drawer
+overlays, general layout, Input/TextField, composition, Dialog and packaged
+distribution remain later gates. Browser coverage in this slice is Chromium only; Firefox, WebKit, actual
 Safari, real IME and assistive technology require their own measured profiles.
 The existing GPUI Canvas backend and legacy native Button controllers are
 unchanged.

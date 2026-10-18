@@ -90,7 +90,7 @@ criterion is closed by this note.
 
 ## 2026-10-18 local macOS visible-window/AX evidence
 
-Runtime candidate `cb3aa5a` against pinned
+Runtime candidate `22b699e` against pinned
 GPUI `4c2e525f02c00a9c1a560152a914f523a4c2fe47`:
 
 - `--shared-counter-render-proof`: PASS for wide and compact visible native
@@ -100,15 +100,19 @@ GPUI `4c2e525f02c00a9c1a560152a914f523a4c2fe47`:
 - `--shared-counter-ax-proof`: PASS. `AXUIElementPerformAction(kAXPressAction)`
   reached the published main `Increment` Button, changed the App Entity count
   from 0 to 1, and the client closed/destroyed the exact window.
-- `--shared-counter-ui-proof`: **NOT RUN / not qualified on macOS**. A global
-  CGEvent click at the published AX frame was posted but did not change the
-  model; the macOS synthetic pointer path remains open.
+- `--shared-counter-ui-proof`: **PASS** for wide and compact shell fixtures.
+  Guarded global CGEvent mouse move/down/up at the published AX frame produced
+  two accepted increments per fixture. The explicit AX-frame target mode is
+  required because macOS AX hit testing does not return the custom GPUI element;
+  the exact PID/title, enabled Button, activation baseline and point-in-window
+  checks remain.
 - CI run `7dc51cf`: the shared `ubuntu-wayland` and `windows-d3d11` jobs passed
   with the shell pointer/render fixtures. Linux clamps the outer window to
   `800x600`, so the observed compact mode/regions are validated against the
   actual content width. This is XTest/SendInput synthetic host input, not
   physical hardware.
 
-The macOS evidence is local and covers only the main Button AX element. The CI
-result covers Linux/Windows synthetic input at host-clamped widths. No broader
+The macOS evidence is local and covers only the main Button pointer/AX target.
+The CI result covers Linux/Windows synthetic input at host-clamped widths.
+Physical hardware input and a complete shell AX tree remain open. No broader
 YK-05 acceptance criterion is closed.

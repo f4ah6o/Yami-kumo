@@ -135,7 +135,7 @@ the other shared native tests.
 ### macOS visible-window and external-AX evidence
 
 Local macOS host evidence was executed against runtime candidate
-`cb3aa5a` and pinned GPUI
+`22b699e` and pinned GPUI
 `4c2e525f02c00a9c1a560152a914f523a4c2fe47`:
 
 - `scripts/native_ui_macos.sh --shared-counter-render-proof` launched the
@@ -148,12 +148,18 @@ Local macOS host evidence was executed against runtime candidate
   Button, observed the model count change from `0` to `1`, and closed the
   window. The AX report confirms the exact PID/title and the completed action.
 - The local evidence directories are
-  `_build/native-ui/macos-shared-render-final/` and
-  `_build/native-ui/macos-shared-ax-run-final/`. They are generated artifacts and
+  `_build/native-ui/macos-shared-render-22b699e/`,
+  `_build/native-ui/macos-shared-input-final2/` and
+  `_build/native-ui/macos-shared-ax-22b699e/`. They are generated artifacts and
   are not committed.
-- The synthetic macOS global-pointer path was attempted with the published AX
-  frame. The event was posted, but the model did not change; therefore macOS
-  CGEvent pointer input remains **NOT RUN / not qualified**.
+- `scripts/native_ui_macos.sh --shared-counter-ui-proof` **passed** for the
+  wide and compact shell fixtures. Guarded global CGEvent mouse move/down/up at
+  the published AX frame produced two accepted increments per fixture and
+  retained the shell mode/region observations. The pointer path uses an
+  explicit AX-frame target mode because macOS AX hit testing does not return the
+  custom GPUI element; it still requires the exact frontmost PID/title, an
+  enabled AX Button, the activation baseline and a point inside the visible
+  window.
 - CI at `7dc51cf` passed the shared native `ubuntu-wayland` and
   `windows-d3d11` jobs with the shell pointer/render fixtures. The Linux
   compositor clamps the outer window request to `800x600`, so the driver
@@ -164,6 +170,6 @@ Local macOS host evidence was executed against runtime candidate
 
 **Not claimed:** physical hardware input, a complete shell AX tree, IME,
 TextField, Dialog, drawer animation/scrim/focus trap, general layout and
-packaged distribution. The macOS AX result covers only the main `Increment`
-Button and is local, not CI, evidence. Browser coverage here is Chromium;
-Firefox/WebKit/Safari need their own profiles.
+packaged distribution. The macOS AX and pointer results cover only the main
+`Increment` Button and are local, not CI, evidence. Browser coverage here is
+Chromium; Firefox/WebKit/Safari need their own profiles.
