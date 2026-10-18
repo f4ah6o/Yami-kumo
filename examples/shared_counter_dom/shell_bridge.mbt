@@ -2,7 +2,7 @@
 /// Bounded DOM driver for the shared AppShell example. The model/view/update
 /// are imported from the same portable package used by native consumers.
 priv struct ShellFixture {
-  mut model : @shared_counter.ShellModel
+  mut model : @shared_counter.PaletteModel
   mut mounted : @dom.DomRoot?
 }
 
@@ -25,19 +25,19 @@ pub fn mount_shell(id : String, theme_name : String) -> String {
     return "already-mounted"
   }
   let fixture : ShellFixture = {
-    model: @shared_counter.ShellModel::new(),
+    model: @shared_counter.PaletteModel::new(),
     mounted: None,
   }
   let result = @dom.mount(
     id,
-    fixture.model.view(),
+    fixture.model.shell_view(),
     fn() {
       match fixture.mounted {
         None => ()
         Some(mounted) =>
           while mounted.next_action() is Some(action) {
-            fixture.model = fixture.model.update(action)
-            mounted.update(fixture.model.view()) |> ignore
+            fixture.model = fixture.model.update_shell(action)
+            mounted.update(fixture.model.shell_view()) |> ignore
           }
       }
     },
@@ -89,7 +89,7 @@ pub fn shell_action(id : String, key : String) -> String {
     None => "missing-shell"
     Some(fixture) => {
       let next = fixture.model.update(@core.Activate(@core.NodeKey::new(key)))
-      match fixture.mounted.unwrap().update(next.view()) {
+      match fixture.mounted.unwrap().update(next.shell_view()) {
         Err(error) => error_name(error)
         Ok(_) => {
           fixture.model = next

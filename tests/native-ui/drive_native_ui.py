@@ -570,13 +570,16 @@ def _send_click(platform: str, ready: dict[str, Any], args: argparse.Namespace) 
     elif platform == "windows":
         _windows_click(ready, args.window_title)
     else:
+        button_name = ready.get("buttonName", "Click me")
+        if not isinstance(button_name, str) or not button_name:
+            raise E2EError("macOS click requires a non-empty buttonName")
         _run_macos_input_helper(
             args,
             [
                 "--click",
                 str(args.sample_pid),
                 args.window_title,
-                "Click me",
+                button_name,
                 str(_rect(ready.get("button"), "button")[2]),
                 str(_rect(ready.get("button"), "button")[3]),
             ],

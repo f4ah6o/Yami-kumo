@@ -50,6 +50,20 @@
       "expected": {
         "counts": [0, 1, 1, 2, 2, 2]
       }
+    },
+    {
+      "id": "shell-counter-two-activations",
+      "description": "Shared AppShell wide fixture: one common model and brand/main/rail/sidebar/header regions increment once per accepted semantic Activate; shell geometry and region visibility are recorded separately.",
+      "expected": {
+        "counts": [0, 1, 2]
+      }
+    },
+    {
+      "id": "shell-compact-counter-two-activations",
+      "description": "Shared AppShell compact fixture at the 820px boundary with stacked optional regions hidden by default; the same common model increments once per accepted semantic Activate.",
+      "expected": {
+        "counts": [0, 1, 2]
+      }
     }
   ]
 }

@@ -68,6 +68,8 @@ def drive(args: argparse.Namespace) -> int:
             "YAMI_NATIVE_UI_WINDOW_TITLE": run_title,
         }
     )
+    if args.fixture:
+        env["YAMI_SHARED_UI_FIXTURE"] = args.fixture
     workspace_root = env.get("YAMI_NATIVE_WORKSPACE_ROOT")
     if not workspace_root:
         raise E2EError("YAMI_NATIVE_WORKSPACE_ROOT must be set by native_ui_workspace.sh")
@@ -131,7 +133,7 @@ def drive(args: argparse.Namespace) -> int:
                 str(client_path),
                 str(process.pid),
                 run_title,
-                "Click me",
+                args.button_name,
                 bundle_id,
                 str(app_bundle),
             ],
@@ -233,6 +235,8 @@ def main() -> int:
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--log", type=Path, required=True)
     parser.add_argument("--window-title", default="Yami-kumo Native UI")
+    parser.add_argument("--button-name", default="Click me")
+    parser.add_argument("--fixture", default=None)
     parser.add_argument("--startup-timeout", type=float, default=240.0)
     parser.add_argument("--client-timeout", type=float, default=45.0)
     parser.add_argument("--marker-timeout", type=float, default=45.0)

@@ -7,7 +7,7 @@ fn shell_mount(theme~ : @theme.Theme? = None) -> @ui.Mounted {
 test "shared shell lays out wide regions and hides compact-only controls" {
   let mounted = shell_mount()
   let frame = mounted
-    .commit(@model.ShellModel::new().view(), 1000.0, 700.0, 1.0, measure)
+    .commit(@model.PaletteModel::new().shell_view(), 1000.0, 700.0, 1.0, measure)
     .unwrap()
   assert_eq(frame.shell_mode(), Some(@view.Wide))
   for
@@ -39,9 +39,9 @@ test "shared shell lays out wide regions and hides compact-only controls" {
 ///|
 test "shared shell compact mode stacks open sidebar and context" {
   let mounted = shell_mount()
-  let initial = @model.ShellModel::new()
+  let initial = @model.PaletteModel::new()
   let frame = mounted
-    .commit(initial.view(), 700.0, 700.0, 1.0, measure)
+    .commit(initial.shell_view(), 700.0, 700.0, 1.0, measure)
     .unwrap()
   assert_eq(frame.shell_mode(), Some(@view.Compact))
   assert_true(frame.region_bounds(@view.Rail) is None)
@@ -50,9 +50,9 @@ test "shared shell compact mode stacks open sidebar and context" {
   assert_true(frame.region_bounds(@view.ContextPanel) is None)
   assert_true(frame.bounds(@view.NodeKey::new("sidebar-increment")) is None)
   let open = initial
-    .update(@view.Activate(@view.NodeKey::new("toggle-sidebar")))
-    .update(@view.Activate(@view.NodeKey::new("toggle-context")))
-  let frame = mounted.commit(open.view(), 700.0, 700.0, 1.0, measure).unwrap()
+    .update_shell(@view.Activate(@view.NodeKey::new("toggle-sidebar")))
+    .update_shell(@view.Activate(@view.NodeKey::new("toggle-context")))
+  let frame = mounted.commit(open.shell_view(), 700.0, 700.0, 1.0, measure).unwrap()
   assert_true(frame.region_bounds(@view.Sidebar) is Some(_))
   assert_true(frame.region_bounds(@view.ContextPanel) is Some(_))
   assert_true(frame.bounds(@view.NodeKey::new("sidebar-increment")) is Some(_))
@@ -66,8 +66,8 @@ test "shared shell compact mode stacks open sidebar and context" {
 ///|
 test "shared shell theme changes paint without replacing slot identity" {
   let mounted = shell_mount(theme=Some(@theme.Light))
-  let model = @model.ShellModel::new()
-  let light = mounted.commit(model.view(), 1000.0, 700.0, 1.0, measure).unwrap()
+  let model = @model.PaletteModel::new()
+  let light = mounted.commit(model.shell_view(), 1000.0, 700.0, 1.0, measure).unwrap()
   let increment_before = light
     .binding_id(@view.NodeKey::new("increment"))
     .unwrap()
@@ -100,7 +100,7 @@ test "shared shell theme changes paint without replacing slot identity" {
     light_colors.subtle,
   )
   assert_true(mounted.set_theme(Some(@theme.Dark)))
-  let dark = mounted.commit(model.view(), 1000.0, 700.0, 1.0, measure).unwrap()
+  let dark = mounted.commit(model.shell_view(), 1000.0, 700.0, 1.0, measure).unwrap()
   assert_eq(dark.theme(), Some(@theme.Dark))
   let dark_colors = @theme.Dark.shell_colors()
   assert_theme_color(
@@ -119,11 +119,11 @@ test "shared shell theme changes paint without replacing slot identity" {
 test "shared shell rejects nested shells and hidden focus targets" {
   let mounted = shell_mount()
   let nested = @view.column(@view.NodeKey::new("outer"), [
-    @model.ShellModel::new().view(),
+    @model.PaletteModel::new().shell_view(),
   ])
   assert_true(mounted.commit(nested, 1000.0, 700.0, 1.0, measure) is Err(_))
-  let model = @model.ShellModel::new()
-  let frame = mounted.commit(model.view(), 700.0, 700.0, 1.0, measure).unwrap()
+  let model = @model.PaletteModel::new()
+  let frame = mounted.commit(model.shell_view(), 700.0, 700.0, 1.0, measure).unwrap()
   assert_true(frame.bounds(@view.NodeKey::new("sidebar-increment")) is None)
   assert_true(!mounted.focus(@view.NodeKey::new("sidebar-increment")))
 }
@@ -131,10 +131,10 @@ test "shared shell rejects nested shells and hidden focus targets" {
 ///|
 test "shared shell drops activation queued from a region that becomes hidden" {
   let mounted = shell_mount()
-  let model = @model.ShellModel::new().update(
+  let model = @model.PaletteModel::new().update_shell(
     @view.Activate(@view.NodeKey::new("toggle-sidebar")),
   )
-  let wide = mounted.commit(model.view(), 1000.0, 700.0, 1.0, measure).unwrap()
+  let wide = mounted.commit(model.shell_view(), 1000.0, 700.0, 1.0, measure).unwrap()
   let button = wide.bounds(@view.NodeKey::new("sidebar-increment")).unwrap()
   assert_true(mounted.handle_event(event(1L, down(button))).unwrap())
   assert_true(mounted.handle_event(event(2L, up(button))).unwrap())
@@ -145,7 +145,7 @@ test "shared shell drops activation queued from a region that becomes hidden" {
   assert_true(mounted.handle_event(event(3L, down(button))).unwrap())
   assert_true(mounted.handle_event(event(4L, up(button))).unwrap())
   let compact = mounted
-    .commit(@model.ShellModel::new().view(), 700.0, 700.0, 1.0, measure)
+    .commit(@model.PaletteModel::new().shell_view(), 700.0, 700.0, 1.0, measure)
     .unwrap()
   assert_true(compact.bounds(@view.NodeKey::new("sidebar-increment")) is None)
   assert_true(mounted.next_action() is None)

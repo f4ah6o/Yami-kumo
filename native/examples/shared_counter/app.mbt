@@ -9,6 +9,7 @@ pub struct NativeCounter {
   priv spacing : Bool
   priv palette : Bool
   priv card : Bool
+  priv shell : Bool
   priv mut disabled : Bool
   priv mut loading : Bool
   priv mut draining : Bool
@@ -94,11 +95,15 @@ pub fn NativeCounter::new(
   card~ : Bool = false,
   spacing~ : Bool = false,
   palette~ : Bool = false,
+  shell~ : Bool = false,
   disabled~ : Bool = false,
   loading~ : Bool = false,
 ) -> Result[NativeCounter, @diagnostics.FrameworkError] {
   if (card && spacing) || (palette && (card || spacing)) {
     return Err(counter_error("Card and spacing fixtures cannot be combined"))
+  }
+  if shell && (card || spacing || palette) {
+    return Err(counter_error("Shell cannot be combined with other view fixtures"))
   }
   let app = match @app.App::new() {
     Err(error) => return Err(error)
@@ -119,6 +124,7 @@ pub fn NativeCounter::new(
     card,
     spacing,
     palette,
+    shell,
     disabled,
     loading,
     draining: false,
@@ -139,6 +145,21 @@ pub fn NativeCounter::model_revision(
   self : NativeCounter,
 ) -> Result[UInt64, @diagnostics.FrameworkError] {
   self.app.revision(self.state)
+}
+
+///|
+/// Queue one semantic activation of the main increment through the retained
+/// common callback. The host loop drains the action through the normal path.
+pub fn NativeCounter::activate_increment(
+  self : NativeCounter,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  if self.disposed || self.draining {
+    return Ok(false)
+  }
+  match self.mount.callback(@view.NodeKey::new("increment")) {
+    None => Ok(false)
+    Some(callback) => Ok(self.mount.activate(callback))
+  }
 }
 
 ///|
@@ -349,7 +370,9 @@ fn NativeCounter::apply_action(
 ) -> Result[Bool, @diagnostics.FrameworkError] {
   let next = match
     self.app.read(self.state, model => {
-      if self.palette {
+      if self.shell {
+        model.update_shell(action)
+      } else if self.palette {
         model.update_palette(action)
       } else if self.spacing {
         model.update(action)
@@ -488,7 +511,9 @@ fn NativeCounter::common_view(
   self : NativeCounter,
   model : @model.PaletteModel,
 ) -> @view.View {
-  if self.palette {
+  if self.shell {
+    model.shell_view()
+  } else if self.palette {
     model.palette_view()
   } else if self.spacing {
     model.view()
@@ -504,6 +529,19 @@ pub fn CounterFrame::card_bounds(self : CounterFrame) -> @primitives.Rect {
   self.frame
   .bounds(@view.NodeKey::new(if self.spacing { "preview" } else { "counter" }))
   .unwrap()
+}
+
+///|
+pub fn CounterFrame::shell_mode(self : CounterFrame) -> @view.ShellMode? {
+  self.frame.shell_mode()
+}
+
+///|
+pub fn CounterFrame::shell_region_bounds(
+  self : CounterFrame,
+  region : @view.ShellRegion,
+) -> @primitives.Rect? {
+  self.frame.region_bounds(region)
 }
 
 ///|

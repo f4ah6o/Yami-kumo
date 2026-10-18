@@ -2,29 +2,12 @@
 /// The bounded shared AppShell demo. One application owner holds the existing
 /// counter and the shell's open state; the shell itself owns no state and emits
 /// no dismiss actions.
-pub struct ShellModel {
-  priv palette : PaletteModel
-  priv sidebar_open : Bool
-  priv context_open : Bool
-} derive(Eq, @debug.Debug)
-
-///|
-pub fn ShellModel::new() -> ShellModel {
-  { palette: PaletteModel::new(), sidebar_open: false, context_open: false, }
-}
-
-///|
-pub fn ShellModel::value(self : ShellModel) -> Int {
-  self.palette.value()
-}
-
-///|
-pub fn ShellModel::sidebar_open(self : ShellModel) -> Bool {
+pub fn PaletteModel::sidebar_open(self : PaletteModel) -> Bool {
   self.sidebar_open
 }
 
 ///|
-pub fn ShellModel::context_open(self : ShellModel) -> Bool {
+pub fn PaletteModel::context_open(self : PaletteModel) -> Bool {
   self.context_open
 }
 
@@ -39,33 +22,29 @@ fn counter_action(action : @core.SemanticAction) -> @core.SemanticAction {
 }
 
 ///|
-pub fn ShellModel::update(
-  self : ShellModel,
+/// Shell open state is application data on the same PaletteModel. No second
+/// model or host-owned copy is introduced.
+pub fn PaletteModel::update_shell(
+  self : PaletteModel,
   action : @core.SemanticAction,
-) -> ShellModel {
+) -> PaletteModel {
   match action {
     @core.Activate(key) if key == @core.NodeKey::new("toggle-sidebar") =>
       { ..self, sidebar_open: !self.sidebar_open, }
     @core.Activate(key) if key == @core.NodeKey::new("toggle-context") =>
       { ..self, context_open: !self.context_open, }
-    _ =>
-      { ..self, palette: self.palette.update_counter(counter_action(action)), }
+    _ => {
+      ..self,
+      spacing: self.spacing.update_counter(counter_action(action)),
+    }
   }
-}
-
-///|
-pub fn ShellModel::update_counter(
-  self : ShellModel,
-  action : @core.SemanticAction,
-) -> ShellModel {
-  { ..self, palette: self.palette.update_counter(counter_action(action)), }
 }
 
 ///|
 /// The same model/view/update is compiled by the DOM and native consumers.
 /// Optional regions are always present so tests can exercise open/close without
 /// changing the keyed tree; visibility is a shared state decision.
-pub fn ShellModel::view(self : ShellModel) -> @core.View {
+pub fn PaletteModel::shell_view(self : PaletteModel) -> @core.View {
   let main = @core.column(@core.NodeKey::new("counter"), [
     @core.text(@core.NodeKey::new("heading"), "Shared AppShell"),
     @core.text(@core.NodeKey::new("value"), "Count: \{self.value()}"),
@@ -101,9 +80,3 @@ pub fn ShellModel::view(self : ShellModel) -> @core.View {
     context_panel_label="Context panel",
   )
 }
-
-///|
-pub extend ShellModel with Eq::{equal, not_equal}
-
-///|
-pub extend ShellModel with @debug.Debug::{to_repr}

@@ -30,12 +30,14 @@ ROOT = Path(__file__).resolve().parents[2]
 # Only these declared fixtures are driven with actual native host pointer input.
 # Additional Button contracts are validated below, but portable event tests must
 # never be presented as native-window/keyboard qualification.
-FIXTURES = {"counter": "counter-two-activations", "disabled-loading": "counter-disabled-loading", "card": "card-counter-two-activations", "spacing": "spacing-count-and-toggle", "palette": "palette-count-and-toggle"}
+FIXTURES = {"counter": "counter-two-activations", "disabled-loading": "counter-disabled-loading", "card": "card-counter-two-activations", "spacing": "spacing-count-and-toggle", "palette": "palette-count-and-toggle", "shell": "shell-counter-two-activations", "shell-compact": "shell-compact-counter-two-activations"}
 CONTRACT_PHASES = {
     "counter-two-activations": 3,
     "card-counter-two-activations": 3,
     "spacing-count-and-toggle": 5,
     "palette-count-and-toggle": 6,
+    "shell-counter-two-activations": 3,
+    "shell-compact-counter-two-activations": 3,
     "counter-disabled-loading": 4,
     "button-interrupted-loading": 6,
     "button-interrupted-disabled": 6,
@@ -45,7 +47,7 @@ COMMON_PATHS = ("ui/core", "ui/runtime", "ui/theme", "examples/shared_counter", 
 BOUND_PATHS = (*COMMON_PATHS, "native/ui", "native/examples/shared_counter",
                "native/examples/shared_counter_host", "tests/shared-ui", "tests/native-ui/drive_native_ui.py",
                "styles/shared-ui.css", "fixtures/shared-ui", "tools/theme_tokens", "scripts/generate-shared-theme.mjs",
-               "docs/shared-card.md", "docs/shared-stack-spacing.md", "docs/shared-button-palettes.md")
+               "docs/shared-card.md", "docs/shared-stack-spacing.md", "docs/shared-button-palettes.md", "docs/shared-app-shell.md")
 
 THEME_SLOTS = {"normal_border", "focused_border", "disabled_border", "normal_fill", "hovered_fill",
                "pressed_fill", "loading_fill", "disabled_fill", "enabled_foreground", "disabled_foreground"}
@@ -219,7 +221,14 @@ def validate_marker(marker: dict[str, Any], fixture: str, phase: int,
         raise E2EError("marker must contain canonical scene object and items")
     texts = [item.get("text") for item in scene["items"] if isinstance(item, dict)
              and item.get("kind") in ("text", "text_run")]
-    labels = (f"Count: {count}", "Increment", "Shared <stack>", "Spacing", "Fixed Card") if fixture == "spacing" else ((f"Count: {count}", "Increment", "Shared palette", "Palette") if fixture == "palette" else (f"Count: {count}", "Increment", "Shared counter"))
+    if fixture == "spacing":
+        labels = (f"Count: {count}", "Increment", "Shared <stack>", "Spacing", "Fixed Card")
+    elif fixture == "palette":
+        labels = (f"Count: {count}", "Increment", "Shared palette", "Palette")
+    elif fixture in ("shell", "shell-compact"):
+        labels = (f"Count: {count}", "Increment", "Shared AppShell")
+    else:
+        labels = (f"Count: {count}", "Increment", "Shared counter")
     if any(texts.count(text) != 1 for text in labels):
         raise E2EError("canonical scene is missing or duplicates shared counter text")
     if _bounds(scene.get("viewport"), "scene.viewport") != root:
@@ -234,6 +243,8 @@ def validate_marker(marker: dict[str, Any], fixture: str, phase: int,
         validate_card_geometry(marker)
         if phase > 0 and marker["focused"] is not True:
             raise E2EError("Card nested Button lost actual pointer focus")
+    if fixture in ("shell", "shell-compact"):
+        validate_shell_marker(marker, fixture)
     if presented or complete:
         frame = marker.get("frame")
         if not isinstance(frame, dict) or not isinstance(frame.get("path"), str) or not frame["path"]:
@@ -385,6 +396,64 @@ def validate_spacing_sequence(markers: list[dict[str, Any]]) -> None:
             raise E2EError(f"spacing {field} did not restore its collapsed geometry")
     if markers[2]["button"] == markers[1]["button"]:
         raise E2EError("spacing increment Button did not move before fresh activation")
+
+
+def validate_shell_marker(marker: dict[str, Any], fixture: str) -> None:
+    """Validate shell mode, region visibility and the main Button's enclosure."""
+    shell = marker.get("shell")
+    if not isinstance(shell, dict) or set(shell) != {"mode", "regions"}:
+        raise E2EError("shell marker is missing its mode/regions observation")
+    expected_mode = "wide" if fixture == "shell" else "compact"
+    if shell.get("mode") != expected_mode:
+        raise E2EError(f"shell mode must be {expected_mode}")
+    regions = shell.get("regions")
+    expected_regions = {"brand", "navigationTrigger", "globalSearch", "headerActions",
+                        "accountMenu", "rail", "sidebar", "tabs", "main",
+                        "contextPanel", "bottomBar"}
+    if not isinstance(regions, dict) or set(regions) != expected_regions:
+        raise E2EError("shell region observation schema is incomplete or unknown")
+    for name in ("brand", "main"):
+        if not isinstance(regions[name], dict):
+            raise E2EError(f"required shell region {name} has no bounds")
+    if expected_mode == "wide":
+        for name in ("rail", "sidebar"):
+            if not isinstance(regions[name], dict):
+                raise E2EError(f"wide shell region {name} is missing")
+        for name in ("navigationTrigger", "contextPanel"):
+            if regions[name] is not None:
+                raise E2EError(f"wide shell region {name} must be absent")
+        expected_size = (1000, 700)
+    else:
+        for name in ("rail", "sidebar", "contextPanel"):
+            if regions[name] is not None:
+                raise E2EError(f"compact shell region {name} must be absent")
+        if not isinstance(regions["navigationTrigger"], dict):
+            raise E2EError("compact shell navigation trigger is missing")
+        expected_size = (700, 700)
+    root = _bounds(marker.get("root"), "root")
+    if abs(root[2] - expected_size[0]) > 1 or abs(root[3] - expected_size[1]) > 1:
+        raise E2EError("shell root dimensions disagree with the fixture window")
+    main = _bounds(regions["main"], "shell.main")
+    brand = _bounds(regions["brand"], "shell.brand")
+    _inside(main, root, "shell.main")
+    _inside(brand, root, "shell.brand")
+    button = _bounds(marker.get("button"), "button")
+    label = _bounds(marker.get("buttonLabel"), "buttonLabel")
+    counter = _bounds(marker.get("counter"), "counter")
+    _inside(button, main, "button")
+    _inside(label, button, "buttonLabel")
+    _inside(counter, main, "counter")
+    if marker.get("buttonName") != "Increment":
+        raise E2EError("shell AX Button name changed")
+    if expected_mode == "wide":
+        rail = _bounds(regions["rail"], "shell.rail")
+        sidebar = _bounds(regions["sidebar"], "shell.sidebar")
+        _inside(rail, root, "shell.rail")
+        _inside(sidebar, root, "shell.sidebar")
+        if rail[0] + rail[2] > sidebar[0] + 1:
+            raise E2EError("wide rail overlaps the sidebar")
+        if sidebar[0] + sidebar[2] > main[0] + 1:
+            raise E2EError("wide sidebar overlaps main")
 
 
 def inspect_card_pixels(image: Any, marker: dict[str, Any]) -> list[list[int]]:
@@ -693,9 +762,11 @@ def bind_sources(root: Path, gpui: Path, candidate: str) -> dict[str, Any]:
 
 
 def preflight(platform: str, env: dict[str, str]) -> None:
-    if platform not in ("linux", "windows"):
-        raise E2EError("shared native host evidence supports Linux and Windows only")
-    if (platform == "linux" and not sys.platform.startswith("linux")) or (platform == "windows" and os.name != "nt"):
+    if platform not in ("linux", "windows", "macos"):
+        raise E2EError("shared native host evidence supports Linux, Windows and macOS")
+    if ((platform == "linux" and not sys.platform.startswith("linux")) or
+            (platform == "windows" and os.name != "nt") or
+            (platform == "macos" and sys.platform != "darwin")):
         raise E2EError("requested platform does not match the executing host")
     if platform == "linux" and (env.get("YAMI_NATIVE_UI_ISOLATED") != "1" or not env.get("DISPLAY") or not env.get("WAYLAND_DISPLAY")):
         raise E2EError("Linux input requires the isolated Xvfb/Weston native UI session")
@@ -709,9 +780,9 @@ def preflight(platform: str, env: dict[str, str]) -> None:
 
 
 def build_plan(command: list[str], platform: str, module: Path, target: Path) -> tuple[list[str], Path]:
-    if platform not in ("linux", "windows"):
+    if platform not in ("linux", "windows", "macos"):
         raise E2EError("unsupported shared native build platform")
-    name = "ubuntu" if platform == "linux" else "windows"
+    name = {"linux": "ubuntu", "windows": "windows", "macos": "macos"}[platform]
     package = (module / "examples/shared_counter" / name).resolve()
     if len(command) != 5 or command[:2] != ["moon", "run"] or Path(command[2]).resolve() != package or command[3:] != ["--target", "native"]:
         raise E2EError(f"command must build the bound shared sample: moon run {package} --target native")
@@ -1048,6 +1119,9 @@ def drive(args: argparse.Namespace) -> int:
                              "fixtures": []}
     try:
         preflight(args.platform, env)
+        if args.platform == "macos":
+            args.macos_helper = native._compile_macos_input_helper(evidence)
+            native._macos_input_preflight(args.macos_helper, evidence)
         for value in (args.startup_timeout, args.marker_timeout, args.build_timeout):
             if not math.isfinite(value) or value <= 0:
                 raise E2EError("timeouts must be finite positive numbers")
@@ -1078,7 +1152,10 @@ def drive(args: argparse.Namespace) -> int:
                 assert theme_contract is not None
                 report["theme"] = run_theme_fixture(args, theme_contract, executable, workspace, evidence, env)
             if scenario in ("shared", "all"):
-                for fixture in FIXTURES:
+                selected = [name.strip() for name in args.fixtures.split(",") if name.strip()]
+                if not selected or any(name not in FIXTURES for name in selected):
+                    raise E2EError("unknown or empty --fixtures selection")
+                for fixture in selected:
                     report["fixtures"].append(run_fixture(args, fixture, expected_counts(contract, fixture),
                                                           executable, workspace, evidence, env))
             final_binding = bind_sources(ROOT, gpui, args.candidate_sha)
@@ -1128,7 +1205,8 @@ def drive(args: argparse.Namespace) -> int:
                 "unverified": ["macOS real host input and GPU", "accessibility and IME"]})
         report.update({"status": "pass", "finishedAt": finished, "candidateSha": args.candidate_sha,
                        "inputDelivery": "XTest in isolated Xvfb/Weston" if args.platform == "linux"
-                       else "Win32 SendInput to uniquely titled foreground HWND"})
+                       else "Win32 SendInput to uniquely titled foreground HWND" if args.platform == "windows"
+                       else "CGEventPost(AX target) to the uniquely titled visible app; not physical hardware"})
         print(f"Shared native {scenario} proof passed: {evidence / 'shared-native-report.json'}", flush=True)
         return 0
     except (E2EError, OSError, ValueError, subprocess.SubprocessError) as error:
@@ -1146,8 +1224,9 @@ def drive(args: argparse.Namespace) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--platform", choices=("linux", "windows"), required=True)
+    parser.add_argument("--platform", choices=("linux", "windows", "macos"), required=True)
     parser.add_argument("--scenario", choices=("shared", "theme", "all"), default="all")
+    parser.add_argument("--fixtures", default=",".join(FIXTURES), help="comma-separated shared fixtures to run")
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--candidate-sha", required=True)
     parser.add_argument("--log", type=Path)

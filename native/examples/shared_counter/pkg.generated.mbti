@@ -37,9 +37,11 @@ pub fn CounterFrame::count(Self) -> Int
 pub fn CounterFrame::counter_bounds(Self) -> @primitives.Rect
 pub fn CounterFrame::expanded(Self) -> Bool
 pub fn CounterFrame::heading_bounds(Self) -> @primitives.Rect
+pub fn CounterFrame::region_bounds(Self, @core.ShellRegion) -> @primitives.Rect?
 pub fn CounterFrame::revision(Self) -> UInt64
 pub fn CounterFrame::root_bounds(Self) -> @primitives.Rect
 pub fn CounterFrame::row_bounds(Self) -> @primitives.Rect
+pub fn CounterFrame::shell_mode(Self) -> @core.ShellMode?
 pub fn CounterFrame::snapshot(Self) -> @scene.SceneSnapshot
 pub fn CounterFrame::stack_bounds(Self) -> @primitives.Rect
 pub fn CounterFrame::toggle_binding_id(Self) -> UInt64
@@ -55,6 +57,7 @@ pub fn CounterFrame::toggle_pressed(Self) -> Bool
 pub struct NativeCounter {
   // private fields
 }
+pub fn NativeCounter::activate_increment(Self) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn NativeCounter::actions(Self) -> Array[@core.SemanticAction]
 pub fn NativeCounter::count(Self) -> Result[Int, @diagnostics.FrameworkError]
 pub fn NativeCounter::dispose(Self) -> Unit
@@ -63,7 +66,7 @@ pub fn NativeCounter::handle_event(Self, @platform.Event) -> Result[Bool, @diagn
 pub fn NativeCounter::invalidate_layout(Self) -> Unit
 pub fn NativeCounter::last_dispatched_input_sequence(Self) -> Int64
 pub fn NativeCounter::model_revision(Self) -> Result[UInt64, @diagnostics.FrameworkError]
-pub fn NativeCounter::new(@platform.WindowId, card? : Bool, spacing? : Bool, palette? : Bool, disabled? : Bool, loading? : Bool) -> Result[Self, @diagnostics.FrameworkError]
+pub fn NativeCounter::new(@platform.WindowId, card? : Bool, spacing? : Bool, palette? : Bool, shell? : Bool, disabled? : Bool, loading? : Bool) -> Result[Self, @diagnostics.FrameworkError]
 pub fn NativeCounter::render(Self, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[CounterFrame, @diagnostics.FrameworkError]
 pub fn NativeCounter::set_mode(Self, Bool, Bool, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Unit, @diagnostics.FrameworkError]
 
