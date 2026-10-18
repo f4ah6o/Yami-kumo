@@ -88,7 +88,7 @@ pub fn shell_action(id : String, key : String) -> String {
   match shell_fixtures.get(id) {
     None => "missing-shell"
     Some(fixture) => {
-      let next = fixture.model.update(@core.Activate(@core.NodeKey::new(key)))
+      let next = fixture.model.update_shell(@core.Activate(@core.NodeKey::new(key)))
       match fixture.mounted.unwrap().update(next.shell_view()) {
         Err(error) => error_name(error)
         Ok(_) => {
