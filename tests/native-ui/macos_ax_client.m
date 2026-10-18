@@ -2191,6 +2191,16 @@ static int external_input(int argc, char **argv) {
   CGEventRef down = NULL;
   CGEventRef up = NULL;
   if (click) {
+    // Establish the pointer location before the button transition. GPUI's
+    // native hit target is updated by mouse movement, not only by mouseDown.
+    CGEventRef move = CGEventCreateMouseEvent(
+        NULL, kCGEventMouseMoved, target.point, kCGMouseButtonLeft);
+    if (move != NULL) {
+      CGEventPost(kCGHIDEventTap, move);
+      CFRelease(move);
+      struct timespec move_pause = {.tv_sec = 0, .tv_nsec = 50000000};
+      nanosleep(&move_pause, NULL);
+    }
     down = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseDown, target.point,
                                    kCGMouseButtonLeft);
     up = CGEventCreateMouseEvent(NULL, kCGEventLeftMouseUp, target.point,
