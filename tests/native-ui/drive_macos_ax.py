@@ -124,6 +124,24 @@ def drive(args: argparse.Namespace) -> int:
                 },
                 plist_file,
             )
+        lsregister = Path(
+            "/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister"
+        )
+        if lsregister.is_file():
+            registered = subprocess.run(
+                [str(lsregister), "-f", str(app_bundle)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                check=False,
+            )
+            (evidence_dir / "macos-ax-lsregister.log").write_text(
+                registered.stdout, encoding="utf-8"
+            )
+            if registered.returncode != 0:
+                raise E2EError("LaunchServices registration of the AX app bundle failed")
         print(f"Launching registered native sample: {app_executable}", flush=True)
         process = subprocess.Popen(
             [str(app_executable), *run_command[1:]],
