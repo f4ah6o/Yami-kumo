@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import plistlib
@@ -81,14 +82,29 @@ def drive(args: argparse.Namespace) -> int:
     process: subprocess.Popen[str] | None = None
     output: ProcessOutput | None = None
     try:
-        run_command, runtime_target = _build_native_sample(
+        shared_driver_path = Path(__file__).resolve().parents[1] / "shared-ui" / "native_driver.py"
+        shared_spec = importlib.util.spec_from_file_location(
+            "_yami_shared_ax_build_driver", shared_driver_path
+        )
+        if shared_spec is None or shared_spec.loader is None:
+            raise E2EError("cannot load the shared native build plan")
+        shared_driver = importlib.util.module_from_spec(shared_spec)
+        sys.modules[shared_spec.name] = shared_driver
+        shared_spec.loader.exec_module(shared_driver)
+        runtime_target = tempfile.TemporaryDirectory(
+            prefix="yami-native-ax-build-", dir=workspace_path
+        )
+        executable = shared_driver.build_sample(
             args.command,
             "macos",
             workspace_path,
             module_root,
+            Path(runtime_target.name),
             evidence_dir,
             env,
+            600,
         )
+        run_command = [str(executable)]
         bundle_id = f"org.f4ah6o.yami-kumo.native-ax.{uuid.uuid4().hex}"
         app_bundle = Path(runtime_target.name) / "YamiNativeAX.app"
         app_contents = app_bundle / "Contents"
