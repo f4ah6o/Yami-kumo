@@ -174,6 +174,36 @@ test('real DOM TextField commits once, preserves composition and restores focus'
       beforeComposition + 1,
     );
 
+    // Consecutive external revisions during composition: the newest revision
+    // must win even when its value equals the current preedit.
+    await page.evaluate(() => {
+      const input = document.querySelector('input');
+      input.focus();
+      input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+      input.value = 'にほん';
+      input.dispatchEvent(
+        new InputEvent('input', { bubbles: true, data: 'にほん', isComposing: true }),
+      );
+    });
+    assert.equal(
+      await page.evaluate(() => window.api.setTextFieldValue('field-root', '外部1')),
+      'updated',
+    );
+    assert.equal(
+      await page.evaluate(() => window.api.setTextFieldValue('field-root', 'にほん')),
+      'updated',
+    );
+    assert.equal(await page.inputValue('input'), 'にほん');
+    await page.evaluate(() => {
+      const input = document.querySelector('input');
+      input.value = '日本語';
+      input.dispatchEvent(
+        new CompositionEvent('compositionend', { bubbles: true, data: '日本語' }),
+      );
+    });
+    await page.waitForFunction(() => document.querySelector('input').value === 'にほん');
+    assert.equal(await page.evaluate(() => window.api.textFieldValue('field-root')), 'にほん');
+
     assert.equal(
       await page.evaluate(() => window.api.setTextFieldValue('field-root', '外部')),
       'updated',

@@ -467,7 +467,7 @@ extern "js" fn update_text_field(
   #|   const composing = node.dataset.ykComposing === "true";
   #|   const lastExternal = node._ykExternalRevision;
   #|   const newerExternal = lastExternal === undefined || revision > lastExternal;
-  #|   if (composing && input && input.value !== value && newerExternal) {
+  #|   if (composing && input && newerExternal) {
   #|     if (node._ykPendingRevision === undefined || revision >= node._ykPendingRevision) {
   #|       node._ykPendingValue = value;
   #|       node._ykPendingRevision = revision;
