@@ -1,8 +1,7 @@
-# M3 status — 2026-10-19
+# M3 status — 2026-10-20
 
-States below describe `main` unless a row names a candidate PR. `PR pending`
-means the work is implemented and tested on an open PR but is not merged into
-`main`; it is not current main behavior.
+States below describe `main`. Rows whose implementation PRs are still open name
+the candidate PR; `PR pending` is not current `main` behavior.
 
 This file is the current-state companion to the 2026-10-17 four-platform plan.
 `manifest.json` is the frozen planning snapshot from that date and still records
@@ -41,28 +40,28 @@ the current implementation state; use this file and the linked code/tests.
 
 ## GPUI packets
 
-| ID                   | Current state        | Evidence                                                                                                                                                                                                  |
-| -------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GP-00                | Implemented          | [Shared UI host audit](https://github.com/gpui-mbt/gpui.mbt/blob/main/docs/shared-ui-host-contract.md) and paired headless fixtures.                                                                      |
-| GP-01A               | Implemented          | `text_session/` ownership, revisions, preview/commit/cancel and observed end. Headless tests only.                                                                                                        |
-| GP-01B               | PR pending (#120)    | [`text_host/`](https://github.com/gpui-mbt/gpui.mbt/pull/120), optional `TextInputHost` and `Capability::TextInputGeometry`, rebased on merged `0.10.0`. Not on `main`; no native host implements it yet. |
-| GP-01-GEOMETRY       | Partial              | Caret/hit measurement exists per OS; candidate-rectangle capability is not advertised.                                                                                                                    |
-| GP-02-L              | Experimental         | Ubuntu text-input-v1 route behind `GPUI_FIELD_WAYLAND_IME=1`; real composition/candidate panel not qualified.                                                                                             |
-| GP-02-W              | Experimental         | Default-off IMM32 route; real Japanese IME and UIA are `NOT_RUN`.                                                                                                                                         |
-| GP-02-M              | Bounded transport    | `NSTextInputClient` composition transport merged (#121, `0.10.0`); candidate caret API exists. Real Kotoeri acceptance `NOT_RUN`; #89/#107 remain draft evidence.                                         |
-| GP-03-FOCUS          | Portable implemented | `element.FocusScopeSession`; native Dialog wiring not done.                                                                                                                                               |
-| GP-03-SEMANTICS / AX | Partial              | Portable model and macOS Button AXPress only; TextField value/selection and native providers are missing.                                                                                                 |
+| ID                   | Current state        | Evidence                                                                                                                                                                                           |
+| -------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GP-00                | Implemented          | [Shared UI host audit](https://github.com/gpui-mbt/gpui.mbt/blob/main/docs/shared-ui-host-contract.md) and paired headless fixtures.                                                               |
+| GP-01A               | Implemented          | `text_session/` ownership, revisions, preview/commit/cancel and observed end. Headless tests only.                                                                                                 |
+| GP-01B               | PR pending (#120)    | [`text_host/`](https://github.com/gpui-mbt/gpui.mbt/pull/120), optional `TextInputHost` and `Capability::TextInputGeometry`, rebased on `0.10.1`. Not on `main`; no native host implements it yet. |
+| GP-01-GEOMETRY       | Partial              | Caret/hit measurement exists per OS; candidate-rectangle capability is not advertised.                                                                                                             |
+| GP-02-L              | Experimental         | Ubuntu text-input-v1 route behind `GPUI_FIELD_WAYLAND_IME=1`; real composition/candidate panel not qualified.                                                                                      |
+| GP-02-W              | Experimental         | Default-off IMM32 route; real Japanese IME and UIA are `NOT_RUN`.                                                                                                                                  |
+| GP-02-M              | Bounded transport    | `NSTextInputClient` composition transport merged (#121, `0.10.0`); candidate caret API exists. Real Kotoeri acceptance `NOT_RUN`; #89/#107 remain draft evidence.                                  |
+| GP-03-FOCUS          | Portable implemented | `element.FocusScopeSession`; native Dialog wiring not done.                                                                                                                                        |
+| GP-03-SEMANTICS / AX | Partial              | Portable model and macOS Button AXPress only; TextField value/selection and native providers are missing.                                                                                          |
 
 ## Dependency pins
 
-| Consumer           | GPUI reference       | State                                    |
-| ------------------ | -------------------- | ---------------------------------------- |
-| gpui.mbt published | `0.10.0` (`7f62b92`) | Current release; #121 merged             |
-| Yami shared source | `7f62b92`            | Candidate PR pins; source-workspace only |
-| Yami native module | `0.10.0`             | Candidate PR pin; 0.2.6 unpublished      |
-| app-demo           | `0.9.0`              | macOS/Web/Windows preview                |
-| gpui-conformance   | `0.7.2` (`b16210d9`) | Baseline pin; candidate overrides exist  |
-| M3 target          | `0.10.0`             | Reached for the bounded text slice       |
+| Consumer           | GPUI reference       | State                                   |
+| ------------------ | -------------------- | --------------------------------------- |
+| gpui.mbt published | `0.10.0` (`7f62b92`) | Current release; #121 merged            |
+| Yami shared source | `e2c8bd5`            | Source workspace; merged via #38/#39    |
+| Yami native module | `0.10.0` / `e2c8bd5` | Source workspace; merged via #40        |
+| app-demo           | `0.9.0`              | macOS/Web/Windows preview               |
+| gpui-conformance   | `0.7.2` (`b16210d9`) | Baseline pin; candidate overrides exist |
+| M3 target          | `0.10.0`             | Reached for the bounded text slice      |
 
 ## Boundaries
 
