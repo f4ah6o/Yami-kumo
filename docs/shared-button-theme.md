@@ -154,3 +154,23 @@ assistive technology, Firefox/Safari, or identical font rasterization across
 operating systems. See the PR's exact-head test results for executed PASS/FAIL
 and any remaining NOT_RUN profiles; documentation of a check is not evidence
 that it ran.
+
+### Native pointer receipt barrier
+
+The native theme test host arms each pointer-move operation with a fresh request
+and acknowledges the window, current phase, scale, target and arm sequence.
+The driver then injects movement once and waits for the corresponding actual
+adapter-dispatch receipt before sending any following input or capture key.
+Receipts carry the request, window, phase, arm/event sequence, dispatch witness,
+scale and delivered coordinates. Wrong, stale or missing receipts cannot advance
+a capture; the existing marker deadline fails closed. Window/lifetime changes
+interrupt an outstanding request. Unrelated movement does not clear it.
+
+Windows requests non-coalesced zero-relative movement after positioning the
+cursor, including repeated same-position operations. OS API success alone never
+satisfies the receipt barrier. The additional arm keys are test-host controls;
+they do not change the shared model or the capture phase. All 36 expected states,
+scene checks and pixel assertions remain unchanged. Portable receipt tests do
+not qualify real Windows/Linux host delivery or macOS runtime behavior.
+
+Linux sends one two-point motion command: an interior point two physical pixels left of the target, followed by the exact target. This requests fresh motion even when the pointer already occupies the target. Both points must remain strictly inside the intended button or root region, and only the final dispatched receipt permits capture. There is no click, retry, timeout fallback, or relaxed state assertion.

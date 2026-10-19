@@ -248,3 +248,9 @@ pub fn NativeTheme::dispose(self : NativeTheme) -> Unit {
     ignore(self.app.run_ready(budget))
   }
 }
+
+///|
+/// Last input actually dispatched by the mounted adapter, including unconsumed motion.
+pub fn NativeTheme::last_dispatched_input_sequence(self : NativeTheme) -> Int64 {
+  self.mount.last_dispatched_input_sequence()
+}
