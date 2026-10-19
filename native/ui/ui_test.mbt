@@ -59,6 +59,19 @@ fn event(sequence : Int64, input : @primitives.InputEvent) -> @platform.Event {
 }
 
 ///|
+fn composition_event(
+  sequence : Int64,
+  composition : @primitives.CompositionEvent,
+) -> @platform.Event {
+  @platform.Event::new(
+    @platform.WindowId::new(1L),
+    sequence,
+    1.0,
+    @platform.Composition(composition),
+  )
+}
+
+///|
 fn down(bounds : @primitives.Rect) -> @primitives.InputEvent {
   @primitives.PointerButtonPressed(
     position=@primitives.Point::new(bounds.left() + 4.0, bounds.top() + 4.0).unwrap(),
@@ -1426,16 +1439,188 @@ test "Button-only adapter gates composition lifetime without dispatching an acti
 }
 
 ///|
-test "native adapter rejects TextField instead of painting a read-only label" {
+fn text_field_view(
+  value~ : String = "日本語",
+  read_only~ : Bool = false,
+  disabled~ : Bool = false,
+) -> @view.View {
+  @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(
+      @view.NodeKey::new("field"),
+      @view.TextFieldProps::new(
+        value,
+        "Name",
+        read_only~,
+        disabled~,
+      ),
+    ),
+  ])
+}
+
+///|
+test "native adapter renders an editable TextField with measured bounds" {
   let mounted = mount()
-  let field = @view.text_field(
-    @view.NodeKey::new("field"),
-    @view.TextFieldProps::new("日本語", "Name"),
+  let view = text_field_view()
+  let frame = render(mounted, view=view)
+  let bounds = frame.bounds(@view.NodeKey::new("field")).unwrap()
+  assert_true(bounds.size().width() >= 240.0)
+  assert_true(bounds.size().height() >= 64.0)
+  assert_true(frame.snapshot().items().length() > 0)
+  assert_true(mounted.view() is Some(_))
+  mounted.dispose()
+}
+
+///|
+test "native TextField routes committed typing through TextChanged" {
+  let mounted = mount()
+  ignore(render(mounted, view=text_field_view()))
+  assert_true(mounted.focus(@view.NodeKey::new("field")))
+  assert_true(
+    mounted
+    .handle_event(event(2L, @primitives.TextInput(text="a")))
+    .unwrap(),
   )
-  let view = @view.column(@view.NodeKey::new("root"), [field])
-  assert_true(mounted.commit(view, 640.0, 480.0, 1.0, measure) is Err(_))
-  assert_true(mounted.frame() is None)
-  assert_true(mounted.view() is None)
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, value)) => {
+      assert_eq(key, @view.NodeKey::new("field"))
+      assert_eq(value, "a日本語")
+    }
+    _ => fail("expected TextChanged")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native TextField focuses on click and edits at the clicked caret" {
+  let mounted = mount()
+  let frame = render(mounted, view=text_field_view())
+  let bounds = frame.bounds(@view.NodeKey::new("field")).unwrap()
+  let point = @primitives.Point::new(
+    bounds.right() - 8.0,
+    bounds.top() + 32.0,
+  ).unwrap()
+  assert_true(
+    mounted
+    .handle_event(
+      event(
+        2L,
+        @primitives.PointerButtonPressed(
+          position=point,
+          button=@primitives.Primary,
+          modifiers=@primitives.Modifiers::none(),
+        ),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(mounted.focus(@view.NodeKey::new("field")))
+  assert_true(mounted.text_caret(@view.NodeKey::new("field")) is Some(_))
+  assert_true(
+    mounted
+    .handle_event(event(3L, @primitives.TextInput(text="!")))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(_, value)) => assert_eq(value, "日本語!")
+    _ => fail("expected TextChanged")
+  }
+  assert_true(
+    mounted
+    .handle_event(event(4L, key_down(@primitives.Backspace)))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(_, value)) => assert_eq(value, "日本語")
+    _ => fail("expected TextChanged")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native TextField applies host composition as preview then commit" {
+  let mounted = mount()
+  ignore(render(mounted, view=text_field_view()))
+  assert_true(mounted.focus(@view.NodeKey::new("field")))
+  assert_true(
+    mounted
+    .handle_event(composition_event(2L, @primitives.Start))
+    .unwrap(),
+  )
+  assert_true(
+    mounted
+    .handle_event(
+      composition_event(
+        3L,
+        @primitives.Update(text="にほん", cursor_utf16=3),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted
+    .handle_event(composition_event(4L, @primitives.Commit(text="日本")))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(_, value)) => assert_eq(value, "日本日本語")
+    _ => fail("expected TextChanged")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native TextField cancels host composition without a committed edit" {
+  let mounted = mount()
+  ignore(render(mounted, view=text_field_view()))
+  assert_true(mounted.focus(@view.NodeKey::new("field")))
+  assert_true(
+    mounted
+    .handle_event(
+      composition_event(
+        2L,
+        @primitives.Update(text="にほん", cursor_utf16=3),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted
+    .handle_event(composition_event(3L, @primitives.Cancel))
+    .unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  mounted.dispose()
+}
+
+///|
+test "native TextField submit and read-only behavior" {
+  let mounted = mount()
+  ignore(render(mounted, view=text_field_view(read_only=true)))
+  assert_true(mounted.focus(@view.NodeKey::new("field")))
+  assert_false(
+    mounted
+    .handle_event(event(2L, @primitives.TextInput(text="x")))
+    .unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  mounted.dispose()
+
+  let editable = mount()
+  ignore(render(editable, view=text_field_view()))
+  assert_true(editable.focus(@view.NodeKey::new("field")))
+  assert_true(
+    editable
+    .handle_event(event(2L, key_down(@primitives.Enter)))
+    .unwrap(),
+  )
+  match editable.next_action() {
+    Some(@view.Submitted(key)) =>
+      assert_eq(key, @view.NodeKey::new("field"))
+    _ => fail("expected Submitted")
+  }
+  editable.dispose()
 }
 
 ///|

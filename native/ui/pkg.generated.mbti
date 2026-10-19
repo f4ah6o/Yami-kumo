@@ -59,6 +59,7 @@ pub fn Mounted::next_focus_result(Self) -> @runtime.FocusResult?
 pub fn Mounted::publish(Self, Prepared) -> Result[Frame, @diagnostics.FrameworkError]
 pub fn Mounted::set_theme(Self, @theme.Theme?) -> Bool
 pub fn Mounted::stage(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Prepared, @diagnostics.FrameworkError]
+pub fn Mounted::text_caret(Self, @core.NodeKey) -> @primitives.Rect?
 pub fn Mounted::theme(Self) -> @theme.Theme?
 pub fn Mounted::view(Self) -> @core.View?
 

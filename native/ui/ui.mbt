@@ -39,6 +39,7 @@ priv struct Binding {
   token : @runtime.InstanceToken?
   text : @components.NativeText?
   button : @button.Button?
+  field : @text_field.TextField?
   visible : Bool
 }
 
@@ -233,6 +234,7 @@ pub struct Mounted {
   priv mut ready : Bool
   priv mut busy : Bool
   priv mut theme : @theme.Theme?
+  priv mut measure : @components.TextMeasure?
 }
 
 ///|
@@ -256,6 +258,7 @@ pub fn Mounted::new(
     ready: false,
     busy: false,
     theme,
+    measure: None,
   }
 }
 
@@ -303,6 +306,222 @@ fn adapter_error(message : String) -> @diagnostics.FrameworkError {
     subsystem="shared-native-ui",
     message~,
   )
+}
+
+///|
+const FIELD_FONT_SIZE : Double = 16.0
+
+///|
+const FIELD_LABEL_SIZE : Double = 12.0
+
+///|
+const FIELD_MIN_WIDTH : Double = 240.0
+
+///|
+const FIELD_HEIGHT : Double = 64.0
+
+///|
+fn field_measure(
+  measure : @components.TextMeasure,
+  document : @text.TextDocument,
+) -> Result[@text_layout.TextMeasurement, @text_field.TextFieldError] {
+  let measurement = match measure(document.text(), FIELD_FONT_SIZE) {
+    Ok(value) => value
+    Err(_) => return Err(@text_field.MeasurementFailed)
+  }
+  if measurement.document().text() != document.text() {
+    return Err(@text_field.MeasurementFailed)
+  }
+  // A host's text measurement may place the final caret partly outside its
+  // logical rect. The field contract requires every cursor stop to stay inside
+  // the measured line, so widen the logical rect to the caret extent.
+  let logical = measurement.logical_rect()
+  let mut right = logical.right()
+  for caret in measurement.carets() {
+    let edge = caret.strong().right()
+    if edge > right {
+      right = edge
+    }
+  }
+  let widened = if right <= logical.right() {
+    logical
+  } else {
+    match
+      @primitives.Rect::new(
+        logical.left(),
+        logical.top(),
+        right - logical.left(),
+        logical.size().height(),
+      ) {
+      Ok(value) => value
+      Err(_) => return Err(@text_field.MeasurementFailed)
+    }
+  }
+  match
+    @text_layout.TextMeasurement::new(
+      document,
+      widened,
+      measurement.ink_rect(),
+      measurement.first_line_baseline(),
+      measurement.line_count(),
+      measurement.unknown_glyph_count(),
+      measurement.carets(),
+    ) {
+    Ok(value) => Ok(value)
+    Err(_) => Err(@text_field.MeasurementFailed)
+  }
+}
+
+///|
+fn field_admit(
+  document : @text.TextDocument,
+  measurement : @text_layout.TextMeasurement,
+) -> Result[Unit, @text_field.TextFieldError] {
+  if measurement.document() != document {
+    return Err(@text_field.AdmissionFailed)
+  }
+  match @text_field.scene_text_run_geometry(measurement) {
+    Ok(_) => Ok(())
+    Err(_) => Err(@text_field.UnsupportedLayout)
+  }
+}
+
+///|
+/// Nearest caret boundary in the measured single line. This is a bounded
+/// single-line hit test, not grapheme-aware selection.
+fn field_hit(
+  measure : @components.TextMeasure,
+  document : @text.TextDocument,
+  point : @primitives.Point,
+) -> Result[@text_layout.TextHit, @text_field.TextFieldError] {
+  let measurement = match field_measure(measure, document) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  let carets = measurement.carets()
+  if carets.length() == 0 {
+    return Err(@text_field.HitTestFailed)
+  }
+  let mut nearest = carets[0].utf16_offset()
+  let mut distance = 0.0
+  let mut first = true
+  for caret in carets {
+    if caret.is_cursor_position() {
+      let x = caret.strong().left()
+      let current = if x >= point.x() { x - point.x() } else { point.x() - x }
+      if first || current < distance {
+        nearest = caret.utf16_offset()
+        distance = current
+        first = false
+      }
+    }
+  }
+  if first {
+    return Err(@text_field.HitTestFailed)
+  }
+  match
+    @text_layout.TextHit::new(
+      document, nearest, 0, nearest, true, true,
+    ) {
+    Ok(value) => Ok(value)
+    Err(_) => Err(@text_field.HitTestFailed)
+  }
+}
+
+///|
+fn field_box(bounds : @primitives.Rect) -> Result[
+  @primitives.Rect,
+  @diagnostics.FrameworkError,
+] {
+  let width = bounds.size().width() - 16.0
+  let height = bounds.size().height() - 28.0
+  if width < 1.0 || height < FIELD_FONT_SIZE {
+    return Err(adapter_error("native TextField bounds are too small"))
+  }
+  match
+    @primitives.Rect::new(
+      bounds.left() + 8.0,
+      bounds.top() + 24.0,
+      width,
+      height,
+    ) {
+    Ok(value) => Ok(value)
+    Err(_) => Err(adapter_error("invalid native TextField bounds"))
+  }
+}
+
+///|
+fn create_field(
+  measure : @components.TextMeasure,
+  id : UInt64,
+  bounds : @primitives.Rect,
+  value : String,
+  focused : Bool,
+) -> Result[@text_field.TextField, @text_field.TextFieldError] {
+  let document = match @text.TextDocument::new(value) {
+    Ok(value) => value
+    Err(_) => return Err(@text_field.MalformedText)
+  }
+  let field = match
+    @text_field.TextField::new(
+      id,
+      bounds,
+      FIELD_FONT_SIZE,
+      document,
+      fn(document) { field_measure(measure, document) },
+      field_admit,
+    ) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  field.with_focus(focused)
+}
+
+///|
+fn field_editable(view : @view.View) -> Bool {
+  match view.text_field_props() {
+    Some(props) => !props.disabled() && !props.read_only()
+    None => false
+  }
+}
+
+///|
+fn field_error_reason(error : @text_field.TextFieldError) -> String {
+  match error {
+    @text_field.InvalidFontSize => "font"
+    @text_field.InvalidBounds => "bounds"
+    @text_field.MalformedText => "text"
+    @text_field.ForbiddenInput => "forbidden"
+    @text_field.TextTooLarge => "large"
+    @text_field.UnsupportedLayout => "layout"
+    @text_field.InvalidSelection => "selection"
+    @text_field.MeasurementFailed => "measure"
+    @text_field.AdmissionFailed => "admit"
+    @text_field.HitTestFailed => "hit"
+    @text_field.InvalidHitResult => "hit-result"
+    @text_field.RevisionExhausted => "revision"
+    @text_field.CompositionActive => "composing"
+    @text_field.NoComposition => "no-composition"
+  }
+}
+
+///|
+/// Read-only fields keep focus and selection but reject text mutation.
+fn field_input_allowed(
+  view : @view.View,
+  input : @primitives.InputEvent,
+) -> Bool {
+  if field_editable(view) {
+    return true
+  }
+  match input {
+    @primitives.TextInput(..) => false
+    @primitives.KeyPressed(key=@primitives.Backspace, modifiers~, ..) =>
+      !modifiers.control() && !modifiers.meta()
+    @primitives.KeyPressed(key=@primitives.Delete, modifiers~, ..) =>
+      !modifiers.control() && !modifiers.meta()
+    _ => true
+  }
 }
 
 ///|
@@ -457,19 +676,23 @@ fn make_element(
   bindings : Array[Binding],
 ) -> @element.Element {
   let binding = binding_for(bindings, view.key()).unwrap()
-  let size = match binding.text {
-    Some(text) => {
-      let size = text.intrinsic_size()
-      if view.kind() == @view.Button {
-        @primitives.Size::new(
-          max(24.0, size.width() + 24.0),
-          max(32.0, size.height() + 12.0),
-        ).unwrap()
-      } else {
-        size
+  let size = if view.kind() == @view.TextField {
+    @primitives.Size::new(FIELD_MIN_WIDTH, FIELD_HEIGHT).unwrap()
+  } else {
+    match binding.text {
+      Some(text) => {
+        let size = text.intrinsic_size()
+        if view.kind() == @view.Button {
+          @primitives.Size::new(
+            max(24.0, size.width() + 24.0),
+            max(32.0, size.height() + 12.0),
+          ).unwrap()
+        } else {
+          size
+        }
       }
+      None => @primitives.Size::new(0.0, 0.0).unwrap()
     }
-    None => @primitives.Size::new(0.0, 0.0).unwrap()
   }
   let item = @layout.FlexItem::new(
       binding.id,
@@ -481,9 +704,13 @@ fn make_element(
     .unwrap()
   let mut element = @element.Element::new(item)
     .with_pointer_events(
-      view.kind() == @view.Button && !view.disabled() && !view.loading(),
+      (view.kind() == @view.Button && !view.disabled() && !view.loading()) ||
+      (view.kind() == @view.TextField && !view.disabled()),
     )
-    .with_focusable(view.kind() == @view.Button && !view.disabled())
+    .with_focusable(
+      (view.kind() == @view.Button && !view.disabled()) ||
+      (view.kind() == @view.TextField && !view.disabled()),
+    )
   if view.kind() == @view.Column || view.kind() == @view.Row {
     let children_style = if view.is_card() {
       style(view.kind()).with_insets(
@@ -1108,23 +1335,23 @@ priv struct Candidate {
 }
 
 ///|
-/// The native TextField adapter is not implemented in this slice. Reject the
-/// whole staged tree instead of painting the label as a read-only Text.
-fn reject_unsupported_text_field(
+/// The native Dialog adapter is not implemented in this slice. Reject the whole
+/// staged tree instead of showing a non-modal imitation.
+fn reject_unsupported_dialog(
   view : @view.View,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if view.kind() == @view.TextField || view.kind() == @view.Dialog {
+  if view.kind() == @view.Dialog {
     return Err(
       @diagnostics.FrameworkError::new(
         @diagnostics.UnsupportedCapability,
         "shared-native-ui",
         subsystem="shared-native-ui",
-        message="TextField/Dialog native adapter is not implemented",
+        message="Dialog native adapter is not implemented",
       ),
     )
   }
   for child in view.children() {
-    match reject_unsupported_text_field(child) {
+    match reject_unsupported_dialog(child) {
       Err(error) => return Err(error)
       Ok(_) => ()
     }
@@ -1141,7 +1368,7 @@ fn Mounted::prepare(
   scale : Double,
   measure : @components.TextMeasure,
 ) -> Result[Candidate, @diagnostics.FrameworkError] {
-  match reject_unsupported_text_field(view) {
+  match reject_unsupported_dialog(view) {
     Err(error) => return Err(error)
     Ok(_) => ()
   }
@@ -1188,23 +1415,41 @@ fn Mounted::prepare(
           return Err(adapter_error("native identity space exhausted"))
         }
         let id = next_id
-        next_id += if node.kind() == @view.AppShell { 40UL } else { 8UL }
+        next_id += if node.kind() == @view.AppShell {
+          40UL
+        } else if node.kind() == @view.TextField {
+          24UL
+        } else {
+          8UL
+        }
         id
       }
     }
     let text = if visible &&
-      (node.kind() == @view.Text || node.kind() == @view.Button) {
-      let foreground = if node.kind() == @view.Text {
+      (node.kind() == @view.Text ||
+        node.kind() == @view.Button ||
+        node.kind() == @view.TextField) {
+      let foreground = if node.kind() == @view.Text ||
+        node.kind() == @view.TextField {
         text_color
       } else {
         // Measurement is color-independent; core resolves paint below.
         color(242, 246, 250)
       }
+      let size = if node.kind() == @view.TextField {
+        FIELD_LABEL_SIZE
+      } else {
+        16.0
+      }
       match
         @components.NativeText::for_button(
-          id + 3UL,
+          if node.kind() == @view.TextField {
+            id + 12UL
+          } else {
+            id + 3UL
+          },
           node.label(),
-          16.0,
+          size,
           foreground,
           measure,
         ) {
@@ -1222,6 +1467,14 @@ fn Mounted::prepare(
       button: if visible {
         match previous {
           Some(binding) => binding.button
+          None => None
+        }
+      } else {
+        None
+      },
+      field: if visible {
+        match previous {
+          Some(binding) => binding.field
           None => None
         }
       } else {
@@ -1286,6 +1539,8 @@ fn Mounted::prepare(
     None => !self.ready
   }
   let items = []
+  let clip_chains : Array[@scene.ClipChain] = []
+  let mut next_clip : Int32 = 1
   let background = if is_shell {
     theme_color(colors.background)
   } else {
@@ -1355,6 +1610,49 @@ fn Mounted::prepare(
             Err(_) => return Err(adapter_error("native Card paint failed"))
           }
         }
+      }
+      let mut field = binding.field
+      if binding.view.kind() == @view.TextField {
+        let props = binding.view.text_field_props().unwrap()
+        let content = match field_box(bounds) {
+          Ok(value) => value
+          Err(error) => return Err(error)
+        }
+        let focused = tree.is_focused(binding.id)
+        let model = match binding.field {
+          Some(old) if old.is_composing() ||
+            old.document().text() == props.value() => old.with_bounds(content)
+          _ => create_field(measure, binding.id, content, props.value(), focused)
+        }
+        let mut model = match model {
+          Ok(value) => value
+          Err(error) => {
+            return Err(
+              adapter_error(
+                "native TextField model rejected: " + field_error_reason(error),
+              ),
+            )
+          }
+        }
+        model = match model.with_focus(focused) {
+          Ok(value) => value
+          Err(_) => {
+            return Err(adapter_error("native TextField focus rejected"))
+          }
+        }
+        match model.paint_items(binding.id, next_clip) {
+          Ok((clip, painted)) => {
+            clip_chains.push(clip)
+            next_clip += 1
+            for item in painted {
+              items.push(item)
+            }
+          }
+          Err(_) => {
+            return Err(adapter_error("native TextField paint failed"))
+          }
+        }
+        field = Some(model)
       }
       let mut button = binding.button
       let mut text = binding.text
@@ -1440,7 +1738,17 @@ fn Mounted::prepare(
           } else {
             @components.Start
           }
-          match text.scene_item(bounds, align) {
+          let text_box = if binding.view.kind() == @view.TextField {
+            @primitives.Rect::new(
+              bounds.left(),
+              bounds.top(),
+              bounds.size().width(),
+              20.0,
+            ).unwrap()
+          } else {
+            bounds
+          }
+          match text.scene_item(text_box, align) {
             Err(error) => return Err(error)
             Ok(item) => items.push(item)
           }
@@ -1454,12 +1762,12 @@ fn Mounted::prepare(
         } else {
           bounds.left()
         }
-        @primitives.Rect::new(
-          x,
-          bounds.top() + (bounds.size().height() - size.height()) / 2.0,
-          size.width(),
-          size.height(),
-        ).unwrap()
+        let y = if binding.view.kind() == @view.TextField {
+          bounds.top()
+        } else {
+          bounds.top() + (bounds.size().height() - size.height()) / 2.0
+        }
+        @primitives.Rect::new(x, y, size.width(), size.height()).unwrap()
       })
       observations.push({
         binding_id: binding.id,
@@ -1467,19 +1775,25 @@ fn Mounted::prepare(
         bounds,
         label_bounds,
         pressed: button.map(model => model.is_pressed()).unwrap_or(false),
-        focused: button.map(model => model.is_focused()).unwrap_or(false),
+        focused: field
+          .map(model => model.is_focused())
+          .unwrap_or(button.map(model => model.is_focused()).unwrap_or(false)),
         hovered: button.map(model => model.is_hovered()).unwrap_or(false),
-        enabled: button.map(model => model.is_enabled()).unwrap_or(false),
+        enabled: if binding.view.kind() == @view.TextField {
+          !binding.view.disabled()
+        } else {
+          button.map(model => model.is_enabled()).unwrap_or(false)
+        },
         loading: button.map(model => model.is_loading()).unwrap_or(false),
         palette: binding.view.button_palette(),
       })
-      bindings[index] = { ..binding, button, text, }
+      bindings[index] = { ..binding, button, text, field, }
     } else {
-      bindings[index] = { ..binding, button: None, text: None, }
+      bindings[index] = { ..binding, button: None, text: None, field: None, }
     }
   }
   let snapshot = match
-    @scene.SceneSnapshot::new(viewport, scale, [], [], items) {
+    @scene.SceneSnapshot::new(viewport, scale, [], clip_chains, items) {
     Err(_) => return Err(adapter_error("native scene validation failed"))
     Ok(value) => value
   }
@@ -1507,6 +1821,7 @@ pub struct Prepared {
   priv view : @view.View
   priv candidate : Candidate
   priv change : Epoch
+  priv measure : @components.TextMeasure
 }
 
 ///|
@@ -1533,7 +1848,7 @@ pub fn Mounted::stage(
   if self.is_disposed() || !same_epoch(change, self.change) {
     return Err(adapter_error("native root changed during preparation"))
   }
-  Ok({ view, candidate, change, })
+  Ok({ view, candidate, change, measure, })
 }
 
 ///|
@@ -1565,6 +1880,7 @@ pub fn Mounted::publish(
     }
   }
   self.bindings = candidate.bindings
+  self.measure = Some(prepared.measure)
   self.tree = Some(candidate.tree)
   self.current_frame = Some(candidate.frame)
   self.next_id = candidate.next_id
@@ -1611,6 +1927,18 @@ fn Mounted::sync_focus(self : Mounted) -> Unit {
         self.bindings[index] = {
           ..binding,
           button: Some(button.with_focus(focused)),
+        }
+      }
+      None => ()
+    }
+    match binding.field {
+      Some(field) => {
+        let focused = self.tree
+          .map(tree => tree.is_focused(binding.id))
+          .unwrap_or(false)
+        match field.with_focus(focused) {
+          Ok(value) => self.bindings[index] = { ..binding, field: Some(value), }
+          Err(_) => ()
         }
       }
       None => ()
@@ -1746,6 +2074,27 @@ pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
 }
 
 ///|
+/// Absolute logical caret rectangle for the focused or named TextField. Hosts
+/// use this for candidate-window placement; no platform call is made here.
+pub fn Mounted::text_caret(self : Mounted, key : @view.NodeKey) -> @primitives.Rect? {
+  if !self.ready || self.is_disposed() {
+    return None
+  }
+  let binding = match binding_for(self.bindings, key) {
+    Some(value) => value
+    None => return None
+  }
+  match binding.field {
+    Some(field) =>
+      match field.caret_rect() {
+        Ok(value) => Some(value)
+        Err(_) => None
+      }
+    None => None
+  }
+}
+
+///|
 pub fn Mounted::next_focus_result(self : Mounted) -> @runtime.FocusResult? {
   self.runtime.next_focus_result()
 }
@@ -1788,6 +2137,12 @@ pub fn Mounted::handle_event(
       self.invalidate_layout()
       Ok(true)
     }
+    @platform.Composition(composition) => {
+      if !self.ready || !self.window_focused {
+        return Ok(false)
+      }
+      self.dispatch_composition(composition)
+    }
     @platform.Input(input) => {
       if !self.ready || !self.window_focused {
         return Ok(false)
@@ -1808,10 +2163,93 @@ pub fn Mounted::handle_event(
 }
 
 ///|
+/// Host composition is owner-routed, not hit-tested. The focused editable field
+/// is the only target; disabled or read-only fields ignore the transaction.
+fn Mounted::dispatch_composition(
+  self : Mounted,
+  composition : @primitives.CompositionEvent,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  let measure = match self.measure {
+    Some(value) => value
+    None => return Ok(false)
+  }
+  let tree = match self.tree {
+    Some(value) => value
+    None => return Ok(false)
+  }
+  for index in 0..<self.bindings.length() {
+    let binding = self.bindings[index]
+    if !tree.is_focused(binding.id) || !field_editable(binding.view) {
+      continue
+    }
+    let field = match binding.field {
+      Some(value) => value
+      None => return Ok(false)
+    }
+    let updated = match composition {
+      @primitives.Start => Ok(field)
+      @primitives.Update(text~, cursor_utf16~) => {
+        let selection = match
+          @text.TextSelection::new(cursor_utf16, cursor_utf16) {
+          Ok(value) => value
+          Err(_) => return Ok(false)
+        }
+        field.update_composition(
+          text,
+          selection,
+          fn(document) { field_measure(measure, document) },
+          field_admit,
+        )
+      }
+      @primitives.Commit(text~) =>
+        field.commit_composition(
+          text,
+          fn(document) { field_measure(measure, document) },
+          field_admit,
+        )
+      @primitives.Cancel =>
+        field.cancel_composition(
+          fn(document) { field_measure(measure, document) },
+          field_admit,
+        )
+    }
+    let next = match updated {
+      Ok(value) => value
+      Err(error) => {
+        return Err(
+          adapter_error(
+            "native TextField composition rejected: " +
+            field_error_reason(error),
+          ),
+        )
+      }
+    }
+    let changed = !next.is_composing() &&
+      next.committed_document().text() != field.committed_document().text()
+    if changed {
+      match binding.token {
+        Some(token) =>
+          ignore(
+            self.runtime.enqueue_text_changed(token, next.document().text()),
+          )
+        None => ()
+      }
+    }
+    self.bindings[index] = { ..binding, field: Some(next), }
+    return Ok(true)
+  }
+  Ok(false)
+}
+
+///|
 fn Mounted::dispatch(
   self : Mounted,
   input : @primitives.InputEvent,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
+  let measure = match self.measure {
+    Some(value) => value
+    None => return Err(adapter_error("native TextField measure is unavailable"))
+  }
   let mut tree = self.tree.unwrap()
   match input {
     @primitives.KeyPressed(key=@primitives.Tab, modifiers~, repeat=false) if !modifiers.control() &&
@@ -1849,6 +2287,74 @@ fn Mounted::dispatch(
   let mut consumed = false
   for index in 0..<self.bindings.length() {
     let binding = self.bindings[index]
+    match binding.field {
+      Some(field) => {
+        let route = match input {
+          @primitives.PointerMoved(..) => false
+          @primitives.PointerButtonPressed(..) |
+          @primitives.PointerButtonReleased(..) => target == Some(binding.id)
+          _ => field.is_focused()
+        }
+        if route && field_input_allowed(binding.view, input) {
+          let outcome = match
+            field.handle_input(
+              input,
+              fn(document) { field_measure(measure, document) },
+              field_admit,
+              fn(document, point) { field_hit(measure, document, point) },
+            ) {
+            Ok(value) => value
+            Err(error) => {
+              return Err(
+                adapter_error(
+                  "native TextField input rejected: " + field_error_reason(error),
+                ),
+              )
+            }
+          }
+          let (next, action) = outcome
+          let mut next = next
+          let editable = field_editable(binding.view)
+          match action {
+            Some(@text_field.Submit) =>
+              if editable {
+                match binding.token {
+                  Some(token) => ignore(self.runtime.enqueue_submitted(token))
+                  None => ()
+                }
+              }
+            Some(@text_field.Blur) => {
+              tree = tree.clear_focus()
+              self.tree = Some(tree)
+              self.sync_focus()
+            }
+            Some(@text_field.Cut(text=_, candidate~)) =>
+              if editable {
+                next = candidate
+              }
+            Some(@text_field.Paste) => ()
+            Some(@text_field.Copy(_)) => ()
+            None => ()
+          }
+          let changed = next.document().text() != field.document().text()
+          if changed && editable {
+            match binding.token {
+              Some(token) =>
+                ignore(
+                  self.runtime.enqueue_text_changed(
+                    token,
+                    next.document().text(),
+                  ),
+                )
+              None => ()
+            }
+          }
+          self.bindings[index] = { ..binding, field: Some(next), }
+          consumed = true
+        }
+      }
+      None => ()
+    }
     match binding.button {
       Some(button) => {
         let route = match input {

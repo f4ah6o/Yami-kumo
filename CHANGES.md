@@ -16,10 +16,12 @@
 
 ### Added
 
-- Added the shared `TextField` semantic View, DOM `<input>` adapter with
-  committed-value-only composition handling, and native-adapter guard. The
-  native adapter returns `UnsupportedCapability`; no native text field is
-  claimed in this slice.
+- Added the shared `TextField` semantic View, a DOM `<input>` adapter with
+  committed-value-only composition handling, and a native adapter with a
+  measured single-line field, click/focus, caret movement, editing, submit,
+  and host composition events through `controls/text_field`. Native Dialog
+  remains rejected with `UnsupportedCapability`. Real OS IME and accessibility
+  qualification remain `NOT_RUN`.
 - Added the shared `Dialog` semantic View and DOM `<dialog>` adapter with
   top-layer modal behavior, Escape dismissal, initial focus and native focus
   restoration. A non-dismissible dialog ignores Escape, and the native adapter
@@ -40,7 +42,7 @@
 ### Changed
 
 - Pinned `@cloudflare/kumo` to `2.14.0` so generated class and stylesheet contracts remain reproducible.
-- Bumped the native module to `0.2.5` against GPUI `0.7.2` and pure MoonBit module `0.1.1`; its macOS sample runner revalidates the target before each event, bounds AX/helper lifetimes, and uses zero-modifier input. The external input route remains runtime-unqualified.
+- Bumped the native module to `0.2.6` against GPUI `0.10.0` and pure MoonBit module `0.1.1`; the native adapter now paints and edits a measured TextField and consumes host composition events. The macOS sample runner revalidates the target before each event, bounds AX/helper lifetimes, and uses zero-modifier input. The external input route remains runtime-unqualified.
 - Made the macOS native UI runner fail closed on locked or unknown console sessions and record blocked preflight evidence before launching the sample.
 - Expose the native Button's pressed phase on sample frames and keep held pointer/key state through same-bounds repaint; focus loss and layout changes still cancel.
 - Align native Button keyboard phases with pinned Kumo: focused enabled Enter activates on every key-down, including repeats, while Space stays pressed through repaint and activates on matching key-up.

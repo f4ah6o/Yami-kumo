@@ -3,8 +3,9 @@
 This additive development API implements the bounded YK-01 lifetime model,
 YK-02 Text/Button DOM path and the DOM parts of YK-06 TextField and YK-07 Dialog
 from the [four-platform roadmap](roadmaps/20261017-four-platform-gui/ROADMAP.md).
-Native TextField/IME and Dialog remain unimplemented and return
-`UnsupportedCapability`.
+Native TextField editing and host composition are implemented in the native
+adapter. Native Dialog and real OS IME/accessibility qualification remain
+unimplemented; Dialog returns `UnsupportedCapability` and IME is `NOT_RUN`.
 The [architecture decision](adr/0001-shared-ui-runtime.md) records what is
 inherited from the legacy Kumo API and what remains a separate contract.
 
@@ -29,11 +30,12 @@ inherited from the legacy Kumo API and what remains a separate contract.
 - `styles/shared-ui.css`: scoped row/column rules and required fixed Card geometry, without Kumo.
 - `examples/shared_button_theme`: one immutable Button-theme fixture model,
   imported unchanged by DOM and native host runners.
-- `native/ui`: explicit GPUI Text/Button/Column/Row and AppShell adapter with
-  private native IDs, common lifetime tokens, staged geometry/scene publication
-  and one GPUI Button controller per live Button. A TextField or Dialog in the
-  staged tree is rejected with `UnsupportedCapability`; there is no read-only
-  Text or non-modal imitation.
+- `native/ui`: explicit GPUI Text/Button/Column/Row, AppShell and TextField
+  adapter with private native IDs, common lifetime tokens, staged
+  geometry/scene publication, one GPUI Button controller per live Button and
+  one GPUI TextField controller per focused field. A Dialog in the staged tree
+  is rejected with `UnsupportedCapability`; there is no read-only Text or
+  non-modal imitation.
 - `native/examples/shared_counter`: one App Entity owning the unchanged common
   Model, plus thin Linux/Windows/macOS entrypoints.
 

@@ -12,7 +12,7 @@ moon add f4ah6o/yami_kumo_native
 ```
 
 Building this module for MoonBit's native/LLVM targets requires Python 3
-(`python3`) on `PATH`. GPUI 0.7.1 runs a Python prebuild during compilation to
+(`python3`) on `PATH`. GPUI 0.10.0 runs a Python prebuild during compilation to
 propagate macOS CoreText framework link settings. Python is needed only while
 building; the resulting application has no Python runtime dependency.
 
@@ -194,8 +194,10 @@ The native `ButtonInteraction::key_down` return type changes from `Unit` to
 Web API is unchanged.
 
 The GPUI host capabilities differ by platform. The [macOS host guide](https://github.com/gpui-mbt/gpui.mbt/blob/1ec90dfad7a3bc9f8ffbfad80928eaba737ab0bd/docs/macos-native.md)
-covers bounded single-line measurement and drawing; a native editor and IME
-are not implemented. The [Ubuntu text-field guide](https://github.com/gpui-mbt/gpui.mbt/blob/1ec90dfad7a3bc9f8ffbfad80928eaba737ab0bd/docs/linux-text-field.md)
+covers bounded single-line measurement, drawing and an opt-in composition
+transport. The shared adapter now owns a measured single-line field with
+click/focus, caret movement, editing and host composition; real Kotoeri
+qualification remains NOT RUN. The [Ubuntu text-field guide](https://github.com/gpui-mbt/gpui.mbt/blob/1ec90dfad7a3bc9f8ffbfad80928eaba737ab0bd/docs/linux-text-field.md)
 documents an experimental single-line LTR field with caret, selection, undo,
 and a private direct-keyboard route. Public `TextInput` and IME transport are
 not supported; the [Wayland IME transport](https://github.com/gpui-mbt/gpui.mbt/blob/1ec90dfad7a3bc9f8ffbfad80928eaba737ab0bd/docs/ubuntu-ime.md)
@@ -203,10 +205,10 @@ is private opt-in work and is not qualified. The [Windows host guide](https://gi
 describes a focused single-line field and a private, default-off IMM32 session;
 real Japanese IME and candidate-window behavior are not qualified.
 
-Before exposing `NativeInput`, Yami needs shared focus and edit ownership plus
-per-platform committed-text, composition, and caret integration with separate
-tests. The native Button click/frame proof above does not qualify text input or
-IME support.
+The shared adapter now exposes one measured TextField with owner-side focus,
+editing and composition. Real OS IME, candidate-window placement, clipboard and
+accessibility transport are not qualified; the native Button click/frame proof
+does not qualify text input or IME support.
 
 ## Maintainer checks
 
