@@ -232,7 +232,7 @@ pub fn dispose_counter(id : String) -> Unit {
 priv struct TextFieldDemo {
   mut value : String
   mut submitted : String
-  mut changes : Int32
+  mut changes : Int
   mut revision : UInt64
   mut mounted : @dom.DomRoot?
 }
@@ -335,7 +335,7 @@ pub fn set_text_field_value(id : String, value : String) -> String {
 
 ///|
 #export_name("textFieldChanges")
-pub fn text_field_changes(id : String) -> Int32 {
+pub fn text_field_changes(id : String) -> Int {
   match text_fields.get(id) {
     Some(demo) => demo.changes
     None => 0
