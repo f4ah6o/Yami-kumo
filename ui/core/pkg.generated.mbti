@@ -26,6 +26,8 @@ pub fn row_with_spacing(NodeKey, Array[View], StackSpacing) -> View
 
 pub fn text(NodeKey, String) -> View
 
+pub fn text_field(NodeKey, TextFieldProps) -> View
+
 // Errors
 
 // Types and methods
@@ -89,6 +91,7 @@ pub(all) enum NodeKind {
   Column
   Row
   AppShell
+  TextField
 } derive(Eq, @debug.Debug)
 pub fn NodeKind::equal(Self, Self) -> Bool
 pub fn NodeKind::not_equal(Self, Self) -> Bool
@@ -96,6 +99,8 @@ pub fn NodeKind::to_repr(Self) -> @debug.Repr
 
 pub(all) enum SemanticAction {
   Activate(NodeKey)
+  TextChanged(NodeKey, String)
+  Submitted(NodeKey)
 } derive(Eq, @debug.Debug)
 pub fn SemanticAction::equal(Self, Self) -> Bool
 pub fn SemanticAction::not_equal(Self, Self) -> Bool
@@ -165,6 +170,22 @@ pub fn StackSpacing::not_equal(Self, Self) -> Bool
 pub fn StackSpacing::padding(Self) -> SpacingToken
 pub fn StackSpacing::to_repr(Self) -> @debug.Repr
 
+pub struct TextFieldProps {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn TextFieldProps::description(Self) -> String
+pub fn TextFieldProps::disabled(Self) -> Bool
+pub fn TextFieldProps::equal(Self, Self) -> Bool
+pub fn TextFieldProps::error(Self) -> String?
+pub fn TextFieldProps::label(Self) -> String
+pub fn TextFieldProps::new(String, String, description? : String, error? : String?, required? : Bool, disabled? : Bool, read_only? : Bool, revision? : UInt64) -> Self
+pub fn TextFieldProps::not_equal(Self, Self) -> Bool
+pub fn TextFieldProps::read_only(Self) -> Bool
+pub fn TextFieldProps::required(Self) -> Bool
+pub fn TextFieldProps::revision(Self) -> UInt64
+pub fn TextFieldProps::to_repr(Self) -> @debug.Repr
+pub fn TextFieldProps::value(Self) -> String
+
 pub struct View {
   // private fields
 } derive(Eq, @debug.Debug)
@@ -182,6 +203,8 @@ pub fn View::not_equal(Self, Self) -> Bool
 pub fn View::shell(Self) -> ShellState?
 pub fn View::shell_region(Self) -> ShellRegion?
 pub fn View::spacing(Self) -> StackSpacing?
+pub fn View::text_field_props(Self) -> TextFieldProps?
+pub fn View::text_field_revision(Self) -> UInt64
 pub fn View::to_repr(Self) -> @debug.Repr
 
 // Type aliases

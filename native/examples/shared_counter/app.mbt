@@ -263,7 +263,7 @@ fn mode_view(view : @view.View, disabled : Bool, loading : Bool) -> @view.View {
         }
       }
     }
-    @view.Text => view
+    @view.Text | @view.TextField => view
     @view.AppShell => shell_mode_view(view, disabled, loading)
   }
 }
@@ -311,6 +311,8 @@ pub fn NativeCounter::render(
         action_keys: self.actions.map(action => {
           match action {
             @view.Activate(key) => key.value()
+            @view.TextChanged(key, _) => key.value()
+            @view.Submitted(key) => key.value()
           }
         }),
       })

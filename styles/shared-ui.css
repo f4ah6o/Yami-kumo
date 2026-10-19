@@ -22,6 +22,42 @@
   background: rgb(245, 247, 250);
 }
 
+/* Shared TextField. The host input is the only editing surface; the wrapper
+   keeps the label, input and description in one semantic item. */
+.yk-ui-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.yk-ui-field-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  font: inherit;
+}
+
+.yk-ui-field-input {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--yk-shell-strong-border, rgb(199, 204, 210));
+  background: var(--yk-shell-panel, rgb(255, 255, 255));
+  color: inherit;
+  font: inherit;
+}
+
+.yk-ui-field-description {
+  font-size: 12px;
+  color: var(--yk-shell-muted, rgb(109, 116, 125));
+}
+
+.yk-ui-field-error {
+  color: rgb(176, 42, 42);
+}
+
 /* Explicit plain-stack tokens only; legacy spacing and fixed Card are unchanged. */
 .yk-ui-gap-0 {
   gap: 0px;

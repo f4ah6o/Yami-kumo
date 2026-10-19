@@ -172,6 +172,7 @@ fn gate(view : @core.View, disabled~ : Bool, loading~ : Bool) -> @core.View {
     @core.Column => @core.column(view.key(), view.children().map(child => gate(child, disabled~, loading~)))
     @core.Row => @core.row(view.key(), view.children().map(child => gate(child, disabled~, loading~)))
     @core.AppShell => view
+    @core.TextField => view
   }
 }
 

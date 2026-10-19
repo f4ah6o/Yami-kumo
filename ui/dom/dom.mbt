@@ -217,6 +217,24 @@ extern "js" fn create_node(
 ) -> DomNode =
   #| (kind, key, label) => {
   #|   // One element per semantic child keeps adjacent Text views distinct flex items.
+  #|   if (kind === 5) {
+  #|     const wrapper = document.createElement("div");
+  #|     wrapper.className = "yk-ui-field";
+  #|     wrapper.setAttribute("data-yk-key", key);
+  #|     const labelNode = document.createElement("label");
+  #|     labelNode.className = "yk-ui-field-label";
+  #|     const labelText = document.createElement("span");
+  #|     labelText.className = "yk-ui-field-label-text";
+  #|     labelText.textContent = label;
+  #|     const input = document.createElement("input");
+  #|     input.type = "text";
+  #|     input.className = "yk-ui-field-input";
+  #|     labelNode.append(labelText, input);
+  #|     const description = document.createElement("span");
+  #|     description.className = "yk-ui-field-description";
+  #|     wrapper.append(labelNode, description);
+  #|     return wrapper;
+  #|   }
   #|   const node = document.createElement(kind === 0 ? "span" : kind === 1 ? "button" : "div");
   #|   node.setAttribute("data-yk-key", key);
   #|   if (kind === 0) {
@@ -362,6 +380,137 @@ extern "js" fn remove_button_events(events : ButtonEvents) -> Unit =
   #| events => events.dispose()
 
 ///|
+#external
+priv type TextFieldEvents
+
+///|
+/// The browser input is the editing surface; the common TextField value is the
+/// only committed document. Composition events are not published as
+/// TextChanged. Enter submits only when no composition is active.
+extern "js" fn add_text_field_events(
+  node : DomNode,
+  on_change : (String) -> Unit,
+  on_submit : () -> Unit,
+) -> TextFieldEvents =
+  #| (node, on_change, on_submit) => {
+  #|   const input = node.querySelector("input");
+  #|   node._ykLastPublished = input.value;
+  #|   const setComposing = value => {
+  #|     if (value) node.dataset.ykComposing = "true";
+  #|     else delete node.dataset.ykComposing;
+  #|   };
+  #|   const publish = value => {
+  #|     if (value === node._ykLastPublished) return;
+  #|     node._ykLastPublished = value;
+  #|     on_change(value);
+  #|   };
+  #|   const inputHandler = event => {
+  #|     if (event.isComposing || node.dataset.ykComposing === "true") return;
+  #|     publish(input.value);
+  #|   };
+  #|   const compositionStart = () => setComposing(true);
+  #|   const compositionEnd = () => {
+  #|     setComposing(false);
+  #|     const pending = node._ykPendingValue;
+  #|     const pendingRevision = node._ykPendingRevision;
+  #|     delete node._ykPendingValue;
+  #|     delete node._ykPendingRevision;
+  #|     if (pending !== undefined) {
+  #|       if (input.value !== pending) {
+  #|         input.value = pending;
+  #|         input.setSelectionRange(pending.length, pending.length);
+  #|       }
+  #|       if (pendingRevision !== undefined) node._ykExternalRevision = pendingRevision;
+  #|       node._ykLastPublished = input.value;
+  #|       return;
+  #|     }
+  #|     publish(input.value);
+  #|   };
+  #|   const keydown = event => {
+  #|     if (event.key === "Enter" && !event.isComposing &&
+  #|         node.dataset.ykComposing !== "true") {
+  #|       event.preventDefault();
+  #|       on_submit();
+  #|     }
+  #|   };
+  #|   const listeners = {input: inputHandler, compositionstart: compositionStart,
+  #|     compositionend: compositionEnd, keydown};
+  #|   for (const [type, listener] of Object.entries(listeners)) input.addEventListener(type, listener);
+  #|   return {
+  #|     dispose() {
+  #|       for (const [type, listener] of Object.entries(listeners)) input.removeEventListener(type, listener);
+  #|       setComposing(false);
+  #|     },
+  #|   };
+  #| }
+
+///|
+extern "js" fn remove_text_field_events(events : TextFieldEvents) -> Unit =
+  #| events => events.dispose()
+
+///|
+extern "js" fn update_text_field(
+  node : DomNode,
+  value : String,
+  revision : UInt64,
+  label : String,
+  description : String,
+  error : String,
+  required : Bool,
+  disabled : Bool,
+  read_only : Bool,
+) -> Unit =
+  #| (node, value, revision, label, description, error, required, disabled, readOnly) => {
+  #|   const input = node.querySelector("input");
+  #|   const labelText = node.querySelector(".yk-ui-field-label-text");
+  #|   const desc = node.querySelector(".yk-ui-field-description");
+  #|   if (labelText && labelText.textContent !== label) labelText.textContent = label;
+  #|   const composing = node.dataset.ykComposing === "true";
+  #|   const lastExternal = node._ykExternalRevision;
+  #|   const newerExternal = lastExternal === undefined || revision > lastExternal;
+  #|   if (composing && input && newerExternal) {
+  #|     if (node._ykPendingRevision === undefined || revision >= node._ykPendingRevision) {
+  #|       node._ykPendingValue = value;
+  #|       node._ykPendingRevision = revision;
+  #|     }
+  #|   }
+  #|   if (input && !composing) {
+  #|     const focused = document.activeElement === input;
+  #|     const sameRevision = node._ykExternalRevision === revision;
+  #|     // A focused, same-revision render is a stale echo of the value the app
+  #|     // already received; writing it back would roll the input backwards.
+  #|     if (!sameRevision || !focused) {
+  #|       if (input.value !== value) {
+  #|         const start = input.selectionStart;
+  #|         const end = input.selectionEnd;
+  #|         input.value = value;
+  #|         if (focused) {
+  #|           const limit = value.length;
+  #|           input.setSelectionRange(Math.min(start ?? limit, limit), Math.min(end ?? limit, limit));
+  #|         }
+  #|       }
+  #|       node._ykExternalRevision = revision;
+  #|       node._ykLastPublished = value;
+  #|     }
+  #|   }
+  #|   if (desc) {
+  #|     desc.textContent = error !== "" ? error : description;
+  #|     desc.classList.toggle("yk-ui-field-error", error !== "");
+  #|   }
+  #|   if (input) {
+  #|     input.required = required;
+  #|     input.disabled = disabled;
+  #|     input.readOnly = readOnly;
+  #|     input.setAttribute("aria-label", label);
+  #|     if (error !== "") input.setAttribute("aria-invalid", "true");
+  #|     else input.removeAttribute("aria-invalid");
+  #|     const help = error !== "" ? error : description;
+  #|     if (help !== "") input.setAttribute("aria-description", help);
+  #|     else input.removeAttribute("aria-description");
+  #|   }
+  #| }
+
+///|
 extern "js" fn enqueue_microtask(callback : () -> Unit) -> Unit =
   #| (callback) => queueMicrotask(callback)
 
@@ -397,10 +546,13 @@ extern "js" fn restore_focus(root : DomNode, node : DomNode) -> Unit =
 ///|
 extern "js" fn focus_observed(root : DomNode, node : DomNode) -> Bool =
   #| (root, node) => {
-  #|   if (!root.isConnected || !root.contains(node) || node.getClientRects().length === 0 ||
-  #|       node.disabled || typeof node.focus !== "function") return false;
-  #|   node.focus({preventScroll: true});
-  #|   return document.activeElement === node;
+  #|   const target = node.classList && node.classList.contains("yk-ui-field")
+  #|     ? node.querySelector("input") : node;
+  #|   if (!target || !root.isConnected || !root.contains(node) ||
+  #|       node.getClientRects().length === 0 || target.disabled ||
+  #|       typeof target.focus !== "function") return false;
+  #|   target.focus({preventScroll: true});
+  #|   return document.activeElement === target;
   #| }
 
 ///|
@@ -421,6 +573,7 @@ priv struct MountedNode {
   token : @runtime.InstanceToken
   node : DomNode
   events : ButtonEvents?
+  text_events : TextFieldEvents?
   shell : ShellNodes?
 }
 
@@ -523,6 +676,7 @@ fn kind_number(kind : @core.NodeKind) -> Int {
     Column => 2
     Row => 3
     AppShell => 4
+    TextField => 5
   }
 }
 
@@ -565,7 +719,24 @@ fn DomRoot::render_node(
       } else {
         None
       }
-      let item = { token, node, events, shell: None, }
+      let text_events = if kind == @core.TextField {
+        let on_change = fn(value : String) {
+          if accepts_events(self.root, node) &&
+            self.runtime.enqueue_text_changed(token, value) {
+            self.schedule_actions()
+          }
+        }
+        let on_submit = fn() {
+          if accepts_events(self.root, node) &&
+            self.runtime.enqueue_submitted(token) {
+            self.schedule_actions()
+          }
+        }
+        Some(add_text_field_events(node, on_change, on_submit))
+      } else {
+        None
+      }
+      let item = { token, node, events, text_events, shell: None, }
       self.nodes.set(key, item)
       item
     }
@@ -583,6 +754,26 @@ fn DomRoot::render_node(
     view.loading(),
     view.is_card(),
   )
+  if kind == @core.TextField {
+    match view.text_field_props() {
+      Some(props) =>
+        update_text_field(
+          mounted.node,
+          props.value(),
+          props.revision(),
+          props.label(),
+          props.description(),
+          match props.error() {
+            Some(error) => error
+            None => ""
+          },
+          props.required(),
+          props.disabled(),
+          props.read_only(),
+        )
+      None => ()
+    }
+  }
   if kind == @core.Button {
     update_button_palette(
       mounted.node,
@@ -763,6 +954,10 @@ pub fn DomRoot::update(
         Some(events) => remove_button_events(events)
         None => ()
       }
+      match mounted.text_events {
+        Some(events) => remove_text_field_events(events)
+        None => ()
+      }
       remove_owned_node(self.root, mounted.node)
       removed.push(key)
     }
@@ -781,12 +976,14 @@ pub fn DomRoot::next_action(self : DomRoot) -> @core.SemanticAction? {
     return self.runtime.next_action()
   }
   while self.runtime.next_action() is Some(action) {
-    let visible = match action {
-      Activate(key) =>
-        match self.nodes.get(key.value()) {
-          Some(mounted) => node_visible(mounted.node)
-          None => false
-        }
+    let key = match action {
+      Activate(key) => key
+      TextChanged(key, _) => key
+      Submitted(key) => key
+    }
+    let visible = match self.nodes.get(key.value()) {
+      Some(mounted) => node_visible(mounted.node)
+      None => false
     }
     if visible {
       return Some(action)
@@ -837,6 +1034,10 @@ pub fn DomRoot::dispose(self : DomRoot) -> Unit {
   for _, mounted in self.nodes {
     match mounted.events {
       Some(events) => remove_button_events(events)
+      None => ()
+    }
+    match mounted.text_events {
+      Some(events) => remove_text_field_events(events)
       None => ()
     }
     remove_owned_node(self.root, mounted.node)

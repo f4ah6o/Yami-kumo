@@ -56,6 +56,8 @@ pub fn Runtime::commit(Self, @core.View) -> Result[Unit, CommitError]
 pub fn Runtime::complete_focus(Self, FocusRequest, @core.FocusOutcome) -> Bool
 pub fn Runtime::dispose(Self) -> Unit
 pub fn Runtime::enqueue_activate(Self, InstanceToken) -> Bool
+pub fn Runtime::enqueue_submitted(Self, InstanceToken) -> Bool
+pub fn Runtime::enqueue_text_changed(Self, InstanceToken, String) -> Bool
 pub fn Runtime::is_current(Self, InstanceToken) -> Bool
 pub fn Runtime::is_disposed(Self) -> Bool
 pub fn Runtime::new() -> Self

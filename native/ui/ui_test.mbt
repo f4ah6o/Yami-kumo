@@ -1424,3 +1424,17 @@ test "Button-only adapter gates composition lifetime without dispatching an acti
   assert_eq(mounted.last_dispatched_input_sequence(), 5L)
   assert_true(mounted.next_action() is None)
 }
+
+///|
+test "native adapter rejects TextField instead of painting a read-only label" {
+  let mounted = mount()
+  let field = @view.text_field(
+    @view.NodeKey::new("field"),
+    @view.TextFieldProps::new("日本語", "Name"),
+  )
+  let view = @view.column(@view.NodeKey::new("root"), [field])
+  assert_true(mounted.commit(view, 640.0, 480.0, 1.0, measure) is Err(_))
+  assert_true(mounted.frame() is None)
+  assert_true(mounted.view() is None)
+}
+
