@@ -311,6 +311,8 @@ pub fn NativeCounter::render(
         action_keys: self.actions.map(action => {
           match action {
             @view.Activate(key) => key.value()
+            @view.TextChanged(key, _) => key.value()
+            @view.Submitted(key) => key.value()
           }
         }),
       })
