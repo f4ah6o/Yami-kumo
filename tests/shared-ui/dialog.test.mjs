@@ -29,7 +29,7 @@ test('real DOM Dialog owns the top layer, dismisses once and restores focus', as
     } else if (request.url === '/') {
       response.setHeader('Content-Type', 'text/html');
       response.end(
-        '<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="/shared.css"><title>Dialog</title></head><body><main id="dialog-root"></main></body></html>',
+        '<!doctype html><html lang="en"><head><meta charset="utf-8"><link rel="stylesheet" href="/shared.css"><title>Dialog</title></head><body><main id="dialog-root"></main><main id="field-dialog-root"></main><main id="invalid-dialog-root"></main></body></html>',
       );
     } else {
       response.writeHead(404);
@@ -60,7 +60,7 @@ test('real DOM Dialog owns the top layer, dismisses once and restores focus', as
     await page.waitForFunction(() => window.api.dialogOpen('dialog-root') === true);
     assert.equal(await page.evaluate(() => document.querySelector('dialog').open), true);
     assert.equal(
-      await page.evaluate(() => document.querySelector('dialog').matches(':modal')),
+      await page.evaluate(() => document.querySelector('#dialog-root dialog').matches(':modal')),
       true,
     );
     assert.equal(
@@ -87,6 +87,16 @@ test('real DOM Dialog owns the top layer, dismisses once and restores focus', as
       'open',
     );
 
+    // Backdrop clicks dismiss; clicks inside the panel do not.
+    await page.click('button[data-yk-key="open"]');
+    await page.waitForFunction(() => window.api.dialogOpen('dialog-root') === true);
+    const panel = await page.locator('dialog').boundingBox();
+    await page.mouse.click(panel.x + panel.width / 2, panel.y + panel.height / 2);
+    await page.waitForTimeout(50);
+    assert.equal(await page.evaluate(() => window.api.dialogOpen('dialog-root')), true);
+    await page.mouse.click(2, 2);
+    await page.waitForFunction(() => window.api.dialogOpen('dialog-root') === false);
+
     // A non-dismissible dialog ignores Escape.
     assert.equal(
       await page.evaluate(() => window.api.setDialogDismissible('dialog-root', false)),
@@ -110,8 +120,33 @@ test('real DOM Dialog owns the top layer, dismisses once and restores focus', as
     await page.waitForFunction(() => window.api.dialogOpen('dialog-root') === false);
     assert.equal(await page.evaluate(() => window.api.dialogConfirmed('dialog-root')), true);
 
+    assert.equal(
+      await page.evaluate(() => window.api.mountDialogWithInvalidFocus('invalid-dialog-root')),
+      'invalid-dialog-focus',
+    );
+    assert.equal(await page.evaluate(() => window.api.dialogOpen('invalid-dialog-root')), false);
+
+    assert.equal(
+      await page.evaluate(() => window.api.mountDialogWithField('field-dialog-root')),
+      'mounted',
+    );
+    assert.equal(
+      await page.evaluate(() => window.api.dialogOpen('field-dialog-root')),
+      true,
+    );
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.tagName),
+      'INPUT',
+    );
+    assert.equal(
+      await page.evaluate(() => document.querySelector('#field-dialog-root dialog').matches(':modal')),
+      true,
+    );
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.api.dialogOpen('field-dialog-root') === false);
+
     await page.evaluate(() => window.api.disposeDialog('dialog-root'));
-    assert.equal(await page.locator('dialog').count(), 0);
+    assert.equal(await page.locator('#dialog-root dialog').count(), 0);
     assert.deepEqual(errors, []);
   } finally {
     if (browser) await browser.close();

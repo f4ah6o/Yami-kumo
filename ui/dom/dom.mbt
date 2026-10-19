@@ -556,7 +556,11 @@ extern "js" fn add_dialog_events(
   #|     on_dismiss();
   #|   };
   #|   const click = event => {
-  #|     if (event.target === node && node._ykDismissible && !composing()) on_dismiss();
+  #|     if (event.target !== node || !node._ykDismissible || composing()) return;
+  #|     const rect = node.getBoundingClientRect();
+  #|     const outside = event.clientX < rect.left || event.clientX > rect.right ||
+  #|       event.clientY < rect.top || event.clientY > rect.bottom;
+  #|     if (outside) on_dismiss();
   #|   };
   #|   node.addEventListener("cancel", cancel);
   #|   node.addEventListener("click", click);
@@ -588,14 +592,23 @@ extern "js" fn update_dialog(
   #|   const titleNode = node.querySelector(".yk-ui-dialog-title");
   #|   if (titleNode && titleNode.textContent !== title) titleNode.textContent = title;
   #|   node.setAttribute("aria-label", title);
+  #|   const focusTarget = () => {
+  #|     if (initialFocus !== "") {
+  #|       const found = Array.from(node.querySelectorAll("[data-yk-key]"))
+  #|         .find(item => item.getAttribute("data-yk-key") === initialFocus);
+  #|       if (!found) return null;
+  #|       return found.matches(".yk-ui-field") ? found.querySelector("input") : found;
+  #|     }
+  #|     const body = node.querySelector(".yk-ui-dialog-body") || node;
+  #|     return Array.from(body.querySelectorAll(
+  #|       "button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex='-1'])",
+  #|     )).find(item => item.getClientRects().length > 0) || null;
+  #|   };
   #|   if (open && !node.open) {
   #|     if (typeof node.showModal === "function") node.showModal();
   #|     else node.setAttribute("open", "");
-  #|     if (initialFocus !== "") {
-  #|       const target = Array.from(node.querySelectorAll("[data-yk-key]"))
-  #|         .find(item => item.getAttribute("data-yk-key") === initialFocus);
-  #|       if (target && typeof target.focus === "function") target.focus();
-  #|     }
+  #|     const target = focusTarget();
+  #|     if (target && typeof target.focus === "function") target.focus();
   #|   } else if (!open && node.open) {
   #|     node.close();
   #|   }
@@ -656,6 +669,7 @@ pub(all) enum DomError {
   Disposed
   HostTreeChanged
   InvalidShell
+  InvalidDialogFocus
   InvalidView(@runtime.CommitError)
 } derive(Eq, @debug.Debug)
 
@@ -888,26 +902,6 @@ fn DomRoot::render_node(
       None => ()
     }
   }
-  if kind == @core.Dialog {
-    match view.dialog_props() {
-      Some(props) => {
-        match mounted.dialog_events {
-          Some(events) => update_dialog_events(events, props.dismissible())
-          None => ()
-        }
-        update_dialog(
-          mounted.node,
-          props.open(),
-          props.title(),
-          match props.initial_focus() {
-            Some(key) => key.value()
-            None => ""
-          },
-        )
-      }
-      None => ()
-    }
-  }
   if kind == @core.Button {
     update_button_palette(
       mounted.node,
@@ -1024,6 +1018,27 @@ fn DomRoot::render_node(
       child_index = child_index + 1 {
     self.render_node(children[child_index], child_parent, child_index)
   }
+  // Children must be connected before showModal() and initial-focus resolution.
+  if kind == @core.Dialog {
+    match view.dialog_props() {
+      Some(props) => {
+        match mounted.dialog_events {
+          Some(events) => update_dialog_events(events, props.dismissible())
+          None => ()
+        }
+        update_dialog(
+          mounted.node,
+          props.open(),
+          props.title(),
+          match props.initial_focus() {
+            Some(key) => key.value()
+            None => ""
+          },
+        )
+      }
+      None => ()
+    }
+  }
 }
 
 ///|
@@ -1059,6 +1074,79 @@ fn validate_shell_tree(
 }
 
 ///|
+fn dialog_focusable(view : @core.View) -> Bool {
+  match view.kind() {
+    @core.Button | @core.TextField => !view.disabled()
+    _ => false
+  }
+}
+
+///|
+fn dialog_find(view : @core.View, key : @core.NodeKey) -> @core.View? {
+  if view.key() == key {
+    return Some(view)
+  }
+  for child in view.children() {
+    match dialog_find(child, key) {
+      Some(found) => return Some(found)
+      None => ()
+    }
+  }
+  None
+}
+
+///|
+fn dialog_first_focusable(view : @core.View) -> @core.View? {
+  if dialog_focusable(view) {
+    return Some(view)
+  }
+  for child in view.children() {
+    match dialog_first_focusable(child) {
+      Some(found) => return Some(found)
+      None => ()
+    }
+  }
+  None
+}
+
+///|
+/// An open Dialog must have a live focusable target before showModal().
+fn validate_dialog_tree(
+  view : @core.View,
+  depth : Int,
+) -> Result[Unit, DomError] {
+  if depth >= 63 {
+    return Err(InvalidShell)
+  }
+  if view.kind() == @core.Dialog {
+    match view.dialog_props() {
+      Some(props) if props.open() =>
+        match props.initial_focus() {
+          Some(key) =>
+            match dialog_find(view, key) {
+              Some(target) if target.key() != view.key() &&
+                dialog_focusable(target) => ()
+              _ => return Err(InvalidDialogFocus)
+            }
+          None =>
+            match dialog_first_focusable(view) {
+              Some(_) => ()
+              None => return Err(InvalidDialogFocus)
+            }
+        }
+      _ => ()
+    }
+  }
+  for child in view.children() {
+    match validate_dialog_tree(child, depth + 1) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+  }
+  Ok(())
+}
+
+///|
 /// Validate the whole view before changing runtime ownership or DOM nodes.
 /// Equal-key/equal-kind nodes and their click listener are retained.
 pub fn DomRoot::update(
@@ -1069,6 +1157,10 @@ pub fn DomRoot::update(
     return Err(Disposed)
   }
   match validate_shell_tree(view, 0) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
+  match validate_dialog_tree(view, 0) {
     Err(error) => return Err(error)
     Ok(_) => ()
   }
