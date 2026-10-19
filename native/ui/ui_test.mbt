@@ -1622,6 +1622,80 @@ test "native TextField Escape restores the previous focus owner" {
 }
 
 ///|
+fn shortcut(key : @primitives.Key, control~ : Bool = false, meta~ : Bool = false) -> @primitives.InputEvent {
+  @primitives.KeyPressed(
+    key~,
+    repeat=false,
+    modifiers=@primitives.Modifiers::new(
+      shift=false,
+      control~,
+      alt=false,
+      meta~,
+    ),
+  )
+}
+
+///|
+test "native TextField exposes clipboard requests and applies paste" {
+  let mounted = mount()
+  ignore(render(mounted, view=text_field_view()))
+  assert_true(mounted.focus(@view.NodeKey::new("field")))
+  assert_true(
+    mounted
+    .handle_event(event(2L, shortcut(@primitives.Character("a"), control=true)))
+    .unwrap(),
+  )
+  assert_true(
+    mounted
+    .handle_event(event(3L, shortcut(@primitives.Character("c"), control=true)))
+    .unwrap(),
+  )
+  match mounted.next_clipboard() {
+    Some(@ui.Copy(text)) => assert_eq(text, "日本語")
+    _ => fail("expected Copy")
+  }
+  assert_true(mounted.next_clipboard() is None)
+  assert_true(
+    mounted
+    .handle_event(event(4L, shortcut(@primitives.Character("v"), control=true)))
+    .unwrap(),
+  )
+  assert_true(mounted.next_clipboard() is Some(@ui.Paste))
+  assert_true(mounted.paste("世界"))
+  match mounted.next_action() {
+    Some(@view.TextChanged(_, value)) => assert_eq(value, "世界")
+    _ => fail("expected TextChanged")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native TextField cut reports the removed text" {
+  let mounted = mount()
+  ignore(render(mounted, view=text_field_view()))
+  assert_true(mounted.focus(@view.NodeKey::new("field")))
+  assert_true(
+    mounted
+    .handle_event(event(2L, shortcut(@primitives.Character("a"), control=true)))
+    .unwrap(),
+  )
+  assert_true(
+    mounted
+    .handle_event(event(3L, shortcut(@primitives.Character("x"), control=true)))
+    .unwrap(),
+  )
+  match mounted.next_clipboard() {
+    Some(@ui.Copy(text)) => assert_eq(text, "日本語")
+    _ => fail("expected Copy")
+  }
+  match mounted.next_action() {
+    Some(@view.TextChanged(_, value)) => assert_eq(value, "")
+    _ => fail("expected TextChanged")
+  }
+  mounted.dispose()
+}
+
+///|
 test "native TextField submit and read-only behavior" {
   let mounted = mount()
   ignore(render(mounted, view=text_field_view(read_only=true)))

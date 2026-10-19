@@ -33,6 +33,15 @@ pub struct Activation {
 }
 
 ///|
+/// Host clipboard work requested by the focused TextField. `Copy` carries the
+/// exact text to write; `Paste` asks the host to read its clipboard and call
+/// `Mounted::paste` with that text.
+pub(all) enum ClipboardRequest {
+  Copy(String)
+  Paste
+}
+
+///|
 priv struct Binding {
   view : @view.View
   id : UInt64
@@ -236,6 +245,7 @@ pub struct Mounted {
   priv mut theme : @theme.Theme?
   priv mut measure : @components.TextMeasure?
   priv mut focus_return : UInt64?
+  priv mut clipboard : Array[ClipboardRequest]
 }
 
 ///|
@@ -261,6 +271,7 @@ pub fn Mounted::new(
     theme,
     measure: None,
     focus_return: None,
+    clipboard: [],
   }
 }
 
@@ -2080,6 +2091,63 @@ pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
 }
 
 ///|
+/// Drain one clipboard request without calling the OS.
+pub fn Mounted::next_clipboard(self : Mounted) -> ClipboardRequest? {
+  if self.clipboard.length() == 0 {
+    return None
+  }
+  Some(self.clipboard.remove(0))
+}
+
+///|
+/// Apply host clipboard text to the focused editable TextField. The host reads
+/// its clipboard first; this method never performs platform I/O.
+pub fn Mounted::paste(self : Mounted, text : String) -> Bool {
+  if !self.ready || self.is_disposed() || text.length() == 0 {
+    return false
+  }
+  let measure = match self.measure {
+    Some(value) => value
+    None => return false
+  }
+  let tree = match self.tree {
+    Some(value) => value
+    None => return false
+  }
+  for index in 0..<self.bindings.length() {
+    let binding = self.bindings[index]
+    if !tree.is_focused(binding.id) || !field_editable(binding.view) {
+      continue
+    }
+    let field = match binding.field {
+      Some(value) => value
+      None => return false
+    }
+    let next = match
+      field.replace_selection(
+        text,
+        fn(document) { field_measure(measure, document) },
+        field_admit,
+      ) {
+      Ok(value) => value
+      Err(_) => return false
+    }
+    if next.document().text() != field.document().text() {
+      match binding.token {
+        Some(token) =>
+          ignore(
+            self.runtime.enqueue_text_changed(token, next.document().text()),
+          )
+        None => ()
+      }
+    }
+    self.bindings[index] = { ..binding, field: Some(next), }
+    return true
+  }
+  false
+}
+
+///|
 /// Absolute logical caret rectangle for the focused or named TextField. Hosts
 /// use this for candidate-window placement; no platform call is made here.
 pub fn Mounted::text_caret(self : Mounted, key : @view.NodeKey) -> @primitives.Rect? {
@@ -2347,12 +2415,19 @@ fn Mounted::dispatch(
               self.tree = Some(tree)
               self.sync_focus()
             }
-            Some(@text_field.Cut(text=_, candidate~)) =>
+            Some(@text_field.Cut(text~, candidate~)) =>
               if editable {
                 next = candidate
+                self.clipboard.push(Copy(text))
               }
-            Some(@text_field.Paste) => ()
-            Some(@text_field.Copy(_)) => ()
+            Some(@text_field.Paste) =>
+              if editable {
+                self.clipboard.push(Paste)
+              }
+            Some(@text_field.Copy(text)) =>
+              if text.length() > 0 {
+                self.clipboard.push(Copy(text))
+              }
             None => ()
           }
           let changed = next.document().text() != field.document().text()
@@ -2410,6 +2485,7 @@ pub fn Mounted::dispose(self : Mounted) -> Unit {
   self.bindings = []
   self.tree = None
   self.current_frame = None
+  self.clipboard = []
   self.ready = false
 }
 

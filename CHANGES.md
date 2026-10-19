@@ -19,8 +19,9 @@
 - Added the shared `TextField` semantic View, a DOM `<input>` adapter with
   committed-value-only composition handling, and a native adapter with a
   measured single-line field, click/focus, focus restoration on blur, caret
-  movement, editing, submit, and host composition events through
-  `controls/text_field`. The native module remains source-workspace only: the
+  movement, editing, submit, host composition events, focus restoration and a
+  host-drained clipboard request seam through `controls/text_field`. The native
+  module remains source-workspace only: the
   pinned `f4ah6o/yami_kumo@0.1.1` does not contain the new View nodes, so a
   Mooncakes release waits for the root module. Native Dialog
   remains rejected with `UnsupportedCapability`. Real OS IME and accessibility
