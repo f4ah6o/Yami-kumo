@@ -21,7 +21,7 @@
   measured single-line field, click/focus, caret movement, editing, submit,
   and host composition events through `controls/text_field`. Native Dialog
   remains rejected with `UnsupportedCapability`. Real OS IME and accessibility
-  qualification remain `NOT_RUN`.
+  qualification remain `NOT_RUN`; `text_session` ownership is not wired yet.
 - Added the shared `Dialog` semantic View and DOM `<dialog>` adapter with
   top-layer modal behavior, Escape dismissal, initial focus and native focus
   restoration. A non-dismissible dialog ignores Escape, and the native adapter
