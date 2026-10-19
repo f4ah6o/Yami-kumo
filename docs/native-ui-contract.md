@@ -36,7 +36,7 @@ HTML output and CSS remain compatible.
   shared native adapter owns one measured single-line TextField with focus,
   focus restoration on blur, caret movement, editing, host composition events
   and a clipboard request seam: `next_clipboard` yields `Copy`/`Paste`, and the
-  host calls `paste(text)` after reading its own clipboard. Real OS IME,
+  host calls `paste(request, text)` after reading its own clipboard. Real OS IME,
   candidate-window placement, host clipboard transport and accessibility remain
   separate unqualified stages.
 - Headless component/state/layout/event tests, native builds, actual native
