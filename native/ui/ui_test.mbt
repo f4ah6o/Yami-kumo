@@ -1714,6 +1714,39 @@ test "native TextField rejects a paste request after focus moves" {
 }
 
 ///|
+test "native TextField rejects a paste request after an external value update" {
+  let mounted = mount()
+  ignore(render(mounted, view=text_field_view(value="A")))
+  assert_true(mounted.focus(@view.NodeKey::new("field")))
+  assert_true(
+    mounted
+    .handle_event(event(2L, shortcut(@primitives.Character("v"), control=true)))
+    .unwrap(),
+  )
+  let request = match mounted.next_clipboard() {
+    Some(@ui.Paste(value)) => value
+    _ => fail("expected Paste")
+  }
+  ignore(render(mounted, view=text_field_view(value="B")))
+  assert_false(mounted.paste(request, "X"))
+  assert_true(
+    mounted
+    .handle_event(event(3L, shortcut(@primitives.Character("a"), control=true)))
+    .unwrap(),
+  )
+  assert_true(
+    mounted
+    .handle_event(event(4L, shortcut(@primitives.Character("c"), control=true)))
+    .unwrap(),
+  )
+  match mounted.next_clipboard() {
+    Some(@ui.Copy(text)) => assert_eq(text, "B")
+    _ => fail("expected the regenerated value")
+  }
+  mounted.dispose()
+}
+
+///|
 test "native TextField cut reports the removed text" {
   let mounted = mount()
   ignore(render(mounted, view=text_field_view()))

@@ -40,6 +40,7 @@ pub struct PasteRequest {
   priv binding : UInt64
   priv token : @runtime.InstanceToken
   priv revision : Int32
+  priv generation : UInt64
 }
 
 ///|
@@ -59,6 +60,7 @@ priv struct Binding {
   text : @components.NativeText?
   button : @button.Button?
   field : @text_field.TextField?
+  field_generation : UInt64
   visible : Bool
 }
 
@@ -256,6 +258,7 @@ pub struct Mounted {
   priv mut measure : @components.TextMeasure?
   priv mut focus_return : UInt64?
   priv mut clipboard : Array[ClipboardRequest]
+  priv mut next_field_generation : UInt64
 }
 
 ///|
@@ -282,6 +285,7 @@ pub fn Mounted::new(
     measure: None,
     focus_return: None,
     clipboard: [],
+    next_field_generation: 1UL,
   }
 }
 
@@ -1369,6 +1373,7 @@ priv struct Candidate {
   tree : @element.ElementTree
   frame : Frame
   next_id : UInt64
+  next_field_generation : UInt64
   cancel_pending : Bool
 }
 
@@ -1440,6 +1445,7 @@ fn Mounted::prepare(
   }
   let bindings : Array[Binding] = []
   let mut next_id = self.next_id
+  let mut next_field_generation = self.next_field_generation
   for node in nodes {
     let previous = match binding_for(self.bindings, node.key()) {
       Some(binding) if binding.view.kind() == node.kind() => Some(binding)
@@ -1517,6 +1523,14 @@ fn Mounted::prepare(
         }
       } else {
         None
+      },
+      field_generation: if visible {
+        match previous {
+          Some(binding) => binding.field_generation
+          None => 0UL
+        }
+      } else {
+        0UL
       },
       visible,
     })
@@ -1650,6 +1664,7 @@ fn Mounted::prepare(
         }
       }
       let mut field = binding.field
+      let mut field_generation = binding.field_generation
       if binding.view.kind() == @view.TextField {
         let props = binding.view.text_field_props().unwrap()
         let content = match field_box(bounds) {
@@ -1660,7 +1675,12 @@ fn Mounted::prepare(
         let model = match binding.field {
           Some(old) if old.is_composing() ||
             old.document().text() == props.value() => old.with_bounds(content)
-          _ => create_field(measure, binding.id, content, props.value(), focused)
+          _ => {
+            let generation = next_field_generation
+            next_field_generation += 1UL
+            field_generation = generation
+            create_field(measure, binding.id, content, props.value(), focused)
+          }
         }
         let mut model = match model {
           Ok(value) => value
@@ -1825,9 +1845,15 @@ fn Mounted::prepare(
         loading: button.map(model => model.is_loading()).unwrap_or(false),
         palette: binding.view.button_palette(),
       })
-      bindings[index] = { ..binding, button, text, field, }
+      bindings[index] = { ..binding, button, text, field, field_generation, }
     } else {
-      bindings[index] = { ..binding, button: None, text: None, field: None, }
+      bindings[index] = {
+        ..binding,
+        button: None,
+        text: None,
+        field: None,
+        field_generation: 0UL,
+      }
     }
   }
   let snapshot = match
@@ -1839,6 +1865,7 @@ fn Mounted::prepare(
     bindings,
     tree,
     next_id,
+    next_field_generation,
     cancel_pending,
     frame: {
       snapshot,
@@ -1922,6 +1949,7 @@ pub fn Mounted::publish(
   self.tree = Some(candidate.tree)
   self.current_frame = Some(candidate.frame)
   self.next_id = candidate.next_id
+  self.next_field_generation = candidate.next_field_generation
   self.revision = candidate.frame.revision
   self.ready = true
   self.change = fresh_epoch()
@@ -2160,7 +2188,9 @@ pub fn Mounted::paste(
     Some(token) if token == request.token => ()
     _ => return false
   }
-  if !tree.is_focused(binding.id) || !field_editable(binding.view) {
+  if !tree.is_focused(binding.id) ||
+    !field_editable(binding.view) ||
+    binding.field_generation != request.generation {
     return false
   }
   let field = match binding.field {
@@ -2476,6 +2506,7 @@ fn Mounted::dispatch(
                         binding: binding.id,
                         token,
                         revision: field.revision(),
+                        generation: binding.field_generation,
                       }),
                     )
                   None => ()
