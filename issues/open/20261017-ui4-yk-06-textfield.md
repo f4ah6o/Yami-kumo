@@ -1,10 +1,10 @@
 # YK-06 — 共通TextFieldとDOM編集・GPUI接続
 
-状態：proposed／実装未着手／製品テスト未実行／Yami-kumo mainへ計画ドラフト登録。
+状態：DOM slice実装済み（#38）／native単一行adapter実装済み（#40）／OS IME・AXはNOT_RUN。
 作成日：2026-10-17 JST。
 作業先：`f4ah6o/Yami-kumo`。段階：M3。依存：YK-02, YK-03, GP-01。
 
-本ファイルは計画ドラフトであり、承認済み仕様・既存PR番号・実装完了を示さない。実装開始時に最新mainと関連PRを再確認する。
+本ファイルは計画と現在状態を併記する。DOMとnativeの単一行sliceは実装済みだが、OS IMEとaccessibilityの資格付けは未完了であり、製品対応を主張しない。
 
 ## 1. 目的・範囲
 
@@ -16,12 +16,12 @@
 2. DOMはinputを使い、編集中の.value書戻しでselection/compositionを破壊しない。未確認の古い外部revisionを上書き採用しない。
 3. compositionstart/update/endとinput/beforeinputの実測列をGP-01へ変換する。non-cancelable eventやcommit後inputでも二重挿入しない。編集hostのundoを二重実行しない。
 4. 貼付、cut、選択、delete、undo/redo、form resetを含む。旧DOM Fieldのreset後pristine/filled/invalid再同期を回帰として残す。
-5. NativeはGP-01と3 OSの公開bridgeを使う。未対応profileではcapability不足を明示し、Textで偽装してTextField対応と呼ばない。
+5. NativeはGP-01と3 OSの公開bridgeを使う。未対応profileではcapability不足を明示し、Textで偽装してTextField対応と呼ばない。現状は`native/ui`がGPUI `controls/text_field`を保持し、click/focus、caret、編集、submit/blur、host `Composition` eventを処理する。copy/pasteとOS IME/AXは未対応。
 6. IME中の保存やDialog Escapeについて、未確定値の扱いとキーの優先順をYK-00の契約どおり実装する。
 
 ## 3. テスト対象と反例
 
-以下は実施予定。すべて未実行。実装PRで実際のコマンド・candidate SHA・profile・exit code・artifact・PASS/FAIL/未実行を記録する。
+DOM sliceはPR #38、native sliceはPR #40で実装した。以下は未完了項目を含む。実装PRで実際のコマンド・candidate SHA・profile・exit code・artifact・PASS/FAIL/未実行を記録する。
 
 1. 日本語、絵文字、結合文字、surrogate境界、RTLを含むoffset入力の拒否/維持を検査する。RTL完全編集対応をfixture存在だけで主張しない。
 2. composition後のnon-cancelable beforeinput/inputで重複しない。
@@ -33,6 +33,13 @@
 - [ ] 共通のsettings viewにTextFieldを追加できる。
 - [ ] Web実編集が動き、NativeはGP-02ごとの実測状態が明示される。
 - [ ] 全4 profileのTextField完了は3 OS bridgeの資格付け後に判定する。
+
+## 4a. 実装済みの証拠
+
+- DOM: 実Chromiumでcommit、composition deferral、rapid edit、submit、focusを確認（#38）。
+- Native: GPUI `0.10.0`（release tree `fffe79168e7ad79dffe2002e83a570551b1ae8f1`）に対し、native/ui 49/49、native ui + shared counter 66/66、Yami root 58/58。
+- Native composition: previewは`TextChanged`を出さず、commitは1回だけ出し、cancelはactionを出さないheadless test。
+- macOS Kotoeri、candidate window、copy/paste、AX: **NOT RUN**。synthetic compositionは実IMEの合格ではない。
 
 ## 5. 非対象
 
