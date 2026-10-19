@@ -41,7 +41,7 @@ fn Counter::test_view(self : Counter, view : @core.View) -> @core.View {
     }
   }
   match view.kind() {
-    Text | Button => view
+    Text | Button | TextField => view
     Column => {
       let children = view.children().map(fn(child) { self.test_view(child) })
       if view.is_card() {
@@ -222,6 +222,130 @@ pub fn dispose_counter(id : String) -> Unit {
       counter.mounted.unwrap().dispose()
       counter.mounted = None
       counters.remove(id) |> ignore
+    }
+  }
+}
+
+///|
+/// Bounded TextField test driver. The application model owns the committed
+/// value; the DOM input is the editing host.
+priv struct TextFieldDemo {
+  mut value : String
+  mut submitted : String
+  mut revision : UInt64
+  mut mounted : @dom.DomRoot?
+}
+
+///|
+let text_fields : Map[String, TextFieldDemo] = Map([])
+
+///|
+fn TextFieldDemo::view(self : TextFieldDemo) -> @core.View {
+  let props = @core.TextFieldProps::new(
+    self.value,
+    "Name",
+    description="Japanese name",
+    error=if self.value.is_empty() { Some("Required") } else { None },
+    required=true,
+    revision=self.revision,
+  )
+  @core.column(@core.NodeKey::new("text-field-root"), [
+    @core.text_field(@core.NodeKey::new("name"), props),
+    @core.text(@core.NodeKey::new("submitted"), self.submitted),
+  ])
+}
+
+///|
+fn TextFieldDemo::drain(self : TextFieldDemo) -> Unit {
+  match self.mounted {
+    None => ()
+    Some(mounted) =>
+      while mounted.next_action() is Some(action) {
+        match action {
+          TextChanged(_, value) => self.value = value
+          Submitted(_) => self.submitted = self.value
+          Activate(_) => ()
+        }
+        mounted.update(self.view()) |> ignore
+      }
+  }
+}
+
+///|
+#export_name("mountTextField")
+pub fn mount_text_field(id : String) -> String {
+  if text_fields.contains(id) {
+    return "already-mounted"
+  }
+  let demo : TextFieldDemo = {
+    value: "",
+    submitted: "",
+    revision: 0UL,
+    mounted: None,
+  }
+  let result = @dom.mount(id, demo.view(), fn() { demo.drain() })
+  match result {
+    Err(error) => error_name(error)
+    Ok(mounted) => {
+      demo.mounted = Some(mounted)
+      text_fields.set(id, demo)
+      "mounted"
+    }
+  }
+}
+
+///|
+#export_name("textFieldValue")
+pub fn text_field_value(id : String) -> String {
+  match text_fields.get(id) {
+    Some(demo) => demo.value
+    None => ""
+  }
+}
+
+///|
+#export_name("textFieldSubmitted")
+pub fn text_field_submitted(id : String) -> String {
+  match text_fields.get(id) {
+    Some(demo) => demo.submitted
+    None => ""
+  }
+}
+
+///|
+#export_name("setTextFieldValue")
+pub fn set_text_field_value(id : String, value : String) -> String {
+  match text_fields.get(id) {
+    None => "missing-field"
+    Some(demo) => {
+      demo.value = value
+      demo.revision = demo.revision + 1UL
+      match demo.mounted.unwrap().update(demo.view()) {
+        Ok(_) => "updated"
+        Err(error) => error_name(error)
+      }
+    }
+  }
+}
+
+///|
+#export_name("focusTextField")
+pub fn focus_text_field(id : String) -> Bool {
+  match text_fields.get(id) {
+    None => false
+    Some(demo) => demo.mounted.unwrap().focus(@core.NodeKey::new("name"))
+  }
+}
+
+///|
+#export_name("disposeTextField")
+pub fn dispose_text_field(id : String) -> Unit {
+  match text_fields.get(id) {
+    None => ()
+    Some(demo) => {
+      demo.mounted.unwrap().dispose()
+      demo.mounted = None
+      text_fields.remove(id) |> ignore
     }
   }
 }

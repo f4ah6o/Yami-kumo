@@ -22,7 +22,77 @@ pub(all) enum NodeKind {
   Column
   Row
   AppShell
+  TextField
 } derive(Eq, @debug.Debug)
+
+///|
+/// Immutable TextField value and presentation inputs. The application owns the
+/// committed value; `revision` identifies the generation used to reject stale
+/// host updates. `read_only` keeps focus/selection but rejects edits.
+pub struct TextFieldProps {
+  priv value : String
+  priv label : String
+  priv description : String
+  priv error : String?
+  priv required : Bool
+  priv disabled : Bool
+  priv read_only : Bool
+  priv revision : UInt64
+} derive(Eq, @debug.Debug)
+
+///|
+pub fn TextFieldProps::new(
+  value : String,
+  label : String,
+  description~ : String = "",
+  error~ : String? = None,
+  required~ : Bool = false,
+  disabled~ : Bool = false,
+  read_only~ : Bool = false,
+  revision~ : UInt64 = 0UL,
+) -> TextFieldProps {
+  { value, label, description, error, required, disabled, read_only, revision, }
+}
+
+///|
+pub fn TextFieldProps::value(self : TextFieldProps) -> String {
+  self.value
+}
+
+///|
+pub fn TextFieldProps::label(self : TextFieldProps) -> String {
+  self.label
+}
+
+///|
+pub fn TextFieldProps::description(self : TextFieldProps) -> String {
+  self.description
+}
+
+///|
+pub fn TextFieldProps::error(self : TextFieldProps) -> String? {
+  self.error
+}
+
+///|
+pub fn TextFieldProps::required(self : TextFieldProps) -> Bool {
+  self.required
+}
+
+///|
+pub fn TextFieldProps::disabled(self : TextFieldProps) -> Bool {
+  self.disabled
+}
+
+///|
+pub fn TextFieldProps::read_only(self : TextFieldProps) -> Bool {
+  self.read_only
+}
+
+///|
+pub fn TextFieldProps::revision(self : TextFieldProps) -> UInt64 {
+  self.revision
+}
 
 ///|
 /// Immutable semantic tree. Constructors and accessors copy child arrays;
@@ -39,6 +109,7 @@ pub struct View {
   priv button_palette : ButtonPaletteToken?
   priv region : ShellRegion?
   priv shell : ShellState?
+  priv text_field_props : TextFieldProps?
   priv children : Array[View]
 } derive(Eq, @debug.Debug)
 
@@ -55,6 +126,7 @@ pub fn text(key : NodeKey, value : String) -> View {
     button_palette: None,
     region: None,
     shell: None,
+    text_field_props: None,
     children: [],
   }
 }
@@ -83,6 +155,7 @@ pub fn button(
     button_palette: None,
     region: None,
     shell: None,
+    text_field_props: None,
     children: [],
   }
 }
@@ -100,6 +173,7 @@ pub fn column(key : NodeKey, children : Array[View]) -> View {
     button_palette: None,
     region: None,
     shell: None,
+    text_field_props: None,
     children: children.copy(),
   }
 }
@@ -117,7 +191,28 @@ pub fn row(key : NodeKey, children : Array[View]) -> View {
     button_palette: None,
     region: None,
     shell: None,
+    text_field_props: None,
     children: children.copy(),
+  }
+}
+
+///|
+/// Describes one controlled single-line TextField. The application owns the
+/// committed value; the host owns editing, selection and composition.
+pub fn text_field(key : NodeKey, props : TextFieldProps) -> View {
+  {
+    key,
+    kind: TextField,
+    label: props.label(),
+    disabled: props.disabled(),
+    loading: false,
+    card: false,
+    spacing: None,
+    button_palette: None,
+    region: None,
+    shell: None,
+    text_field_props: Some(props),
+    children: [],
   }
 }
 
@@ -148,6 +243,21 @@ pub fn View::loading(self : View) -> Bool {
 }
 
 ///|
+pub fn View::text_field_props(self : View) -> TextFieldProps? {
+  self.text_field_props
+}
+
+///|
+/// TextField revision for an external value update. Non-TextField views return
+/// zero so the runtime gate comparison stays uniform.
+pub fn View::text_field_revision(self : View) -> UInt64 {
+  match self.text_field_props {
+    Some(props) => props.revision()
+    None => 0UL
+  }
+}
+
+///|
 pub fn View::children(self : View) -> Array[View] {
   self.children.copy()
 }
@@ -156,6 +266,8 @@ pub fn View::children(self : View) -> Array[View] {
 /// Semantic input consumed by the single application model owner.
 pub(all) enum SemanticAction {
   Activate(NodeKey)
+  TextChanged(NodeKey, String)
+  Submitted(NodeKey)
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -184,6 +296,12 @@ pub extend View with Eq::{equal, not_equal}
 
 ///|
 pub extend View with @debug.Debug::{to_repr}
+
+///|
+pub extend TextFieldProps with Eq::{equal, not_equal}
+
+///|
+pub extend TextFieldProps with @debug.Debug::{to_repr}
 
 ///|
 pub extend SemanticAction with Eq::{equal, not_equal}

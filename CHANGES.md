@@ -16,6 +16,10 @@
 
 ### Added
 
+- Added the shared `TextField` semantic View, DOM `<input>` adapter with
+  committed-value-only composition handling, and native-adapter guard. The
+  native adapter returns `UnsupportedCapability`; no native text field is
+  claimed in this slice.
 - Added the additive shared AppShell region model, DOM semantic wrappers, GPUI
   flex layout, compact stacked layout, shell surface/text/Card theme tokens, and
   bounded DOM/native tests. Local macOS visible wide/compact rendering, CGEvent

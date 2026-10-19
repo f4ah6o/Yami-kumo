@@ -57,6 +57,7 @@ priv struct Entry {
 priv struct PendingAction {
   token : InstanceToken
   gate : Identity
+  action : @core.SemanticAction
 }
 
 ///|
@@ -204,7 +205,8 @@ pub fn Runtime::commit(
         // A gate change cancels already-queued input, including the sequence
         // enabled -> disabled/loading -> enabled before the queue is drained.
         let same_gate = previous.view.disabled() == node.disabled() &&
-          previous.view.loading() == node.loading()
+          previous.view.loading() == node.loading() &&
+          previous.view.text_field_revision() == node.text_field_revision()
         next.push({
           view: node,
           token: previous.token,
@@ -275,12 +277,75 @@ fn available_button(entry : Entry) -> Bool {
 }
 
 ///|
+fn available_text_field(entry : Entry) -> Bool {
+  if entry.view.kind() != @core.TextField || entry.view.disabled() {
+    return false
+  }
+  match entry.view.text_field_props() {
+    Some(props) => !props.read_only()
+    None => false
+  }
+}
+
+///|
+fn available_action(entry : Entry, action : @core.SemanticAction) -> Bool {
+  match action {
+    Activate(_) => available_button(entry)
+    TextChanged(_, _) | Submitted(_) => available_text_field(entry)
+  }
+}
+
+///|
 /// Accept normalized activation only; native controls and real DOM button click
 /// are the host's entry points. Disabled/loading is checked again at delivery.
 pub fn Runtime::enqueue_activate(self : Runtime, token : InstanceToken) -> Bool {
   match self.active_entry(token) {
     Some(entry) if available_button(entry) => {
-      self.actions.push({ token, gate: entry.gate, })
+      self.actions.push({
+        token,
+        gate: entry.gate,
+        action: @core.Activate(token.key()),
+      })
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+/// Queue one committed TextField value. Disabled/read-only is rechecked at
+/// delivery; a revision change invalidates the queued action.
+pub fn Runtime::enqueue_text_changed(
+  self : Runtime,
+  token : InstanceToken,
+  value : String,
+) -> Bool {
+  match self.active_entry(token) {
+    Some(entry) if available_text_field(entry) => {
+      self.actions.push({
+        token,
+        gate: entry.gate,
+        action: @core.TextChanged(token.key(), value),
+      })
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+/// Queue a submit request for a TextField. Focus loss does not imply submit.
+pub fn Runtime::enqueue_submitted(
+  self : Runtime,
+  token : InstanceToken,
+) -> Bool {
+  match self.active_entry(token) {
+    Some(entry) if available_text_field(entry) => {
+      self.actions.push({
+        token,
+        gate: entry.gate,
+        action: @core.Submitted(token.key()),
+      })
       true
     }
     _ => false
@@ -290,14 +355,14 @@ pub fn Runtime::enqueue_activate(self : Runtime, token : InstanceToken) -> Bool 
 ///|
 /// Drain one still-current semantic action in FIFO order, skipping cancelled
 /// entries. No application callbacks run inside the runtime. Draining one at a
-/// time lets the model owner commit disabled/loading before the next action.
+/// time lets the model owner commit disabled/loading/revision before the next
+/// action.
 pub fn Runtime::next_action(self : Runtime) -> @core.SemanticAction? {
   while !self.actions.is_empty() {
     let pending = self.actions.remove(0)
     match self.active_entry(pending.token) {
-      Some(entry) if available_button(entry) &&
-        same_identity(entry.gate, pending.gate) =>
-        return Some(@core.Activate(pending.token.key))
+      Some(entry) if available_action(entry, pending.action) &&
+        same_identity(entry.gate, pending.gate) => return Some(pending.action)
       _ => ()
     }
   }
@@ -318,10 +383,14 @@ pub fn Runtime::request_focus(
     Some(entry) => entry
     None => return Err(StaleToken)
   }
-  if entry.view.kind() != @core.Button {
+  if entry.view.kind() != @core.Button && entry.view.kind() != @core.TextField {
     return Err(NotFocusable)
   }
-  if !available_button(entry) {
+  if entry.view.kind() == @core.Button {
+    if !available_button(entry) {
+      return Err(Unavailable)
+    }
+  } else if entry.view.disabled() {
     return Err(Unavailable)
   }
   for request in self.focus_requests {

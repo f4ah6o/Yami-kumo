@@ -1,16 +1,19 @@
 # Shared UI source-workspace slice
 
-This additive development API implements the bounded YK-01 lifetime model and
-YK-02 Text/Button DOM path from the [four-platform roadmap](roadmaps/20261017-four-platform-gui/ROADMAP.md).
+This additive development API implements the bounded YK-01 lifetime model,
+YK-02 Text/Button DOM path and the DOM part of YK-06 TextField from the
+[four-platform roadmap](roadmaps/20261017-four-platform-gui/ROADMAP.md). Native
+TextField/IME remains unimplemented and returns `UnsupportedCapability`.
 The [architecture decision](adr/0001-shared-ui-runtime.md) records what is
 inherited from the legacy Kumo API and what remains a separate contract.
 
 ## What is implemented
 
-- `ui/core`: immutable Text/Button/Column/Row View, additive fixed Card decoration, semantic Activate values, and the host-neutral AppShell region model.
+- `ui/core`: immutable Text/Button/Column/Row/TextField View, additive fixed Card decoration, semantic Activate/TextChanged/Submitted values, and the host-neutral AppShell region model.
 - `ui/runtime`: root-wide key validation, opaque root/incarnation ownership,
   atomic commits, queued activation, per-button disabled/loading cancellation,
-  observed focus results and idempotent disposal.
+  observed focus results and idempotent disposal. TextField actions are gated by
+  the same token/revision model; disabled and read-only fields reject edits.
 - `ui/theme`: light/dark semantic Button and AppShell surface/text colors shared
   by generated CSS and GPUI paint palettes; see
   [shared-button-theme.md](shared-button-theme.md) and
@@ -18,6 +21,7 @@ inherited from the legacy Kumo API and what remains a separate contract.
 - `examples/shared_counter`: one pure model/view/update, imported unchanged by
   standalone JS/native source consumers, the DOM bootstrap, and the App/Entity native bootstrap.
 - `ui/dom`: explicit mount into an empty element, keyed text spans and native buttons,
+  a real `<input>` TextField with committed-value-only composition handling,
   keyed updates, root overlap rejection, retained focus and owned cleanup; the
   same adapter renders the semantic AppShell skeleton and scoped CSS.
 - `styles/shared-ui.css`: scoped row/column rules and required fixed Card geometry, without Kumo.
@@ -25,7 +29,8 @@ inherited from the legacy Kumo API and what remains a separate contract.
   imported unchanged by DOM and native host runners.
 - `native/ui`: explicit GPUI Text/Button/Column/Row and AppShell adapter with
   private native IDs, common lifetime tokens, staged geometry/scene publication
-  and one GPUI Button controller per live Button.
+  and one GPUI Button controller per live Button. A TextField in the staged tree
+  is rejected with `UnsupportedCapability`; there is no read-only Text fallback.
 - `native/examples/shared_counter`: one App Entity owning the unchanged common
   Model, plus thin Linux/Windows/macOS entrypoints.
 

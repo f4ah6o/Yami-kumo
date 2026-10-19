@@ -172,6 +172,7 @@ pub fn app_shell(
     spacing: None,
     button_palette: None,
     region: None,
+    text_field_props: None,
     shell: Some({
       sidebar_collapsed,
       mobile_sidebar_open,

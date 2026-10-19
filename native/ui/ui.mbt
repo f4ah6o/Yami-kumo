@@ -1108,6 +1108,31 @@ priv struct Candidate {
 }
 
 ///|
+/// The native TextField adapter is not implemented in this slice. Reject the
+/// whole staged tree instead of painting the label as a read-only Text.
+fn reject_unsupported_text_field(
+  view : @view.View,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if view.kind() == @view.TextField {
+    return Err(
+      @diagnostics.FrameworkError::new(
+        @diagnostics.UnsupportedCapability,
+        "shared-native-ui",
+        subsystem="shared-native-ui",
+        message="TextField native adapter is not implemented",
+      ),
+    )
+  }
+  for child in view.children() {
+    match reject_unsupported_text_field(child) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+  }
+  Ok(())
+}
+
+///|
 fn Mounted::prepare(
   self : Mounted,
   view : @view.View,
@@ -1116,6 +1141,10 @@ fn Mounted::prepare(
   scale : Double,
   measure : @components.TextMeasure,
 ) -> Result[Candidate, @diagnostics.FrameworkError] {
+  match reject_unsupported_text_field(view) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
   if width <= 0.0 || height <= 0.0 || scale <= 0.0 {
     return Err(adapter_error("positive viewport and scale required"))
   }
@@ -1657,12 +1686,14 @@ pub fn Mounted::next_action(self : Mounted) -> @view.SemanticAction? {
     return self.runtime.next_action()
   }
   while self.runtime.next_action() is Some(action) {
-    let visible = match action {
-      @view.Activate(key) =>
-        match self.current_frame {
-          Some(frame) => frame.bounds(key) is Some(_)
-          None => false
-        }
+    let key = match action {
+      @view.Activate(key) => key
+      @view.TextChanged(key, _) => key
+      @view.Submitted(key) => key
+    }
+    let visible = match self.current_frame {
+      Some(frame) => frame.bounds(key) is Some(_)
+      None => false
     }
     if visible {
       return Some(action)

@@ -36,6 +36,16 @@ const explicitButtonSelectors = new Set(
     ),
   ),
 );
+const textFieldProperties = new Map([
+  ['.yk-ui-field', new Set(['display', 'flex-direction', 'gap', 'min-width'])],
+  ['.yk-ui-field-label', new Set(['display', 'flex-direction', 'gap', 'min-width', 'font'])],
+  [
+    '.yk-ui-field-input',
+    new Set(['box-sizing', 'min-width', 'padding', 'border', 'background', 'color', 'font']),
+  ],
+  ['.yk-ui-field-description', new Set(['font-size', 'color'])],
+  ['.yk-ui-field-error', new Set(['color'])],
+]);
 const shellRegionClasses = [
   'topbar',
   'brand-group',
@@ -136,6 +146,18 @@ export function checkSharedStylesheetScope(css) {
           assert.match(declaration.value, /^rgb\(\d+, \d+, \d+\)$/);
         }
         explicitButtons.push(selector);
+        continue;
+      }
+      if (textFieldProperties.has(selector)) {
+        const allowed = textFieldProperties.get(selector);
+        for (const declaration of rule.nodes) {
+          assert.equal(declaration.type, 'decl');
+          assert.equal(Boolean(declaration.important), false);
+          assert.ok(
+            allowed.has(declaration.prop),
+            `unsupported TextField property: ${selector} ${declaration.prop}`,
+          );
+        }
         continue;
       }
       if (shellSelector(selector)) {

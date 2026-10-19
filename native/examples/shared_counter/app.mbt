@@ -263,7 +263,7 @@ fn mode_view(view : @view.View, disabled : Bool, loading : Bool) -> @view.View {
         }
       }
     }
-    @view.Text => view
+    @view.Text | @view.TextField => view
     @view.AppShell => shell_mode_view(view, disabled, loading)
   }
 }

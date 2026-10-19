@@ -61,7 +61,38 @@ test "Card is an additive noninteractive immutable Column decoration" {
       @core.Column => 2
       @core.Row => 3
       @core.AppShell => 4
+      @core.TextField => 5
     },
     2,
   )
+}
+
+///|
+test "TextField props are immutable and expose the committed value" {
+  let props = @core.TextFieldProps::new(
+    "日本語",
+    "名前",
+    description="表示名",
+    error=Some("必須です"),
+    required=true,
+    revision=7UL,
+  )
+  let field = @core.text_field(@core.NodeKey::new("name"), props)
+  assert_eq(field.kind(), @core.TextField)
+  assert_eq(field.label(), "名前")
+  assert_eq(field.text_field_revision(), 7UL)
+  assert_eq(field.children(), [])
+  match field.text_field_props() {
+    Some(value) => {
+      assert_eq(value.value(), "日本語")
+      assert_eq(value.description(), "表示名")
+      assert_eq(value.error().unwrap(), "必須です")
+      assert_true(value.required())
+      assert_true(!value.read_only())
+    }
+    None => abort("TextField props missing")
+  }
+  let read_only = @core.TextFieldProps::new("x", "x", read_only=true)
+  let field = @core.text_field(@core.NodeKey::new("readonly"), read_only)
+  assert_true(field.text_field_props().unwrap().read_only())
 }
