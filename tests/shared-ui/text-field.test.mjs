@@ -68,6 +68,35 @@ test('real DOM TextField commits once, preserves composition and restores focus'
     await page.press('input', 'Enter');
     await page.waitForFunction(() => window.api.textFieldSubmitted('field-root') === '日本');
 
+    // A composing keydown must not submit even if the local composition flag
+    // has not been set by a compositionstart event.
+    assert.equal(
+      await page.evaluate(() => {
+        const input = document.querySelector('input');
+        input.dispatchEvent(
+          new KeyboardEvent('keydown', {
+            key: 'Enter',
+            isComposing: true,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+        return window.api.textFieldSubmitted('field-root');
+      }),
+      '日本',
+    );
+    await page.evaluate(() => {
+      document.querySelector('input').dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          isComposing: false,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    await page.waitForFunction(() => window.api.textFieldSubmitted('field-root') === '日本');
+
     await page.evaluate(() => {
       const input = document.querySelector('input');
       input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));

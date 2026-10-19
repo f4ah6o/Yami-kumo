@@ -427,7 +427,8 @@ extern "js" fn add_text_field_events(
   #|     publish(input.value);
   #|   };
   #|   const keydown = event => {
-  #|     if (event.key === "Enter" && node.dataset.ykComposing !== "true") {
+  #|     if (event.key === "Enter" && !event.isComposing &&
+  #|         node.dataset.ykComposing !== "true") {
   #|       event.preventDefault();
   #|       on_submit();
   #|     }
