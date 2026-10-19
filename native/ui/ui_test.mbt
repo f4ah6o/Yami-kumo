@@ -1595,6 +1595,33 @@ test "native TextField cancels host composition without a committed edit" {
 }
 
 ///|
+test "native TextField Escape restores the previous focus owner" {
+  let mounted = mount()
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.button(@view.NodeKey::new("button"), "Increment"),
+    @view.text_field(
+      @view.NodeKey::new("field"),
+      @view.TextFieldProps::new("日本語", "Name"),
+    ),
+  ])
+  ignore(render(mounted, view=view))
+  assert_true(mounted.focus(@view.NodeKey::new("button")))
+  assert_true(mounted.focus(@view.NodeKey::new("field")))
+  assert_true(
+    mounted.handle_event(event(2L, key_down(@primitives.Escape))).unwrap(),
+  )
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Enter))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Activate(key)) =>
+      assert_eq(key, @view.NodeKey::new("button"))
+    _ => fail("expected restored Button activation")
+  }
+  mounted.dispose()
+}
+
+///|
 test "native TextField submit and read-only behavior" {
   let mounted = mount()
   ignore(render(mounted, view=text_field_view(read_only=true)))

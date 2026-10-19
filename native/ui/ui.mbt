@@ -235,6 +235,7 @@ pub struct Mounted {
   priv mut busy : Bool
   priv mut theme : @theme.Theme?
   priv mut measure : @components.TextMeasure?
+  priv mut focus_return : UInt64?
 }
 
 ///|
@@ -259,6 +260,7 @@ pub fn Mounted::new(
     busy: false,
     theme,
     measure: None,
+    focus_return: None,
   }
 }
 
@@ -2060,10 +2062,14 @@ pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
     None => return false
     Some(value) => value
   }
+  let previous = tree.focused()
   let outcome = match tree.with_focus(binding.id) {
     Err(_) => @view.Rejected
     Ok(next) => {
       self.tree = Some(next)
+      if previous != Some(binding.id) {
+        self.focus_return = previous
+      }
       self.sync_focus()
       self.change = fresh_epoch()
       @view.Focused
@@ -2270,6 +2276,7 @@ fn Mounted::dispatch(
     }
     @primitives.PointerButtonPressed(button=@primitives.Primary, ..) => {
       let target = tree.dispatch_input(input).target()
+      let previous = tree.focused()
       tree = match target {
         Some(id) =>
           match tree.with_focus(id) {
@@ -2277,6 +2284,9 @@ fn Mounted::dispatch(
             Err(_) => tree.clear_focus()
           }
         None => tree.clear_focus()
+      }
+      if target is Some(_) && previous != target {
+        self.focus_return = previous
       }
       self.tree = Some(tree)
       self.sync_focus()
@@ -2325,6 +2335,15 @@ fn Mounted::dispatch(
               }
             Some(@text_field.Blur) => {
               tree = tree.clear_focus()
+              match self.focus_return {
+                Some(id) =>
+                  match tree.with_focus(id) {
+                    Ok(value) => tree = value
+                    Err(_) => ()
+                  }
+                None => ()
+              }
+              self.focus_return = None
               self.tree = Some(tree)
               self.sync_focus()
             }
