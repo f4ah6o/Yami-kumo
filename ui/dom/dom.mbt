@@ -465,9 +465,13 @@ extern "js" fn update_text_field(
   #|   const desc = node.querySelector(".yk-ui-field-description");
   #|   if (labelText && labelText.textContent !== label) labelText.textContent = label;
   #|   const composing = node.dataset.ykComposing === "true";
-  #|   if (composing && input && input.value !== value) {
-  #|     node._ykPendingValue = value;
-  #|     node._ykPendingRevision = revision;
+  #|   const lastExternal = node._ykExternalRevision;
+  #|   const newerExternal = lastExternal === undefined || revision > lastExternal;
+  #|   if (composing && input && input.value !== value && newerExternal) {
+  #|     if (node._ykPendingRevision === undefined || revision >= node._ykPendingRevision) {
+  #|       node._ykPendingValue = value;
+  #|       node._ykPendingRevision = revision;
+  #|     }
   #|   }
   #|   if (input && !composing) {
   #|     const focused = document.activeElement === input;

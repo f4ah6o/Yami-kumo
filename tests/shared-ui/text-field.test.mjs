@@ -147,6 +147,33 @@ test('real DOM TextField commits once, preserves composition and restores focus'
     await page.waitForFunction(() => document.querySelector('input').value === '外部2');
     assert.equal(await page.evaluate(() => window.api.textFieldValue('field-root')), '外部2');
 
+    // A same-revision render during composition must not be mistaken for an
+    // external override; the later composition commit still reaches the model.
+    const beforeComposition = await page.evaluate(() => window.api.textFieldChanges('field-root'));
+    await page.evaluate(() => {
+      const input = document.querySelector('input');
+      input.focus();
+      input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+      input.value = 'にほん';
+      input.dispatchEvent(
+        new CompositionEvent('compositionupdate', { bubbles: true, data: 'にほん' }),
+      );
+      input.dispatchEvent(
+        new InputEvent('input', { bubbles: true, data: 'にほん', isComposing: true }),
+      );
+      window.api.rerenderTextField('field-root');
+      input.value = '日本語';
+      input.dispatchEvent(
+        new CompositionEvent('compositionend', { bubbles: true, data: '日本語' }),
+      );
+    });
+    await page.waitForFunction(() => window.api.textFieldValue('field-root') === '日本語');
+    assert.equal(await page.inputValue('input'), '日本語');
+    assert.equal(
+      await page.evaluate(() => window.api.textFieldChanges('field-root')),
+      beforeComposition + 1,
+    );
+
     assert.equal(
       await page.evaluate(() => window.api.setTextFieldValue('field-root', '外部')),
       'updated',
