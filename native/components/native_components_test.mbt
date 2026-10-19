@@ -501,3 +501,78 @@ fn component_test_dimension(value : Double) -> @layout.Dimension raise {
     Err(_) => fail("test flex dimensions should be valid")
   }
 }
+
+///|
+test "NativeButton layout preserves physical size and source ids in every flow direction" {
+  let buttons = [
+    @components.NativeButton::new(
+      20,
+      "OK",
+      @yami_kumo.Primary,
+      @yami_kumo.Base,
+      false,
+      @components.Theme::light(),
+      component_test_measure,
+    ).unwrap(),
+    @components.NativeButton::new(
+      40,
+      "Continue",
+      @yami_kumo.Primary,
+      @yami_kumo.Lg,
+      false,
+      @components.Theme::light(),
+      component_test_measure,
+    ).unwrap(),
+  ]
+  for
+    (direction, horizontal, reverse) in [
+      (@layout.FlowDirection::row(), true, false),
+      (@layout.FlowDirection::row_reverse(), true, true),
+      (@layout.FlowDirection::column(), false, false),
+      (@layout.FlowDirection::column_reverse(), false, true),
+    ] {
+    let container = @layout.FlexContainer::new(
+        direction,
+        @primitives.Size::new(400.0, 300.0).unwrap(),
+      )
+      .with_align(@layout.AlignItems::start())
+      .with_justify(
+        if reverse {
+          @layout.JustifyContent::end()
+        } else {
+          @layout.JustifyContent::start()
+        },
+      )
+      .with_gap(8.0)
+      .unwrap()
+    let result = @layout.layout_flex(
+      container,
+      buttons.map(button => button.layout_item(direction).unwrap()),
+    ).unwrap()
+    let items = result.items()
+    assert_eq(items.map(item => item.id()), [20UL, 40UL])
+    assert_false(result.overflow())
+    let mut cursor = if reverse {
+      if horizontal {
+        400.0
+      } else {
+        300.0
+      }
+    } else {
+      0.0
+    }
+    for index = 0; index < buttons.length(); index = index + 1 {
+      let size = buttons[index].intrinsic_size()
+      let bounds = items[index].bounds()
+      assert_eq(bounds.size().width(), size.width())
+      assert_eq(bounds.size().height(), size.height())
+      let extent = if horizontal { size.width() } else { size.height() }
+      if reverse {
+        cursor -= extent
+      }
+      assert_eq(if horizontal { bounds.left() } else { bounds.top() }, cursor)
+      assert_eq(if horizontal { bounds.top() } else { bounds.left() }, 0.0)
+      cursor = if reverse { cursor - 8.0 } else { cursor + extent + 8.0 }
+    }
+  }
+}

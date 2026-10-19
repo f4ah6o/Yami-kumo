@@ -151,11 +151,7 @@ fn button_surface(frame : @sample.SampleFrame) -> String raise {
     .snapshot()
     .items()
     .filter(item => {
-      let id = match item {
-        @scene.QuadItem(id~, ..)
-        | @scene.TextItem(id~, ..)
-        | @scene.TextRunItem(id~, ..) => id
-      }
+      let id = item.id()
       id >= 40 && id <= 45
     })
   match @scene.SceneSnapshot::new(frame.root_bounds(), 1.0, [], [], items) {

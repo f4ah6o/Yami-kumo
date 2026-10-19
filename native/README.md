@@ -36,6 +36,17 @@ surfaces and interaction state, a rectangular `NativeCard`, and a semantic
 state, Flex layout, hit testing, pointer and keyboard activation are common to
 all three host entrypoints in `examples/`.
 
+## Source-workspace development
+
+The current source tree handles GPUI's `RowReverse` and `ColumnReverse` flow
+variants. Build it with the immutable GPUI revision recorded in
+[`tests/native-ui/gpui-revision.txt`](../tests/native-ui/gpui-revision.txt)
+using `GPUI_SOURCE=/path/to/gpui.mbt sh scripts/native_ui_workspace.sh ...`
+from the repository root. The shared UI lane pins the same revision in
+[`tests/shared-ui/gpui-revision.txt`](../tests/shared-ui/gpui-revision.txt).
+This is a source-workspace change, not a new package release; the published
+module dependency declarations have not been advanced.
+
 ## Platform status
 
 | Host    | Text measurement and display                                 | Native UI proof                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
