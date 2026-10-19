@@ -33,12 +33,22 @@ pub struct Activation {
 }
 
 ///|
+/// Opaque destination for one asynchronous paste. It binds the requesting
+/// field instance and its text revision so a delayed clipboard response cannot
+/// land in a different field or a newer edit.
+pub struct PasteRequest {
+  priv binding : UInt64
+  priv token : @runtime.InstanceToken
+  priv revision : Int32
+}
+
+///|
 /// Host clipboard work requested by the focused TextField. `Copy` carries the
-/// exact text to write; `Paste` asks the host to read its clipboard and call
-/// `Mounted::paste` with that text.
+/// exact text to write; `Paste` carries the request that `Mounted::paste`
+/// must validate.
 pub(all) enum ClipboardRequest {
   Copy(String)
-  Paste
+  Paste(PasteRequest)
 }
 
 ///|
@@ -527,13 +537,28 @@ fn field_input_allowed(
   if field_editable(view) {
     return true
   }
+  // A read-only field keeps selection, caret movement, copy and blur. Every
+  // mutation path, including undo/redo and cut/paste shortcuts, stays closed.
   match input {
-    @primitives.TextInput(..) => false
-    @primitives.KeyPressed(key=@primitives.Backspace, modifiers~, ..) =>
-      !modifiers.control() && !modifiers.meta()
-    @primitives.KeyPressed(key=@primitives.Delete, modifiers~, ..) =>
-      !modifiers.control() && !modifiers.meta()
-    _ => true
+    @primitives.PointerButtonPressed(..)
+    | @primitives.PointerButtonReleased(..)
+    | @primitives.Scroll(..) => true
+    @primitives.KeyPressed(key=@primitives.ArrowLeft, ..)
+    | @primitives.KeyPressed(key=@primitives.ArrowRight, ..)
+    | @primitives.KeyPressed(key=@primitives.Home, ..)
+    | @primitives.KeyPressed(key=@primitives.End, ..)
+    | @primitives.KeyPressed(key=@primitives.Escape, ..) => true
+    @primitives.KeyPressed(
+      key=@primitives.Character("a"),
+      modifiers~,
+      ..
+    ) => modifiers.control() || modifiers.meta()
+    @primitives.KeyPressed(
+      key=@primitives.Character("c"),
+      modifiers~,
+      ..
+    ) => modifiers.control() || modifiers.meta()
+    _ => false
   }
 }
 
@@ -2100,9 +2125,14 @@ pub fn Mounted::next_clipboard(self : Mounted) -> ClipboardRequest? {
 }
 
 ///|
-/// Apply host clipboard text to the focused editable TextField. The host reads
-/// its clipboard first; this method never performs platform I/O.
-pub fn Mounted::paste(self : Mounted, text : String) -> Bool {
+/// Apply host clipboard text to the exact field that requested it. The request
+/// is rejected when the field instance, focus, or text revision moved while the
+/// host was reading its clipboard.
+pub fn Mounted::paste(
+  self : Mounted,
+  request : PasteRequest,
+  text : String,
+) -> Bool {
   if !self.ready || self.is_disposed() || text.length() == 0 {
     return false
   }
@@ -2114,37 +2144,54 @@ pub fn Mounted::paste(self : Mounted, text : String) -> Bool {
     Some(value) => value
     None => return false
   }
+  let mut found : Binding? = None
+  let mut found_index = -1
   for index in 0..<self.bindings.length() {
-    let binding = self.bindings[index]
-    if !tree.is_focused(binding.id) || !field_editable(binding.view) {
-      continue
+    if self.bindings[index].id == request.binding {
+      found = Some(self.bindings[index])
+      found_index = index
     }
-    let field = match binding.field {
-      Some(value) => value
-      None => return false
-    }
-    let next = match
-      field.replace_selection(
-        text,
-        fn(document) { field_measure(measure, document) },
-        field_admit,
-      ) {
-      Ok(value) => value
-      Err(_) => return false
-    }
-    if next.document().text() != field.document().text() {
-      match binding.token {
-        Some(token) =>
-          ignore(
-            self.runtime.enqueue_text_changed(token, next.document().text()),
-          )
-        None => ()
-      }
-    }
-    self.bindings[index] = { ..binding, field: Some(next), }
-    return true
   }
-  false
+  let binding = match found {
+    Some(value) => value
+    None => return false
+  }
+  match binding.token {
+    Some(token) if token == request.token => ()
+    _ => return false
+  }
+  if !tree.is_focused(binding.id) || !field_editable(binding.view) {
+    return false
+  }
+  let field = match binding.field {
+    Some(value) => value
+    None => return false
+  }
+  if field.revision() != request.revision {
+    return false
+  }
+  let next = match
+    field.replace_selection(
+      text,
+      fn(document) { field_measure(measure, document) },
+      field_admit,
+    ) {
+    Ok(value) => value
+    Err(_) => return false
+  }
+  if next.document().text() != field.document().text() {
+    match binding.token {
+      Some(token) =>
+        ignore(
+          self.runtime.enqueue_text_changed(token, next.document().text()),
+        )
+      None => ()
+    }
+  }
+  if found_index >= 0 {
+    self.bindings[found_index] = { ..binding, field: Some(next), }
+  }
+  true
 }
 
 ///|
@@ -2422,7 +2469,17 @@ fn Mounted::dispatch(
               }
             Some(@text_field.Paste) =>
               if editable {
-                self.clipboard.push(Paste)
+                match binding.token {
+                  Some(token) =>
+                    self.clipboard.push(
+                      Paste({
+                        binding: binding.id,
+                        token,
+                        revision: field.revision(),
+                      }),
+                    )
+                  None => ()
+                }
               }
             Some(@text_field.Copy(text)) =>
               if text.length() > 0 {

@@ -23,7 +23,7 @@ pub struct Activation {
 
 pub(all) enum ClipboardRequest {
   Copy(String)
-  Paste
+  Paste(PasteRequest)
 }
 
 pub struct Frame {
@@ -62,13 +62,17 @@ pub fn Mounted::new(@platform.WindowId, theme? : @theme.Theme?) -> Self
 pub fn Mounted::next_action(Self) -> @core.SemanticAction?
 pub fn Mounted::next_clipboard(Self) -> ClipboardRequest?
 pub fn Mounted::next_focus_result(Self) -> @runtime.FocusResult?
-pub fn Mounted::paste(Self, String) -> Bool
+pub fn Mounted::paste(Self, PasteRequest, String) -> Bool
 pub fn Mounted::publish(Self, Prepared) -> Result[Frame, @diagnostics.FrameworkError]
 pub fn Mounted::set_theme(Self, @theme.Theme?) -> Bool
 pub fn Mounted::stage(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Prepared, @diagnostics.FrameworkError]
 pub fn Mounted::text_caret(Self, @core.NodeKey) -> @primitives.Rect?
 pub fn Mounted::theme(Self) -> @theme.Theme?
 pub fn Mounted::view(Self) -> @core.View?
+
+pub struct PasteRequest {
+  // private fields
+}
 
 pub struct Prepared {
   // private fields

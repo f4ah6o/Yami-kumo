@@ -208,7 +208,7 @@ real Japanese IME and candidate-window behavior are not qualified.
 The shared adapter now exposes one measured TextField with owner-side focus,
 editing, composition and a clipboard request seam. The host still owns actual
 clipboard I/O and must drain `Mounted::next_clipboard`, then call
-`Mounted::paste`; no sample runner wires that yet. Real OS IME,
+`Mounted::paste(request, text)`; no sample runner wires that yet. Real OS IME,
 candidate-window placement and accessibility transport are not qualified; the
 native Button click/frame proof does not qualify text input or IME support.
 

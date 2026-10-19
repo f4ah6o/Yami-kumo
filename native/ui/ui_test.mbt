@@ -1660,11 +1660,55 @@ test "native TextField exposes clipboard requests and applies paste" {
     .handle_event(event(4L, shortcut(@primitives.Character("v"), control=true)))
     .unwrap(),
   )
-  assert_true(mounted.next_clipboard() is Some(@ui.Paste))
-  assert_true(mounted.paste("世界"))
+  let request = match mounted.next_clipboard() {
+    Some(@ui.Paste(value)) => value
+    _ => fail("expected Paste")
+  }
+  assert_true(mounted.paste(request, "世界"))
   match mounted.next_action() {
     Some(@view.TextChanged(_, value)) => assert_eq(value, "世界")
     _ => fail("expected TextChanged")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native TextField rejects a paste request after focus moves" {
+  let mounted = mount()
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(
+      @view.NodeKey::new("first"),
+      @view.TextFieldProps::new("A", "First"),
+    ),
+    @view.text_field(
+      @view.NodeKey::new("second"),
+      @view.TextFieldProps::new("B", "Second"),
+    ),
+  ])
+  ignore(render(mounted, view=view))
+  assert_true(mounted.focus(@view.NodeKey::new("first")))
+  assert_true(
+    mounted
+    .handle_event(event(2L, shortcut(@primitives.Character("v"), control=true)))
+    .unwrap(),
+  )
+  let request = match mounted.next_clipboard() {
+    Some(@ui.Paste(value)) => value
+    _ => fail("expected Paste")
+  }
+  assert_true(mounted.focus(@view.NodeKey::new("second")))
+  assert_false(mounted.paste(request, "世界"))
+  assert_true(
+    mounted
+    .handle_event(event(3L, @primitives.TextInput(text="!")))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, value)) => {
+      assert_eq(key, @view.NodeKey::new("second"))
+      assert_eq(value, "!B")
+    }
+    _ => fail("expected TextChanged for the second field")
   }
   mounted.dispose()
 }
@@ -1705,6 +1749,37 @@ test "native TextField submit and read-only behavior" {
     .handle_event(event(2L, @primitives.TextInput(text="x")))
     .unwrap(),
   )
+  assert_true(mounted.next_action() is None)
+  assert_false(
+    mounted
+    .handle_event(event(3L, key_down(@primitives.Backspace)))
+    .unwrap(),
+  )
+  assert_false(
+    mounted
+    .handle_event(event(4L, key_down(@primitives.Delete)))
+    .unwrap(),
+  )
+  assert_false(
+    mounted
+    .handle_event(event(5L, shortcut(@primitives.Character("v"), control=true)))
+    .unwrap(),
+  )
+  assert_true(mounted.next_clipboard() is None)
+  assert_true(
+    mounted
+    .handle_event(event(6L, shortcut(@primitives.Character("a"), control=true)))
+    .unwrap(),
+  )
+  assert_true(
+    mounted
+    .handle_event(event(7L, shortcut(@primitives.Character("c"), control=true)))
+    .unwrap(),
+  )
+  match mounted.next_clipboard() {
+    Some(@ui.Copy(text)) => assert_eq(text, "日本語")
+    _ => fail("expected unchanged read-only copy")
+  }
   assert_true(mounted.next_action() is None)
   mounted.dispose()
 
