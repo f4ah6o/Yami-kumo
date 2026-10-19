@@ -85,6 +85,8 @@ pub fn NativeTheme::render(
             @view.Activate(key) => key.value()
             @view.TextChanged(key, _) => key.value()
             @view.Submitted(key) => key.value()
+            @view.Dismissed(key) => key.value()
+            @view.Confirmed(key) => key.value()
           }
         }),
       })

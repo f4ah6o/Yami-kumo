@@ -1113,13 +1113,13 @@ priv struct Candidate {
 fn reject_unsupported_text_field(
   view : @view.View,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if view.kind() == @view.TextField {
+  if view.kind() == @view.TextField || view.kind() == @view.Dialog {
     return Err(
       @diagnostics.FrameworkError::new(
         @diagnostics.UnsupportedCapability,
         "shared-native-ui",
         subsystem="shared-native-ui",
-        message="TextField native adapter is not implemented",
+        message="TextField/Dialog native adapter is not implemented",
       ),
     )
   }
@@ -1690,6 +1690,8 @@ pub fn Mounted::next_action(self : Mounted) -> @view.SemanticAction? {
       @view.Activate(key) => key
       @view.TextChanged(key, _) => key
       @view.Submitted(key) => key
+      @view.Dismissed(key) => key
+      @view.Confirmed(key) => key
     }
     let visible = match self.current_frame {
       Some(frame) => frame.bounds(key) is Some(_)

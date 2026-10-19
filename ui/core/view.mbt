@@ -23,6 +23,7 @@ pub(all) enum NodeKind {
   Row
   AppShell
   TextField
+  Dialog
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -95,6 +96,47 @@ pub fn TextFieldProps::revision(self : TextFieldProps) -> UInt64 {
 }
 
 ///|
+/// Immutable Dialog state. The application owns `open`; the host reports
+/// `Dismissed`/`Confirmed` as requests. `initial_focus` names a focusable node
+/// inside the dialog; `None` uses the first focusable child.
+pub struct DialogProps {
+  priv open : Bool
+  priv title : String
+  priv dismissible : Bool
+  priv initial_focus : NodeKey?
+} derive(Eq, @debug.Debug)
+
+///|
+pub fn DialogProps::new(
+  open : Bool,
+  title : String,
+  dismissible~ : Bool = true,
+  initial_focus~ : NodeKey? = None,
+) -> DialogProps {
+  { open, title, dismissible, initial_focus, }
+}
+
+///|
+pub fn DialogProps::open(self : DialogProps) -> Bool {
+  self.open
+}
+
+///|
+pub fn DialogProps::title(self : DialogProps) -> String {
+  self.title
+}
+
+///|
+pub fn DialogProps::dismissible(self : DialogProps) -> Bool {
+  self.dismissible
+}
+
+///|
+pub fn DialogProps::initial_focus(self : DialogProps) -> NodeKey? {
+  self.initial_focus
+}
+
+///|
 /// Immutable semantic tree. Constructors and accessors copy child arrays;
 /// neither a caller nor a host can mutate an already-built view indirectly.
 /// Text and labels are literal content, never markup.
@@ -110,6 +152,7 @@ pub struct View {
   priv region : ShellRegion?
   priv shell : ShellState?
   priv text_field_props : TextFieldProps?
+  priv dialog_props : DialogProps?
   priv children : Array[View]
 } derive(Eq, @debug.Debug)
 
@@ -127,6 +170,7 @@ pub fn text(key : NodeKey, value : String) -> View {
     region: None,
     shell: None,
     text_field_props: None,
+    dialog_props: None,
     children: [],
   }
 }
@@ -156,6 +200,7 @@ pub fn button(
     region: None,
     shell: None,
     text_field_props: None,
+    dialog_props: None,
     children: [],
   }
 }
@@ -174,6 +219,7 @@ pub fn column(key : NodeKey, children : Array[View]) -> View {
     region: None,
     shell: None,
     text_field_props: None,
+    dialog_props: None,
     children: children.copy(),
   }
 }
@@ -192,6 +238,7 @@ pub fn row(key : NodeKey, children : Array[View]) -> View {
     region: None,
     shell: None,
     text_field_props: None,
+    dialog_props: None,
     children: children.copy(),
   }
 }
@@ -212,7 +259,29 @@ pub fn text_field(key : NodeKey, props : TextFieldProps) -> View {
     region: None,
     shell: None,
     text_field_props: Some(props),
+    dialog_props: None,
     children: [],
+  }
+}
+
+///|
+/// Describes one modal Dialog. The application owns `open`; the host reports
+/// dismiss/confirm requests. The DOM host uses a native `<dialog>` top layer.
+pub fn dialog(key : NodeKey, props : DialogProps, children : Array[View]) -> View {
+  {
+    key,
+    kind: Dialog,
+    label: props.title(),
+    disabled: false,
+    loading: false,
+    card: false,
+    spacing: None,
+    button_palette: None,
+    region: None,
+    shell: None,
+    text_field_props: None,
+    dialog_props: Some(props),
+    children: children.copy(),
   }
 }
 
@@ -258,6 +327,20 @@ pub fn View::text_field_revision(self : View) -> UInt64 {
 }
 
 ///|
+///|
+pub fn View::dialog_props(self : View) -> DialogProps? {
+  self.dialog_props
+}
+
+///|
+pub fn View::dialog_open(self : View) -> Bool {
+  match self.dialog_props {
+    Some(props) => props.open()
+    None => false
+  }
+}
+
+///|
 pub fn View::children(self : View) -> Array[View] {
   self.children.copy()
 }
@@ -268,6 +351,8 @@ pub(all) enum SemanticAction {
   Activate(NodeKey)
   TextChanged(NodeKey, String)
   Submitted(NodeKey)
+  Dismissed(NodeKey)
+  Confirmed(NodeKey)
 } derive(Eq, @debug.Debug)
 
 ///|
@@ -302,6 +387,12 @@ pub extend TextFieldProps with Eq::{equal, not_equal}
 
 ///|
 pub extend TextFieldProps with @debug.Debug::{to_repr}
+
+///|
+pub extend DialogProps with Eq::{equal, not_equal}
+
+///|
+pub extend DialogProps with @debug.Debug::{to_repr}
 
 ///|
 pub extend SemanticAction with Eq::{equal, not_equal}

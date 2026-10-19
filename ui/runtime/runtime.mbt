@@ -206,7 +206,8 @@ pub fn Runtime::commit(
         // enabled -> disabled/loading -> enabled before the queue is drained.
         let same_gate = previous.view.disabled() == node.disabled() &&
           previous.view.loading() == node.loading() &&
-          previous.view.text_field_revision() == node.text_field_revision()
+          previous.view.text_field_revision() == node.text_field_revision() &&
+          previous.view.dialog_open() == node.dialog_open()
         next.push({
           view: node,
           token: previous.token,
@@ -288,10 +289,16 @@ fn available_text_field(entry : Entry) -> Bool {
 }
 
 ///|
+fn available_dialog(entry : Entry) -> Bool {
+  entry.view.kind() == @core.Dialog && entry.view.dialog_open()
+}
+
+///|
 fn available_action(entry : Entry, action : @core.SemanticAction) -> Bool {
   match action {
     Activate(_) => available_button(entry)
     TextChanged(_, _) | Submitted(_) => available_text_field(entry)
+    Dismissed(_) | Confirmed(_) => available_dialog(entry)
   }
 }
 
@@ -345,6 +352,39 @@ pub fn Runtime::enqueue_submitted(
         token,
         gate: entry.gate,
         action: @core.Submitted(token.key()),
+      })
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+/// Queue a dismiss request for the current open Dialog. The application still
+/// owns the next `open` value.
+pub fn Runtime::enqueue_dismissed(self : Runtime, token : InstanceToken) -> Bool {
+  match self.active_entry(token) {
+    Some(entry) if available_dialog(entry) => {
+      self.actions.push({
+        token,
+        gate: entry.gate,
+        action: @core.Dismissed(token.key()),
+      })
+      true
+    }
+    _ => false
+  }
+}
+
+///|
+/// Queue a confirm request for the current open Dialog.
+pub fn Runtime::enqueue_confirmed(self : Runtime, token : InstanceToken) -> Bool {
+  match self.active_entry(token) {
+    Some(entry) if available_dialog(entry) => {
+      self.actions.push({
+        token,
+        gate: entry.gate,
+        action: @core.Confirmed(token.key()),
       })
       true
     }

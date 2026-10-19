@@ -235,6 +235,18 @@ extern "js" fn create_node(
   #|     wrapper.append(labelNode, description);
   #|     return wrapper;
   #|   }
+  #|   if (kind === 6) {
+  #|     const dialog = document.createElement("dialog");
+  #|     dialog.className = "yk-ui-dialog";
+  #|     dialog.setAttribute("data-yk-key", key);
+  #|     const title = document.createElement("h2");
+  #|     title.className = "yk-ui-dialog-title";
+  #|     title.textContent = label;
+  #|     const body = document.createElement("div");
+  #|     body.className = "yk-ui-dialog-body";
+  #|     dialog.append(title, body);
+  #|     return dialog;
+  #|   }
   #|   const node = document.createElement(kind === 0 ? "span" : kind === 1 ? "button" : "div");
   #|   node.setAttribute("data-yk-key", key);
   #|   if (kind === 0) {
@@ -511,6 +523,98 @@ extern "js" fn update_text_field(
   #| }
 
 ///|
+extern "js" fn dialog_body(node : DomNode) -> DomNode =
+  #| (node) => node.querySelector(".yk-ui-dialog-body")
+
+///|
+#external
+priv type DialogEvents
+
+///|
+/// The browser `<dialog>` owns the top layer, background inertness and focus
+/// restoration. Escape is observed as `cancel`; the host prevents the default
+/// close so the application can update `open` first. Composition Escape is left
+/// to the focused TextField.
+extern "js" fn add_dialog_events(
+  node : DomNode,
+  on_dismiss : () -> Unit,
+  dismissible : Bool,
+) -> DialogEvents =
+  #| (node, on_dismiss, dismissible) => {
+  #|   node._ykDismissible = dismissible;
+  #|   const composing = () => {
+  #|     const active = document.activeElement;
+  #|     return !!(active && active.closest && active.closest(".yk-ui-field") &&
+  #|       active.closest(".yk-ui-field").dataset.ykComposing === "true");
+  #|   };
+  #|   const cancel = event => {
+  #|     if (!node._ykDismissible || composing()) {
+  #|       event.preventDefault();
+  #|       return;
+  #|     }
+  #|     event.preventDefault();
+  #|     on_dismiss();
+  #|   };
+  #|   const click = event => {
+  #|     if (event.target !== node || !node._ykDismissible || composing()) return;
+  #|     const rect = node.getBoundingClientRect();
+  #|     const outside = event.clientX < rect.left || event.clientX > rect.right ||
+  #|       event.clientY < rect.top || event.clientY > rect.bottom;
+  #|     if (outside) on_dismiss();
+  #|   };
+  #|   node.addEventListener("cancel", cancel);
+  #|   node.addEventListener("click", click);
+  #|   return {
+  #|     update(nextDismissible) { node._ykDismissible = nextDismissible; },
+  #|     dispose() {
+  #|       node.removeEventListener("cancel", cancel);
+  #|       node.removeEventListener("click", click);
+  #|     },
+  #|   };
+  #| }
+
+///|
+extern "js" fn remove_dialog_events(events : DialogEvents) -> Unit =
+  #| events => events.dispose()
+
+///|
+extern "js" fn update_dialog_events(events : DialogEvents, dismissible : Bool) -> Unit =
+  #| (events, dismissible) => events.update(dismissible)
+
+///|
+extern "js" fn update_dialog(
+  node : DomNode,
+  open : Bool,
+  title : String,
+  initial_focus : String,
+) -> Unit =
+  #| (node, open, title, initialFocus) => {
+  #|   const titleNode = node.querySelector(".yk-ui-dialog-title");
+  #|   if (titleNode && titleNode.textContent !== title) titleNode.textContent = title;
+  #|   node.setAttribute("aria-label", title);
+  #|   const focusTarget = () => {
+  #|     if (initialFocus !== "") {
+  #|       const found = Array.from(node.querySelectorAll("[data-yk-key]"))
+  #|         .find(item => item.getAttribute("data-yk-key") === initialFocus);
+  #|       if (!found) return null;
+  #|       return found.matches(".yk-ui-field") ? found.querySelector("input") : found;
+  #|     }
+  #|     const body = node.querySelector(".yk-ui-dialog-body") || node;
+  #|     return Array.from(body.querySelectorAll(
+  #|       "button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex='-1'])",
+  #|     )).find(item => item.getClientRects().length > 0) || null;
+  #|   };
+  #|   if (open && !node.open) {
+  #|     if (typeof node.showModal === "function") node.showModal();
+  #|     else node.setAttribute("open", "");
+  #|     const target = focusTarget();
+  #|     if (target && typeof target.focus === "function") target.focus();
+  #|   } else if (!open && node.open) {
+  #|     node.close();
+  #|   }
+  #| }
+
+///|
 extern "js" fn enqueue_microtask(callback : () -> Unit) -> Unit =
   #| (callback) => queueMicrotask(callback)
 
@@ -565,6 +669,7 @@ pub(all) enum DomError {
   Disposed
   HostTreeChanged
   InvalidShell
+  InvalidDialogFocus
   InvalidView(@runtime.CommitError)
 } derive(Eq, @debug.Debug)
 
@@ -574,6 +679,7 @@ priv struct MountedNode {
   node : DomNode
   events : ButtonEvents?
   text_events : TextFieldEvents?
+  dialog_events : DialogEvents?
   shell : ShellNodes?
 }
 
@@ -677,6 +783,7 @@ fn kind_number(kind : @core.NodeKind) -> Int {
     Row => 3
     AppShell => 4
     TextField => 5
+    Dialog => 6
   }
 }
 
@@ -736,11 +843,32 @@ fn DomRoot::render_node(
       } else {
         None
       }
-      let item = { token, node, events, text_events, shell: None, }
+      let dialog_events = if kind == @core.Dialog {
+        let on_dismiss = fn() {
+          if accepts_events(self.root, node) &&
+            self.runtime.enqueue_dismissed(token) {
+            self.schedule_actions()
+          }
+        }
+        Some(add_dialog_events(node, on_dismiss, false))
+      } else {
+        None
+      }
+      let item = {
+        token,
+        node,
+        events,
+        text_events,
+        dialog_events,
+        shell: None,
+      }
       self.nodes.set(key, item)
       item
     }
   }
+  // Attach before updating. In particular, a Dialog must be in the document
+  // before showModal() is legal.
+  position_child(parent, mounted.node, index)
   match mounted.events {
     Some(events) =>
       update_button_events(events, view.disabled(), view.loading())
@@ -795,9 +923,6 @@ fn DomRoot::render_node(
       None => update_spacing(mounted.node, -1, -1)
     }
   }
-  // Place parents before children. A retained former descendant can become an
-  // ancestor in the next tree; detach its old ancestry before moving children.
-  position_child(parent, mounted.node, index)
   if kind == @core.AppShell {
     let shell = match mounted.shell {
       Some(nodes) => nodes
@@ -883,10 +1008,36 @@ fn DomRoot::render_node(
     return
   }
   let children = view.children()
+  let child_parent = if kind == @core.Dialog {
+    dialog_body(mounted.node)
+  } else {
+    mounted.node
+  }
   for child_index = 0
       child_index < children.length()
       child_index = child_index + 1 {
-    self.render_node(children[child_index], mounted.node, child_index)
+    self.render_node(children[child_index], child_parent, child_index)
+  }
+  // Children must be connected before showModal() and initial-focus resolution.
+  if kind == @core.Dialog {
+    match view.dialog_props() {
+      Some(props) => {
+        match mounted.dialog_events {
+          Some(events) => update_dialog_events(events, props.dismissible())
+          None => ()
+        }
+        update_dialog(
+          mounted.node,
+          props.open(),
+          props.title(),
+          match props.initial_focus() {
+            Some(key) => key.value()
+            None => ""
+          },
+        )
+      }
+      None => ()
+    }
   }
 }
 
@@ -923,6 +1074,79 @@ fn validate_shell_tree(
 }
 
 ///|
+fn dialog_focusable(view : @core.View) -> Bool {
+  match view.kind() {
+    @core.Button | @core.TextField => !view.disabled()
+    _ => false
+  }
+}
+
+///|
+fn dialog_find(view : @core.View, key : @core.NodeKey) -> @core.View? {
+  if view.key() == key {
+    return Some(view)
+  }
+  for child in view.children() {
+    match dialog_find(child, key) {
+      Some(found) => return Some(found)
+      None => ()
+    }
+  }
+  None
+}
+
+///|
+fn dialog_first_focusable(view : @core.View) -> @core.View? {
+  if dialog_focusable(view) {
+    return Some(view)
+  }
+  for child in view.children() {
+    match dialog_first_focusable(child) {
+      Some(found) => return Some(found)
+      None => ()
+    }
+  }
+  None
+}
+
+///|
+/// An open Dialog must have a live focusable target before showModal().
+fn validate_dialog_tree(
+  view : @core.View,
+  depth : Int,
+) -> Result[Unit, DomError] {
+  if depth >= 63 {
+    return Err(InvalidShell)
+  }
+  if view.kind() == @core.Dialog {
+    match view.dialog_props() {
+      Some(props) if props.open() =>
+        match props.initial_focus() {
+          Some(key) =>
+            match dialog_find(view, key) {
+              Some(target) if target.key() != view.key() &&
+                dialog_focusable(target) => ()
+              _ => return Err(InvalidDialogFocus)
+            }
+          None =>
+            match dialog_first_focusable(view) {
+              Some(_) => ()
+              None => return Err(InvalidDialogFocus)
+            }
+        }
+      _ => ()
+    }
+  }
+  for child in view.children() {
+    match validate_dialog_tree(child, depth + 1) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+  }
+  Ok(())
+}
+
+///|
 /// Validate the whole view before changing runtime ownership or DOM nodes.
 /// Equal-key/equal-kind nodes and their click listener are retained.
 pub fn DomRoot::update(
@@ -933,6 +1157,10 @@ pub fn DomRoot::update(
     return Err(Disposed)
   }
   match validate_shell_tree(view, 0) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
+  match validate_dialog_tree(view, 0) {
     Err(error) => return Err(error)
     Ok(_) => ()
   }
@@ -958,6 +1186,10 @@ pub fn DomRoot::update(
         Some(events) => remove_text_field_events(events)
         None => ()
       }
+      match mounted.dialog_events {
+        Some(events) => remove_dialog_events(events)
+        None => ()
+      }
       remove_owned_node(self.root, mounted.node)
       removed.push(key)
     }
@@ -980,6 +1212,8 @@ pub fn DomRoot::next_action(self : DomRoot) -> @core.SemanticAction? {
       Activate(key) => key
       TextChanged(key, _) => key
       Submitted(key) => key
+      Dismissed(key) => key
+      Confirmed(key) => key
     }
     let visible = match self.nodes.get(key.value()) {
       Some(mounted) => node_visible(mounted.node)
@@ -1038,6 +1272,10 @@ pub fn DomRoot::dispose(self : DomRoot) -> Unit {
     }
     match mounted.text_events {
       Some(events) => remove_text_field_events(events)
+      None => ()
+    }
+    match mounted.dialog_events {
+      Some(events) => remove_dialog_events(events)
       None => ()
     }
     remove_owned_node(self.root, mounted.node)

@@ -36,6 +36,23 @@ const explicitButtonSelectors = new Set(
     ),
   ),
 );
+const dialogProperties = new Map([
+  [
+    '.yk-ui-dialog',
+    new Set([
+      'box-sizing',
+      'max-width',
+      'padding',
+      'border',
+      'border-radius',
+      'background',
+      'color',
+    ]),
+  ],
+  ['.yk-ui-dialog::backdrop', new Set(['background', 'opacity'])],
+  ['.yk-ui-dialog-title', new Set(['margin', 'font-size'])],
+  ['.yk-ui-dialog-body', new Set(['display', 'flex-direction', 'gap'])],
+]);
 const textFieldProperties = new Map([
   ['.yk-ui-field', new Set(['display', 'flex-direction', 'gap', 'min-width'])],
   ['.yk-ui-field-label', new Set(['display', 'flex-direction', 'gap', 'min-width', 'font'])],
@@ -146,6 +163,18 @@ export function checkSharedStylesheetScope(css) {
           assert.match(declaration.value, /^rgb\(\d+, \d+, \d+\)$/);
         }
         explicitButtons.push(selector);
+        continue;
+      }
+      if (dialogProperties.has(selector)) {
+        const allowed = dialogProperties.get(selector);
+        for (const declaration of rule.nodes) {
+          assert.equal(declaration.type, 'decl');
+          assert.equal(Boolean(declaration.important), false);
+          assert.ok(
+            allowed.has(declaration.prop),
+            `unsupported Dialog property: ${selector} ${declaration.prop}`,
+          );
+        }
         continue;
       }
       if (textFieldProperties.has(selector)) {

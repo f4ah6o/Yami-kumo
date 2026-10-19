@@ -41,7 +41,7 @@ fn Counter::test_view(self : Counter, view : @core.View) -> @core.View {
     }
   }
   match view.kind() {
-    Text | Button | TextField => view
+    Text | Button | TextField | Dialog => view
     Column => {
       let children = view.children().map(fn(child) { self.test_view(child) })
       if view.is_card() {
@@ -111,6 +111,7 @@ fn error_name(error : @dom.DomError) -> String {
     Disposed => "disposed"
     HostTreeChanged => "host-tree-changed"
     InvalidShell => "invalid-shell"
+    InvalidDialogFocus => "invalid-dialog-focus"
     InvalidView(_) => "invalid-view"
   }
 }
@@ -268,7 +269,7 @@ fn TextFieldDemo::drain(self : TextFieldDemo) -> Unit {
             self.changes = self.changes + 1
           }
           Submitted(_) => self.submitted = self.value
-          Activate(_) => ()
+          Activate(_) | Dismissed(_) | Confirmed(_) => ()
         }
         mounted.update(self.view()) |> ignore
       }
@@ -373,6 +374,209 @@ pub fn dispose_text_field(id : String) -> Unit {
       demo.mounted.unwrap().dispose()
       demo.mounted = None
       text_fields.remove(id) |> ignore
+    }
+  }
+}
+
+///|
+/// Bounded Dialog test driver. The application owns `open`; the host reports
+/// Dismissed and normal Buttons report Activate.
+priv struct DialogDemo {
+  mut open : Bool
+  mut confirmed : Bool
+  mut dismissible : Bool
+  with_field : Bool
+  invalid_focus : Bool
+  mut mounted : @dom.DomRoot?
+}
+
+///|
+let dialogs : Map[String, DialogDemo] = Map([])
+
+///|
+fn DialogDemo::view(self : DialogDemo) -> @core.View {
+  let focus_key = if self.with_field {
+    "name"
+  } else if self.invalid_focus {
+    "missing"
+  } else {
+    "confirm"
+  }
+  let children = if self.with_field {
+    [
+      @core.text_field(
+        @core.NodeKey::new("name"),
+        @core.TextFieldProps::new("", "Name"),
+      ),
+      @core.button(@core.NodeKey::new("confirm"), "Confirm"),
+    ]
+  } else {
+    [
+      @core.text(@core.NodeKey::new("dialog-body"), "Apply the change?"),
+      @core.button(@core.NodeKey::new("confirm"), "Confirm"),
+      @core.button(@core.NodeKey::new("cancel"), "Cancel"),
+    ]
+  }
+  @core.column(@core.NodeKey::new("dialog-root"), [
+    @core.button(@core.NodeKey::new("open"), "Open"),
+    @core.dialog(
+      @core.NodeKey::new("confirm-dialog"),
+      @core.DialogProps::new(
+        self.open,
+        "Save changes?",
+        dismissible=self.dismissible,
+        initial_focus=Some(@core.NodeKey::new(focus_key)),
+      ),
+      children,
+    ),
+  ])
+}
+
+///|
+fn DialogDemo::drain(self : DialogDemo) -> Unit {
+  match self.mounted {
+    None => ()
+    Some(mounted) =>
+      while mounted.next_action() is Some(action) {
+        match action {
+          Activate(key) =>
+            if key == @core.NodeKey::new("open") {
+              self.open = true
+            } else if key == @core.NodeKey::new("cancel") {
+              self.open = false
+            } else if key == @core.NodeKey::new("confirm") {
+              self.open = false
+              self.confirmed = true
+            }
+          Dismissed(_) => self.open = false
+          Confirmed(_) => {
+            self.open = false
+            self.confirmed = true
+          }
+          TextChanged(_, _) | Submitted(_) => ()
+        }
+        mounted.update(self.view()) |> ignore
+      }
+  }
+}
+
+///|
+#export_name("mountDialog")
+pub fn mount_dialog(id : String) -> String {
+  if dialogs.contains(id) {
+    return "already-mounted"
+  }
+  let demo : DialogDemo = {
+    open: false,
+    confirmed: false,
+    dismissible: true,
+    with_field: false,
+    invalid_focus: false,
+    mounted: None,
+  }
+  let result = @dom.mount(id, demo.view(), fn() { demo.drain() })
+  match result {
+    Err(error) => error_name(error)
+    Ok(mounted) => {
+      demo.mounted = Some(mounted)
+      dialogs.set(id, demo)
+      "mounted"
+    }
+  }
+}
+
+///|
+#export_name("mountDialogWithField")
+pub fn mount_dialog_with_field(id : String) -> String {
+  if dialogs.contains(id) {
+    return "already-mounted"
+  }
+  let demo : DialogDemo = {
+    open: true,
+    confirmed: false,
+    dismissible: true,
+    with_field: true,
+    invalid_focus: false,
+    mounted: None,
+  }
+  let result = @dom.mount(id, demo.view(), fn() { demo.drain() })
+  match result {
+    Err(error) => error_name(error)
+    Ok(mounted) => {
+      demo.mounted = Some(mounted)
+      dialogs.set(id, demo)
+      "mounted"
+    }
+  }
+}
+
+///|
+#export_name("mountDialogWithInvalidFocus")
+pub fn mount_dialog_with_invalid_focus(id : String) -> String {
+  if dialogs.contains(id) {
+    return "already-mounted"
+  }
+  let demo : DialogDemo = {
+    open: true,
+    confirmed: false,
+    dismissible: true,
+    with_field: false,
+    invalid_focus: true,
+    mounted: None,
+  }
+  let result = @dom.mount(id, demo.view(), fn() { demo.drain() })
+  match result {
+    Err(error) => error_name(error)
+    Ok(mounted) => {
+      demo.mounted = Some(mounted)
+      dialogs.set(id, demo)
+      "mounted"
+    }
+  }
+}
+
+///|
+#export_name("dialogOpen")
+pub fn dialog_open(id : String) -> Bool {
+  match dialogs.get(id) {
+    Some(demo) => demo.open
+    None => false
+  }
+}
+
+///|
+#export_name("dialogConfirmed")
+pub fn dialog_confirmed(id : String) -> Bool {
+  match dialogs.get(id) {
+    Some(demo) => demo.confirmed
+    None => false
+  }
+}
+
+///|
+#export_name("setDialogDismissible")
+pub fn set_dialog_dismissible(id : String, dismissible : Bool) -> String {
+  match dialogs.get(id) {
+    None => "missing-dialog"
+    Some(demo) => {
+      demo.dismissible = dismissible
+      match demo.mounted.unwrap().update(demo.view()) {
+        Ok(_) => "updated"
+        Err(error) => error_name(error)
+      }
+    }
+  }
+}
+
+///|
+#export_name("disposeDialog")
+pub fn dispose_dialog(id : String) -> Unit {
+  match dialogs.get(id) {
+    None => ()
+    Some(demo) => {
+      demo.mounted.unwrap().dispose()
+      demo.mounted = None
+      dialogs.remove(id) |> ignore
     }
   }
 }
