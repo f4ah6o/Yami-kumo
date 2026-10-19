@@ -20,6 +20,8 @@ pub fn column(NodeKey, Array[View]) -> View
 
 pub fn column_with_spacing(NodeKey, Array[View], StackSpacing) -> View
 
+pub fn dialog(NodeKey, DialogProps, Array[View]) -> View
+
 pub fn row(NodeKey, Array[View]) -> View
 
 pub fn row_with_spacing(NodeKey, Array[View], StackSpacing) -> View
@@ -67,6 +69,18 @@ pub fn ButtonPaletteToken::equal(Self, Self) -> Bool
 pub fn ButtonPaletteToken::not_equal(Self, Self) -> Bool
 pub fn ButtonPaletteToken::to_repr(Self) -> @debug.Repr
 
+pub struct DialogProps {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn DialogProps::dismissible(Self) -> Bool
+pub fn DialogProps::equal(Self, Self) -> Bool
+pub fn DialogProps::initial_focus(Self) -> NodeKey?
+pub fn DialogProps::new(Bool, String, dismissible? : Bool, initial_focus? : NodeKey?) -> Self
+pub fn DialogProps::not_equal(Self, Self) -> Bool
+pub fn DialogProps::open(Self) -> Bool
+pub fn DialogProps::title(Self) -> String
+pub fn DialogProps::to_repr(Self) -> @debug.Repr
+
 pub(all) enum FocusOutcome {
   Focused
   Rejected
@@ -92,6 +106,7 @@ pub(all) enum NodeKind {
   Row
   AppShell
   TextField
+  Dialog
 } derive(Eq, @debug.Debug)
 pub fn NodeKind::equal(Self, Self) -> Bool
 pub fn NodeKind::not_equal(Self, Self) -> Bool
@@ -101,6 +116,8 @@ pub(all) enum SemanticAction {
   Activate(NodeKey)
   TextChanged(NodeKey, String)
   Submitted(NodeKey)
+  Dismissed(NodeKey)
+  Confirmed(NodeKey)
 } derive(Eq, @debug.Debug)
 pub fn SemanticAction::equal(Self, Self) -> Bool
 pub fn SemanticAction::not_equal(Self, Self) -> Bool
@@ -191,6 +208,8 @@ pub struct View {
 } derive(Eq, @debug.Debug)
 pub fn View::button_palette(Self) -> ButtonPaletteToken?
 pub fn View::children(Self) -> Array[Self]
+pub fn View::dialog_open(Self) -> Bool
+pub fn View::dialog_props(Self) -> DialogProps?
 pub fn View::disabled(Self) -> Bool
 pub fn View::equal(Self, Self) -> Bool
 pub fn View::is_card(Self) -> Bool

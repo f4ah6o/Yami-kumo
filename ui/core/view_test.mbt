@@ -62,6 +62,7 @@ test "Card is an additive noninteractive immutable Column decoration" {
       @core.Row => 3
       @core.AppShell => 4
       @core.TextField => 5
+      @core.Dialog => 6
     },
     2,
   )
@@ -95,4 +96,34 @@ test "TextField props are immutable and expose the committed value" {
   let read_only = @core.TextFieldProps::new("x", "x", read_only=true)
   let field = @core.text_field(@core.NodeKey::new("readonly"), read_only)
   assert_true(field.text_field_props().unwrap().read_only())
+}
+
+///|
+test "Dialog props stay application-owned and immutable" {
+  let props = @core.DialogProps::new(
+    true,
+    "Save changes?",
+    dismissible=false,
+    initial_focus=Some(@core.NodeKey::new("cancel")),
+  )
+  let children = [@core.button(@core.NodeKey::new("cancel"), "Cancel")]
+  let modal = @core.dialog(@core.NodeKey::new("confirm"), props, children)
+  children.clear()
+  assert_eq(modal.kind(), @core.Dialog)
+  assert_eq(modal.label(), "Save changes?")
+  assert_true(modal.dialog_open())
+  assert_eq(modal.children().length(), 1)
+  match modal.dialog_props() {
+    Some(value) => {
+      assert_true(!value.dismissible())
+      assert_eq(value.initial_focus().unwrap().value(), "cancel")
+    }
+    None => abort("Dialog props missing")
+  }
+  let closed = @core.dialog(
+    @core.NodeKey::new("closed"),
+    @core.DialogProps::new(false, "Closed"),
+    [],
+  )
+  assert_true(!closed.dialog_open())
 }

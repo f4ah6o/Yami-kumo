@@ -1438,3 +1438,15 @@ test "native adapter rejects TextField instead of painting a read-only label" {
   assert_true(mounted.view() is None)
 }
 
+///|
+test "native adapter rejects Dialog instead of showing a non-modal imitation" {
+  let mounted = mount()
+  let modal = @view.dialog(
+    @view.NodeKey::new("dialog"),
+    @view.DialogProps::new(true, "Confirm"),
+    [@view.button(@view.NodeKey::new("ok"), "OK")],
+  )
+  let view = @view.column(@view.NodeKey::new("root"), [modal])
+  assert_true(mounted.commit(view, 640.0, 480.0, 1.0, measure) is Err(_))
+  assert_true(mounted.frame() is None)
+}
