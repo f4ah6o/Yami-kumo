@@ -34,7 +34,8 @@ HTML output and CSS remain compatible.
 - gpui owns all OS FFI and native host/rendering behavior. macOS gains the
   measurement/rendering seam and an opt-in text-composition transport. The
   shared native adapter owns one measured single-line TextField with focus,
-  caret movement, editing and host composition events. Real OS IME,
+  focus restoration on blur, caret movement, editing and host composition
+  events. Real OS IME,
   candidate-window placement, clipboard and accessibility remain separate
   unqualified stages.
 - Headless component/state/layout/event tests, native builds, actual native

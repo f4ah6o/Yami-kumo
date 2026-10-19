@@ -18,8 +18,9 @@
 
 - Added the shared `TextField` semantic View, a DOM `<input>` adapter with
   committed-value-only composition handling, and a native adapter with a
-  measured single-line field, click/focus, caret movement, editing, submit,
-  and host composition events through `controls/text_field`. Native Dialog
+  measured single-line field, click/focus, focus restoration on blur, caret
+  movement, editing, submit, and host composition events through
+  `controls/text_field`. Native Dialog
   remains rejected with `UnsupportedCapability`. Real OS IME and accessibility
   qualification remain `NOT_RUN`; `text_session` ownership is not wired yet.
 - Added the shared `Dialog` semantic View and DOM `<dialog>` adapter with
