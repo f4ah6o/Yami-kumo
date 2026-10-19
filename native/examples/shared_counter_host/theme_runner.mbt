@@ -112,6 +112,9 @@ fn theme_loop(
             gate.changed(pending is Some(_))
             dirty = true
           }
+          // Composition is a separate host event, not a Button activation.
+          // Keep presentation current without synthesizing committed text input.
+          @platform.Composition(_) => dirty = true
           @platform.VisibilityChanged(visible) => {
             if !visible {
               gate.invalidate(pending is Some(_))

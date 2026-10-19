@@ -1391,3 +1391,36 @@ test "dispatch witness distinguishes unconsumed motion from ignored input" {
   assert_false(mounted.handle_event(event(9L, motion)).unwrap())
   assert_eq(mounted.last_dispatched_input_sequence(), 8L)
 }
+
+///|
+test "Button-only adapter gates composition lifetime without dispatching an activation" {
+  let mounted = mount()
+  ignore(render(mounted))
+  let motion = @primitives.PointerMoved(
+    position=@primitives.Point::new(20.0, 20.0).unwrap(),
+  )
+  for
+    (sequence, composition) in [
+      (1L, @primitives.CompositionEvent::Start),
+      (2L, @primitives.CompositionEvent::Update(text="に", cursor_utf16=1)),
+      (3L, @primitives.CompositionEvent::Commit(text="日")),
+      (4L, @primitives.CompositionEvent::Cancel),
+    ] {
+    let composition_event = @platform.Event::new(
+      @platform.WindowId::new(1L),
+      sequence,
+      1.0,
+      @platform.Composition(composition),
+    )
+    assert_false(mounted.handle_event(composition_event).unwrap())
+    assert_true(mounted.next_action() is None)
+    assert_eq(mounted.last_dispatched_input_sequence(), 0L)
+    // Composition consumes the sequence lifetime even though this Button-only
+    // adapter has no text editor. Same-sequence input must not be replayed.
+    assert_false(mounted.handle_event(event(sequence, motion)).unwrap())
+    assert_eq(mounted.last_dispatched_input_sequence(), 0L)
+  }
+  assert_false(mounted.handle_event(event(5L, motion)).unwrap())
+  assert_eq(mounted.last_dispatched_input_sequence(), 5L)
+  assert_true(mounted.next_action() is None)
+}

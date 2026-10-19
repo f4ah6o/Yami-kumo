@@ -366,8 +366,10 @@ pub fn NativeButton::layout_item(
       )
   }
   match direction {
-    @layout.Row => Ok(@layout.FlexItem::new(self.id, width, height, size))
-    @layout.Column => Ok(@layout.FlexItem::new(self.id, height, width, size))
+    @layout.Row | @layout.RowReverse =>
+      Ok(@layout.FlexItem::new(self.id, width, height, size))
+    @layout.Column | @layout.ColumnReverse =>
+      Ok(@layout.FlexItem::new(self.id, height, width, size))
   }
 }
 
