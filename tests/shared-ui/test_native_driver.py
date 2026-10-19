@@ -1099,5 +1099,117 @@ class IsolatedImportTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
 
 
+class ThemePointerReceiptTests(unittest.TestCase):
+    def events(self, request=1, arm=10, sequence=11, phase=1, operation="move-inside"):
+        x, y = driver.theme_pointer_target(operation, theme_marker(phase))
+        identity = {"request": request, "phase": phase, "windowId": 1, "armSequence": arm,
+                    "scale": 1.0, "x": x, "y": y}
+        receipt = identity | {"sequence": sequence, "dispatchedSequence": sequence}
+        return [("YAMI_NATIVE_UI_POINTER_ARMED", identity), ("YAMI_NATIVE_UI_POINTER_MOVED", receipt)]
+
+    def invoke(self, events, request=0, after=0, operation="move-inside"):
+        stream = Mock()
+        stream.next.side_effect = events
+        calls = []
+        with patch.object(driver, "send_theme_input", side_effect=lambda platform, op, marker, args: calls.append(op)):
+            try:
+                result = driver.send_theme_phase_inputs("windows", [operation, "pointer-down"], theme_marker(1),
+                    argparse.Namespace(marker_timeout=1), stream, request, after, [], 2)
+            except driver.E2EError:
+                self.assertNotIn("key-c", calls)
+                self.assertNotIn("pointer-down", calls)
+                raise
+        return result, calls
+
+    def test_capture_follows_actual_receipt_and_repeated_target_needs_new_request(self):
+        result, calls = self.invoke(self.events())
+        self.assertEqual(result, (1, 11))
+        self.assertEqual(calls, ["key-arm-inside", "move-inside", "pointer-down", "key-c"])
+        result, calls = self.invoke(self.events(request=2, arm=12, sequence=13), request=1, after=11)
+        self.assertEqual(result, (2, 13))
+        self.assertEqual(calls[-1], "key-c")
+        with self.assertRaises(driver.E2EError):
+            self.invoke(self.events(), request=1, after=11)
+
+    def test_wrong_arm_identity_sequence_scale_or_geometry_never_releases_capture(self):
+        for key, value in [("request", 0), ("phase", 0), ("windowId", 2), ("armSequence", 4),
+                           ("armSequence", True), ("scale", 2), ("x", 76), ("y", float("nan"))]:
+            events = self.events()
+            events[0][1][key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(driver.E2EError):
+                self.invoke(events)
+
+    def test_wrong_stale_or_undispatched_receipts_never_release_capture(self):
+        for key, value in [("request", 0), ("phase", 0), ("windowId", 2), ("armSequence", 9),
+                           ("sequence", 10), ("sequence", True), ("dispatchedSequence", 10),
+                           ("dispatchedSequence", True), ("scale", 2), ("x", 76),
+                           ("y", 55), ("x", float("nan")), ("y", float("inf"))]:
+            events = self.events()
+            events[1][1][key] = value
+            with self.subTest(key=key, value=value), self.assertRaises(driver.E2EError):
+                self.invoke(events)
+
+    def test_stale_matching_dispatch_and_arm_ack_cannot_be_reused(self):
+        events = self.events()
+        events[1][1].update(sequence=10, dispatchedSequence=10)
+        with self.assertRaisesRegex(driver.E2EError, "fresh dispatch"):
+            self.invoke(events)
+        with self.assertRaisesRegex(driver.E2EError, "arm sequence"):
+            self.invoke(self.events(), after=10)
+
+    def test_missing_receipt_or_premature_capture_fails_without_reinjection(self):
+        for second in [driver.E2EError("receipt deadline"), ("YAMI_NATIVE_UI_PRESENTED", theme_marker(2)),
+                       ("YAMI_NATIVE_UI_POINTER_ARMED", self.events()[0][1])]:
+            with self.subTest(second=second), self.assertRaises(driver.E2EError):
+                self.invoke([self.events()[0], second])
+
+    def test_movement_outside_uses_its_own_target_and_arm(self):
+        result, calls = self.invoke(self.events(operation="move-outside"), operation="move-outside")
+        self.assertEqual(result, (1, 11))
+        self.assertEqual(calls[:2], ["key-arm-outside", "move-outside"])
+
+    def test_windows_same_position_requests_noncoalesced_os_motion_each_time(self):
+        import ctypes
+        from ctypes import wintypes
+        class POINT(ctypes.Structure):
+            _fields_ = [("x", wintypes.LONG), ("y", wintypes.LONG)]
+        user32 = Mock()
+        user32.GetWindowThreadProcessId.side_effect = lambda hwnd, pid: setattr(pid._obj, "value", 77)
+        user32.GetForegroundWindow.return_value = 123
+        user32.ClientToScreen.return_value = True
+        def client_rect(hwnd, rect):
+            rect._obj.right, rect._obj.bottom = 160, 140
+            return True
+        user32.GetClientRect.side_effect = client_rect
+        user32.GetDpiForWindow.return_value = 96
+        user32.SetCursorPos.return_value = True
+        types = (ctypes, wintypes, POINT, lambda **kwargs: kwargs, lambda *args: args, None)
+        args = argparse.Namespace(window_title="owned", sample_pid=77)
+        with patch.object(driver.native, "_windows_window", return_value=(123, user32, types)), \
+             patch.object(driver.native, "_windows_send_input") as send:
+            for _ in range(2):
+                driver.send_theme_input("windows", "move-inside", theme_marker(1), args)
+            self.assertEqual(user32.SetCursorPos.call_count, 2)
+            self.assertEqual(send.call_count, 2)
+            for call in send.call_args_list:
+                self.assertEqual(call.args[2], [{"type": 0, "mi": (0, 0, 0, 0x2001, 0, 0)}])
+            user32.SetCursorPos.return_value = False
+            with self.assertRaises(driver.E2EError):
+                driver.send_theme_input("windows", "move-inside", theme_marker(1), args)
+            self.assertEqual(send.call_count, 2)
+
+    def test_valid_buffered_receipt_checked_after_deadline_never_releases_capture(self):
+        # Even next(0) may return an already-buffered valid marker. The absolute
+        # deadline must be checked after reading it, not just passed to next().
+        with patch.object(driver.time, "monotonic", side_effect=[0.0, 0.0, 0.0, 2.0, 2.0]):
+            with self.assertRaisesRegex(driver.E2EError, "receipt exceeded deadline"):
+                self.invoke(self.events())
+
+    def test_arm_deadline_never_injects_move_or_capture(self):
+        with patch.object(driver.time, "monotonic", side_effect=[0.0, 0.0, 2.0]):
+            with self.assertRaisesRegex(driver.E2EError, "deadline"):
+                self.invoke(self.events())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -54,7 +54,7 @@ BOUND_PATHS = (*COMMON_PATHS, "native/ui", "native/examples/shared_counter",
 THEME_SLOTS = {"normal_border", "focused_border", "disabled_border", "normal_fill", "hovered_fill",
                "pressed_fill", "loading_fill", "disabled_fill", "enabled_foreground", "disabled_foreground"}
 THEME_FLAGS = ("disabled", "loading", "focused", "hovered", "pressed")
-THEME_CONTROL_KEYS = {"key-t": ("Prior", 0x21), "key-c": ("Next", 0x22),
+THEME_CONTROL_KEYS = {"key-arm-inside": ("Right", 0x27), "key-arm-outside": ("Delete", 0x2E), "key-t": ("Prior", 0x21), "key-c": ("Next", 0x22),
                       "key-n": ("Home", 0x24), "key-d": ("End", 0x23),
                       "key-l": ("Up", 0x26), "key-b": ("Down", 0x28), "key-f": ("Left", 0x25)}
 # These are observations of a fixed host-input trace, never controller logic.
@@ -958,7 +958,7 @@ def run_fixture(args: argparse.Namespace, fixture: str, counts: list[int], execu
 
 def send_theme_input(platform: str, operation: str, marker: dict[str, Any], args: argparse.Namespace) -> None:
     allowed = {"move-inside", "move-outside", "pointer-down", "pointer-up", "space-down", "space-up",
-               "key-t", "key-n", "key-d", "key-l", "key-b", "key-f", "key-c"}
+               "key-t", "key-n", "key-d", "key-l", "key-b", "key-f", "key-c", "key-arm-inside", "key-arm-outside"}
     if operation not in allowed or platform not in ("linux", "windows"):
         raise E2EError("unknown or unsupported native theme input")
     x, y, width, height = _bounds(marker["button"], "button")
@@ -1004,6 +1004,12 @@ def send_theme_input(platform: str, operation: str, marker: dict[str, Any], args
             raise E2EError("theme input point is outside the owned native client area")
         if not user32.SetCursorPos(origin.x + target_x, origin.y + target_y):
             raise E2EError("theme SetCursorPos failed")
+        # Request a fresh, non-coalesced motion even when already at the target.
+        # Success still does not release the barrier: the host must acknowledge
+        # the actual adapter dispatch below.
+        native._windows_send_input(user32, types, [
+            INPUT(type=0, mi=MOUSEINPUT(0, 0, 0, 0x0001 | 0x2000, 0, 0)),
+        ])
         return
     if operation.startswith("pointer-"):
         events = [INPUT(type=0, mi=MOUSEINPUT(0, 0, 0, 0x0002 if operation.endswith("down") else 0x0004, 0, 0))]
@@ -1013,6 +1019,83 @@ def send_theme_input(platform: str, operation: str, marker: dict[str, Any], args
         vk = THEME_CONTROL_KEYS[operation][1]
         events = [INPUT(type=1, ki=KEYBDINPUT(vk, 0, flag, 0, 0)) for flag in (0, 0x0002)]
     native._windows_send_input(user32, types, events)
+
+
+def theme_pointer_target(operation: str, marker: dict[str, Any]) -> tuple[float, float]:
+    x, y, width, height = _bounds(marker["button"], "button")
+    if operation == "move-outside":
+        x, y, width, height = _bounds(marker["root"], "root")
+        return x + width - 16, y + height - 16
+    if operation != "move-inside":
+        raise E2EError("pointer barrier requires a move operation")
+    return x + width / 2, y + height / 2
+
+
+def theme_pointer_move(platform: str, operation: str, marker: dict[str, Any], args: argparse.Namespace,
+                       stream: MarkerStream, request: int, after_sequence: int) -> dict[str, Any]:
+    """Arm, inject once, then require a fresh actual dispatch before continuing.
+
+    No repeated injection, capture retries, sleep-based success, or old receipts.
+    Unexpected markers fail closed rather than skipping a failed observation.
+    """
+    deadline = time.monotonic() + args.marker_timeout
+    x, y = theme_pointer_target(operation, marker)
+    send_theme_input(platform, "key-arm-inside" if operation == "move-inside" else "key-arm-outside", marker, args)
+    name, armed = stream.next(max(0, deadline - time.monotonic()))
+    identity = {"request": request, "phase": marker["phase"], "windowId": marker["windowId"]}
+    if name != "YAMI_NATIVE_UI_POINTER_ARMED" or any(
+        type(armed.get(key)) is not int or armed[key] != value for key, value in identity.items()
+    ):
+        raise E2EError("unexpected theme pointer arm identity")
+    arm_sequence = armed.get("armSequence")
+    if type(arm_sequence) is not int or arm_sequence <= max(marker["inputSequence"], after_sequence):
+        raise E2EError("stale theme pointer arm sequence")
+    if type(armed.get("scale")) not in (int, float) or armed["scale"] != marker["scale"]:
+        raise E2EError("theme pointer arm scale mismatch")
+    for key, expected in (("x", x), ("y", y)):
+        value = armed.get(key)
+        if type(value) not in (int, float) or not math.isfinite(value) or abs(value - expected) > 0.01:
+            raise E2EError("theme pointer arm coordinate mismatch")
+    if time.monotonic() >= deadline:
+        raise E2EError("theme pointer arm exceeded receipt deadline")
+    send_theme_input(platform, operation, marker, args)
+    name, receipt = stream.next(max(0, deadline - time.monotonic()))
+    if time.monotonic() >= deadline:
+        raise E2EError("theme pointer receipt exceeded deadline")
+    if name != "YAMI_NATIVE_UI_POINTER_MOVED" or any(
+        type(receipt.get(key)) is not int or receipt[key] != value for key, value in identity.items()
+    ) or type(receipt.get("armSequence")) is not int or receipt["armSequence"] != arm_sequence:
+        raise E2EError("unexpected theme pointer receipt identity")
+    sequence = receipt.get("sequence")
+    if type(sequence) is not int or sequence <= arm_sequence or type(receipt.get("dispatchedSequence")) is not int or receipt["dispatchedSequence"] != sequence:
+        raise E2EError("theme pointer receipt lacks a fresh dispatch")
+    if type(receipt.get("scale")) not in (int, float) or receipt["scale"] != marker["scale"]:
+        raise E2EError("theme pointer receipt scale mismatch")
+    x, y = theme_pointer_target(operation, marker)
+    for key, expected in (("x", x), ("y", y)):
+        value = receipt.get(key)
+        if type(value) not in (int, float) or not math.isfinite(value) or abs(value - expected) > 0.51 / marker["scale"]:
+            raise E2EError("theme pointer receipt coordinate mismatch")
+    return {"armed": armed, "received": receipt}
+
+
+def send_theme_phase_inputs(platform: str, operations: list[str], previous: dict[str, Any],
+                            args: argparse.Namespace, stream: MarkerStream, pointer_request: int,
+                            pointer_sequence: int, inputs: list[dict[str, Any]], phase: int) -> tuple[int, int]:
+    for operation in [*operations, "key-c"]:
+        event = {"phase": phase, "operation": operation, "status": "pending"}
+        inputs.append(event)
+        if operation.startswith("move-"):
+            pointer_request += 1
+            event["receipt"] = theme_pointer_move(
+                platform, operation, previous, args, stream, pointer_request, pointer_sequence,
+            )
+            pointer_sequence = event["receipt"]["received"]["sequence"]
+            event["status"] = "dispatched"
+        else:
+            send_theme_input(platform, operation, previous, args)
+            event["status"] = "sent"
+    return pointer_request, pointer_sequence
 
 
 def run_theme_fixture(args: argparse.Namespace, contract: dict[str, Any], executable: Path,
@@ -1045,17 +1128,19 @@ def run_theme_fixture(args: argparse.Namespace, contract: dict[str, Any], execut
         inspect_theme_frame(ready, directory, contract)
         input_args = argparse.Namespace(**vars(args))
         input_args.window_title, input_args.sample_pid = title, process.pid
+        pointer_request, pointer_sequence = 0, 0
         for phase, expected in enumerate(THEME_PHASES[1:], 1):
             previous = trace["presented"][-1]
-            for operation in [*expected["inputs"], "key-c"]:
-                event = {"phase": phase, "operation": operation, "status": "pending"}
-                trace["inputs"].append(event)
-                send_theme_input(args.platform, operation, previous, input_args)
-                event["status"] = "sent"
+            pointer_request, pointer_sequence = send_theme_phase_inputs(
+                args.platform, expected["inputs"], previous, input_args, stream,
+                pointer_request, pointer_sequence, trace["inputs"], phase,
+            )
             name, marker = stream.next(args.marker_timeout)
             if name != "YAMI_NATIVE_UI_PRESENTED":
                 raise E2EError("theme capture request did not produce PRESENTED")
             validate_theme_marker(marker, phase, contract)
+            if marker["inputSequence"] <= pointer_sequence:
+                raise E2EError("theme capture did not follow the pointer receipt")
             inspect_theme_frame(marker, directory, contract)
             trace["presented"].append(marker)
         trace["pixels"] = inspect_theme_sequence(trace["presented"], directory, contract)

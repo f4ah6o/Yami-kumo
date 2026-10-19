@@ -20,6 +20,8 @@ fn theme_control_key(input : @primitives.InputEvent) -> String? {
         @primitives.ArrowUp => Some("l")
         @primitives.ArrowDown => Some("b")
         @primitives.ArrowLeft => Some("f")
+        @primitives.ArrowRight => Some("arm-inside")
+        @primitives.Delete => Some("arm-outside")
         _ => None
       }
     _ => None
@@ -78,8 +80,10 @@ fn theme_loop(
     last_payload: None,
     input_sequence: 0L,
   }
+  let pointer = ThemePointerReceipt::new(window)
   let gate = PresentationGate::{ rendered: false, pending_stale: false, }
   let mut pending : @shared_counter.ThemeFrame? = None
+  let mut current : @shared_counter.ThemeFrame? = None
   let mut dirty = true
   let mut closing = false
   let mut destroyed = false
@@ -97,9 +101,38 @@ fn theme_loop(
           return Err(runner_error("theme host sequence did not advance"))
         }
         sequence = value.sequence()
+        if pointer.waiting {
+          match value.kind() {
+            @platform.FocusChanged(_)
+            | @platform.Resized(..)
+            | @platform.ScaleChanged
+            | @platform.VisibilityChanged(_)
+            | @platform.CloseRequested
+            | @platform.Destroyed
+            | @platform.ExitRequested =>
+              return Err(
+                runner_error(
+                  "theme pointer request interrupted by window change",
+                ),
+              )
+            _ => ()
+          }
+        }
+        let before_dispatch = app.last_dispatched_input_sequence()
         match app.handle_event(value) {
           Err(error) => return Err(error)
           Ok(_) => ()
+        }
+        if e2e {
+          match
+            pointer.observe(
+              value,
+              before_dispatch,
+              app.last_dispatched_input_sequence(),
+            ) {
+            Some(receipt) => emit("YAMI_NATIVE_UI_POINTER_MOVED", receipt)
+            None => ()
+          }
         }
         match value.kind() {
           @platform.Created => dirty = true
@@ -149,8 +182,42 @@ fn theme_loop(
                   }
                 }
                 match theme_control_key(input) {
+                  Some("arm-inside") | Some("arm-outside") if e2e => {
+                    let frame = match current {
+                      Some(frame) => frame.frame()
+                      None =>
+                        return Err(
+                          runner_error(
+                            "pointer request before accepted geometry",
+                          ),
+                        )
+                    }
+                    let (x, y) = if theme_control_key(input) ==
+                      Some("arm-inside") {
+                      let bounds = frame
+                        .bounds(@view.NodeKey::new("increment"))
+                        .unwrap()
+                      (
+                        bounds.left() + bounds.size().width() / 2.0,
+                        bounds.top() + bounds.size().height() / 2.0,
+                      )
+                    } else {
+                      let bounds = frame.root_bounds()
+                      (bounds.right() - 16.0, bounds.bottom() - 16.0)
+                    }
+                    if !pointer.arm(value, proof.phase, x, y) {
+                      return Err(
+                        runner_error("overlapping theme pointer request"),
+                      )
+                    }
+                    emit(
+                      "YAMI_NATIVE_UI_POINTER_ARMED",
+                      pointer.identity_json(),
+                    )
+                  }
+                  Some("arm-inside") | Some("arm-outside") => ()
                   Some("c") if e2e => {
-                    if proof.phase != proof.last_phase {
+                    if pointer.waiting || proof.phase != proof.last_phase {
                       return Err(
                         runner_error("overlapping theme capture requests"),
                       )
@@ -210,6 +277,7 @@ fn theme_loop(
         Err(error) => return Err(error)
         Ok(value) => value
       }
+      current = Some(frame)
       match host.present(window, frame.frame().snapshot()) {
         Err(error) => return Err(error)
         Ok(_) => ()

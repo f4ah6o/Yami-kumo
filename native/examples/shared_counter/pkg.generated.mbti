@@ -78,6 +78,7 @@ pub fn NativeTheme::dispose(Self) -> Unit
 pub fn NativeTheme::drain_one(Self, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn NativeTheme::handle_event(Self, @platform.Event) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn NativeTheme::invalidate_layout(Self) -> Unit
+pub fn NativeTheme::last_dispatched_input_sequence(Self) -> Int64
 pub fn NativeTheme::new(@platform.WindowId) -> Result[Self, @diagnostics.FrameworkError]
 pub fn NativeTheme::render(Self, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[ThemeFrame, @diagnostics.FrameworkError]
 
