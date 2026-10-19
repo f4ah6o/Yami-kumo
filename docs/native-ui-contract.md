@@ -32,9 +32,13 @@ HTML output and CSS remain compatible.
   Host startup, measurement and Backend event/presentation adapter selection
   are small platform entrypoints in the native module.
 - gpui owns all OS FFI and native host/rendering behavior. macOS gains the
-  display-only measurement/rendering seam; this contract adds no Input/IME.
-  Input editing, focus ownership and IME qualification are assessed per OS and
-  documented as an independent later stage.
+  measurement/rendering seam and an opt-in text-composition transport. The
+  shared native adapter owns one measured single-line TextField with focus,
+  focus restoration on blur, caret movement, editing, host composition events
+  and a clipboard request seam: `next_clipboard` yields `Copy`/`Paste`, and the
+  host calls `paste(request, text)` after reading its own clipboard. Real OS IME,
+  candidate-window placement, host clipboard transport and accessibility remain
+  separate unqualified stages.
 - Headless component/state/layout/event tests, native builds, actual native
   frame/readback and host-delivered click evidence are reported separately.
   Linux/Windows hosted native CI and local macOS native execution are used.
