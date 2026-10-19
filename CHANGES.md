@@ -20,7 +20,9 @@
   committed-value-only composition handling, and a native adapter with a
   measured single-line field, click/focus, focus restoration on blur, caret
   movement, editing, submit, and host composition events through
-  `controls/text_field`. Native Dialog
+  `controls/text_field`. The native module remains source-workspace only: the
+  pinned `f4ah6o/yami_kumo@0.1.1` does not contain the new View nodes, so a
+  Mooncakes release waits for the root module. Native Dialog
   remains rejected with `UnsupportedCapability`. Real OS IME and accessibility
   qualification remain `NOT_RUN`; `text_session` ownership is not wired yet.
 - Added the shared `Dialog` semantic View and DOM `<dialog>` adapter with
