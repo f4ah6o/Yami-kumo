@@ -968,10 +968,22 @@ def send_theme_input(platform: str, operation: str, marker: dict[str, Any], args
         px, py = rx + rw - 16, ry + rh - 16
     if platform == "linux":
         if operation.startswith("move-"):
-            # --sync waits for movement even when the pointer is already here.
-            # The following exact capture phase validates delivered host state.
-            command = ["xdotool", "mousemove", str(args.linux_origin_x + round(px * marker["scale"])),
-                       str(args.linux_origin_y + round(py * marker["scale"]))]
+            # X11 may suppress a warp to the current position. Use one bounded
+            # excursion and return, even for repeated targets. Neither point
+            # leaves the intended region; only the final dispatched coordinate
+            # can satisfy the receipt gate. Command success is never a receipt.
+            scale = marker["scale"]
+            if type(scale) not in (int, float) or not math.isfinite(scale) or scale <= 0:
+                raise E2EError("theme Linux pointer scale must be positive and finite")
+            rx, ry, rw, rh = _bounds(marker["button"] if operation == "move-inside" else marker["root"], "pointer region")
+            tx, ty = round(px * scale), round(py * scale)
+            excursion_x = tx - 2
+            if not (rx * scale < excursion_x < tx < (rx + rw) * scale
+                    and ry * scale < ty < (ry + rh) * scale):
+                raise E2EError("theme Linux pointer excursion must stay inside its target region")
+            command = ["xdotool", "mousemove", str(args.linux_origin_x + excursion_x),
+                       str(args.linux_origin_y + ty), "mousemove", str(args.linux_origin_x + tx),
+                       str(args.linux_origin_y + ty)]
         elif operation.startswith("pointer-"):
             command = ["xdotool", "mousedown" if operation.endswith("down") else "mouseup", "1"]
         elif operation.startswith("space-"):

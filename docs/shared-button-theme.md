@@ -172,3 +172,5 @@ satisfies the receipt barrier. The additional arm keys are test-host controls;
 they do not change the shared model or the capture phase. All 36 expected states,
 scene checks and pixel assertions remain unchanged. Portable receipt tests do
 not qualify real Windows/Linux host delivery or macOS runtime behavior.
+
+Linux sends one two-point motion command: an interior point two physical pixels left of the target, followed by the exact target. This requests fresh motion even when the pointer already occupies the target. Both points must remain strictly inside the intended button or root region, and only the final dispatched receipt permits capture. There is no click, retry, timeout fallback, or relaxed state assertion.

@@ -982,7 +982,7 @@ class ThemeOracleTests(unittest.TestCase):
             for op in ("move-inside", "pointer-down", "key-t", "pointer-up"):
                 driver.send_theme_input("linux", op, theme_marker(), args)
             self.assertEqual([call.args[0] for call in run.call_args_list], [
-                ["xdotool", "mousemove", "78", "59"],
+                ["xdotool", "mousemove", "76", "59", "mousemove", "78", "59"],
                 ["xdotool", "mousedown", "1"], ["xdotool", "key", "Prior"], ["xdotool", "mouseup", "1"]])
         with patch.object(driver.subprocess, "run", side_effect=AssertionError("input forbidden")):
             for platform, operation in (("macos", "pointer-down"), ("linux", "unknown")):
@@ -1167,6 +1167,49 @@ class ThemePointerReceiptTests(unittest.TestCase):
         result, calls = self.invoke(self.events(operation="move-outside"), operation="move-outside")
         self.assertEqual(result, (1, 11))
         self.assertEqual(calls[:2], ["key-arm-outside", "move-outside"])
+
+    def test_linux_repeated_targets_always_excursion_then_return_without_clicks(self):
+        args = argparse.Namespace(linux_origin_x=3, linux_origin_y=5)
+        for scale in (1, 1.25, 2):
+            for operation in ("move-inside", "move-outside"):
+                marker = theme_marker(1) | {"scale": scale}
+                x, y = driver.theme_pointer_target(operation, marker)
+                tx, ty = round(x * scale) + 3, round(y * scale) + 5
+                expected = ["xdotool", "mousemove", str(tx - 2), str(ty),
+                            "mousemove", str(tx), str(ty)]
+                with self.subTest(scale=scale, operation=operation), patch.object(driver.subprocess, "run") as run:
+                    for _ in range(2):
+                        driver.send_theme_input("linux", operation, marker, args)
+                    self.assertEqual([call.args[0] for call in run.call_args_list], [expected, expected])
+                    for call in run.call_args_list:
+                        self.assertEqual(call.kwargs, {"check": True, "timeout": 10})
+
+    def test_linux_unsafe_excursion_or_scale_fails_before_injection(self):
+        args = argparse.Namespace(linux_origin_x=0, linux_origin_y=0)
+        for change in ({"scale": 0}, {"scale": float("nan")},
+                       {"button": {"x": 0, "y": 0, "width": 2, "height": 2}}):
+            with self.subTest(change=change), patch.object(driver.subprocess, "run") as run:
+                with self.assertRaises(driver.E2EError):
+                    driver.send_theme_input("linux", "move-inside", theme_marker(1) | change, args)
+                run.assert_not_called()
+
+    def test_linux_intermediate_motion_or_transport_failure_never_releases_capture(self):
+        for failure in (False, True):
+            stream = Mock()
+            events = self.events()
+            events[1][1]["x"] -= 2
+            stream.next.side_effect = events
+            args = argparse.Namespace(marker_timeout=1, linux_origin_x=0, linux_origin_y=0)
+            def inject(command, **kwargs):
+                if failure and "mousemove" in command:
+                    raise driver.subprocess.CalledProcessError(1, command)
+            with self.subTest(failure=failure), patch.object(driver.subprocess, "run", side_effect=inject) as run:
+                with self.assertRaises((driver.E2EError, driver.subprocess.CalledProcessError)):
+                    driver.send_theme_phase_inputs("linux", ["move-inside", "pointer-down"],
+                        theme_marker(1), args, stream, 0, 0, [], 2)
+                commands = [call.args[0] for call in run.call_args_list]
+                self.assertFalse(any("mousedown" in command for command in commands))
+                self.assertFalse(any(command == ["xdotool", "key", "c"] for command in commands))
 
     def test_windows_same_position_requests_noncoalesced_os_motion_each_time(self):
         import ctypes
