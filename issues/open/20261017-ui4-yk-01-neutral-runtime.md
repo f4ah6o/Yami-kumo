@@ -1,6 +1,6 @@
 # YK-01 — 共通View・安定ID・寿命管理と独立consumerの最小骨格
 
-状態：proposed／実装未着手／製品テスト未実行／Yami-kumo mainへ計画ドラフト登録。
+状態：implemented（bounded）／`ui/core`・`ui/runtime` と独立consumerは実装済み／実機GUI全体とM1の4経路受入は未完了。現在値は [STATUS.md](../../docs/roadmaps/20261017-four-platform-gui/STATUS.md) を参照。
 作成日：2026-10-17 JST。
 作業先：`f4ah6o/Yami-kumo`。段階：M1。依存：YK-00。
 

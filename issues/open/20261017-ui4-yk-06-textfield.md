@@ -1,6 +1,7 @@
 # YK-06 — 共通TextFieldとDOM編集・GPUI接続
 
-状態：DOM slice実装済み（#38）／native単一行adapter実装済み（#40）／OS IME・AXはNOT_RUN。
+AD
+状態：DOM slice実装済み（#38）／native単一行adapter実装済み（#40）／OS IME・AXはNOT_RUN。 契約は [shared-textfield.md](../../docs/shared-textfield.md)。
 作成日：2026-10-17 JST。
 作業先：`f4ah6o/Yami-kumo`。段階：M3。依存：YK-02, YK-03, GP-01。
 
