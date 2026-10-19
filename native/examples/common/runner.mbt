@@ -275,6 +275,9 @@ fn run_native_loop(
             }
             dirty = true
           }
+          // Composition is a separate host event, not a Button activation.
+          // Keep presentation current without synthesizing committed text input.
+          @platform.Composition(_) => dirty = true
           @platform.VisibilityChanged(visible) => if visible { dirty = true }
           @platform.Input(input) => {
             if evidence.contract {

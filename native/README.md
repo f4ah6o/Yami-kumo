@@ -39,7 +39,10 @@ all three host entrypoints in `examples/`.
 ## Source-workspace development
 
 The current source tree handles GPUI's `RowReverse` and `ColumnReverse` flow
-variants. Build it with the immutable GPUI revision recorded in
+variants. Its pinned GPUI source requires MoonBit `0.10.15+943464bfa`
+(compiler and core), matching both native source-workspace workflows.
+MoonBit `0.10.14` cannot discover the pinned GPUI packages because it does
+not recognize the `max_concurrent_tests` package setting. Build it with the immutable GPUI revision recorded in
 [`tests/native-ui/gpui-revision.txt`](../tests/native-ui/gpui-revision.txt)
 using `GPUI_SOURCE=/path/to/gpui.mbt sh scripts/native_ui_workspace.sh ...`
 from the repository root. The shared UI lane pins the same revision in

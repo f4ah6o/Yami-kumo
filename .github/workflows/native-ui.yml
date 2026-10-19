@@ -46,8 +46,8 @@ jobs:
       - name: Setup MoonBit
         uses: hustcer/setup-moonbit@v1.23
         with:
-          version: 0.10.14+7d59c7ec9
-          core-version: 0.10.14+7d59c7ec9
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Install Wayland, Mesa, fonts, Xvfb, and host input tools
         shell: bash
@@ -139,8 +139,8 @@ jobs:
       - name: Setup MoonBit
         uses: hustcer/setup-moonbit@v1.23
         with:
-          version: 0.10.14+7d59c7ec9
-          core-version: 0.10.14+7d59c7ec9
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Verify MSVC and MoonBit environment
         shell: pwsh
@@ -199,8 +199,8 @@ jobs:
       - name: Setup MoonBit
         uses: hustcer/setup-moonbit@v1.23
         with:
-          version: 0.10.14+7d59c7ec9
-          core-version: 0.10.14+7d59c7ec9
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
 
       - name: Verify Xcode and MoonBit environment
         shell: bash
