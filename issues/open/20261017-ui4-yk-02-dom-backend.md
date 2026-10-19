@@ -1,6 +1,6 @@
 # YK-02 — root単位のDOMバックエンドとkeyed更新
 
-状態：proposed／実装未着手／製品テスト未実行／Yami-kumo mainへ計画ドラフト登録。
+状態：implemented（bounded）／`ui/dom` とreal-Chromiumテストは実装済み／Firefox・WebKitと全DOM契約は未検証。現在値は [STATUS.md](../../docs/roadmaps/20261017-four-platform-gui/STATUS.md) を参照。
 作成日：2026-10-17 JST。
 作業先：`f4ah6o/Yami-kumo`。段階：M1。依存：YK-01。
 
