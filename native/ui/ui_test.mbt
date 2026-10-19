@@ -1443,6 +1443,7 @@ fn text_field_view(
   value~ : String = "日本語",
   read_only~ : Bool = false,
   disabled~ : Bool = false,
+  revision~ : UInt64 = 0UL,
 ) -> @view.View {
   @view.column(@view.NodeKey::new("root"), [
     @view.text_field(
@@ -1452,6 +1453,7 @@ fn text_field_view(
         "Name",
         read_only~,
         disabled~,
+        revision~,
       ),
     ),
   ])
@@ -1742,6 +1744,39 @@ test "native TextField rejects a paste request after an external value update" {
   match mounted.next_clipboard() {
     Some(@ui.Copy(text)) => assert_eq(text, "B")
     _ => fail("expected the regenerated value")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native TextField rejects a paste request after the app revision advances" {
+  let mounted = mount()
+  ignore(render(mounted, view=text_field_view(value="A")))
+  assert_true(mounted.focus(@view.NodeKey::new("field")))
+  assert_true(
+    mounted
+    .handle_event(event(2L, shortcut(@primitives.Character("v"), control=true)))
+    .unwrap(),
+  )
+  let stale = match mounted.next_clipboard() {
+    Some(@ui.Paste(value)) => value
+    _ => fail("expected Paste")
+  }
+  ignore(render(mounted, view=text_field_view(value="A", revision=1)))
+  assert_false(mounted.paste(stale, "X"))
+  assert_true(
+    mounted
+    .handle_event(event(3L, shortcut(@primitives.Character("v"), control=true)))
+    .unwrap(),
+  )
+  let current = match mounted.next_clipboard() {
+    Some(@ui.Paste(value)) => value
+    _ => fail("expected a new Paste")
+  }
+  assert_true(mounted.paste(current, "X"))
+  match mounted.next_action() {
+    Some(@view.TextChanged(_, value)) => assert_eq(value, "XA")
+    _ => fail("expected TextChanged")
   }
   mounted.dispose()
 }

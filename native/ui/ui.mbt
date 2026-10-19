@@ -41,6 +41,7 @@ pub struct PasteRequest {
   priv token : @runtime.InstanceToken
   priv revision : Int32
   priv generation : UInt64
+  priv app_revision : UInt64
 }
 
 ///|
@@ -2193,6 +2194,10 @@ pub fn Mounted::paste(
     binding.field_generation != request.generation {
     return false
   }
+  match binding.view.text_field_props() {
+    Some(props) if props.revision() == request.app_revision => ()
+    _ => return false
+  }
   let field = match binding.field {
     Some(value) => value
     None => return false
@@ -2507,6 +2512,10 @@ fn Mounted::dispatch(
                         token,
                         revision: field.revision(),
                         generation: binding.field_generation,
+                        app_revision: match binding.view.text_field_props() {
+                          Some(props) => props.revision()
+                          None => 0UL
+                        },
                       }),
                     )
                   None => ()
