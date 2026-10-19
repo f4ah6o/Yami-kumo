@@ -130,16 +130,12 @@ test('real DOM Dialog owns the top layer, dismisses once and restores focus', as
       await page.evaluate(() => window.api.mountDialogWithField('field-dialog-root')),
       'mounted',
     );
+    assert.equal(await page.evaluate(() => window.api.dialogOpen('field-dialog-root')), true);
+    assert.equal(await page.evaluate(() => document.activeElement?.tagName), 'INPUT');
     assert.equal(
-      await page.evaluate(() => window.api.dialogOpen('field-dialog-root')),
-      true,
-    );
-    assert.equal(
-      await page.evaluate(() => document.activeElement?.tagName),
-      'INPUT',
-    );
-    assert.equal(
-      await page.evaluate(() => document.querySelector('#field-dialog-root dialog').matches(':modal')),
+      await page.evaluate(() =>
+        document.querySelector('#field-dialog-root dialog').matches(':modal'),
+      ),
       true,
     );
     await page.keyboard.press('Escape');
