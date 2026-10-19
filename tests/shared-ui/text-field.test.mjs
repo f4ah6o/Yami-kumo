@@ -100,17 +100,52 @@ test('real DOM TextField commits once, preserves composition and restores focus'
 
     await page.evaluate(() => {
       const input = document.querySelector('input');
+      input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
       input.value = '日本語';
       input.dispatchEvent(
         new CompositionEvent('compositionend', { bubbles: true, data: '日本語' }),
-      );
-      input.dispatchEvent(
-        new InputEvent('input', { bubbles: true, data: '日本語', isComposing: false }),
       );
     });
     await page.waitForFunction(() => window.api.textFieldValue('field-root') === '日本語');
     assert.equal(await page.inputValue('input'), '日本語');
     assert.equal(await page.evaluate(() => window.api.textFieldValue('field-root')), '日本語');
+    const compositionChanges = await page.evaluate(() => window.api.textFieldChanges('field-root'));
+
+    // A post-composition input with the same value must not duplicate the commit.
+    await page.evaluate(() => {
+      const input = document.querySelector('input');
+      input.dispatchEvent(
+        new InputEvent('input', { bubbles: true, data: '日本語', isComposing: false }),
+      );
+    });
+    await page.waitForTimeout(0);
+    assert.equal(
+      await page.evaluate(() => window.api.textFieldChanges('field-root')),
+      compositionChanges,
+    );
+
+    // A same-revision rerender while focused must not roll the input backwards.
+    await page.focus('input');
+    const afterStaleRender = await page.evaluate(() => {
+      const input = document.querySelector('input');
+      input.value = '編集中';
+      input.dispatchEvent(
+        new InputEvent('input', { bubbles: true, data: '編集中', isComposing: false }),
+      );
+      window.api.rerenderTextField('field-root');
+      return input.value;
+    });
+    assert.equal(afterStaleRender, '編集中');
+    await page.waitForFunction(() => window.api.textFieldValue('field-root') === '編集中');
+    assert.equal(await page.inputValue('input'), '編集中');
+
+    // A new external revision applies even while the input is focused.
+    assert.equal(
+      await page.evaluate(() => window.api.setTextFieldValue('field-root', '外部2')),
+      'updated',
+    );
+    await page.waitForFunction(() => document.querySelector('input').value === '外部2');
+    assert.equal(await page.evaluate(() => window.api.textFieldValue('field-root')), '外部2');
 
     assert.equal(
       await page.evaluate(() => window.api.setTextFieldValue('field-root', '外部')),

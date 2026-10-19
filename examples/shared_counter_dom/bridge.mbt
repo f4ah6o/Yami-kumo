@@ -232,6 +232,7 @@ pub fn dispose_counter(id : String) -> Unit {
 priv struct TextFieldDemo {
   mut value : String
   mut submitted : String
+  mut changes : Int32
   mut revision : UInt64
   mut mounted : @dom.DomRoot?
 }
@@ -262,7 +263,10 @@ fn TextFieldDemo::drain(self : TextFieldDemo) -> Unit {
     Some(mounted) =>
       while mounted.next_action() is Some(action) {
         match action {
-          TextChanged(_, value) => self.value = value
+          TextChanged(_, value) => {
+            self.value = value
+            self.changes = self.changes + 1
+          }
           Submitted(_) => self.submitted = self.value
           Activate(_) => ()
         }
@@ -280,6 +284,7 @@ pub fn mount_text_field(id : String) -> String {
   let demo : TextFieldDemo = {
     value: "",
     submitted: "",
+    changes: 0,
     revision: 0UL,
     mounted: None,
   }
@@ -325,6 +330,28 @@ pub fn set_text_field_value(id : String, value : String) -> String {
         Err(error) => error_name(error)
       }
     }
+  }
+}
+
+///|
+#export_name("textFieldChanges")
+pub fn text_field_changes(id : String) -> Int32 {
+  match text_fields.get(id) {
+    Some(demo) => demo.changes
+    None => 0
+  }
+}
+
+///|
+#export_name("rerenderTextField")
+pub fn rerender_text_field(id : String) -> String {
+  match text_fields.get(id) {
+    None => "missing-field"
+    Some(demo) =>
+      match demo.mounted.unwrap().update(demo.view()) {
+        Ok(_) => "updated"
+        Err(error) => error_name(error)
+      }
   }
 }
 

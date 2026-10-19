@@ -394,23 +394,37 @@ extern "js" fn add_text_field_events(
 ) -> TextFieldEvents =
   #| (node, on_change, on_submit) => {
   #|   const input = node.querySelector("input");
+  #|   node._ykLastPublished = input.value;
   #|   const setComposing = value => {
   #|     if (value) node.dataset.ykComposing = "true";
   #|     else delete node.dataset.ykComposing;
   #|   };
+  #|   const publish = value => {
+  #|     if (value === node._ykLastPublished) return;
+  #|     node._ykLastPublished = value;
+  #|     on_change(value);
+  #|   };
   #|   const inputHandler = event => {
   #|     if (event.isComposing || node.dataset.ykComposing === "true") return;
-  #|     on_change(input.value);
+  #|     publish(input.value);
   #|   };
   #|   const compositionStart = () => setComposing(true);
   #|   const compositionEnd = () => {
   #|     setComposing(false);
   #|     const pending = node._ykPendingValue;
+  #|     const pendingRevision = node._ykPendingRevision;
   #|     delete node._ykPendingValue;
-  #|     if (pending !== undefined && input.value !== pending) {
-  #|       input.value = pending;
-  #|       input.setSelectionRange(pending.length, pending.length);
+  #|     delete node._ykPendingRevision;
+  #|     if (pending !== undefined) {
+  #|       if (input.value !== pending) {
+  #|         input.value = pending;
+  #|         input.setSelectionRange(pending.length, pending.length);
+  #|       }
+  #|       if (pendingRevision !== undefined) node._ykExternalRevision = pendingRevision;
+  #|       node._ykLastPublished = input.value;
+  #|       return;
   #|     }
+  #|     publish(input.value);
   #|   };
   #|   const keydown = event => {
   #|     if (event.key === "Enter" && node.dataset.ykComposing !== "true") {
@@ -437,6 +451,7 @@ extern "js" fn remove_text_field_events(events : TextFieldEvents) -> Unit =
 extern "js" fn update_text_field(
   node : DomNode,
   value : String,
+  revision : UInt64,
   label : String,
   description : String,
   error : String,
@@ -444,21 +459,33 @@ extern "js" fn update_text_field(
   disabled : Bool,
   read_only : Bool,
 ) -> Unit =
-  #| (node, value, label, description, error, required, disabled, readOnly) => {
+  #| (node, value, revision, label, description, error, required, disabled, readOnly) => {
   #|   const input = node.querySelector("input");
   #|   const labelText = node.querySelector(".yk-ui-field-label-text");
   #|   const desc = node.querySelector(".yk-ui-field-description");
   #|   if (labelText && labelText.textContent !== label) labelText.textContent = label;
   #|   const composing = node.dataset.ykComposing === "true";
-  #|   if (composing && input && input.value !== value) node._ykPendingValue = value;
-  #|   if (!composing && input) delete node._ykPendingValue;
-  #|   if (input && !composing && input.value !== value) {
-  #|     const start = input.selectionStart;
-  #|     const end = input.selectionEnd;
-  #|     input.value = value;
-  #|     if (document.activeElement === input) {
-  #|       const limit = value.length;
-  #|       input.setSelectionRange(Math.min(start ?? limit, limit), Math.min(end ?? limit, limit));
+  #|   if (composing && input && input.value !== value) {
+  #|     node._ykPendingValue = value;
+  #|     node._ykPendingRevision = revision;
+  #|   }
+  #|   if (input && !composing) {
+  #|     const focused = document.activeElement === input;
+  #|     const sameRevision = node._ykExternalRevision === revision;
+  #|     // A focused, same-revision render is a stale echo of the value the app
+  #|     // already received; writing it back would roll the input backwards.
+  #|     if (!sameRevision || !focused) {
+  #|       if (input.value !== value) {
+  #|         const start = input.selectionStart;
+  #|         const end = input.selectionEnd;
+  #|         input.value = value;
+  #|         if (focused) {
+  #|           const limit = value.length;
+  #|           input.setSelectionRange(Math.min(start ?? limit, limit), Math.min(end ?? limit, limit));
+  #|         }
+  #|       }
+  #|       node._ykExternalRevision = revision;
+  #|       node._ykLastPublished = value;
   #|     }
   #|   }
   #|   if (desc) {
@@ -728,6 +755,7 @@ fn DomRoot::render_node(
         update_text_field(
           mounted.node,
           props.value(),
+          props.revision(),
           props.label(),
           props.description(),
           match props.error() {
