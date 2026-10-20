@@ -99,7 +99,8 @@ without `text_host` return a typed error for `--text-e2e`. The local
 live Japanese input source and records preedit, commit, candidate and
 physical-keyboard claims separately. The sample also publishes the focused
 TextField's role, value, focus and frame; `--text-ax-proof` verifies them with a
-dedicated AXUIElement client. The console session must be unlocked and
+dedicated AXUIElement client. Native `0.2.11` adds that publish/proof path;
+the value and focus are copied from the focused field each frame. The console session must be unlocked and
 Accessibility authorized; otherwise both modes record `NOT_RUN` or
 `UNSUPPORTED`. AX set-value and actions are out of scope.
 Native `0.2.10` moves to GPUI `0.10.4` (`70c5818`) and stacks nested and sibling Dialogs: every open Dialog keeps its
