@@ -25,13 +25,13 @@ The private root manifest and Mooncakes releases are independent.
    deployment branch to `main`; configure required reviewers if desired.
 4. In npm package Settings → Trusted Publisher, choose GitHub Actions and enter:
 
-   | Field | Exact value |
-   | --- | --- |
-   | Organization or user | `f4ah6o` |
-   | Repository | `Yami-kumo` |
-   | Workflow filename | `npm-publish.yml` |
-   | Environment name | `npm` |
-   | Allowed actions | Enable direct `npm publish` |
+   | Field                | Exact value                 |
+   | -------------------- | --------------------------- |
+   | Organization or user | `f4ah6o`                    |
+   | Repository           | `Yami-kumo`                 |
+   | Workflow filename    | `npm-publish.yml`           |
+   | Environment name     | `npm`                       |
+   | Allowed actions      | Enable direct `npm publish` |
 
    Enter the filename only, not `.github/workflows/…`. No `NPM_TOKEN` or
    `NODE_AUTH_TOKEN` secret is needed. Do not add a token fallback.

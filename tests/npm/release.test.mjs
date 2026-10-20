@@ -21,7 +21,11 @@ test('release gates reject wrong identity and unverified or altered artifacts', 
     json('package/package.json', manifest);
     const build = { version: manifest.version, sourceSha: 'source-sha', sourceDirty: false };
     const filename = `f4ah6o-yami-kumo-${manifest.version}.tgz`;
-    const evidence = { status: 'PASS', consumers: ['javascript', 'typescript', 'browser', 'react'], tarball: filename };
+    const evidence = {
+      status: 'PASS',
+      consumers: ['javascript', 'typescript', 'browser', 'react'],
+      tarball: filename,
+    };
     const pack = () => {
       json('package/BUILD.json', build);
       execFileSync('tar', ['-czf', `dist/${filename}`, 'package'], { cwd: dir });
@@ -30,9 +34,19 @@ test('release gates reject wrong identity and unverified or altered artifacts', 
       evidence.shasum = createHash('sha1').update(bytes).digest('hex');
       json('dist/npm-consumers.json', evidence);
     };
-    const run = (overrides = {}, artifact = false) => spawnSync(process.execPath, [script, ...(artifact ? ['--artifact'] : [])], {
-      cwd: dir, encoding: 'utf8', env: { ...process.env, GITHUB_REPOSITORY: 'f4ah6o/Yami-kumo', GITHUB_REF: 'refs/heads/main', RELEASE_VERSION: manifest.version, GITHUB_SHA: 'source-sha', ...overrides },
-    });
+    const run = (overrides = {}, artifact = false) =>
+      spawnSync(process.execPath, [script, ...(artifact ? ['--artifact'] : [])], {
+        cwd: dir,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          GITHUB_REPOSITORY: 'f4ah6o/Yami-kumo',
+          GITHUB_REF: 'refs/heads/main',
+          RELEASE_VERSION: manifest.version,
+          GITHUB_SHA: 'source-sha',
+          ...overrides,
+        },
+      });
     const pass = (result) => assert.equal(result.status, 0, result.stderr);
     const reject = (result, message) => {
       assert.notEqual(result.status, 0);
