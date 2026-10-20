@@ -12,7 +12,7 @@
 - Keep generated Kumo contract code in MoonBit's canonical formatted layout.
 - Format the package README example as valid MoonBit code blocks.
 
-## Unreleased
+## 0.2.0 - 2026-10-20
 
 ### Added
 
@@ -20,11 +20,8 @@
   committed-value-only composition handling, and a native adapter with a
   measured single-line field, click/focus, focus restoration on blur, caret
   movement, editing, submit, host composition events, focus restoration and a
-  host-drained clipboard request seam through `controls/text_field`. The native
-  module remains source-workspace only: the
-  pinned `f4ah6o/yami_kumo@0.1.1` does not contain the new View nodes, so a
-  Mooncakes release waits for the root module. Native Dialog
-  remains rejected with `UnsupportedCapability`. Real OS IME and accessibility
+  host-drained clipboard request seam through `controls/text_field`. Native
+  Dialog remains rejected with `UnsupportedCapability`. Real OS IME and accessibility
   qualification remain `NOT_RUN`; `text_session` ownership is not wired yet.
 - Added the shared `Dialog` semantic View and DOM `<dialog>` adapter with
   top-layer modal behavior, Escape dismissal, initial focus and native focus
@@ -46,7 +43,7 @@
 ### Changed
 
 - Pinned `@cloudflare/kumo` to `2.14.0` so generated class and stylesheet contracts remain reproducible.
-- Bumped the native module to `0.2.6` against GPUI `0.10.0` and pure MoonBit module `0.1.1`; the native adapter now paints and edits a measured TextField and consumes host composition events. The macOS sample runner revalidates the target before each event, bounds AX/helper lifetimes, and uses zero-modifier input. The external input route remains runtime-unqualified.
+- Bumped the native module to `0.2.6` against GPUI `0.10.1` and pure MoonBit module `0.2.0`; the native adapter now paints and edits a measured TextField and consumes host composition events. The macOS sample runner revalidates the target before each event, bounds AX/helper lifetimes, and uses zero-modifier input. The external input route remains runtime-unqualified.
 - Made the macOS native UI runner fail closed on locked or unknown console sessions and record blocked preflight evidence before launching the sample.
 - Expose the native Button's pressed phase on sample frames and keep held pointer/key state through same-bounds repaint; focus loss and layout changes still cancel.
 - Align native Button keyboard phases with pinned Kumo: focused enabled Enter activates on every key-down, including repeats, while Space stays pressed through repaint and activates on matching key-up.
