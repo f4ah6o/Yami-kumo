@@ -1,6 +1,6 @@
 name = "f4ah6o/yami_kumo_native"
 
-version = "0.2.7"
+version = "0.2.8"
 
 readme = "README.md"
 
