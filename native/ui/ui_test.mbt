@@ -1872,6 +1872,7 @@ fn dialog_view(
   open~ : Bool = true,
   dismissible~ : Bool = true,
   with_field~ : Bool = false,
+  disable_cancel~ : Bool = false,
   initial~ : @view.NodeKey? = Some(@view.NodeKey::new("confirm")),
 ) -> @view.View {
   let children = if with_field {
@@ -1886,7 +1887,11 @@ fn dialog_view(
     [
       @view.text(@view.NodeKey::new("body"), "Apply the change?"),
       @view.button(@view.NodeKey::new("confirm"), "Confirm"),
-      @view.button(@view.NodeKey::new("cancel"), "Cancel"),
+      @view.button(
+        @view.NodeKey::new("cancel"),
+        "Cancel",
+        disabled=disable_cancel,
+      ),
     ]
   }
   @view.column(@view.NodeKey::new("root"), [
@@ -2107,6 +2112,83 @@ test "native Dialog routes a pointer click to a nested TextField" {
       assert_eq(value, "a")
     }
     _ => fail("expected TextChanged from dialog field")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native Dialog supports a Dialog root without a background tree" {
+  let mounted = mount()
+  let open = @view.dialog(
+    @view.NodeKey::new("dialog"),
+    @view.DialogProps::new(true, "Root"),
+    [@view.button(@view.NodeKey::new("ok"), "OK")],
+  )
+  let frame = match mounted.commit(open, 640.0, 480.0, 1.0, measure) {
+    Ok(value) => value
+    Err(error) => abort(error.message().unwrap())
+  }
+  assert_true(frame.bounds(@view.NodeKey::new("dialog")) is Some(_))
+  let closed = @view.dialog(
+    @view.NodeKey::new("dialog"),
+    @view.DialogProps::new(false, "Root"),
+    [@view.button(@view.NodeKey::new("ok"), "OK")],
+  )
+  match mounted.commit(closed, 640.0, 480.0, 1.0, measure) {
+    Ok(value) => assert_true(value.bounds(@view.NodeKey::new("dialog")) is None)
+    Err(error) => abort(error.message().unwrap())
+  }
+  mounted.dispose()
+}
+
+///|
+test "native Dialog falls back when the focused child becomes disabled" {
+  let mounted = mount()
+  ignore(render(mounted, view=dialog_view()))
+  assert_true(mounted.focus(@view.NodeKey::new("cancel")))
+  let frame = render(mounted, view=dialog_view(disable_cancel=true))
+  assert_true(frame.focused(@view.NodeKey::new("confirm")))
+  mounted.dispose()
+}
+
+///|
+test "native Dialog ignores Escape repeat after cancelling composition" {
+  let mounted = mount()
+  ignore(
+    render(
+      mounted,
+      view=dialog_view(
+        with_field=true,
+        initial=Some(@view.NodeKey::new("name")),
+      ),
+    ),
+  )
+  assert_true(
+    mounted
+    .handle_event(
+      composition_event(
+        2L,
+        @primitives.Update(text="にほん", cursor_utf16=3),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Escape))).unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted
+    .handle_event(event(4L, key_down(@primitives.Escape, repeat=true)))
+    .unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted.handle_event(event(5L, key_down(@primitives.Escape))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Dismissed(key)) => assert_eq(key, @view.NodeKey::new("dialog"))
+    _ => fail("expected Dismissed on the next independent press")
   }
   mounted.dispose()
 }

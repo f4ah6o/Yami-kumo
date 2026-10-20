@@ -1658,14 +1658,13 @@ fn Mounted::prepare(
       @layout.Insets::zero(),
     )
   }
-  let child = if view.is_shell() {
-    make_shell_element(view, bindings, mode.unwrap())
-  } else {
-    make_element(view, bindings)
-  }
-  let root = @element.Element::root(1UL, root_style)
+  let mut root = @element.Element::root(1UL, root_style)
     .with_pointer_events(false)
-    .with_child(child)
+  if view.is_shell() {
+    root = root.with_child(make_shell_element(view, bindings, mode.unwrap()))
+  } else if view.kind() != @view.Dialog {
+    root = root.with_child(make_element(view, bindings))
+  }
   let requested = match
     root.request_layout_with_device_scale(viewport.size(), scale) {
     Err(_) => return Err(adapter_error("native flex layout failed"))
@@ -1740,7 +1739,15 @@ fn Mounted::prepare(
             inside = true
           }
         }
-        if inside {
+        let still_focusable = match old_focus {
+          Some(id) =>
+            match tree.node(id) {
+              Some(node) => node.focusable
+              None => false
+            }
+          None => false
+        }
+        if inside && still_focusable {
           old_focus.unwrap()
         } else {
           initial
@@ -2623,7 +2630,10 @@ pub fn Mounted::handle_event(
       let result = match modal {
         Some(dialog) => {
           match input {
-            @primitives.KeyPressed(key=@primitives.Escape, ..) => {
+            @primitives.KeyPressed(key=@primitives.Escape, repeat~, ..) => {
+              if repeat {
+                return Ok(true)
+              }
               let tree = self.tree.unwrap()
               let mut composing = false
               for index in 0..<self.bindings.length() {
