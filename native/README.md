@@ -97,7 +97,9 @@ without granting edit authority. The macOS entrypoint supplies the port; hosts
 without `text_host` return a typed error for `--text-e2e`. The local
 `scripts/native_ui_macos.sh --text-ime-proof` mode drives that sample with a
 live Japanese input source and records preedit, commit, candidate and
-physical-keyboard claims separately. The sample also publishes the focused
+physical-keyboard claims separately. On 2026-10-21 the local live Kotoeri run
+passed preedit, commit, committed-document and candidate-visibility claims;
+candidate anchoring and physical-keyboard input remain `NOT_RUN`. The sample also publishes the focused
 TextField's role, value, focus and frame; `--text-ax-proof` verifies them with a
 dedicated AXUIElement client. Native `0.2.11` adds that publish/proof path;
 the value and focus are copied from the focused field each frame. The console session must be unlocked and

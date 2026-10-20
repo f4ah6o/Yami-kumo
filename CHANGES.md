@@ -1,5 +1,26 @@
 # Changes
 
+## native-0.2.12 - 2026-10-21
+
+### Fixed
+
+- Publish `TextChanged` from a portable `Commit` when the committed value
+  changes even if it equals the preedit preview. Many input methods commit the
+  already-converted preview; comparing the visible document dropped the commit
+  and the next frame recreated the field from the stale application value.
+- Do not restart a text session immediately after `FocusLost`/`Cancel` while the
+  field still has focus; wait for the window focus to return.
+- Focus the proof sample's only field after the first frame so the harness does
+  not depend on AppKit's key-view traversal.
+
+### Changed
+
+- The macOS IME driver discovers the sample's actual window/PID instead of the
+  `moon run` wrapper, retries Enter after conversion, and recognizes an
+  in-process candidate panel that appears only during composition. Live Kotoeri
+  preedit, commit, committed document and candidate visibility now PASS; the
+  physical-keyboard claim remains `NOT_RUN`.
+
 ## native-0.2.11 - 2026-10-21
 
 ### Added

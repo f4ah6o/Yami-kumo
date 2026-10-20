@@ -106,6 +106,33 @@ static void command_select(void) {
          selected ? json_escape(selected).UTF8String : "");
 }
 
+static void command_find_window(const char *needle) {
+  NSString *target = [NSString stringWithUTF8String:needle];
+  CFArrayRef windows = CGWindowListCopyWindowInfo(
+      kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+      kCGNullWindowID);
+  if (!windows) fail("cannot enumerate windows");
+  CFIndex count = CFArrayGetCount(windows);
+  for (CFIndex index = 0; index < count; index++) {
+    NSDictionary *window =
+        (__bridge NSDictionary *)CFArrayGetValueAtIndex(windows, index);
+    NSNumber *pid = window[(id)kCGWindowOwnerPID];
+    NSString *name = window[(id)kCGWindowName];
+    NSString *owner = window[(id)kCGWindowOwnerName];
+    if (!pid) continue;
+    bool name_match = name && [name containsString:target];
+    bool owner_match = owner && [owner containsString:target];
+    if (!name_match && !owner_match) continue;
+    printf("{\"status\":\"found\",\"pid\":%d,\"name\":\"%s\"}\n",
+           pid.intValue, name ? json_escape(name).UTF8String : "");
+    CFRelease(windows);
+    return;
+  }
+  CFRelease(windows);
+  printf("{\"status\":\"not-found\"}\n");
+  exit(1);
+}
+
 static void command_session(void) {
   CFDictionaryRef session = CGSessionCopyCurrentDictionary();
   bool locked = false;
@@ -199,6 +226,8 @@ int main(int argc, char **argv) {
       printf("{\"status\":\"restored\"}\n");
     } else if (strcmp(argv[1], "session") == 0) {
       command_session();
+    } else if (strcmp(argv[1], "find-window") == 0 && argc >= 3) {
+      command_find_window(argv[2]);
     } else if (strcmp(argv[1], "trust") == 0) {
       command_trust();
     } else if (strcmp(argv[1], "activate") == 0 && argc >= 3) {

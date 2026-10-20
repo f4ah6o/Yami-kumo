@@ -2762,3 +2762,36 @@ test "native focused TextField exposes its committed document and caret" {
   assert_eq(composing.document().text(), "abc")
   mounted.dispose()
 }
+
+///|
+test "native TextField emits TextChanged when the commit equals the preview" {
+  let mounted = mount()
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(
+      @view.NodeKey::new("name"),
+      @view.TextFieldProps::new("", "Name"),
+    ),
+  ])
+  ignore(render(mounted, view=view))
+  assert_true(mounted.focus(@view.NodeKey::new("name")))
+  let epoch = 9UL
+  assert_true(
+    mounted
+    .text_input(epoch, text_host_event(1L, epoch, @text_host.Preedit(text="日本語", cursor=3)))
+    .unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted
+    .text_input(epoch, text_host_event(2L, epoch, @text_host.Commit(text="日本語")))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, text)) => {
+      assert_eq(key, @view.NodeKey::new("name"))
+      assert_eq(text, "日本語")
+    }
+    _ => fail("an equal preview/commit must still publish the committed value")
+  }
+  mounted.dispose()
+}

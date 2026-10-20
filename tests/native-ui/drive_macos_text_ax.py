@@ -18,7 +18,13 @@ import subprocess
 import sys
 import time
 
-from drive_macos_ime import AppProcess, ImeError, compile_helper, helper_json
+from drive_macos_ime import (
+    AppProcess,
+    ImeError,
+    compile_helper,
+    helper_json,
+    kill_stale_samples,
+)
 
 
 def compile_client(evidence_dir: Path) -> Path:
@@ -120,13 +126,24 @@ def drive(args: argparse.Namespace) -> int:
             "YAMI_NATIVE_UI_SMOKE",
         ):
             env.pop(name, None)
+        kill_stale_samples()
         app = AppProcess(args.command, env, log_path)
         app.wait_marker(
             lambda marker: marker.get("phase") == "frame", 15.0, "the first frame"
         )
-        pid = app.process.pid
+        pid = None
+        for _ in range(50):
+            window = helper_json(
+                helper, "find-window", "Yami-kumo TextField", check=False
+            )
+            if window.get("status") == "found":
+                pid = int(window["pid"])
+                break
+            time.sleep(0.1)
+        if pid is None:
+            raise ImeError("the native sample window was not found")
+        app.app_pid = pid
         helper_json(helper, "activate", str(pid))
-        helper_json(helper, "type", str(pid), "tab")
         app.wait_marker(
             lambda marker: marker.get("phase") == "begin", 8.0, "the text session"
         )
