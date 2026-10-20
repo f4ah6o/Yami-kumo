@@ -83,9 +83,14 @@ use fake event posters only. Native `0.2.8` moves to GPUI `0.10.2` and
 `f4ah6o/yami_kumo` `0.2.2`, adds the shared single-line TextField adapter with
 host composition/focus and a bound clipboard request seam, and adds a bounded
 Dialog overlay with initial focus, Tab trapping, Escape/backdrop dismissal and
-opener restoration. Nested Dialogs and `FocusScopeSession` integration remain
-open. The current external-input route remains unqualified at runtime, and real
-OS IME/AX are `NOT_RUN`, as detailed below.
+opener restoration. Native `0.2.9` moves to GPUI `0.10.3` and replaces that
+adapter-local modal filter with the live `element.FocusScopeSession`: admission,
+Tab trapping, dismissal and opener restoration come from the session, and a
+rebuilt frame adopts its new tree without closing the open scope. The adapter
+also applies portable `text_host.TextInputEvent` observations through
+`Mounted::text_input`; no sample drives the host begin/update/end cycle yet.
+Nested Dialogs remain open. The current external-input route remains unqualified at runtime, and
+real OS IME/AX are `NOT_RUN`, as detailed below.
 
 These checks cover labeled Text and Button rendering, readback of a completed
 native frame, and a host-delivered click that changes the sample's App Entity

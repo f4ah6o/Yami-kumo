@@ -73,6 +73,24 @@ priv struct DialogState {
   panel_id : UInt64
   opener : UInt64?
   dismissible : Bool
+  handle : @element.FocusScopeHandle?
+}
+
+///|
+/// The focus transition an accepted frame asks the live session to perform.
+/// `focused` in the candidate is the exact post-publication acquisition used by
+/// paint and observations; publication reconciles the session to it.
+priv struct OpenPlan {
+  root : UInt64
+  initial : UInt64
+  previous : UInt64?
+}
+
+///|
+priv enum FocusPlan {
+  Restore(UInt64?)
+  Open(OpenPlan)
+  Close
 }
 
 ///|
@@ -254,7 +272,7 @@ pub struct Mounted {
   priv window : @platform.WindowId
   priv runtime : @runtime.Runtime
   priv mut bindings : Array[Binding]
-  priv mut tree : @element.ElementTree?
+  priv mut scope : @element.FocusScopeSession?
   priv mut current_frame : Frame?
   priv mut next_id : UInt64
   priv mut revision : UInt64
@@ -271,6 +289,8 @@ pub struct Mounted {
   priv mut clipboard : Array[ClipboardRequest]
   priv mut next_field_generation : UInt64
   priv mut dialog : DialogState?
+  priv mut text_epoch : UInt64
+  priv mut last_text_sequence : Int64
 }
 
 ///|
@@ -282,7 +302,7 @@ pub fn Mounted::new(
     window,
     runtime: @runtime.Runtime::new(),
     bindings: [],
-    tree: None,
+    scope: None,
     current_frame: None,
     next_id: 8,
     revision: 0,
@@ -299,6 +319,8 @@ pub fn Mounted::new(
     clipboard: [],
     next_field_generation: 1UL,
     dialog: None,
+    text_epoch: 0UL,
+    last_text_sequence: 0L,
   }
 }
 
@@ -459,20 +481,16 @@ fn field_hit(
   if first {
     return Err(@text_field.HitTestFailed)
   }
-  match
-    @text_layout.TextHit::new(
-      document, nearest, 0, nearest, true, true,
-    ) {
+  match @text_layout.TextHit::new(document, nearest, 0, nearest, true, true) {
     Ok(value) => Ok(value)
     Err(_) => Err(@text_field.HitTestFailed)
   }
 }
 
 ///|
-fn field_box(bounds : @primitives.Rect) -> Result[
-  @primitives.Rect,
-  @diagnostics.FrameworkError,
-] {
+fn field_box(
+  bounds : @primitives.Rect,
+) -> Result[@primitives.Rect, @diagnostics.FrameworkError] {
   let width = bounds.size().width() - 16.0
   let height = bounds.size().height() - 28.0
   if width < 1.0 || height < FIELD_FONT_SIZE {
@@ -565,18 +583,30 @@ fn field_input_allowed(
     | @primitives.KeyPressed(key=@primitives.Home, ..)
     | @primitives.KeyPressed(key=@primitives.End, ..)
     | @primitives.KeyPressed(key=@primitives.Escape, ..) => true
-    @primitives.KeyPressed(
-      key=@primitives.Character("a"),
-      modifiers~,
-      ..
-    ) => modifiers.control() || modifiers.meta()
-    @primitives.KeyPressed(
-      key=@primitives.Character("c"),
-      modifiers~,
-      ..
-    ) => modifiers.control() || modifiers.meta()
+    @primitives.KeyPressed(key=@primitives.Character("a"), modifiers~, ..) =>
+      modifiers.control() || modifiers.meta()
+    @primitives.KeyPressed(key=@primitives.Character("c"), modifiers~, ..) =>
+      modifiers.control() || modifiers.meta()
     _ => false
   }
+}
+
+///|
+fn element_focusable(tree : @element.ElementTree, id : UInt64) -> Bool {
+  match tree.node(id) {
+    Some(node) => node.focusable
+    None => false
+  }
+}
+
+///|
+fn binding_in_dialog(bindings : Array[Binding], id : UInt64) -> Bool {
+  for binding in bindings {
+    if binding.id == id {
+      return binding.in_dialog
+    }
+  }
+  false
 }
 
 ///|
@@ -1034,10 +1064,7 @@ fn make_shell_element(
   ).with_children_style(
     @layout.FlexTreeStyle::new(@layout.FlowDirection::column())
     .with_align(@layout.AlignItems::stretch())
-    .with_insets(
-      @layout.Insets::all(24.0).unwrap(),
-      @layout.Insets::zero(),
-    ),
+    .with_insets(@layout.Insets::all(24.0).unwrap(), @layout.Insets::zero()),
   )
   let main = match slot(@view.Main) {
     Some(child) => main.with_child(child)
@@ -1429,6 +1456,8 @@ priv struct Candidate {
   next_id : UInt64
   next_field_generation : UInt64
   dialog : DialogState?
+  focused : UInt64?
+  plan : FocusPlan
   cancel_pending : Bool
 }
 
@@ -1496,8 +1525,10 @@ fn dialog_focus_id(
     None => {
       for binding in bindings {
         if binding.in_dialog &&
-          (binding.view.kind() == @view.Button ||
-            binding.view.kind() == @view.TextField) &&
+          (
+            binding.view.kind() == @view.Button ||
+            binding.view.kind() == @view.TextField
+          ) &&
           !binding.view.disabled() {
           return Ok(binding.id)
         }
@@ -1576,10 +1607,12 @@ fn Mounted::prepare(
       }
     }
     let text = if visible &&
-      (node.kind() == @view.Text ||
+      (
+        node.kind() == @view.Text ||
         node.kind() == @view.Button ||
         node.kind() == @view.TextField ||
-        node.kind() == @view.Dialog) {
+        node.kind() == @view.Dialog
+      ) {
       let foreground = if node.kind() == @view.Text ||
         node.kind() == @view.TextField {
         text_color
@@ -1658,8 +1691,9 @@ fn Mounted::prepare(
       @layout.Insets::zero(),
     )
   }
-  let mut root = @element.Element::root(1UL, root_style)
-    .with_pointer_events(false)
+  let mut root = @element.Element::root(1UL, root_style).with_pointer_events(
+    false,
+  )
   if view.is_shell() {
     root = root.with_child(make_shell_element(view, bindings, mode.unwrap()))
   } else if view.kind() != @view.Dialog {
@@ -1676,8 +1710,8 @@ fn Mounted::prepare(
   }
   let main_tree = painted.tree()
   let mut tree = main_tree
-  let old_focus = match self.tree {
-    Some(old) => old.focused()
+  let old_focus = match self.scope {
+    Some(scope) => scope.focused()
     None => None
   }
   let previous_dialog = self.dialog
@@ -1691,6 +1725,8 @@ fn Mounted::prepare(
   }
   let closing = dialog_view is None && previous_dialog is Some(_)
   let mut next_dialog : DialogState? = None
+  let mut focus : UInt64? = None
+  let mut plan : FocusPlan = Restore(None)
   match dialog_view {
     Some(dialog) => {
       let panel = make_dialog_panel(dialog, bindings)
@@ -1730,32 +1766,26 @@ fn Mounted::prepare(
         Some(binding) => binding.id
         None => return Err(adapter_error("native Dialog binding is absent"))
       }
-      let focus = if opening || old_focus is None {
-        initial
+      if opening {
+        let previous = match old_focus {
+          Some(id) if element_focusable(tree, id) => Some(id)
+          _ => None
+        }
+        focus = Some(initial)
+        plan = Open({ root: root_id, initial, previous, })
       } else {
-        let mut inside = false
-        for binding in bindings {
-          if binding.in_dialog && old_focus == Some(binding.id) {
-            inside = true
-          }
+        let retained = match old_focus {
+          Some(id) if element_focusable(tree, id) &&
+            binding_in_dialog(bindings, id) => Some(id)
+          _ => None
         }
-        let still_focusable = match old_focus {
-          Some(id) =>
-            match tree.node(id) {
-              Some(node) => node.focusable
-              None => false
-            }
-          None => false
-        }
-        if inside && still_focusable {
-          old_focus.unwrap()
-        } else {
-          initial
-        }
-      }
-      tree = match tree.with_focus(focus) {
-        Ok(value) => value
-        Err(_) => return Err(adapter_error("native Dialog focus rejected"))
+        focus = Some(
+          match retained {
+            Some(id) => id
+            None => initial
+          },
+        )
+        plan = Restore(focus)
       }
       let opener = if opening {
         old_focus
@@ -1774,35 +1804,33 @@ fn Mounted::prepare(
           Some(props) => props.dismissible()
           None => false
         },
+        handle: match previous_dialog {
+          Some(previous) => previous.handle
+          None => None
+        },
       })
     }
-    None => {
-      match old_focus {
-        Some(id) =>
-          match tree.with_focus(id) {
-            Ok(value) => tree = value
-            Err(_) => ()
-          }
-        None => ()
-      }
+    None =>
       if closing {
-        match previous_dialog {
+        focus = match previous_dialog {
           Some(previous) =>
             match previous.opener {
-              Some(id) =>
-                match tree.with_focus(id) {
-                  Ok(value) => tree = value
-                  Err(_) => tree = tree.clear_focus()
-                }
-              None => tree = tree.clear_focus()
+              Some(id) if element_focusable(tree, id) => Some(id)
+              _ => None
             }
-          None => ()
+          None => None
         }
+        plan = Close
+      } else {
+        focus = match old_focus {
+          Some(id) if element_focusable(tree, id) => Some(id)
+          _ => None
+        }
+        plan = Restore(focus)
       }
-    }
   }
   if !self.window_focused {
-    tree = tree.clear_focus()
+    focus = None
   }
   let mut cancel_pending = match self.current_frame {
     Some(frame) =>
@@ -1848,7 +1876,7 @@ fn Mounted::prepare(
     color(245, 247, 250)
   }
   let observations = []
-  let paint_order : Array[Int] = []
+  let paint_order : Array[Int32] = []
   for index in 0..<bindings.length() {
     if !bindings[index].in_dialog {
       paint_order.push(index)
@@ -1893,19 +1921,20 @@ fn Mounted::prepare(
         } else {
           color(166, 171, 178)
         }
-        for (item_id, rect, fill) in [
-          (dialog.panel_id, bounds, panel_border),
-          (
-            dialog.panel_id + 1UL,
-            @primitives.Rect::new(
-              bounds.left() + 1.0,
-              bounds.top() + 1.0,
-              bounds.size().width() - 2.0,
-              bounds.size().height() - 2.0,
-            ).unwrap(),
-            panel_fill,
-          ),
-        ] {
+        for
+          (item_id, rect, fill) in [
+            (dialog.panel_id, bounds, panel_border),
+            (
+              dialog.panel_id + 1UL,
+              @primitives.Rect::new(
+                bounds.left() + 1.0,
+                bounds.top() + 1.0,
+                bounds.size().width() - 2.0,
+                bounds.size().height() - 2.0,
+              ).unwrap(),
+              panel_fill,
+            ),
+          ] {
           match
             @scene.SceneItem::quad(
               item_id,
@@ -1955,7 +1984,7 @@ fn Mounted::prepare(
           Ok(value) => value
           Err(error) => return Err(error)
         }
-        let focused = tree.is_focused(binding.id)
+        let focused = focus == Some(binding.id)
         let model = match binding.field {
           Some(old) if old.is_composing() ||
             old.document().text() == props.value() => old.with_bounds(content)
@@ -1968,19 +1997,16 @@ fn Mounted::prepare(
         }
         let mut model = match model {
           Ok(value) => value
-          Err(error) => {
+          Err(error) =>
             return Err(
               adapter_error(
                 "native TextField model rejected: " + field_error_reason(error),
               ),
             )
-          }
         }
         model = match model.with_focus(focused) {
           Ok(value) => value
-          Err(_) => {
-            return Err(adapter_error("native TextField focus rejected"))
-          }
+          Err(_) => return Err(adapter_error("native TextField focus rejected"))
         }
         match model.paint_items(binding.id, next_clip) {
           Ok((clip, painted)) => {
@@ -1990,9 +2016,7 @@ fn Mounted::prepare(
               items.push(item)
             }
           }
-          Err(_) => {
-            return Err(adapter_error("native TextField paint failed"))
-          }
+          Err(_) => return Err(adapter_error("native TextField paint failed"))
         }
         field = Some(model)
       }
@@ -2027,7 +2051,7 @@ fn Mounted::prepare(
         model = model
           .with_enabled(!binding.view.disabled())
           .with_loading(binding.view.loading())
-          .with_focus(tree.is_focused(binding.id))
+          .with_focus(focus == Some(binding.id))
         if !self.ready ||
           (match self.current_frame {
             Some(frame) =>
@@ -2130,8 +2154,8 @@ fn Mounted::prepare(
         label_bounds,
         pressed: button.map(model => model.is_pressed()).unwrap_or(false),
         focused: field
-          .map(model => model.is_focused())
-          .unwrap_or(button.map(model => model.is_focused()).unwrap_or(false)),
+        .map(model => model.is_focused())
+        .unwrap_or(button.map(model => model.is_focused()).unwrap_or(false)),
         hovered: button.map(model => model.is_hovered()).unwrap_or(false),
         enabled: if binding.view.kind() == @view.TextField {
           !binding.view.disabled()
@@ -2163,6 +2187,8 @@ fn Mounted::prepare(
     next_id,
     next_field_generation,
     dialog: next_dialog,
+    focused: focus,
+    plan,
     cancel_pending,
     frame: {
       snapshot,
@@ -2234,7 +2260,89 @@ pub fn Mounted::publish(
   if candidate.cancel_pending {
     self.cancel_pending()
   }
-  for index in 0..<candidate.bindings.length() {
+  let tree = candidate.tree
+  let scope = match self.scope {
+    Some(value) => value
+    None => {
+      let created = match @element.FocusScopeSession::new(tree) {
+        Err(_) => {
+          self.ready = false
+          return Err(adapter_error("native focus scope rejected"))
+        }
+        Ok(value) => value
+      }
+      self.scope = Some(created)
+      created
+    }
+  }
+  let mut opened : @element.FocusScopeHandle? = None
+  let applied = match candidate.plan {
+    Restore(focused) =>
+      scope.adopt_tree(scope.target(), tree, focused, fn(boundary) {
+        self.cancel_interactions(boundary)
+      })
+    Open(open_plan) => {
+      let root = open_plan.root
+      let initial = open_plan.initial
+      let previous = open_plan.previous
+      match
+        scope.adopt_tree(scope.target(), tree, previous, fn(boundary) {
+          self.cancel_interactions(boundary)
+        }) {
+        Err(error) => Err(error)
+        Ok(_) =>
+          match
+            scope.open_scope(
+              scope.target(),
+              root,
+              fn(boundary) { self.cancel_interactions(boundary) },
+              initial~,
+            ) {
+            Err(error) => Err(error)
+            Ok(handle) => {
+              opened = Some(handle)
+              Ok(())
+            }
+          }
+      }
+    }
+    Close =>
+      scope.adopt_tree(scope.target(), tree, None, fn(boundary) {
+        self.cancel_interactions(boundary)
+      })
+  }
+  match applied {
+    Err(_) => {
+      self.ready = false
+      return Err(adapter_error("native focus scope publication failed"))
+    }
+    Ok(_) => ()
+  }
+  // The painted acquisition is authoritative for this frame. A session that
+  // restored a different surviving owner is reconciled to it once here.
+  if scope.focused() != candidate.focused {
+    let reconciled = match candidate.focused {
+      Some(id) => scope.request_focus(scope.target(), id)
+      None => scope.clear_focus(scope.target())
+    }
+    match reconciled {
+      Err(_) => {
+        self.ready = false
+        return Err(adapter_error("native focus scope reconciliation failed"))
+      }
+      Ok(_) => ()
+    }
+  }
+  if !self.window_focused {
+    match scope.clear_focus(scope.target()) {
+      Err(_) => {
+        self.ready = false
+        return Err(adapter_error("native focus scope blur failed"))
+      }
+      Ok(_) => ()
+    }
+  }
+  for index = 0; index < candidate.bindings.length(); index = index + 1 {
     let binding = candidate.bindings[index]
     candidate.bindings[index] = {
       ..binding,
@@ -2242,16 +2350,33 @@ pub fn Mounted::publish(
     }
   }
   self.bindings = candidate.bindings
+  self.scope = Some(scope)
   self.measure = Some(prepared.measure)
-  self.tree = Some(candidate.tree)
-  self.current_frame = Some(candidate.frame)
+  match opened {
+    Some(handle) =>
+      self.dialog = match candidate.dialog {
+        Some(dialog) => Some({ ..dialog, handle: Some(handle), })
+        None => None
+      }
+    None => self.dialog = candidate.dialog
+  }
+  let focused_now = scope.focused()
+  let observations = []
+  for observation in candidate.frame.observations {
+    observations.push({
+      ..observation,
+      focused: focused_now == Some(observation.binding_id),
+    })
+  }
+  let frame = { ..candidate.frame, observations, }
+  self.current_frame = Some(frame)
   self.next_id = candidate.next_id
   self.next_field_generation = candidate.next_field_generation
-  self.dialog = candidate.dialog
-  self.revision = candidate.frame.revision
+  self.revision = frame.revision
   self.ready = true
   self.change = fresh_epoch()
-  Ok(candidate.frame)
+  self.sync_focus()
+  Ok(frame)
 }
 
 ///|
@@ -2281,30 +2406,27 @@ fn Mounted::cancel_pending(self : Mounted) -> Unit {
 
 ///|
 fn Mounted::sync_focus(self : Mounted) -> Unit {
-  for index in 0..<self.bindings.length() {
+  let focused_id = match self.scope {
+    Some(scope) => scope.focused()
+    None => None
+  }
+  for index = 0; index < self.bindings.length(); index = index + 1 {
     let binding = self.bindings[index]
+    let focused = focused_id == Some(binding.id)
     match binding.button {
-      Some(button) => {
-        let focused = self.tree
-          .map(tree => tree.is_focused(binding.id))
-          .unwrap_or(false)
+      Some(button) =>
         self.bindings[index] = {
           ..binding,
           button: Some(button.with_focus(focused)),
         }
-      }
       None => ()
     }
     match binding.field {
-      Some(field) => {
-        let focused = self.tree
-          .map(tree => tree.is_focused(binding.id))
-          .unwrap_or(false)
+      Some(field) =>
         match field.with_focus(focused) {
           Ok(value) => self.bindings[index] = { ..binding, field: Some(value), }
           Err(_) => ()
         }
-      }
       None => ()
     }
   }
@@ -2441,15 +2563,14 @@ pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
     Err(_) => return false
     Ok(value) => value
   }
-  let tree = match self.tree {
+  let scope = match self.scope {
     None => return false
     Some(value) => value
   }
-  let previous = tree.focused()
-  let outcome = match tree.with_focus(binding.id) {
+  let previous = scope.focused()
+  let outcome = match scope.request_focus(scope.target(), binding.id) {
     Err(_) => @view.Rejected
-    Ok(next) => {
-      self.tree = Some(next)
+    Ok(_) => {
       if previous != Some(binding.id) {
         self.focus_return = previous
       }
@@ -2487,8 +2608,8 @@ pub fn Mounted::paste(
     Some(value) => value
     None => return false
   }
-  let tree = match self.tree {
-    Some(value) => value
+  let focused = match self.scope {
+    Some(scope) => scope.focused()
     None => return false
   }
   let mut found : Binding? = None
@@ -2507,7 +2628,7 @@ pub fn Mounted::paste(
     Some(token) if token == request.token => ()
     _ => return false
   }
-  if !tree.is_focused(binding.id) ||
+  if focused != Some(binding.id) ||
     !field_editable(binding.view) ||
     binding.field_generation != request.generation {
     return false
@@ -2535,9 +2656,7 @@ pub fn Mounted::paste(
   if next.document().text() != field.document().text() {
     match binding.token {
       Some(token) =>
-        ignore(
-          self.runtime.enqueue_text_changed(token, next.document().text()),
-        )
+        ignore(self.runtime.enqueue_text_changed(token, next.document().text()))
       None => ()
     }
   }
@@ -2550,7 +2669,10 @@ pub fn Mounted::paste(
 ///|
 /// Absolute logical caret rectangle for the focused or named TextField. Hosts
 /// use this for candidate-window placement; no platform call is made here.
-pub fn Mounted::text_caret(self : Mounted, key : @view.NodeKey) -> @primitives.Rect? {
+pub fn Mounted::text_caret(
+  self : Mounted,
+  key : @view.NodeKey,
+) -> @primitives.Rect? {
   if !self.ready || self.is_disposed() {
     return None
   }
@@ -2571,6 +2693,150 @@ pub fn Mounted::text_caret(self : Mounted, key : @view.NodeKey) -> @primitives.R
 ///|
 pub fn Mounted::next_focus_result(self : Mounted) -> @runtime.FocusResult? {
   self.runtime.next_focus_result()
+}
+
+///|
+fn subtree_removed(
+  tree : @element.ElementTree,
+  roots : Array[UInt64],
+  id : UInt64,
+) -> Bool {
+  let mut current = Some(id)
+  while current is Some(value) {
+    if roots.contains(value) {
+      return true
+    }
+    current = match tree.node(value) {
+      Some(node) => node.parent
+      None => None
+    }
+  }
+  false
+}
+
+///|
+/// Synchronous cancellation for a scope transition. It runs under the session
+/// reentrancy guard, so it cancels owned controllers and never re-enters the
+/// session; the previous authoritative snapshot stays readable.
+fn Mounted::cancel_interactions(
+  self : Mounted,
+  boundary : @element.FocusScopeBoundary,
+) -> Result[Unit, @element.FocusScopeError] {
+  self.cancel_pending()
+  let removed = boundary.removed_roots()
+  if removed.length() == 0 {
+    return Ok(())
+  }
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Ok(())
+  }
+  let tree = scope.snapshot()
+  let measure = self.measure
+  for index = 0; index < self.bindings.length(); index = index + 1 {
+    let binding = self.bindings[index]
+    if !subtree_removed(tree, removed, binding.id) {
+      continue
+    }
+    match binding.button {
+      Some(button) =>
+        self.bindings[index] = {
+          ..binding,
+          button: Some(button.cancel_press()),
+        }
+      None => ()
+    }
+    match binding.field {
+      Some(field) if field.is_composing() => {
+        let measure = match measure {
+          Some(value) => value
+          None => return Err(@element.InteractionBoundaryRejected)
+        }
+        let next = match
+          field.cancel_composition(
+            fn(document) { field_measure(measure, document) },
+            field_admit,
+          ) {
+          Ok(value) => value
+          Err(_) => return Err(@element.InteractionBoundaryRejected)
+        }
+        self.bindings[index] = { ..binding, field: Some(next), }
+      }
+      _ => ()
+    }
+  }
+  let mut index = 0
+  while index < self.clipboard.length() {
+    let drop = match self.clipboard[index] {
+      Copy(_) => false
+      Paste(value) => subtree_removed(tree, removed, value.binding)
+    }
+    if drop {
+      ignore(self.clipboard.remove(index))
+    } else {
+      index += 1
+    }
+  }
+  Ok(())
+}
+
+///|
+/// Route one input record through the live scope. The callback only observes the
+/// admitted target: a dispatch callback runs under the session guard, so focus
+/// acquisition and any other mutation happen after it returns.
+fn Mounted::route(
+  self : Mounted,
+  input : @primitives.InputEvent,
+) -> Result[UInt64?, @diagnostics.FrameworkError] {
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Ok(None)
+  }
+  let admitted : Ref[UInt64?] = Ref(None)
+  let outcome = scope.dispatch_input_with(scope.target(), input, (
+    context,
+    _event,
+  ) => {
+    admitted.val = Some(context.target())
+    context.stop_propagation()
+    Ok(())
+  })
+  match outcome {
+    Err(_) => Err(adapter_error("native focus-scope input admission failed"))
+    Ok(_) => Ok(admitted.val)
+  }
+}
+
+///|
+fn Mounted::close_dialog(
+  self : Mounted,
+  dialog : DialogState,
+  key : @primitives.Key?,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Ok(())
+  }
+  let handle = match dialog.handle {
+    Some(value) => value
+    None => return Ok(())
+  }
+  let hook : (@element.FocusScopeBoundary) -> Result[
+    Unit,
+    @element.FocusScopeError,
+  ] = boundary => self.cancel_interactions(boundary)
+  let closed = match key {
+    Some(value) =>
+      scope.close_scope(scope.target(), handle, hook, dismissal_key=value)
+    None => scope.close_scope(scope.target(), handle, hook)
+  }
+  match closed {
+    Ok(_) => ()
+    Err(@element.StaleHandle) => ()
+    Err(_) => return Err(adapter_error("native Dialog scope close failed"))
+  }
+  self.sync_focus()
+  Ok(())
 }
 
 ///|
@@ -2602,7 +2868,10 @@ pub fn Mounted::handle_event(
       self.window_focused = focused
       if !focused {
         self.cancel_pending()
-        self.tree = self.tree.map(tree => tree.clear_focus())
+        match self.scope {
+          Some(scope) => ignore(scope.clear_focus(scope.target()))
+          None => ()
+        }
         self.sync_focus()
       }
       Ok(true)
@@ -2626,19 +2895,31 @@ pub fn Mounted::handle_event(
         self.invalidate_layout()
         return Ok(false)
       }
-      let modal = self.dialog
-      let result = match modal {
-        Some(dialog) => {
+      let dialog = self.dialog
+      let admitted = match self.route(input) {
+        Err(error) => return Err(error)
+        Ok(value) => value
+      }
+      let result = match dialog {
+        Some(dialog) =>
           match input {
             @primitives.KeyPressed(key=@primitives.Escape, repeat~, ..) => {
               if repeat {
                 return Ok(true)
               }
-              let tree = self.tree.unwrap()
+              let focused = match self.scope {
+                Some(scope) => scope.focused()
+                None => None
+              }
               let mut composing = false
-              for index in 0..<self.bindings.length() {
+              for index = 0; index < self.bindings.length(); index = index + 1 {
                 let binding = self.bindings[index]
-                if binding.in_dialog && tree.is_focused(binding.id) {
+                let dialog_field = binding.in_dialog &&
+                  (match focused {
+                    Some(id) => binding.id == id
+                    None => false
+                  })
+                if dialog_field {
                   match binding.field {
                     Some(field) if field.is_composing() => {
                       let measure = match self.measure {
@@ -2664,7 +2945,12 @@ pub fn Mounted::handle_event(
                 return Ok(true)
               }
               if dialog.dismissible {
-                match binding_for(self.bindings, @view.NodeKey::new(dialog.key)) {
+                match self.close_dialog(dialog, Some(@primitives.Escape)) {
+                  Err(error) => return Err(error)
+                  Ok(_) => ()
+                }
+                match
+                  binding_for(self.bindings, @view.NodeKey::new(dialog.key)) {
                   Some(binding) =>
                     match binding.token {
                       Some(token) =>
@@ -2676,31 +2962,15 @@ pub fn Mounted::handle_event(
               }
               Ok(true)
             }
-            @primitives.PointerButtonPressed(button=@primitives.Primary, ..) => {
-              let mut tree = self.tree.unwrap()
-              let modal_tree = match tree.without_subtree(1UL) {
-                Ok(value) => value
-                Err(_) => return Ok(false)
-              }
-              let focused_target = modal_tree.dispatch_input(input).target()
-              match focused_target {
-                Some(id) =>
-                  if id != dialog.root_id {
-                    match tree.with_focus(id) {
-                      Ok(value) => {
-                        tree = value
-                        self.tree = Some(tree)
-                        self.sync_focus()
-                      }
-                      Err(_) => ()
-                    }
-                  }
-                None => ()
-              }
-              let target = focused_target
-              if target == Some(dialog.root_id) {
+            @primitives.PointerButtonPressed(button=@primitives.Primary, ..) =>
+              if admitted == Some(dialog.root_id) {
                 if dialog.dismissible {
-                  match binding_for(self.bindings, @view.NodeKey::new(dialog.key)) {
+                  match self.close_dialog(dialog, None) {
+                    Err(error) => return Err(error)
+                    Ok(_) => ()
+                  }
+                  match
+                    binding_for(self.bindings, @view.NodeKey::new(dialog.key)) {
                     Some(binding) =>
                       match binding.token {
                         Some(token) =>
@@ -2712,25 +2982,11 @@ pub fn Mounted::handle_event(
                 }
                 Ok(true)
               } else {
-                self.dispatch(input, target, true)
+                self.dispatch(input, admitted)
               }
-            }
-            _ => {
-              let tree = self.tree.unwrap()
-              let modal_tree = match tree.without_subtree(1UL) {
-                Ok(value) => value
-                Err(_) => return Ok(false)
-              }
-              let target = modal_tree.dispatch_input(input).target()
-              self.dispatch(input, target, true)
-            }
+            _ => self.dispatch(input, admitted)
           }
-        }
-        None => {
-          let tree = self.tree.unwrap()
-          let target = tree.dispatch_input(input).target()
-          self.dispatch(input, target, false)
-        }
+        None => self.dispatch(input, admitted)
       }
       if result is Ok(_) {
         self.last_dispatched_input = event.sequence()
@@ -2752,13 +3008,13 @@ fn Mounted::dispatch_composition(
     Some(value) => value
     None => return Ok(false)
   }
-  let tree = match self.tree {
-    Some(value) => value
+  let focused = match self.scope {
+    Some(scope) => scope.focused()
     None => return Ok(false)
   }
-  for index in 0..<self.bindings.length() {
+  for index = 0; index < self.bindings.length(); index = index + 1 {
     let binding = self.bindings[index]
-    if !tree.is_focused(binding.id) || !field_editable(binding.view) {
+    if focused != Some(binding.id) || !field_editable(binding.view) {
       continue
     }
     match self.dialog {
@@ -2798,14 +3054,13 @@ fn Mounted::dispatch_composition(
     }
     let next = match updated {
       Ok(value) => value
-      Err(error) => {
+      Err(error) =>
         return Err(
           adapter_error(
             "native TextField composition rejected: " +
             field_error_reason(error),
           ),
         )
-      }
     }
     let changed = !next.is_composing() &&
       next.committed_document().text() != field.committed_document().text()
@@ -2825,72 +3080,208 @@ fn Mounted::dispatch_composition(
 }
 
 ///|
+///|
+/// Apply one ordered observation from an armed portable text-input session.
+/// The runner owns begin/update/cancel/end; this adapter maps the portable
+/// preview/commit/cancel onto the focused editable field. A rejected field
+/// transaction is an adapter error, never a rewritten host event.
+pub fn Mounted::text_input(
+  self : Mounted,
+  epoch : UInt64,
+  event : @text_host.TextInputEvent,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  if !self.ready || self.is_disposed() || event.window() != self.window {
+    return Ok(false)
+  }
+  if event.epoch() != epoch {
+    return Ok(false)
+  }
+  if self.text_epoch != epoch {
+    self.text_epoch = epoch
+    self.last_text_sequence = 0L
+  }
+  if event.sequence() <= 0L || event.sequence() <= self.last_text_sequence {
+    return Ok(false)
+  }
+  let kind = event.kind()
+  if kind is @text_host.Geometry(..) {
+    self.last_text_sequence = event.sequence()
+    return Ok(true)
+  }
+  let measure = match self.measure {
+    Some(value) => value
+    None => return Ok(false)
+  }
+  let focused = match self.scope {
+    Some(scope) => scope.focused()
+    None => return Ok(false)
+  }
+  for index = 0; index < self.bindings.length(); index = index + 1 {
+    let binding = self.bindings[index]
+    if focused != Some(binding.id) || !field_editable(binding.view) {
+      continue
+    }
+    let field = match binding.field {
+      Some(value) => value
+      None => return Ok(false)
+    }
+    match kind {
+      @text_host.Preedit(text~, cursor~) => {
+        if text.length() > 16_384 {
+          return Err(adapter_error("native TextField preedit is too long"))
+        }
+        let offset = if cursor < 0 { text.length() } else { cursor }
+        let selection = match @text.TextSelection::new(offset, offset) {
+          Err(_) =>
+            return Err(
+              adapter_error("native TextField preedit cursor is outside the text"),
+            )
+          Ok(value) => value
+        }
+        let next = match
+          field.update_composition(
+            text,
+            selection,
+            fn(document) { field_measure(measure, document) },
+            field_admit,
+          ) {
+          Err(error) =>
+            return Err(
+              adapter_error(
+                "native TextField preedit rejected: " +
+                field_error_reason(error),
+              ),
+            )
+          Ok(value) => value
+        }
+        self.bindings[index] = { ..binding, field: Some(next), }
+      }
+      @text_host.Commit(text~) => {
+        let next = match
+          field.commit_composition(
+            text,
+            fn(document) { field_measure(measure, document) },
+            field_admit,
+          ) {
+          Err(error) =>
+            return Err(
+              adapter_error(
+                "native TextField commit rejected: " +
+                field_error_reason(error),
+              ),
+            )
+          Ok(value) => value
+        }
+        if next.document().text() != field.document().text() {
+          match binding.token {
+            Some(token) =>
+              ignore(
+                self.runtime.enqueue_text_changed(token, next.document().text()),
+              )
+            None => ()
+          }
+        }
+        self.bindings[index] = { ..binding, field: Some(next), }
+      }
+      @text_host.Cancel =>
+        match
+          field.cancel_composition(
+            fn(document) { field_measure(measure, document) },
+            field_admit,
+          ) {
+          Err(error) =>
+            return Err(
+              adapter_error(
+                "native TextField cancel rejected: " +
+                field_error_reason(error),
+              ),
+            )
+          Ok(next) => self.bindings[index] = { ..binding, field: Some(next), }
+        }
+      @text_host.FocusLost =>
+        if field.is_composing() {
+          match
+            field.cancel_composition(
+              fn(document) { field_measure(measure, document) },
+              field_admit,
+            ) {
+            Err(error) =>
+              return Err(
+                adapter_error(
+                  "native TextField focus-loss cancel rejected: " +
+                  field_error_reason(error),
+                ),
+              )
+            Ok(next) => self.bindings[index] = { ..binding, field: Some(next), }
+          }
+        }
+      @text_host.Geometry(..) => ()
+    }
+    self.last_text_sequence = event.sequence()
+    self.change = fresh_epoch()
+    return Ok(true)
+  }
+  Ok(false)
+}
+
 fn Mounted::dispatch(
   self : Mounted,
   input : @primitives.InputEvent,
   target : UInt64?,
-  modal : Bool,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
   let measure = match self.measure {
     Some(value) => value
     None => return Err(adapter_error("native TextField measure is unavailable"))
   }
-  let mut tree = self.tree.unwrap()
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Ok(false)
+  }
   match input {
     @primitives.KeyPressed(key=@primitives.Tab, modifiers~, repeat=false) if !modifiers.control() &&
       !modifiers.alt() &&
       !modifiers.meta() => {
-      let traversal = if modal {
-        match tree.without_subtree(1UL) {
-          Ok(value) => value
-          Err(_) => return Err(adapter_error("native modal traversal failed"))
-        }
+      let traversed = if modifiers.shift() {
+        scope.focus_prev(scope.target())
       } else {
-        tree
+        scope.focus_next(scope.target())
       }
-      let next = if modifiers.shift() {
-        traversal.focus_prev()
-      } else {
-        traversal.focus_next()
-      }
-      let focused = match next {
+      match traversed {
         Err(_) => return Err(adapter_error("native focus traversal failed"))
-        Ok(value) => value.focused()
+        Ok(_) => ()
       }
-      match focused {
-        Some(id) =>
-          match tree.with_focus(id) {
-            Ok(value) => tree = value
-            Err(_) => ()
-          }
-        None => tree = tree.clear_focus()
-      }
-      self.tree = Some(tree)
       self.sync_focus()
       return Ok(true)
     }
     @primitives.PointerButtonPressed(button=@primitives.Primary, ..) => {
-      let target = tree.dispatch_input(input).target()
-      let previous = tree.focused()
-      tree = match target {
+      let previous = scope.focused()
+      match target {
         Some(id) =>
-          match tree.with_focus(id) {
-            Ok(value) => value
-            Err(_) => tree.clear_focus()
+          match scope.request_focus(scope.target(), id) {
+            Ok(_) => ()
+            Err(_) =>
+              if self.dialog is None {
+                ignore(scope.clear_focus(scope.target()))
+              }
           }
-        None => tree.clear_focus()
+        None =>
+          if self.dialog is None {
+            ignore(scope.clear_focus(scope.target()))
+          }
       }
-      if target is Some(_) && previous != target {
+      if self.dialog is None && target is Some(_) && previous != target {
         self.focus_return = previous
       }
-      self.tree = Some(tree)
       self.sync_focus()
     }
     _ => ()
   }
   let mut consumed = false
-  for index in 0..<self.bindings.length() {
+  let modal = self.dialog is Some(_)
+  for index = 0; index < self.bindings.length(); index = index + 1 {
     let binding = self.bindings[index]
+    // Scope admission already rejects background targets. This filter only keeps
+    // background controller state (hover, held press) frozen under an open Dialog.
     if modal && !binding.in_dialog {
       continue
     }
@@ -2898,8 +3289,8 @@ fn Mounted::dispatch(
       Some(field) => {
         let route = match input {
           @primitives.PointerMoved(..) => false
-          @primitives.PointerButtonPressed(..) |
-          @primitives.PointerButtonReleased(..) => target == Some(binding.id)
+          @primitives.PointerButtonPressed(..)
+          | @primitives.PointerButtonReleased(..) => target == Some(binding.id)
           _ => field.is_focused()
         }
         if route && field_input_allowed(binding.view, input) {
@@ -2911,13 +3302,13 @@ fn Mounted::dispatch(
               fn(document, point) { field_hit(measure, document, point) },
             ) {
             Ok(value) => value
-            Err(error) => {
+            Err(error) =>
               return Err(
                 adapter_error(
-                  "native TextField input rejected: " + field_error_reason(error),
+                  "native TextField input rejected: " +
+                  field_error_reason(error),
                 ),
               )
-            }
           }
           let (next, action) = outcome
           let mut next = next
@@ -2931,17 +3322,11 @@ fn Mounted::dispatch(
                 }
               }
             Some(@text_field.Blur) => {
-              tree = tree.clear_focus()
               match self.focus_return {
-                Some(id) =>
-                  match tree.with_focus(id) {
-                    Ok(value) => tree = value
-                    Err(_) => ()
-                  }
-                None => ()
+                Some(id) => ignore(scope.request_focus(scope.target(), id))
+                None => ignore(scope.clear_focus(scope.target()))
               }
               self.focus_return = None
-              self.tree = Some(tree)
               self.sync_focus()
             }
             Some(@text_field.Cut(text~, candidate~)) =>
@@ -3027,10 +3412,21 @@ pub fn Mounted::dispose(self : Mounted) -> Unit {
   self.epoch.live = false
   self.runtime.dispose()
   self.bindings = []
-  self.tree = None
+  match self.scope {
+    Some(scope) =>
+      ignore(
+        scope.close(scope.target(), fn(boundary) {
+          self.cancel_interactions(boundary)
+        }),
+      )
+    None => ()
+  }
+  self.scope = None
   self.current_frame = None
   self.clipboard = []
   self.dialog = None
+  self.text_epoch = 0UL
+  self.last_text_sequence = 0L
   self.ready = false
 }
 

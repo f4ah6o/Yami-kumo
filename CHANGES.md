@@ -1,5 +1,30 @@
 # Changes
 
+## native-0.2.9 - 2026-10-20
+
+### Changed
+
+- Replace the adapter-local modal filter in the native Dialog with the live
+  `element.FocusScopeSession`. Input admission, Tab trapping, dismissal and
+  opener restoration now come from the session; a rebuilt frame adopts its new
+  tree while keeping the open scope, so a Dialog survives a view topology change
+  without losing focus. Removing the Dialog from the view restores the opener
+  and cancels a removed field's composition through the session boundary hook.
+- Add `Mounted::text_input` for portable `text_host.TextInputEvent` observations.
+  It applies preedit/commit/cancel to the focused editable field, rejects stale
+  epochs and replayed records, and leaves the host begin/update/end cycle to the
+  runner.
+- Pin GPUI `0.10.3`.
+
+## native-0.2.8 - 2026-10-20
+
+### Added
+
+- Add a bounded native Dialog overlay: second root, backdrop and panel paint,
+  initial focus, dialog-local Tab, Escape/backdrop dismissal, background
+  filtering and opener restoration. Nested Dialogs remain unsupported and real
+  OS IME and accessibility remain `NOT_RUN`.
+
 ## 0.1.1 - 2026-10-13
 
 ### Added
