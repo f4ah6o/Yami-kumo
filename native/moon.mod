@@ -1,6 +1,6 @@
 name = "f4ah6o/yami_kumo_native"
 
-version = "0.2.8"
+version = "0.2.9"
 
 readme = "README.md"
 
@@ -11,6 +11,6 @@ repository = "https://github.com/f4ah6o/Yami-kumo"
 license = "MIT"
 
 import {
-  "f4ah6o/gpui@0.10.2",
+  "f4ah6o/gpui@0.10.3",
   "f4ah6o/yami_kumo@0.2.2",
 }

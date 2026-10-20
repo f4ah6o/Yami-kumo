@@ -1448,13 +1448,7 @@ fn text_field_view(
   @view.column(@view.NodeKey::new("root"), [
     @view.text_field(
       @view.NodeKey::new("field"),
-      @view.TextFieldProps::new(
-        value,
-        "Name",
-        read_only~,
-        disabled~,
-        revision~,
-      ),
+      @view.TextFieldProps::new(value, "Name", read_only~, disabled~, revision~),
     ),
   ])
 }
@@ -1463,7 +1457,7 @@ fn text_field_view(
 test "native adapter renders an editable TextField with measured bounds" {
   let mounted = mount()
   let view = text_field_view()
-  let frame = render(mounted, view=view)
+  let frame = render(mounted, view~)
   let bounds = frame.bounds(@view.NodeKey::new("field")).unwrap()
   assert_true(bounds.size().width() >= 240.0)
   assert_true(bounds.size().height() >= 64.0)
@@ -1478,9 +1472,7 @@ test "native TextField routes committed typing through TextChanged" {
   ignore(render(mounted, view=text_field_view()))
   assert_true(mounted.focus(@view.NodeKey::new("field")))
   assert_true(
-    mounted
-    .handle_event(event(2L, @primitives.TextInput(text="a")))
-    .unwrap(),
+    mounted.handle_event(event(2L, @primitives.TextInput(text="a"))).unwrap(),
   )
   match mounted.next_action() {
     Some(@view.TextChanged(key, value)) => {
@@ -1497,10 +1489,7 @@ test "native TextField focuses on click and edits at the clicked caret" {
   let mounted = mount()
   let frame = render(mounted, view=text_field_view())
   let bounds = frame.bounds(@view.NodeKey::new("field")).unwrap()
-  let point = @primitives.Point::new(
-    bounds.right() - 8.0,
-    bounds.top() + 32.0,
-  ).unwrap()
+  let point = @primitives.Point::new(bounds.right() - 8.0, bounds.top() + 32.0).unwrap()
   assert_true(
     mounted
     .handle_event(
@@ -1518,18 +1507,14 @@ test "native TextField focuses on click and edits at the clicked caret" {
   assert_true(mounted.focus(@view.NodeKey::new("field")))
   assert_true(mounted.text_caret(@view.NodeKey::new("field")) is Some(_))
   assert_true(
-    mounted
-    .handle_event(event(3L, @primitives.TextInput(text="!")))
-    .unwrap(),
+    mounted.handle_event(event(3L, @primitives.TextInput(text="!"))).unwrap(),
   )
   match mounted.next_action() {
     Some(@view.TextChanged(_, value)) => assert_eq(value, "日本語!")
     _ => fail("expected TextChanged")
   }
   assert_true(
-    mounted
-    .handle_event(event(4L, key_down(@primitives.Backspace)))
-    .unwrap(),
+    mounted.handle_event(event(4L, key_down(@primitives.Backspace))).unwrap(),
   )
   match mounted.next_action() {
     Some(@view.TextChanged(_, value)) => assert_eq(value, "日本語")
@@ -1544,9 +1529,7 @@ test "native TextField applies host composition as preview then commit" {
   ignore(render(mounted, view=text_field_view()))
   assert_true(mounted.focus(@view.NodeKey::new("field")))
   assert_true(
-    mounted
-    .handle_event(composition_event(2L, @primitives.Start))
-    .unwrap(),
+    mounted.handle_event(composition_event(2L, @primitives.Start)).unwrap(),
   )
   assert_true(
     mounted
@@ -1588,9 +1571,7 @@ test "native TextField cancels host composition without a committed edit" {
   )
   assert_true(mounted.next_action() is None)
   assert_true(
-    mounted
-    .handle_event(composition_event(3L, @primitives.Cancel))
-    .unwrap(),
+    mounted.handle_event(composition_event(3L, @primitives.Cancel)).unwrap(),
   )
   assert_true(mounted.next_action() is None)
   mounted.dispose()
@@ -1606,7 +1587,7 @@ test "native TextField Escape restores the previous focus owner" {
       @view.TextFieldProps::new("日本語", "Name"),
     ),
   ])
-  ignore(render(mounted, view=view))
+  ignore(render(mounted, view~))
   assert_true(mounted.focus(@view.NodeKey::new("button")))
   assert_true(mounted.focus(@view.NodeKey::new("field")))
   assert_true(
@@ -1616,15 +1597,18 @@ test "native TextField Escape restores the previous focus owner" {
     mounted.handle_event(event(3L, key_down(@primitives.Enter))).unwrap(),
   )
   match mounted.next_action() {
-    Some(@view.Activate(key)) =>
-      assert_eq(key, @view.NodeKey::new("button"))
+    Some(@view.Activate(key)) => assert_eq(key, @view.NodeKey::new("button"))
     _ => fail("expected restored Button activation")
   }
   mounted.dispose()
 }
 
 ///|
-fn shortcut(key : @primitives.Key, control~ : Bool = false, meta~ : Bool = false) -> @primitives.InputEvent {
+fn shortcut(
+  key : @primitives.Key,
+  control~ : Bool = false,
+  meta~ : Bool = false,
+) -> @primitives.InputEvent {
   @primitives.KeyPressed(
     key~,
     repeat=false,
@@ -1687,7 +1671,7 @@ test "native TextField rejects a paste request after focus moves" {
       @view.TextFieldProps::new("B", "Second"),
     ),
   ])
-  ignore(render(mounted, view=view))
+  ignore(render(mounted, view~))
   assert_true(mounted.focus(@view.NodeKey::new("first")))
   assert_true(
     mounted
@@ -1701,9 +1685,7 @@ test "native TextField rejects a paste request after focus moves" {
   assert_true(mounted.focus(@view.NodeKey::new("second")))
   assert_false(mounted.paste(request, "世界"))
   assert_true(
-    mounted
-    .handle_event(event(3L, @primitives.TextInput(text="!")))
-    .unwrap(),
+    mounted.handle_event(event(3L, @primitives.TextInput(text="!"))).unwrap(),
   )
   match mounted.next_action() {
     Some(@view.TextChanged(key, value)) => {
@@ -1813,20 +1795,14 @@ test "native TextField submit and read-only behavior" {
   ignore(render(mounted, view=text_field_view(read_only=true)))
   assert_true(mounted.focus(@view.NodeKey::new("field")))
   assert_false(
-    mounted
-    .handle_event(event(2L, @primitives.TextInput(text="x")))
-    .unwrap(),
+    mounted.handle_event(event(2L, @primitives.TextInput(text="x"))).unwrap(),
   )
   assert_true(mounted.next_action() is None)
   assert_false(
-    mounted
-    .handle_event(event(3L, key_down(@primitives.Backspace)))
-    .unwrap(),
+    mounted.handle_event(event(3L, key_down(@primitives.Backspace))).unwrap(),
   )
   assert_false(
-    mounted
-    .handle_event(event(4L, key_down(@primitives.Delete)))
-    .unwrap(),
+    mounted.handle_event(event(4L, key_down(@primitives.Delete))).unwrap(),
   )
   assert_false(
     mounted
@@ -1855,13 +1831,10 @@ test "native TextField submit and read-only behavior" {
   ignore(render(editable, view=text_field_view()))
   assert_true(editable.focus(@view.NodeKey::new("field")))
   assert_true(
-    editable
-    .handle_event(event(2L, key_down(@primitives.Enter)))
-    .unwrap(),
+    editable.handle_event(event(2L, key_down(@primitives.Enter))).unwrap(),
   )
   match editable.next_action() {
-    Some(@view.Submitted(key)) =>
-      assert_eq(key, @view.NodeKey::new("field"))
+    Some(@view.Submitted(key)) => assert_eq(key, @view.NodeKey::new("field"))
     _ => fail("expected Submitted")
   }
   editable.dispose()
@@ -2059,12 +2032,13 @@ test "native Dialog cancels composition before dismissing" {
 ///|
 test "native Dialog can focus and edit a nested TextField" {
   let mounted = mount()
-  let frame = render(mounted, view=dialog_view(with_field=true, initial=Some(@view.NodeKey::new("name"))))
+  let frame = render(
+    mounted,
+    view=dialog_view(with_field=true, initial=Some(@view.NodeKey::new("name"))),
+  )
   assert_true(frame.focused(@view.NodeKey::new("name")))
   assert_true(
-    mounted
-    .handle_event(event(2L, @primitives.TextInput(text="a")))
-    .unwrap(),
+    mounted.handle_event(event(2L, @primitives.TextInput(text="a"))).unwrap(),
   )
   match mounted.next_action() {
     Some(@view.TextChanged(key, value)) => {
@@ -2081,7 +2055,10 @@ test "native Dialog routes a pointer click to a nested TextField" {
   let mounted = mount()
   let frame = render(
     mounted,
-    view=dialog_view(with_field=true, initial=Some(@view.NodeKey::new("confirm"))),
+    view=dialog_view(
+      with_field=true,
+      initial=Some(@view.NodeKey::new("confirm")),
+    ),
   )
   let field = frame.bounds(@view.NodeKey::new("name")).unwrap()
   assert_true(
@@ -2102,9 +2079,7 @@ test "native Dialog routes a pointer click to a nested TextField" {
     .unwrap(),
   )
   assert_true(
-    mounted
-    .handle_event(event(3L, @primitives.TextInput(text="a")))
-    .unwrap(),
+    mounted.handle_event(event(3L, @primitives.TextInput(text="a"))).unwrap(),
   )
   match mounted.next_action() {
     Some(@view.TextChanged(key, value)) => {
@@ -2204,4 +2179,130 @@ test "native Dialog rejects an open dialog without a focusable target" {
   let view = @view.column(@view.NodeKey::new("root"), [modal])
   assert_true(mounted.commit(view, 640.0, 480.0, 1.0, measure) is Err(_))
   assert_true(mounted.frame() is None)
+}
+
+///|
+test "native Dialog keeps its acquisition when a press misses the viewport" {
+  let mounted = mount()
+  ignore(render(mounted, view=dialog_view()))
+  assert_true(mounted.frame().unwrap().focused(@view.NodeKey::new("confirm")))
+  ignore(
+    mounted.handle_event(
+      event(
+        2L,
+        @primitives.PointerButtonPressed(
+          position=@primitives.Point::new(-8.0, -8.0).unwrap(),
+          button=@primitives.Primary,
+          modifiers=@primitives.Modifiers::none(),
+        ),
+      ),
+    ),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Enter))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Activate(key)) => assert_eq(key, @view.NodeKey::new("confirm"))
+    _ => fail("expected the dialog acquisition to survive a missed press")
+  }
+  mounted.dispose()
+}
+
+///|
+fn focus_event(sequence : Int64, focused : Bool) -> @platform.Event {
+  @platform.Event::new(
+    @platform.WindowId::new(1L),
+    sequence,
+    1.0,
+    @platform.FocusChanged(focused),
+  )
+}
+
+///|
+test "native Dialog keeps its live scope across a topology change" {
+  let mounted = mount()
+  ignore(render(mounted, view=dialog_view(open=false)))
+  assert_true(mounted.focus(@view.NodeKey::new("open")))
+  ignore(render(mounted, view=dialog_view()))
+  assert_true(mounted.frame().unwrap().focused(@view.NodeKey::new("confirm")))
+  let expanded = @view.column(@view.NodeKey::new("root"), [
+    @view.button(@view.NodeKey::new("open"), "Open"),
+    @view.dialog(
+      @view.NodeKey::new("dialog"),
+      @view.DialogProps::new(true, "Save changes?"),
+      [
+        @view.text(@view.NodeKey::new("body"), "Apply the change?"),
+        @view.text(@view.NodeKey::new("note"), "This cannot be undone."),
+        @view.button(@view.NodeKey::new("confirm"), "Confirm"),
+        @view.button(@view.NodeKey::new("cancel"), "Cancel"),
+      ],
+    ),
+  ])
+  let frame = render(mounted, view=expanded)
+  assert_true(frame.focused(@view.NodeKey::new("confirm")))
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Escape))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Dismissed(key)) => assert_eq(key, @view.NodeKey::new("dialog"))
+    _ => fail("expected Dismissed after a topology change")
+  }
+  let closed = @view.column(@view.NodeKey::new("root"), [
+    @view.button(@view.NodeKey::new("open"), "Open"),
+    @view.dialog(
+      @view.NodeKey::new("dialog"),
+      @view.DialogProps::new(false, "Save changes?"),
+      [@view.text(@view.NodeKey::new("body"), "Apply the change?")],
+    ),
+  ])
+  let restored = render(mounted, view=closed)
+  assert_true(restored.focused(@view.NodeKey::new("open")))
+  mounted.dispose()
+}
+
+///|
+test "native Dialog restores the opener when the view removes it directly" {
+  let mounted = mount()
+  ignore(render(mounted, view=dialog_view(open=false)))
+  assert_true(mounted.focus(@view.NodeKey::new("open")))
+  ignore(
+    render(
+      mounted,
+      view=dialog_view(
+        with_field=true,
+        initial=Some(@view.NodeKey::new("name")),
+      ),
+    ),
+  )
+  assert_true(
+    mounted
+    .handle_event(
+      composition_event(
+        2L,
+        @primitives.Update(text="にほん", cursor_utf16=3),
+      ),
+    )
+    .unwrap(),
+  )
+  let frame = render(mounted, view=dialog_view(open=false))
+  assert_true(frame.focused(@view.NodeKey::new("open")))
+  assert_true(mounted.next_action() is None)
+  mounted.dispose()
+}
+
+///|
+test "native focus scope drops the acquisition on window blur" {
+  let mounted = mount()
+  ignore(render(mounted))
+  assert_true(mounted.focus(key()))
+  let focused = render(mounted)
+  assert_true(focused.focused(key()))
+  assert_true(mounted.handle_event(focus_event(2L, false)).unwrap())
+  let blurred = render(mounted)
+  assert_true(!blurred.focused(key()))
+  assert_true(mounted.handle_event(focus_event(3L, true)).unwrap())
+  let refocused = render(mounted)
+  assert_true(!refocused.focused(key()))
+  mounted.dispose()
 }
