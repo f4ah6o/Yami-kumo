@@ -27,6 +27,7 @@
 - Add unit coverage for the sample view/action mapping and for the runner's
   begin/update/commit/focus-loss sequence with a scripted backend and a fake
   text-input port.
+- Pin GPUI `0.10.4` (`70c5818`).
 - Add the local `--text-ime-proof` mode for the native text-field sample. It
   selects a live Japanese input source, restores the previous source, activates
   the app, posts key codes with `CGEventPostToPid`, waits for a Japanese
