@@ -79,7 +79,7 @@ UI workflows now pin the reviewed GPUI source at
 updates that dependency to GPUI `0.7.2` and includes stricter per-event target
 revalidation, bounded AX/helper lifetimes, owned input cleanup, and explicit
 zero-modifier events for the opt-in macOS sample runner. These guard fixtures
-use fake event posters only. Native `0.2.6` moves to GPUI `0.10.2` and
+use fake event posters only. Native `0.2.7` moves to GPUI `0.10.2` and
 `f4ah6o/yami_kumo` `0.2.2`, adds the shared single-line TextField adapter with
 host composition/focus and a bound clipboard request seam, and keeps native
 Dialog unsupported. The current external-input route remains unqualified at
