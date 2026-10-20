@@ -3,13 +3,13 @@ set -eu
 
 mode=${1:---ui-proof}
 if [ "$#" -gt 1 ]; then
-  echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-render-proof|--shared-counter-ax-proof]" >&2
+  echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-render-proof|--shared-counter-ax-proof|--text-ime-proof|--text-ax-proof]" >&2
   exit 2
 fi
 case "$mode" in
-  --ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-render-proof|--shared-counter-ax-proof) ;;
+  --ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-render-proof|--shared-counter-ax-proof|--text-ime-proof|--text-ax-proof) ;;
   *)
-    echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-render-proof|--shared-counter-ax-proof]" >&2
+    echo "usage: $0 [--ui-proof|--ax-proof|--build-and-test|--shared-counter-build-and-test|--shared-counter-ui-proof|--shared-counter-render-proof|--shared-counter-ax-proof|--text-ime-proof|--text-ax-proof]" >&2
     exit 2
     ;;
 esac
@@ -67,6 +67,21 @@ sh "$yami_root/scripts/native_ui_workspace.sh" \
     tail -n 160 "$evidence_dir/core-text-tests.log" >&2 || true
     exit 1
   }
+
+if [ "$mode" = "--text-ax-proof" ]; then
+  printf '%s\n' '{"platform":"macos","accessibility":"not-run","reason":"the text sample does not publish TextField AX yet"}' \
+    > "$evidence_dir/text-ax.json"
+  echo "NOT_RUN: the TextField AX proof requires the sample AX port and an unlocked session."
+  exit 0
+fi
+
+if [ "$mode" = "--text-ime-proof" ]; then
+  run_macos_python_driver "$yami_root/tests/native-ui/drive_macos_ime.py" \
+    --evidence-dir "$evidence_dir" \
+    --log "$evidence_dir/native-ime.log" \
+    -- moon run "$yami_root/native/examples/macos" --target native
+  exit 0
+fi
 
 if [ "$mode" = "--shared-counter-build-and-test" ]; then
   sh "$yami_root/scripts/native_ui_workspace.sh" \

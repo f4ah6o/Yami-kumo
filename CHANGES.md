@@ -4,6 +4,17 @@
 
 ### Added
 
+- Support nested and sibling native Dialogs as a scope stack ordered by view
+  preorder. Each level paints its own backdrop and panel, keeps an independent
+  `element.FocusScopeSession` scope and restores its enclosing focus once when
+  removed. Only the innermost level admits input, focus and semantic actions;
+  a non-dismissible inner level consumes Escape and backdrop presses without
+  dismissing an outer level.
+- Assign each binding the deepest Dialog level that contains it and paint main
+  content before level 0, then each deeper level. Add regression tests for
+  nested focus, Tab containment, staged Escape/backdrop dismissal,
+  non-dismissible trapping, outer removal with an open child, sibling stacking
+  and inner composition cancellation.
 - Add `Mounted::focused_text`, a read-only observation of the focused editable
   field's committed document, caret, binding identity and composing flag. Hosts
   use it as the owner state for a portable text-input session.
@@ -16,22 +27,15 @@
 - Add unit coverage for the sample view/action mapping and for the runner's
   begin/update/commit/focus-loss sequence with a scripted backend and a fake
   text-input port.
-
-## native-0.2.10 - 2026-10-21
-
-### Added
-
-- Support nested and sibling native Dialogs as a scope stack ordered by view
-  preorder. Each level paints its own backdrop and panel, keeps an independent
-  `element.FocusScopeSession` scope and restores its enclosing focus once when
-  removed. Only the innermost level admits input, focus and semantic actions;
-  a non-dismissible inner level consumes Escape and backdrop presses without
-  dismissing an outer level.
-- Assign each binding the deepest Dialog level that contains it and paint main
-  content before level 0, then each deeper level. Add regression tests for
-  nested focus, Tab containment, staged Escape/backdrop dismissal, non-dismissible
-  trapping, outer removal with an open child, sibling stacking and inner
-  composition cancellation.
+- Add the local `--text-ime-proof` mode for the native text-field sample. It
+  selects a live Japanese input source, restores the previous source, activates
+  the app, posts key codes with `CGEventPostToPid`, waits for a Japanese
+  preedit and a commit, and probes on-screen windows for an input-method
+  candidate window. Claims are recorded per item; a locked console session, a
+  missing Japanese source or untrusted Accessibility posting records
+  `NOT_RUN`/`UNSUPPORTED`. Physical-keyboard input and candidate anchoring
+  remain `NOT_RUN`. `--text-ax-proof` records `NOT_RUN` until the sample
+  publishes TextField AX.
 
 ### Fixed
 
