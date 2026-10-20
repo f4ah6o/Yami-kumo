@@ -69,9 +69,10 @@ sh "$yami_root/scripts/native_ui_workspace.sh" \
   }
 
 if [ "$mode" = "--text-ax-proof" ]; then
-  printf '%s\n' '{"platform":"macos","accessibility":"not-run","reason":"the text sample does not publish TextField AX yet"}' \
-    > "$evidence_dir/text-ax.json"
-  echo "NOT_RUN: the TextField AX proof requires the sample AX port and an unlocked session."
+  run_macos_python_driver "$yami_root/tests/native-ui/drive_macos_text_ax.py" \
+    --evidence-dir "$evidence_dir" \
+    --log "$evidence_dir/native-text-ax.log" \
+    -- moon run "$yami_root/native/examples/macos" --target native
   exit 0
 fi
 

@@ -86,6 +86,26 @@ fn main {
   let text_port = @common.NativeTextInputPort::new(
     text_begin, text_update, text_cancel, text_end, text_next,
   )
+  let text_ax_port = @common.NativeTextAXPort::new(
+    fn(window, existing, snapshot) {
+      host.publish_text_field_accessibility(
+        window,
+        existing,
+        @mac_host.TextFieldAccessibilitySnapshot::new(
+          "Name",
+          snapshot.value,
+          snapshot.bounds,
+          snapshot.focused,
+          snapshot.editable,
+          0,
+          0,
+        ),
+      )
+    },
+    fn(window, token) {
+      host.revoke_text_field_accessibility(window, token)
+    },
+  )
   let result = @common.run_native_entry(
     host,
     @common.Macos,
@@ -93,6 +113,7 @@ fn main {
     capture,
     accessibility_port=Some(accessibility_port),
     text_port=Some(text_port),
+    text_accessibility_port=Some(text_ax_port),
   )
   let stopped = host.stop()
   match result {

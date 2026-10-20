@@ -101,5 +101,11 @@ Claims are recorded per item: live preedit, live commit, candidate visibility,
 candidate anchoring and physical-keyboard input. Candidate anchoring and
 physical-keyboard input remain `NOT_RUN`. Missing Japanese sources,
 untrusted Accessibility posting or a locked console session produce
-`NOT_RUN`/`UNSUPPORTED`, not a pass. `--text-ax-proof` currently records
-`NOT_RUN`; the text sample does not publish TextField AX yet.
+`NOT_RUN`/`UNSUPPORTED`, not a pass.
+
+`sh scripts/native_ui_macos.sh --text-ax-proof` focuses the same sample's field
+with the IME helper's Tab post, then runs `tests/native-ui/macos_text_ax_client.m`
+against the app. The client walks the AX tree for an `AXTextField` and verifies
+role, value, focus and a non-empty frame. A missing AX window while the console
+is locked is `NOT_RUN`; untrusted AX observation is `UNSUPPORTED`; a mismatched
+field is `FAIL`. AX set-value and actions are not implemented.
