@@ -192,7 +192,7 @@ def drive(args: argparse.Namespace) -> int:
     app: AppProcess | None = None
     previous_source = ""
     try:
-        trust = helper_json(helper, "type", "0", "tab", check=False)
+        trust = helper_json(helper, "trust", check=False)
         if trust.get("status") == "unsupported":
             report["claims"]["ime.live-engine.preedit"] = "UNSUPPORTED"
             report["claims"]["ime.live-engine.commit"] = "UNSUPPORTED"

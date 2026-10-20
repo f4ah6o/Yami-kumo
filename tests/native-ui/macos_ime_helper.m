@@ -106,6 +106,15 @@ static void command_select(void) {
          selected ? json_escape(selected).UTF8String : "");
 }
 
+static void command_trust(void) {
+  if (AXIsProcessTrusted()) {
+    printf("{\"status\":\"trusted\"}\n");
+    return;
+  }
+  printf("{\"status\":\"unsupported\",\"reason\":\"accessibility-not-trusted\"}\n");
+  exit(77);
+}
+
 static void command_activate(pid_t pid) {
   NSRunningApplication *app =
       [NSRunningApplication runningApplicationWithProcessIdentifier:pid];
@@ -176,6 +185,8 @@ int main(int argc, char **argv) {
       if (!restore_source([NSString stringWithUTF8String:argv[2]]))
         fail("cannot restore the input source");
       printf("{\"status\":\"restored\"}\n");
+    } else if (strcmp(argv[1], "trust") == 0) {
+      command_trust();
     } else if (strcmp(argv[1], "activate") == 0 && argc >= 3) {
       command_activate((pid_t)atoi(argv[2]));
     } else if (strcmp(argv[1], "type") == 0 && argc >= 4) {
