@@ -192,6 +192,10 @@ def drive(args: argparse.Namespace) -> int:
     app: AppProcess | None = None
     previous_source = ""
     try:
+        session = helper_json(helper, "session", check=False)
+        if session.get("locked"):
+            print("NOT_RUN: the console session is locked; AX/key delivery is unavailable")
+            return 0
         trust = helper_json(helper, "trust", check=False)
         if trust.get("status") == "unsupported":
             report["claims"]["ime.live-engine.preedit"] = "UNSUPPORTED"
