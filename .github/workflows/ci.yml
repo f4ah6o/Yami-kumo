@@ -61,6 +61,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
+      - name: Test npm release gates
+        run: node --test tests/npm/release.test.mjs
       - name: Setup Vite+
         uses: voidzero-dev/setup-vp@v1.16.1
         with:

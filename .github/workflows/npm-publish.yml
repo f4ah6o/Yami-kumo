@@ -1,0 +1,94 @@
+name: npm trusted publishing
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact version from npm/package.json (no v prefix)
+        required: true
+        type: string
+      publish:
+        description: Publish the tested preview to npm (false only builds and verifies)
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: npm-publish
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+      - name: Check release identity
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: node scripts/check-npm-release.mjs
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1.16.1
+        with:
+          node-version: '24'
+          run-install: true
+      - name: Setup MoonBit
+        uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.14+7d59c7ec9
+          setup-core: true
+          core-version: 0.10.14+7d59c7ec9
+      - name: Install consumer browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Build and test the packed JS, TS, browser and React consumers
+        run: pnpm run test:npm
+      - name: Verify the tested release artifact and simulate publishing
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          node scripts/check-npm-release.mjs --artifact
+          npm publish ./dist/f4ah6o-yami-kumo-*.tgz --dry-run --ignore-scripts --access public --tag preview --registry https://registry.npmjs.org
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-release
+          path: |
+            dist/*.tgz
+            dist/npm-consumers.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    needs: prepare
+    if: ${{ inputs.publish && github.ref == 'refs/heads/main' && github.repository == 'f4ah6o/Yami-kumo' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+      - name: Ensure an OIDC-capable npm CLI
+        run: npm install --global npm@11.9.0 --ignore-scripts --registry https://registry.npmjs.org
+      - uses: actions/download-artifact@v4
+        with:
+          name: npm-release
+          path: dist
+      - name: Verify downloaded artifact against consumer evidence and source
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: node scripts/check-npm-release.mjs --artifact
+      - name: Publish the tested tarball using OIDC
+        run: npm publish ./dist/f4ah6o-yami-kumo-*.tgz --ignore-scripts --access public --tag preview --registry https://registry.npmjs.org
