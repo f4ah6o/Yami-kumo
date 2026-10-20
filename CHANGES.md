@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- Include `text_sample` in the published module archive so the shared runner's
+  import resolves after installation.
 - Keep a Dialog's overlay root id stable while the same key occupies a level.
   Previously a rebuilt open Dialog changed the root id, frame adoption revoked
   its live scope, and only the adapter's `in_dialog` filters still blocked
