@@ -97,9 +97,11 @@ without granting edit authority. The macOS entrypoint supplies the port; hosts
 without `text_host` return a typed error for `--text-e2e`. The local
 `scripts/native_ui_macos.sh --text-ime-proof` mode drives that sample with a
 live Japanese input source and records preedit, commit, candidate and
-physical-keyboard claims separately. The console session must be unlocked and
-Accessibility posting authorized; otherwise the mode records `NOT_RUN` or
-`UNSUPPORTED`.
+physical-keyboard claims separately. The sample also publishes the focused
+TextField's role, value, focus and frame; `--text-ax-proof` verifies them with a
+dedicated AXUIElement client. The console session must be unlocked and
+Accessibility authorized; otherwise both modes record `NOT_RUN` or
+`UNSUPPORTED`. AX set-value and actions are out of scope.
 Native `0.2.10` moves to GPUI `0.10.4` (`70c5818`) and stacks nested and sibling Dialogs: every open Dialog keeps its
 own overlay root and live scope, only the innermost level admits input and
 semantic actions, Tab stays in that level, and Escape/backdrop dismiss the

@@ -49,6 +49,38 @@ pub fn NativeTextInputPort::new(
 }
 
 ///|
+/// One copied TextField observation for a host accessibility projection.
+pub struct NativeTextAXSnapshot {
+  value : String
+  bounds : @primitives.Rect
+  focused : Bool
+  editable : Bool
+}
+
+///|
+/// Optional TextField accessibility transport. The runner publishes the focused
+/// field's copied value/frame/focus and revokes it when focus or the session
+/// ends. Selection is not published; the host adapter keeps its last value.
+pub struct NativeTextAXPort {
+  publish : (@platform.WindowId, Int64, NativeTextAXSnapshot) -> Result[
+    Int64,
+    @diagnostics.FrameworkError,
+  ]
+  revoke : (@platform.WindowId, Int64) -> Result[Unit, @diagnostics.FrameworkError]
+}
+
+///|
+pub fn NativeTextAXPort::new(
+  publish : (@platform.WindowId, Int64, NativeTextAXSnapshot) -> Result[
+    Int64,
+    @diagnostics.FrameworkError,
+  ],
+  revoke : (@platform.WindowId, Int64) -> Result[Unit, @diagnostics.FrameworkError],
+) -> NativeTextAXPort {
+  { publish, revoke, }
+}
+
+///|
 priv struct TextSession {
   epoch : UInt64
   binding : UInt64
@@ -64,11 +96,18 @@ pub fn run_native_entry(
   capture : NativeFrameCapture,
   accessibility_port~ : NativeButtonAXPort? = None,
   text_port~ : NativeTextInputPort? = None,
+  text_accessibility_port~ : NativeTextAXPort? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let args = @env.args()
   if args.contains("--text-e2e") ||
     @env.get_env_var("YAMI_NATIVE_UI_TEXT_E2E") == Some("1") {
-    return run_native_text_sample(host, platform, measure, text_port~)
+    return run_native_text_sample(
+      host,
+      platform,
+      measure,
+      text_port~,
+      accessibility_port=text_accessibility_port,
+    )
   }
   run_native_sample(host, platform, measure, capture, accessibility_port~)
 }
@@ -122,6 +161,7 @@ pub fn run_native_text_sample(
   platform : NativeSamplePlatform,
   measure : @components.TextMeasure,
   text_port~ : NativeTextInputPort? = None,
+  accessibility_port~ : NativeTextAXPort? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let port = match text_port {
     Some(value) => value
@@ -141,6 +181,7 @@ pub fn run_native_text_sample(
   let mounted = @ui.Mounted::new(window)
   let sample = @text_sample.TextSample::new()
   let mut session : TextSession? = None
+  let mut ax_token : Int64 = 0
   let mut last_document = ""
   let mut last_caret = @primitives.Rect::new(0.0, 0.0, 0.0, 0.0).unwrap()
   let mut dirty = true
@@ -329,6 +370,34 @@ pub fn run_native_text_sample(
             }
           }
       }
+      match accessibility_port {
+        Some(ax) =>
+          match
+            (frame.bounds(@text_sample.text_sample_field()),
+             mounted.focused_text()) {
+            (Some(bounds), Some(state)) => {
+              let snapshot : NativeTextAXSnapshot = {
+                value: state.document().text(),
+                bounds,
+                focused: true,
+                editable: true,
+              }
+              ax_token = match (ax.publish)(window, ax_token, snapshot) {
+                Err(error) => return Err(error)
+                Ok(value) => value
+              }
+            }
+            _ =>
+              if ax_token != 0 {
+                match (ax.revoke)(window, ax_token) {
+                  Err(error) => return Err(error)
+                  Ok(_) => ()
+                }
+                ax_token = 0
+              }
+          }
+        None => ()
+      }
       let submitted = match sample.submitted() {
         Some(value) => value
         None => ""
@@ -345,6 +414,17 @@ pub fn run_native_text_sample(
         Ok(_) => ()
       }
     None => ()
+  }
+  if ax_token != 0 {
+    match accessibility_port {
+      Some(ax) =>
+        match (ax.revoke)(window, ax_token) {
+          Err(error) => return Err(error)
+          Ok(_) => ()
+        }
+      None => ()
+    }
+    ax_token = 0
   }
   mounted.dispose()
   if destroyed || ticks >= tick_limit {

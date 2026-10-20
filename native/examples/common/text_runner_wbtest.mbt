@@ -118,11 +118,24 @@ test "text runner begins, updates and ends a session around a commit" {
       }
     },
   )
+  let publishes : Ref[Array[String]] = Ref([])
+  let revoked : Ref[Int] = Ref(0)
+  let ax_port = NativeTextAXPort::new(
+    fn(_window, _existing, snapshot) {
+      publishes.val.push(snapshot.value)
+      Ok(42L)
+    },
+    fn(_window, _token) {
+      revoked.val += 1
+      Ok(())
+    },
+  )
   let result = run_native_text_sample(
     host,
     Macos,
     text_runner_measure,
     text_port=Some(port),
+    accessibility_port=Some(ax_port),
   )
   match result {
     Err(error) => abort(error.message().unwrap_or("text runner failed"))
@@ -132,4 +145,7 @@ test "text runner begins, updates and ends a session around a commit" {
   assert_true(ended.val)
   assert_eq(cancelled.val, 1)
   assert_true(updates.val.contains("日本語"))
+  assert_true(publishes.val.length() > 0)
+  assert_eq(publishes.val[publishes.val.length() - 1], "日本語")
+  assert_eq(revoked.val, 1)
 }

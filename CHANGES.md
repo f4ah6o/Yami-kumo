@@ -1,5 +1,19 @@
 # Changes
 
+## native-0.2.11 - 2026-10-21
+
+### Added
+
+- Publish the focused TextField's role, value, focus and frame through
+  `platform/macos.Host::publish_text_field_accessibility` while a portable text
+  session is active, and revoke it on focus/session end. The shared runner gains
+  `NativeTextAXPort`; hosts without an AX projection ignore it.
+- Add `--text-ax-proof`: a dedicated AXUIElement client verifies the TextField
+  role, value, focus and frame; the driver focuses the field with the IME
+  helper's Tab post. A locked console, missing AX window or untrusted
+  observation records `NOT_RUN`/`UNSUPPORTED`; a mismatch is `FAIL`. AX
+  set-value and actions remain out of scope.
+
 ## native-0.2.10 - 2026-10-21
 
 ### Added
