@@ -2724,3 +2724,41 @@ test "native nested Dialog cancels inner composition before dismissing" {
   }
   mounted.dispose()
 }
+
+///|
+test "native focused TextField exposes its committed document and caret" {
+  let mounted = mount()
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(
+      @view.NodeKey::new("name"),
+      @view.TextFieldProps::new("abc", "Name"),
+    ),
+    @view.button(@view.NodeKey::new("go"), "Go"),
+  ])
+  let frame = render(mounted, view=view)
+  assert_true(mounted.focused_text() is None)
+  assert_true(mounted.focus(@view.NodeKey::new("name")))
+  let state = match mounted.focused_text() {
+    Some(value) => value
+    None => fail("expected a focused field state")
+  }
+  assert_eq(state.key(), @view.NodeKey::new("name"))
+  assert_eq(
+    state.binding_id(),
+    frame.binding_id(@view.NodeKey::new("name")).unwrap(),
+  )
+  assert_eq(state.document().text(), "abc")
+  assert_true(state.caret().size().height() > 0.0)
+  assert_false(state.composing())
+  assert_true(
+    mounted
+    .handle_event(
+      composition_event(2L, @primitives.Update(text="にほん", cursor_utf16=3)),
+    )
+    .unwrap(),
+  )
+  let composing = mounted.focused_text().unwrap()
+  assert_true(composing.composing())
+  assert_eq(composing.document().text(), "abc")
+  mounted.dispose()
+}

@@ -4,6 +4,23 @@
 
 ### Added
 
+- Add `Mounted::focused_text`, a read-only observation of the focused editable
+  field's committed document, caret, binding identity and composing flag. Hosts
+  use it as the owner state for a portable text-input session.
+- Add the `text_sample` fixture and `examples/common` text runner. It begins a
+  `text_host` session for the focused field, republishes document/caret updates,
+  applies ordered `Preedit`/`Commit`/`Cancel`/`FocusLost` observations through
+  `Mounted::text_input`, drains `TextChanged` before the next frame so a commit
+  is not replaced by a stale owning value, and cancels/ends on focus loss. The
+  macOS entrypoint supplies the port from `platform/macos.Host`.
+- Add unit coverage for the sample view/action mapping and for the runner's
+  begin/update/commit/focus-loss sequence with a scripted backend and a fake
+  text-input port.
+
+## native-0.2.10 - 2026-10-21
+
+### Added
+
 - Support nested and sibling native Dialogs as a scope stack ordered by view
   preorder. Each level paints its own backdrop and panel, keeps an independent
   `element.FocusScopeSession` scope and restores its enclosing focus once when

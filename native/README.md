@@ -88,7 +88,13 @@ adapter-local modal filter with the live `element.FocusScopeSession`: admission,
 Tab trapping, dismissal and opener restoration come from the session, and a
 rebuilt frame adopts its new tree without closing the open scope. The adapter
 also applies portable `text_host.TextInputEvent` observations through
-`Mounted::text_input`; no sample drives the host begin/update/end cycle yet.
+`Mounted::text_input`. The new `text_sample` fixture drives the full host cycle:
+the shared runner begins a session for the focused field, republishes the
+committed document and caret, applies ordered observations, drains the field's
+`TextChanged` action before the next frame, and cancels/ends on focus loss.
+`Mounted::focused_text` exposes the committed document, caret and composing flag
+without granting edit authority. The macOS entrypoint supplies the port; hosts
+without `text_host` return a typed error for `--text-e2e`.
 Native `0.2.10` stacks nested and sibling Dialogs: every open Dialog keeps its
 own overlay root and live scope, only the innermost level admits input and
 semantic actions, Tab stays in that level, and Escape/backdrop dismiss the
