@@ -2454,3 +2454,273 @@ test "native portable text input cancels composition on focus loss" {
   assert_true(mounted.next_action() is None)
   mounted.dispose()
 }
+
+///|
+test "native Dialog survives repeated rebuilds while open" {
+  let mounted = mount()
+  ignore(render(mounted, view=dialog_view(open=false)))
+  assert_true(mounted.focus(@view.NodeKey::new("open")))
+  ignore(render(mounted, view=dialog_view()))
+  ignore(render(mounted, view=dialog_view()))
+  assert_false(mounted.focus(@view.NodeKey::new("open")))
+  for sequence in 4L..<7L {
+    assert_true(
+      mounted.handle_event(event(sequence, key_down(@primitives.Tab))).unwrap(),
+    )
+  }
+  let rebuilt = render(mounted, view=dialog_view())
+  assert_false(rebuilt.focused(@view.NodeKey::new("open")))
+  assert_true(mounted.callback(@view.NodeKey::new("open")) is None)
+  assert_true(
+    mounted.handle_event(event(7L, key_down(@primitives.Enter))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Activate(key)) => assert_eq(key, @view.NodeKey::new("cancel"))
+    _ => fail("expected dialog-local traversal after rebuild")
+  }
+  mounted.dispose()
+}
+
+///|
+fn nested_dialog_view(
+  outer_open~ : Bool = true,
+  inner_open~ : Bool = true,
+  outer_dismissible~ : Bool = true,
+  inner_dismissible~ : Bool = true,
+) -> @view.View {
+  @view.column(@view.NodeKey::new("root"), [
+    @view.button(@view.NodeKey::new("open"), "Open"),
+    @view.dialog(
+      @view.NodeKey::new("outer"),
+      @view.DialogProps::new(
+        outer_open,
+        "Outer",
+        dismissible=outer_dismissible,
+        initial_focus=Some(@view.NodeKey::new("outer-confirm")),
+      ),
+      [
+        @view.text(@view.NodeKey::new("outer-body"), "Outer body"),
+        @view.button(@view.NodeKey::new("outer-confirm"), "Outer confirm"),
+        @view.dialog(
+          @view.NodeKey::new("inner"),
+          @view.DialogProps::new(
+            inner_open,
+            "Inner",
+            dismissible=inner_dismissible,
+            initial_focus=Some(@view.NodeKey::new("inner-confirm")),
+          ),
+          [
+            @view.text(@view.NodeKey::new("inner-body"), "Inner body"),
+            @view.button(@view.NodeKey::new("inner-confirm"), "Inner confirm"),
+            @view.button(@view.NodeKey::new("inner-cancel"), "Inner cancel"),
+          ],
+        ),
+      ],
+    ),
+  ])
+}
+
+///|
+test "native nested Dialog admits only the innermost level" {
+  let mounted = mount()
+  ignore(render(mounted, view=nested_dialog_view(inner_open=false)))
+  assert_true(
+    mounted.frame().unwrap().focused(@view.NodeKey::new("outer-confirm")),
+  )
+  let frame = render(mounted, view=nested_dialog_view())
+  assert_true(frame.focused(@view.NodeKey::new("inner-confirm")))
+  assert_false(frame.focused(@view.NodeKey::new("outer-confirm")))
+  assert_false(mounted.focus(@view.NodeKey::new("outer-confirm")))
+  assert_true(mounted.callback(@view.NodeKey::new("outer-confirm")) is None)
+  assert_true(mounted.callback(@view.NodeKey::new("inner-confirm")) is Some(_))
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Escape))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Dismissed(key)) => assert_eq(key, @view.NodeKey::new("inner"))
+    _ => fail("expected the inner Dialog to dismiss")
+  }
+  let restored = render(mounted, view=nested_dialog_view(inner_open=false))
+  assert_true(restored.focused(@view.NodeKey::new("outer-confirm")))
+  assert_true(
+    mounted.handle_event(event(4L, key_down(@primitives.Escape))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Dismissed(key)) => assert_eq(key, @view.NodeKey::new("outer"))
+    _ => fail("expected the outer Dialog to dismiss")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native nested Dialog dismisses from the innermost backdrop only" {
+  let mounted = mount()
+  ignore(render(mounted, view=nested_dialog_view()))
+  let press = @primitives.PointerButtonPressed(
+    position=@primitives.Point::new(2.0, 2.0).unwrap(),
+    button=@primitives.Primary,
+    modifiers=@primitives.Modifiers::none(),
+  )
+  assert_true(mounted.handle_event(event(3L, press)).unwrap())
+  match mounted.next_action() {
+    Some(@view.Dismissed(key)) => assert_eq(key, @view.NodeKey::new("inner"))
+    _ => fail("expected the inner Dialog backdrop to dismiss")
+  }
+  match mounted.next_action() {
+    Some(@view.Dismissed(_)) => fail("only the innermost Dialog may dismiss")
+    _ => ()
+  }
+  let restored = render(mounted, view=nested_dialog_view(inner_open=false))
+  assert_true(restored.focused(@view.NodeKey::new("outer-confirm")))
+  mounted.dispose()
+}
+
+///|
+test "native non-dismissible inner Dialog traps Escape and backdrop" {
+  let mounted = mount()
+  ignore(render(mounted, view=nested_dialog_view(inner_dismissible=false)))
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Escape))).unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  let press = @primitives.PointerButtonPressed(
+    position=@primitives.Point::new(2.0, 2.0).unwrap(),
+    button=@primitives.Primary,
+    modifiers=@primitives.Modifiers::none(),
+  )
+  assert_true(mounted.handle_event(event(4L, press)).unwrap())
+  assert_true(mounted.next_action() is None)
+  let restored = render(mounted, view=nested_dialog_view(inner_open=false))
+  assert_true(restored.focused(@view.NodeKey::new("outer-confirm")))
+  mounted.dispose()
+}
+
+///|
+test "native Dialog restores the outer level when both close together" {
+  let mounted = mount()
+  ignore(render(mounted, view=dialog_view(open=false)))
+  assert_true(mounted.focus(@view.NodeKey::new("open")))
+  ignore(render(mounted, view=nested_dialog_view()))
+  let closed = render(mounted, view=nested_dialog_view(outer_open=false))
+  assert_true(closed.bounds(@view.NodeKey::new("outer")) is None)
+  assert_true(closed.bounds(@view.NodeKey::new("inner")) is None)
+  assert_true(closed.focused(@view.NodeKey::new("open")))
+  mounted.dispose()
+}
+
+///|
+test "native nested Dialog replaces a deeper level without stale focus" {
+  let mounted = mount()
+  let first = @view.column(@view.NodeKey::new("root"), [
+    @view.button(@view.NodeKey::new("open"), "Open"),
+    @view.dialog(
+      @view.NodeKey::new("outer"),
+      @view.DialogProps::new(true, "Outer"),
+      [
+        @view.button(@view.NodeKey::new("outer-confirm"), "Outer confirm"),
+        @view.dialog(
+          @view.NodeKey::new("inner-a"),
+          @view.DialogProps::new(true, "Inner A"),
+          [@view.button(@view.NodeKey::new("inner-a-confirm"), "A")],
+        ),
+      ],
+    ),
+  ])
+  ignore(render(mounted, view=first))
+  let second = @view.column(@view.NodeKey::new("root"), [
+    @view.button(@view.NodeKey::new("open"), "Open"),
+    @view.dialog(
+      @view.NodeKey::new("outer"),
+      @view.DialogProps::new(true, "Outer"),
+      [
+        @view.button(@view.NodeKey::new("outer-confirm"), "Outer confirm"),
+        @view.dialog(
+          @view.NodeKey::new("inner-b"),
+          @view.DialogProps::new(true, "Inner B"),
+          [@view.button(@view.NodeKey::new("inner-b-confirm"), "B")],
+        ),
+      ],
+    ),
+  ])
+  let frame = render(mounted, view=second)
+  assert_true(frame.focused(@view.NodeKey::new("inner-b-confirm")))
+  assert_true(frame.bounds(@view.NodeKey::new("inner-a")) is None)
+  assert_false(mounted.focus(@view.NodeKey::new("outer-confirm")))
+  mounted.dispose()
+}
+
+///|
+test "native sibling Dialogs stack in view order" {
+  let mounted = mount()
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.dialog(
+      @view.NodeKey::new("first"),
+      @view.DialogProps::new(true, "First"),
+      [@view.button(@view.NodeKey::new("first-confirm"), "First confirm")],
+    ),
+    @view.dialog(
+      @view.NodeKey::new("second"),
+      @view.DialogProps::new(true, "Second"),
+      [@view.button(@view.NodeKey::new("second-confirm"), "Second confirm")],
+    ),
+  ])
+  let frame = render(mounted, view~)
+  assert_true(frame.focused(@view.NodeKey::new("second-confirm")))
+  assert_false(mounted.callback(@view.NodeKey::new("first-confirm")) is Some(_))
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Escape))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Dismissed(key)) => assert_eq(key, @view.NodeKey::new("second"))
+    _ => fail("expected the top sibling to dismiss")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native nested Dialog cancels inner composition before dismissing" {
+  let mounted = mount()
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.dialog(
+      @view.NodeKey::new("outer"),
+      @view.DialogProps::new(true, "Outer"),
+      [
+        @view.button(@view.NodeKey::new("outer-confirm"), "Outer confirm"),
+        @view.dialog(
+          @view.NodeKey::new("inner"),
+          @view.DialogProps::new(true, "Inner"),
+          [
+            @view.text_field(
+              @view.NodeKey::new("inner-name"),
+              @view.TextFieldProps::new("", "Name"),
+            ),
+            @view.button(@view.NodeKey::new("inner-confirm"), "Inner confirm"),
+          ],
+        ),
+      ],
+    ),
+  ])
+  ignore(render(mounted, view~))
+  assert_true(
+    mounted
+    .handle_event(
+      composition_event(
+        2L,
+        @primitives.Update(text="にほん", cursor_utf16=3),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Escape))).unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted.handle_event(event(4L, key_down(@primitives.Escape))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Dismissed(key)) => assert_eq(key, @view.NodeKey::new("inner"))
+    _ => fail("expected the inner Dialog to dismiss after cancel")
+  }
+  mounted.dispose()
+}

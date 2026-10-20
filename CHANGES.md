@@ -1,5 +1,29 @@
 # Changes
 
+## native-0.2.10 - 2026-10-21
+
+### Added
+
+- Support nested and sibling native Dialogs as a scope stack ordered by view
+  preorder. Each level paints its own backdrop and panel, keeps an independent
+  `element.FocusScopeSession` scope and restores its enclosing focus once when
+  removed. Only the innermost level admits input, focus and semantic actions;
+  a non-dismissible inner level consumes Escape and backdrop presses without
+  dismissing an outer level.
+- Assign each binding the deepest Dialog level that contains it and paint main
+  content before level 0, then each deeper level. Add regression tests for
+  nested focus, Tab containment, staged Escape/backdrop dismissal, non-dismissible
+  trapping, outer removal with an open child, sibling stacking and inner
+  composition cancellation.
+
+### Fixed
+
+- Keep a Dialog's overlay root id stable while the same key occupies a level.
+  Previously a rebuilt open Dialog changed the root id, frame adoption revoked
+  its live scope, and only the adapter's `in_dialog` filters still blocked
+  background input; now the session scope survives a rebuild and continues to
+  own admission.
+
 ## native-0.2.9 - 2026-10-20
 
 ### Changed
