@@ -12,6 +12,13 @@
 - Keep generated Kumo contract code in MoonBit's canonical formatted layout.
 - Format the package README example as valid MoonBit code blocks.
 
+## 0.2.1 - 2026-10-20
+
+### Fixed
+
+- Include the `ui/` packages in the Mooncakes archive. `0.2.0` omitted them,
+  so the native module could not resolve `f4ah6o/yami_kumo/ui/core`.
+
 ## 0.2.0 - 2026-10-20
 
 ### Added

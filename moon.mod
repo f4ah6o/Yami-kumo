@@ -1,6 +1,6 @@
 name = "f4ah6o/yami_kumo"
 
-version = "0.2.0"
+version = "0.2.1"
 
 description = "Pure MoonBit HTML components matching a pinned subset of Cloudflare Kumo"
 

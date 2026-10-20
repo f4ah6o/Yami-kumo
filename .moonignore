@@ -11,6 +11,8 @@
 !/native/
 !/*.mbt
 !/dom/
+!/ui/
+!/ui/**
 !/dom/moon.pkg
 !/dom/*.mbt
 !/styles/

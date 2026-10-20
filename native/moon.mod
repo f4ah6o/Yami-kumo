@@ -11,6 +11,6 @@ repository = "https://github.com/f4ah6o/Yami-kumo"
 license = "MIT"
 
 import {
-  "f4ah6o/gpui@0.10.1",
-  "f4ah6o/yami_kumo@0.2.0",
+  "f4ah6o/gpui@0.10.2",
+  "f4ah6o/yami_kumo@0.2.1",
 }
