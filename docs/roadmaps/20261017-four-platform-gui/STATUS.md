@@ -36,7 +36,7 @@ the current implementation state; use this file and the linked code/tests.
 | YK-06 | PR pending (#38, #40) | Candidate DOM `<input>` slice (#38) and native `TextField` with composition, focus restoration and clipboard requests (#40). Neither is on `main`. Native Dialog, OS IME and AX are `NOT_RUN`/unsupported. [Shared TextField contract](../../shared-textfield.md).                                       |
 | YK-07 | Bounded DOM + native  | DOM `<dialog>` slice merged (#39). Native adapter adds a bounded root overlay with initial focus, dialog-local Tab, Escape/backdrop dismissal, background filtering and opener restoration. Nested Dialogs and `FocusScopeSession` wiring remain open. [Shared Dialog contract](../../shared-dialog.md). |
 | YK-08 | Not started           | Harness pieces exist (`evidence.mjs`, native drivers, palettes); no Shared Settings matrix.                                                                                                                                                                                                              |
-| YK-09 | Published, bounded    | Published `f4ah6o/yami_kumo@0.2.2` and `f4ah6o/yami_kumo_native@0.2.7` (GPUI `0.10.2`). `0.2.0`/`0.2.1` and native `0.2.6` are superseded packaging failures; use `0.2.2`/`0.2.7`.                                                                                                                       |
+| YK-09 | Published, bounded    | Published `f4ah6o/yami_kumo@0.2.2` and `f4ah6o/yami_kumo_native@0.2.8` (GPUI `0.10.2`). `0.2.0`/`0.2.1` and native `0.2.6` are superseded packaging failures; use `0.2.2`/`0.2.8`.                                                                                                                       |
 
 ## GPUI packets
 
