@@ -10,6 +10,8 @@
 !/components/**
 !/sample/
 !/sample/**
+!/text_sample/
+!/text_sample/**
 !/examples/
 !/examples/**
 # The shared UI development path depends on source-workspace-only packages.
