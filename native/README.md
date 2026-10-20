@@ -100,7 +100,7 @@ live Japanese input source and records preedit, commit, candidate and
 physical-keyboard claims separately. The console session must be unlocked and
 Accessibility posting authorized; otherwise the mode records `NOT_RUN` or
 `UNSUPPORTED`.
-Native `0.2.10` stacks nested and sibling Dialogs: every open Dialog keeps its
+Native `0.2.10` moves to GPUI `0.10.4` (`70c5818`) and stacks nested and sibling Dialogs: every open Dialog keeps its
 own overlay root and live scope, only the innermost level admits input and
 semantic actions, Tab stays in that level, and Escape/backdrop dismiss the
 innermost dismissible level. A non-dismissible inner level consumes both
