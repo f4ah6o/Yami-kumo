@@ -1,0 +1,7 @@
+import {
+  "f4ah6o/yami_kumo/ui/core" @view,
+}
+
+import {
+  "f4ah6o/yami_kumo/ui/core" @view,
+} for "test"

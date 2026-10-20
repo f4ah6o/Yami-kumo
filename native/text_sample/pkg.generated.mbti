@@ -1,0 +1,31 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "f4ah6o/yami_kumo_native/text_sample"
+
+import {
+  "f4ah6o/yami_kumo/ui/core",
+}
+
+// Values
+pub fn text_sample_field() -> @core.NodeKey
+
+pub fn text_sample_root() -> @core.NodeKey
+
+pub fn text_sample_status() -> @core.NodeKey
+
+pub fn text_sample_submit() -> @core.NodeKey
+
+// Errors
+
+// Types and methods
+pub struct TextSample {
+  // private fields
+}
+pub fn TextSample::apply(Self, @core.SemanticAction) -> Bool
+pub fn TextSample::new() -> Self
+pub fn TextSample::submitted(Self) -> String?
+pub fn TextSample::value(Self) -> String
+pub fn TextSample::view(Self) -> @core.View
+
+// Type aliases
+
+// Traits

@@ -68,12 +68,31 @@ fn main {
   let accessibility_port = @common.NativeButtonAXPort::new(
     publish_accessibility_button, revoke_accessibility_button, take_accessibility_request,
   )
-  let result = @common.run_native_sample(
+  let text_begin : @common.NativeTextBegin = fn(window, root) {
+    host.begin_text_input(window, root)
+  }
+  let text_update : @common.NativeTextUpdate = fn(epoch, state) {
+    host.update_text_input(epoch, state)
+  }
+  let text_cancel : @common.NativeTextCancel = fn(epoch) {
+    host.cancel_text_input(epoch)
+  }
+  let text_end : @common.NativeTextEnd = fn(epoch) {
+    host.end_text_input(epoch)
+  }
+  let text_next : @common.NativeTextNext = fn(timeout) {
+    host.next_text_input(timeout_ms=timeout)
+  }
+  let text_port = @common.NativeTextInputPort::new(
+    text_begin, text_update, text_cancel, text_end, text_next,
+  )
+  let result = @common.run_native_entry(
     host,
     @common.Macos,
     macos_measure,
     capture,
     accessibility_port=Some(accessibility_port),
+    text_port=Some(text_port),
   )
   let stopped = host.stop()
   match result {
