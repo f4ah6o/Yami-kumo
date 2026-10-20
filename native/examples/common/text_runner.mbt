@@ -185,6 +185,8 @@ pub fn run_native_text_sample(
   let mut last_document = ""
   let mut last_caret = @primitives.Rect::new(0.0, 0.0, 0.0, 0.0).unwrap()
   let mut dirty = true
+  let mut focus_initialized = false
+  let mut text_suspended = false
   let mut ticks = 0
   let mut destroyed = false
   let mut last_sequence : Int64 = 0
@@ -234,6 +236,7 @@ pub fn run_native_text_sample(
             Ok(_) => ()
           }
           session = None
+          text_suspended = true
           last_document = ""
         }
         _ => ()
@@ -267,6 +270,7 @@ pub fn run_native_text_sample(
             mounted.invalidate_layout()
           @platform.FocusChanged(focused) => {
             ignore(mounted.handle_event(value))
+            text_suspended = !focused
             if !focused {
               match session {
                 Some(current) => {
@@ -308,9 +312,17 @@ pub fn run_native_text_sample(
         }
       }
       let focused = frame.focused(@text_sample.text_sample_field())
+      // The proof fixture owns one field; focus it once after the first frame
+      // so an external harness does not depend on AppKit key-view traversal.
+      if !focus_initialized {
+        focus_initialized = true
+        if !focused && mounted.focus(@text_sample.text_sample_field()) {
+          dirty = true
+        }
+      }
       match session {
         None =>
-          if focused {
+          if focused && !text_suspended {
             match mounted.focused_text() {
               Some(state) => {
                 let epoch = match (port.begin)(window, state.binding_id()) {
@@ -348,7 +360,7 @@ pub fn run_native_text_sample(
             last_document = ""
           } else {
             match mounted.focused_text() {
-              Some(state) =>
+              Some(state) => {
                 if state.document().text() != last_document ||
                   state.caret() != last_caret {
                   let epoch = match
@@ -366,6 +378,7 @@ pub fn run_native_text_sample(
                   last_document = state.document().text()
                   last_caret = state.caret()
                 }
+              }
               None => ()
             }
           }

@@ -3315,12 +3315,14 @@ pub fn Mounted::text_input(
             )
           Ok(value) => value
         }
-        if next.document().text() != field.document().text() {
+        // The preview already carries the final text in many IMEs. Compare the
+        // committed value, not the visible document, or an equal preview/commit
+        // pair would never reach the application's value model.
+        let committed = next.committed_document().text()
+        if committed != field.committed_document().text() {
           match binding.token {
             Some(token) =>
-              ignore(
-                self.runtime.enqueue_text_changed(token, next.document().text()),
-              )
+              ignore(self.runtime.enqueue_text_changed(token, committed))
             None => ()
           }
         }

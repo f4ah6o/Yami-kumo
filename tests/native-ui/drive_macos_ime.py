@@ -97,6 +97,28 @@ def helper_json(helper: Path, *args: str, check: bool = True) -> dict:
     raise ImeError(f"helper {args[0]} produced no JSON")
 
 
+def kill_stale_samples() -> None:
+    """Terminate leftover native sample binaries from earlier proof attempts."""
+    result = subprocess.run(
+        ["pgrep", "-f", "build/examples/macos/macos.exe"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        check=False,
+    )
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line.isdigit():
+            continue
+        pid = int(line)
+        if pid == os.getpid():
+            continue
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+
+
 class AppProcess:
     def __init__(self, command: list[str], env: dict[str, str], log_path: Path):
         self.log_path = log_path
@@ -115,6 +137,7 @@ class AppProcess:
         self.markers: list[dict] = []
         self.reader = threading.Thread(target=self._read, daemon=True)
         self.reader.start()
+        self.app_pid: int | None = None
 
     def _read(self) -> None:
         assert self.process.stdout is not None
@@ -154,14 +177,42 @@ class AppProcess:
             except subprocess.TimeoutExpired:
                 self.process.kill()
                 self.process.wait(timeout=5)
+        if self.app_pid is not None:
+            try:
+                os.kill(self.app_pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
         self.log.close()
 
 
-def candidate_windows(probe: dict) -> list[dict]:
+def window_key(window: dict) -> tuple:
+    return (
+        window.get("pid"),
+        window.get("layer"),
+        window.get("x"),
+        window.get("y"),
+        window.get("width"),
+        window.get("height"),
+    )
+
+
+def candidate_windows(probe: dict, app_pid: int, baseline: set[tuple]) -> list[dict]:
     windows = []
     for window in probe.get("windows", []):
         owner = window.get("owner", "")
         if any(hint in owner for hint in IME_OWNER_HINTS):
+            windows.append(window)
+            continue
+        # Some input methods draw the candidate panel in the application
+        # process. A small floating window that appeared only during
+        # composition is a bounded candidate observation.
+        if (
+            window.get("pid") == app_pid
+            and window.get("layer", 0) > 0
+            and 0 < window.get("width", 0) < 500
+            and 0 < window.get("height", 0) < 500
+            and window_key(window) not in baseline
+        ):
             windows.append(window)
     return windows
 
@@ -224,44 +275,79 @@ def drive(args: argparse.Namespace) -> int:
         env.pop("YAMI_NATIVE_UI_E2E", None)
         env.pop("YAMI_NATIVE_UI_AX_E2E", None)
         env.pop("YAMI_NATIVE_UI_SMOKE", None)
+        kill_stale_samples()
         app = AppProcess(args.command, env, log_path)
         app.wait_marker(
             lambda marker: marker.get("phase") == "frame", 15.0, "the first frame"
         )
-        pid = app.process.pid
+        pid = None
+        for _ in range(50):
+            window = helper_json(
+                helper, "find-window", "Yami-kumo TextField", check=False
+            )
+            if window.get("status") == "found":
+                pid = int(window["pid"])
+                break
+            time.sleep(0.1)
+        if pid is None:
+            raise ImeError("the native sample window was not found")
+        app.app_pid = pid
         helper_json(helper, "activate", str(pid))
-        helper_json(helper, "type", str(pid), "tab")
         app.wait_marker(
             lambda marker: marker.get("phase") == "begin", 8.0, "the text session"
         )
+        baseline_probe = helper_json(helper, "probe")
+        baseline = {
+            window_key(window) for window in baseline_probe.get("windows", [])
+        }
         helper_json(helper, "type", str(pid), "romaji")
-        preedit = app.wait_marker(
+        app.wait_marker(
             lambda marker: marker.get("phase") == "preedit"
             and any("\u3040" <= ch <= "\u30ff" for ch in marker.get("text", "")),
             10.0,
             "a Japanese preedit",
         )
-        report["preedit"] = preedit.get("text", "")
+        # Keep the most recent preedit: later records carry the converted text.
+        japanese_preedits = [
+            marker
+            for marker in app.markers
+            if marker.get("phase") == "preedit"
+            and any(
+                "\u3040" <= ch <= "\u30ff" for ch in marker.get("text", "")
+            )
+        ]
+        report["preedit"] = japanese_preedits[-1].get("text", "")
         report["claims"]["ime.live-engine.preedit"] = "PASS"
         probe = helper_json(helper, "probe")
-        candidates = candidate_windows(probe)
+        candidates = candidate_windows(probe, pid, baseline)
         report["candidate"] = candidates[0] if candidates else None
         report["claims"]["ime.candidate.visible"] = (
             "PASS" if candidates else "NOT_RUN"
         )
         helper_json(helper, "type", str(pid), "space")
-        time.sleep(0.4)
+        time.sleep(0.8)
         probe = helper_json(helper, "probe")
-        if candidates == [] and candidate_windows(probe):
-            report["candidate"] = candidate_windows(probe)[0]
-            report["claims"]["ime.candidate.visible"] = "PASS"
+        report["probe"] = probe
+        if candidates == []:
+            candidates = candidate_windows(probe, pid, baseline)
+            if candidates:
+                report["candidate"] = candidates[0]
+                report["claims"]["ime.candidate.visible"] = "PASS"
         helper_json(helper, "type", str(pid), "enter")
-        commit = app.wait_marker(
-            lambda marker: marker.get("phase") == "commit"
-            and marker.get("text", ""),
-            10.0,
-            "a commit",
-        )
+        commit = None
+        for _ in range(2):
+            try:
+                commit = app.wait_marker(
+                    lambda marker: marker.get("phase") == "commit"
+                    and marker.get("text", ""),
+                    6.0,
+                    "a commit",
+                )
+                break
+            except ImeError:
+                helper_json(helper, "type", str(pid), "enter")
+        if commit is None:
+            raise ImeError("timed out waiting for a commit")
         report["commit"] = commit.get("text", "")
         report["claims"]["ime.live-engine.commit"] = "PASS"
         document = app.wait_marker(

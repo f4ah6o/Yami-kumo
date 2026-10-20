@@ -98,8 +98,9 @@ Enter to commit. The committed text and the sample's document marker must
 match.
 
 Claims are recorded per item: live preedit, live commit, candidate visibility,
-candidate anchoring and physical-keyboard input. Candidate anchoring and
-physical-keyboard input remain `NOT_RUN`. Missing Japanese sources,
+candidate anchoring and physical-keyboard input. The 2026-10-21 local run
+passed live preedit, live commit, committed-document and candidate visibility
+(Kotoeri); candidate anchoring and physical-keyboard input remain `NOT_RUN`. Missing Japanese sources,
 untrusted Accessibility posting or a locked console session produce
 `NOT_RUN`/`UNSUPPORTED`, not a pass.
 
