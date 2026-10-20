@@ -12,6 +12,13 @@
 - Keep generated Kumo contract code in MoonBit's canonical formatted layout.
 - Format the package README example as valid MoonBit code blocks.
 
+## 0.2.2 - 2026-10-20
+
+### Fixed
+
+- Include the `examples/shared_counter` and `examples/shared_button_theme`
+  packages in the Mooncakes archive so the native module can resolve them.
+
 ## 0.2.1 - 2026-10-20
 
 ### Fixed

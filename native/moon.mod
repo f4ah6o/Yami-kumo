@@ -12,5 +12,5 @@ license = "MIT"
 
 import {
   "f4ah6o/gpui@0.10.2",
-  "f4ah6o/yami_kumo@0.2.1",
+  "f4ah6o/yami_kumo@0.2.2",
 }

@@ -12,7 +12,12 @@
 !/*.mbt
 !/dom/
 !/ui/
+!/examples/
 !/ui/**
+!/examples/shared_button_theme/**
+!/examples/shared_button_theme/
+!/examples/shared_counter/**
+!/examples/shared_counter/
 !/dom/moon.pkg
 !/dom/*.mbt
 !/styles/
