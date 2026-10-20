@@ -4,6 +4,20 @@
 
 ### Added
 
+- Add the local `--text-ime-proof` mode for the native text-field sample. It
+  selects a live Japanese input source, restores the previous source, activates
+  the app, posts key codes with `CGEventPostToPid`, waits for a Japanese
+  preedit and a commit, and probes on-screen windows for an input-method
+  candidate window. Claims are recorded per item; a locked console session, a
+  missing Japanese source or untrusted Accessibility posting records
+  `NOT_RUN`/`UNSUPPORTED`. Physical-keyboard input and candidate anchoring
+  remain `NOT_RUN`. `--text-ax-proof` records `NOT_RUN` until the sample
+  publishes TextField AX.
+
+## native-0.2.10 - 2026-10-21
+
+### Added
+
 - Add `Mounted::focused_text`, a read-only observation of the focused editable
   field's committed document, caret, binding identity and composing flag. Hosts
   use it as the owner state for a portable text-input session.

@@ -84,3 +84,22 @@ an explicitly supplied empty/compatible workspace, uses absolute module
 members, and copies GPUI's compiler helper scripts into that temporary root for
 Moon's cwd-relative native compiler lookup. It removes only files it created
 and only when their contents are unchanged.
+
+## Text-field IME proof
+
+`sh scripts/native_ui_macos.sh --text-ime-proof` runs the text-field sample
+under a live Japanese input method. Before launch it selects an available
+Japanese source (`Kotoeri`, `mozc`, `azooKey` or Google Japanese Input) and
+restores the previous source on exit. The app is started with
+`YAMI_NATIVE_UI_TEXT_E2E=1`; the driver activates it, sends Tab to focus the
+field with `CGEventPostToPid`, types `nihongo`, waits for a Japanese preedit,
+probes on-screen windows for an input-method candidate window, and presses
+Enter to commit. The committed text and the sample's document marker must
+match.
+
+Claims are recorded per item: live preedit, live commit, candidate visibility,
+candidate anchoring and physical-keyboard input. Candidate anchoring and
+physical-keyboard input remain `NOT_RUN`. Missing Japanese sources,
+untrusted Accessibility posting or a locked console session produce
+`NOT_RUN`/`UNSUPPORTED`, not a pass. `--text-ax-proof` currently records
+`NOT_RUN`; the text sample does not publish TextField AX yet.
