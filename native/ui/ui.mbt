@@ -2748,6 +2748,79 @@ pub fn Mounted::text_caret(
 }
 
 ///|
+/// The committed document, caret and binding of the focused editable TextField.
+/// Hosts use this as the owner state for a portable text-input session. The
+/// value excludes an active display-only preedit; `composing` reports it.
+pub(all) struct FocusedText {
+  priv key : @view.NodeKey
+  priv binding_id : UInt64
+  priv document : @text.TextDocument
+  priv caret : @primitives.Rect
+  priv composing : Bool
+}
+
+///|
+pub fn FocusedText::key(self : FocusedText) -> @view.NodeKey {
+  self.key
+}
+
+///|
+pub fn FocusedText::binding_id(self : FocusedText) -> UInt64 {
+  self.binding_id
+}
+
+///|
+pub fn FocusedText::document(self : FocusedText) -> @text.TextDocument {
+  self.document
+}
+
+///|
+pub fn FocusedText::caret(self : FocusedText) -> @primitives.Rect {
+  self.caret
+}
+
+///|
+pub fn FocusedText::composing(self : FocusedText) -> Bool {
+  self.composing
+}
+
+///|
+pub fn Mounted::focused_text(self : Mounted) -> FocusedText? {
+  if !self.ready || self.is_disposed() {
+    return None
+  }
+  let focused = match self.scope {
+    Some(scope) => scope.focused()
+    None => return None
+  }
+  let id = match focused {
+    Some(value) => value
+    None => return None
+  }
+  for binding in self.bindings {
+    if binding.id != id || !field_editable(binding.view) {
+      continue
+    }
+    let field = match binding.field {
+      Some(value) => value
+      None => return None
+    }
+    let caret = match field.caret_rect() {
+      Ok(value) => value
+      Err(_) => return None
+    }
+    return Some({
+      key: binding.view.key(),
+      binding_id: binding.id,
+      document: field.committed_document(),
+      caret,
+      composing: field.is_composing(),
+    })
+  }
+  None
+}
+
+///|
 pub fn Mounted::next_focus_result(self : Mounted) -> @runtime.FocusResult? {
   self.runtime.next_focus_result()
 }

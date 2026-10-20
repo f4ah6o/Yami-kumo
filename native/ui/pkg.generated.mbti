@@ -6,6 +6,7 @@ import {
   "f4ah6o/gpui/platform",
   "f4ah6o/gpui/primitives",
   "f4ah6o/gpui/scene",
+  "f4ah6o/gpui/text",
   "f4ah6o/gpui/text_host",
   "f4ah6o/gpui/text_layout",
   "f4ah6o/yami_kumo/ui/core",
@@ -26,6 +27,15 @@ pub(all) enum ClipboardRequest {
   Copy(String)
   Paste(PasteRequest)
 }
+
+pub(all) struct FocusedText {
+  // private fields
+}
+pub fn FocusedText::binding_id(Self) -> UInt64
+pub fn FocusedText::caret(Self) -> @primitives.Rect
+pub fn FocusedText::composing(Self) -> Bool
+pub fn FocusedText::document(Self) -> @text.TextDocument
+pub fn FocusedText::key(Self) -> @core.NodeKey
 
 pub struct Frame {
   // private fields
@@ -54,6 +64,7 @@ pub fn Mounted::callback(Self, @core.NodeKey) -> Activation?
 pub fn Mounted::commit(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Frame, @diagnostics.FrameworkError]
 pub fn Mounted::dispose(Self) -> Unit
 pub fn Mounted::focus(Self, @core.NodeKey) -> Bool
+pub fn Mounted::focused_text(Self) -> FocusedText?
 pub fn Mounted::frame(Self) -> Frame?
 pub fn Mounted::handle_event(Self, @platform.Event) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn Mounted::invalidate_layout(Self) -> Unit
