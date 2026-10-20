@@ -2667,12 +2667,27 @@ pub fn Mounted::handle_event(
               Ok(true)
             }
             @primitives.PointerButtonPressed(button=@primitives.Primary, ..) => {
-              let tree = self.tree.unwrap()
+              let mut tree = self.tree.unwrap()
               let modal_tree = match tree.without_subtree(1UL) {
                 Ok(value) => value
                 Err(_) => return Ok(false)
               }
-              let target = modal_tree.dispatch_input(input).target()
+              let focused_target = modal_tree.dispatch_input(input).target()
+              match focused_target {
+                Some(id) =>
+                  if id != dialog.root_id {
+                    match tree.with_focus(id) {
+                      Ok(value) => {
+                        tree = value
+                        self.tree = Some(tree)
+                        self.sync_focus()
+                      }
+                      Err(_) => ()
+                    }
+                  }
+                None => ()
+              }
+              let target = focused_target
               if target == Some(dialog.root_id) {
                 if dialog.dismissible {
                   match binding_for(self.bindings, @view.NodeKey::new(dialog.key)) {

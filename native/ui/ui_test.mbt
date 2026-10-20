@@ -2072,6 +2072,46 @@ test "native Dialog can focus and edit a nested TextField" {
 }
 
 ///|
+test "native Dialog routes a pointer click to a nested TextField" {
+  let mounted = mount()
+  let frame = render(
+    mounted,
+    view=dialog_view(with_field=true, initial=Some(@view.NodeKey::new("confirm"))),
+  )
+  let field = frame.bounds(@view.NodeKey::new("name")).unwrap()
+  assert_true(
+    mounted
+    .handle_event(
+      event(
+        2L,
+        @primitives.PointerButtonPressed(
+          position=@primitives.Point::new(
+            field.left() + 12.0,
+            field.top() + 24.0,
+          ).unwrap(),
+          button=@primitives.Primary,
+          modifiers=@primitives.Modifiers::none(),
+        ),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(
+    mounted
+    .handle_event(event(3L, @primitives.TextInput(text="a")))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, value)) => {
+      assert_eq(key, @view.NodeKey::new("name"))
+      assert_eq(value, "a")
+    }
+    _ => fail("expected TextChanged from dialog field")
+  }
+  mounted.dispose()
+}
+
+///|
 test "native Dialog rejects an open dialog without a focusable target" {
   let mounted = mount()
   let modal = @view.dialog(
