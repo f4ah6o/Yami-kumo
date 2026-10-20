@@ -81,9 +81,11 @@ revalidation, bounded AX/helper lifetimes, owned input cleanup, and explicit
 zero-modifier events for the opt-in macOS sample runner. These guard fixtures
 use fake event posters only. Native `0.2.7` moves to GPUI `0.10.2` and
 `f4ah6o/yami_kumo` `0.2.2`, adds the shared single-line TextField adapter with
-host composition/focus and a bound clipboard request seam, and keeps native
-Dialog unsupported. The current external-input route remains unqualified at
-runtime, and real OS IME/AX are `NOT_RUN`, as detailed below.
+host composition/focus and a bound clipboard request seam, and adds a bounded
+Dialog overlay with initial focus, Tab trapping, Escape/backdrop dismissal and
+opener restoration. Nested Dialogs and `FocusScopeSession` integration remain
+open. The current external-input route remains unqualified at runtime, and real
+OS IME/AX are `NOT_RUN`, as detailed below.
 
 These checks cover labeled Text and Button rendering, readback of a completed
 native frame, and a host-delivered click that changes the sample's App Entity

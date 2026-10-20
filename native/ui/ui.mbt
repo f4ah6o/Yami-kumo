@@ -62,7 +62,17 @@ priv struct Binding {
   button : @button.Button?
   field : @text_field.TextField?
   field_generation : UInt64
+  in_dialog : Bool
   visible : Bool
+}
+
+///|
+priv struct DialogState {
+  key : String
+  root_id : UInt64
+  panel_id : UInt64
+  opener : UInt64?
+  dismissible : Bool
 }
 
 ///|
@@ -260,6 +270,7 @@ pub struct Mounted {
   priv mut focus_return : UInt64?
   priv mut clipboard : Array[ClipboardRequest]
   priv mut next_field_generation : UInt64
+  priv mut dialog : DialogState?
 }
 
 ///|
@@ -287,6 +298,7 @@ pub fn Mounted::new(
     focus_return: None,
     clipboard: [],
     next_field_generation: 1UL,
+    dialog: None,
   }
 }
 
@@ -589,6 +601,9 @@ fn flatten(
   if depth > 0 && view.kind() == @view.AppShell {
     return Err(adapter_error("nested AppShell is unsupported"))
   }
+  if view.kind() == @view.Dialog && !view.dialog_open() {
+    return Ok(())
+  }
   if view.key().value().is_empty() {
     return Err(adapter_error("empty view key"))
   }
@@ -754,6 +769,10 @@ fn make_element(
       (view.kind() == @view.Button && !view.disabled()) ||
       (view.kind() == @view.TextField && !view.disabled()),
     )
+    .with_tab_stop(
+      (view.kind() == @view.Button && !view.disabled()) ||
+      (view.kind() == @view.TextField && !view.disabled()),
+    )
   if view.kind() == @view.Column || view.kind() == @view.Row {
     let children_style = if view.is_card() {
       style(view.kind()).with_insets(
@@ -775,10 +794,44 @@ fn make_element(
     }
     element = element.with_children_style(children_style)
     for child in view.children() {
-      element = element.with_child(make_element(child, bindings))
+      if child.kind() != @view.Dialog {
+        element = element.with_child(make_element(child, bindings))
+      }
     }
   }
   element
+}
+
+///|
+fn make_dialog_panel(
+  view : @view.View,
+  bindings : Array[Binding],
+) -> @element.Element {
+  let binding = binding_for(bindings, view.key()).unwrap()
+  let item = @layout.FlexItem::new(
+      binding.id,
+      @layout.Dimension::auto(),
+      points(420.0),
+      @primitives.Size::new(420.0, 0.0).unwrap(),
+    )
+    .with_flex(0.0, 0.0)
+    .unwrap()
+  let mut panel = @element.Element::new(item)
+    .with_pointer_events(true)
+    .with_focusable(false)
+    .with_children_style(
+      style(@view.Column)
+      .with_gap(12.0)
+      .unwrap()
+      .with_insets(
+        @layout.Insets::new(20.0, 20.0, 20.0, 52.0).unwrap(),
+        @layout.Insets::zero(),
+      ),
+    )
+  for child in view.children() {
+    panel = panel.with_child(make_element(child, bindings))
+  }
+  panel
 }
 
 ///|
@@ -1375,32 +1428,83 @@ priv struct Candidate {
   frame : Frame
   next_id : UInt64
   next_field_generation : UInt64
+  dialog : DialogState?
   cancel_pending : Bool
 }
 
 ///|
-/// The native Dialog adapter is not implemented in this slice. Reject the whole
-/// staged tree instead of showing a non-modal imitation.
-fn reject_unsupported_dialog(
+fn find_open_dialog(
   view : @view.View,
-) -> Result[Unit, @diagnostics.FrameworkError] {
-  if view.kind() == @view.Dialog {
-    return Err(
-      @diagnostics.FrameworkError::new(
-        @diagnostics.UnsupportedCapability,
-        "shared-native-ui",
-        subsystem="shared-native-ui",
-        message="Dialog native adapter is not implemented",
-      ),
-    )
+) -> Result[@view.View?, @diagnostics.FrameworkError] {
+  let mut found : @view.View? = None
+  if view.kind() == @view.Dialog && view.dialog_open() {
+    found = Some(view)
   }
   for child in view.children() {
-    match reject_unsupported_dialog(child) {
+    match find_open_dialog(child) {
       Err(error) => return Err(error)
-      Ok(_) => ()
+      Ok(Some(value)) =>
+        match found {
+          Some(_) =>
+            return Err(adapter_error("multiple native Dialogs are unsupported"))
+          None => found = Some(value)
+        }
+      Ok(None) => ()
     }
   }
-  Ok(())
+  Ok(found)
+}
+
+///|
+fn view_contains_key(view : @view.View, key : String) -> Bool {
+  if view.key().value() == key {
+    return true
+  }
+  for child in view.children() {
+    if view_contains_key(child, key) {
+      return true
+    }
+  }
+  false
+}
+
+///|
+fn dialog_focus_id(
+  dialog : @view.View,
+  bindings : Array[Binding],
+) -> Result[UInt64, @diagnostics.FrameworkError] {
+  let props = match dialog.dialog_props() {
+    Some(value) => value
+    None => return Err(adapter_error("native Dialog has no props"))
+  }
+  match props.initial_focus() {
+    Some(key) => {
+      for binding in bindings {
+        if binding.in_dialog && binding.view.key() == key {
+          if binding.view.kind() == @view.Button ||
+            binding.view.kind() == @view.TextField {
+            if binding.view.disabled() {
+              return Err(adapter_error("Dialog initial focus is disabled"))
+            }
+            return Ok(binding.id)
+          }
+          return Err(adapter_error("Dialog initial focus is not focusable"))
+        }
+      }
+      Err(adapter_error("Dialog initial focus target is absent"))
+    }
+    None => {
+      for binding in bindings {
+        if binding.in_dialog &&
+          (binding.view.kind() == @view.Button ||
+            binding.view.kind() == @view.TextField) &&
+          !binding.view.disabled() {
+          return Ok(binding.id)
+        }
+      }
+      Err(adapter_error("Dialog has no focusable child"))
+    }
+  }
 }
 
 ///|
@@ -1412,9 +1516,9 @@ fn Mounted::prepare(
   scale : Double,
   measure : @components.TextMeasure,
 ) -> Result[Candidate, @diagnostics.FrameworkError] {
-  match reject_unsupported_dialog(view) {
+  let dialog_view = match find_open_dialog(view) {
     Err(error) => return Err(error)
-    Ok(_) => ()
+    Ok(value) => value
   }
   if width <= 0.0 || height <= 0.0 || scale <= 0.0 {
     return Err(adapter_error("positive viewport and scale required"))
@@ -1460,7 +1564,8 @@ fn Mounted::prepare(
           return Err(adapter_error("native identity space exhausted"))
         }
         let id = next_id
-        next_id += if node.kind() == @view.AppShell {
+        next_id += if node.kind() == @view.AppShell ||
+          node.kind() == @view.Dialog {
           40UL
         } else if node.kind() == @view.TextField {
           24UL
@@ -1473,7 +1578,8 @@ fn Mounted::prepare(
     let text = if visible &&
       (node.kind() == @view.Text ||
         node.kind() == @view.Button ||
-        node.kind() == @view.TextField) {
+        node.kind() == @view.TextField ||
+        node.kind() == @view.Dialog) {
       let foreground = if node.kind() == @view.Text ||
         node.kind() == @view.TextField {
         text_color
@@ -1483,6 +1589,8 @@ fn Mounted::prepare(
       }
       let size = if node.kind() == @view.TextField {
         FIELD_LABEL_SIZE
+      } else if node.kind() == @view.Dialog {
+        18.0
       } else {
         16.0
       }
@@ -1533,6 +1641,10 @@ fn Mounted::prepare(
       } else {
         0UL
       },
+      in_dialog: match dialog_view {
+        Some(dialog) => view_contains_key(dialog, node.key().value())
+        None => false
+      },
       visible,
     })
   }
@@ -1546,14 +1658,13 @@ fn Mounted::prepare(
       @layout.Insets::zero(),
     )
   }
-  let child = if view.is_shell() {
-    make_shell_element(view, bindings, mode.unwrap())
-  } else {
-    make_element(view, bindings)
-  }
-  let root = @element.Element::root(1UL, root_style)
+  let mut root = @element.Element::root(1UL, root_style)
     .with_pointer_events(false)
-    .with_child(child)
+  if view.is_shell() {
+    root = root.with_child(make_shell_element(view, bindings, mode.unwrap()))
+  } else if view.kind() != @view.Dialog {
+    root = root.with_child(make_element(view, bindings))
+  }
   let requested = match
     root.request_layout_with_device_scale(viewport.size(), scale) {
     Err(_) => return Err(adapter_error("native flex layout failed"))
@@ -1563,16 +1674,110 @@ fn Mounted::prepare(
     Err(_) => return Err(adapter_error("native element prepaint failed"))
     Ok(value) => value
   }
-  let mut tree = painted.tree()
-  // Preserve the exact GPUI focus owner for unchanged topology; rebuilds may
-  // retain focus only when the private native ID still belongs to this token.
-  match self.tree {
-    Some(old_tree) => {
-      tree = match old_tree.with_layout_bounds(painted) {
-        Ok(value) => value
-        Err(_) => tree
+  let main_tree = painted.tree()
+  let mut tree = main_tree
+  let old_focus = match self.tree {
+    Some(old) => old.focused()
+    None => None
+  }
+  let previous_dialog = self.dialog
+  let opening = match dialog_view {
+    Some(dialog) =>
+      match previous_dialog {
+        Some(previous) => previous.key != dialog.key().value()
+        None => true
       }
-      match old_tree.focused() {
+    None => false
+  }
+  let closing = dialog_view is None && previous_dialog is Some(_)
+  let mut next_dialog : DialogState? = None
+  match dialog_view {
+    Some(dialog) => {
+      let panel = make_dialog_panel(dialog, bindings)
+      let root_id = next_id
+      next_id += 8UL
+      let overlay = @element.Element::root(
+          root_id,
+          @layout.FlexTreeStyle::new(@layout.FlowDirection::column())
+          .with_align(@layout.AlignItems::center())
+          .with_justify(@layout.JustifyContent::center()),
+        )
+        .with_pointer_events(true)
+        .with_child(panel)
+      let dialog_painted = match
+        overlay.request_layout_with_device_scale(viewport.size(), scale) {
+        Err(_) => return Err(adapter_error("native Dialog layout failed"))
+        Ok(requested) =>
+          match requested.prepaint() {
+            Err(_) => return Err(adapter_error("native Dialog prepaint failed"))
+            Ok(value) => value
+          }
+      }
+      let dialog_tree = dialog_painted.tree()
+      let all_nodes = main_tree.nodes()
+      for node in dialog_tree.nodes() {
+        all_nodes.push(node)
+      }
+      tree = match @element.ElementTree::new(all_nodes) {
+        Err(_) => return Err(adapter_error("native Dialog tree rejected"))
+        Ok(value) => value
+      }
+      let initial = match dialog_focus_id(dialog, bindings) {
+        Err(error) => return Err(error)
+        Ok(value) => value
+      }
+      let panel_id = match binding_for(bindings, dialog.key()) {
+        Some(binding) => binding.id
+        None => return Err(adapter_error("native Dialog binding is absent"))
+      }
+      let focus = if opening || old_focus is None {
+        initial
+      } else {
+        let mut inside = false
+        for binding in bindings {
+          if binding.in_dialog && old_focus == Some(binding.id) {
+            inside = true
+          }
+        }
+        let still_focusable = match old_focus {
+          Some(id) =>
+            match tree.node(id) {
+              Some(node) => node.focusable
+              None => false
+            }
+          None => false
+        }
+        if inside && still_focusable {
+          old_focus.unwrap()
+        } else {
+          initial
+        }
+      }
+      tree = match tree.with_focus(focus) {
+        Ok(value) => value
+        Err(_) => return Err(adapter_error("native Dialog focus rejected"))
+      }
+      let opener = if opening {
+        old_focus
+      } else {
+        match previous_dialog {
+          Some(previous) => previous.opener
+          None => old_focus
+        }
+      }
+      next_dialog = Some({
+        key: dialog.key().value(),
+        root_id,
+        panel_id,
+        opener,
+        dismissible: match dialog.dialog_props() {
+          Some(props) => props.dismissible()
+          None => false
+        },
+      })
+    }
+    None => {
+      match old_focus {
         Some(id) =>
           match tree.with_focus(id) {
             Ok(value) => tree = value
@@ -1580,8 +1785,21 @@ fn Mounted::prepare(
           }
         None => ()
       }
+      if closing {
+        match previous_dialog {
+          Some(previous) =>
+            match previous.opener {
+              Some(id) =>
+                match tree.with_focus(id) {
+                  Ok(value) => tree = value
+                  Err(_) => tree = tree.clear_focus()
+                }
+              None => tree = tree.clear_focus()
+            }
+          None => ()
+        }
+      }
     }
-    None => ()
   }
   if !self.window_focused {
     tree = tree.clear_focus()
@@ -1630,12 +1848,77 @@ fn Mounted::prepare(
     color(245, 247, 250)
   }
   let observations = []
+  let paint_order : Array[Int] = []
   for index in 0..<bindings.length() {
+    if !bindings[index].in_dialog {
+      paint_order.push(index)
+    }
+  }
+  for index in 0..<bindings.length() {
+    if bindings[index].in_dialog {
+      paint_order.push(index)
+    }
+  }
+  for index in paint_order {
     let binding = bindings[index]
     if binding.visible {
       let bounds = match tree.node(binding.id) {
         Some(node) => node.bounds()
         None => return Err(adapter_error("visible binding has no layout node"))
+      }
+      if binding.view.kind() == @view.Dialog {
+        let dialog = match next_dialog {
+          Some(value) => value
+          None => return Err(adapter_error("native Dialog state is absent"))
+        }
+        match
+          @scene.SceneItem::quad(
+            dialog.root_id,
+            viewport,
+            @primitives.Color::rgba(10, 12, 16, 140).unwrap(),
+            @scene.AffineTransform::identity(),
+            1.0,
+            None,
+          ) {
+          Ok(item) => items.push(item)
+          Err(_) => return Err(adapter_error("Dialog backdrop paint failed"))
+        }
+        let panel_fill = if self.theme is Some(_) {
+          theme_color(colors.panel)
+        } else {
+          color(255, 255, 255)
+        }
+        let panel_border = if self.theme is Some(_) {
+          theme_color(colors.border)
+        } else {
+          color(166, 171, 178)
+        }
+        for (item_id, rect, fill) in [
+          (dialog.panel_id, bounds, panel_border),
+          (
+            dialog.panel_id + 1UL,
+            @primitives.Rect::new(
+              bounds.left() + 1.0,
+              bounds.top() + 1.0,
+              bounds.size().width() - 2.0,
+              bounds.size().height() - 2.0,
+            ).unwrap(),
+            panel_fill,
+          ),
+        ] {
+          match
+            @scene.SceneItem::quad(
+              item_id,
+              rect,
+              fill,
+              @scene.AffineTransform::identity(),
+              1.0,
+              None,
+            ) {
+            Ok(item) => items.push(item)
+            Err(_) => return Err(adapter_error("Dialog panel paint failed"))
+          }
+        }
       }
       if binding.view.is_card() {
         // Flat bindings are preorder: paint both Card quads before descendants.
@@ -1797,7 +2080,14 @@ fn Mounted::prepare(
           } else {
             @components.Start
           }
-          let text_box = if binding.view.kind() == @view.TextField {
+          let text_box = if binding.view.kind() == @view.Dialog {
+            @primitives.Rect::new(
+              bounds.left() + 20.0,
+              bounds.top() + 16.0,
+              bounds.size().width() - 40.0,
+              26.0,
+            ).unwrap()
+          } else if binding.view.kind() == @view.TextField {
             @primitives.Rect::new(
               bounds.left(),
               bounds.top(),
@@ -1821,8 +2111,13 @@ fn Mounted::prepare(
         } else {
           bounds.left()
         }
-        let y = if binding.view.kind() == @view.TextField {
-          bounds.top()
+        let y = if binding.view.kind() == @view.TextField ||
+          binding.view.kind() == @view.Dialog {
+          if binding.view.kind() == @view.Dialog {
+            bounds.top() + 16.0
+          } else {
+            bounds.top()
+          }
         } else {
           bounds.top() + (bounds.size().height() - size.height()) / 2.0
         }
@@ -1867,6 +2162,7 @@ fn Mounted::prepare(
     tree,
     next_id,
     next_field_generation,
+    dialog: next_dialog,
     cancel_pending,
     frame: {
       snapshot,
@@ -1951,6 +2247,7 @@ pub fn Mounted::publish(
   self.current_frame = Some(candidate.frame)
   self.next_id = candidate.next_id
   self.next_field_generation = candidate.next_field_generation
+  self.dialog = candidate.dialog
   self.revision = candidate.frame.revision
   self.ready = true
   self.change = fresh_epoch()
@@ -2035,7 +2332,11 @@ pub fn Mounted::callback(self : Mounted, key : @view.NodeKey) -> Activation? {
     return None
   }
   match binding_for(self.bindings, key) {
-    Some(binding) if binding.visible => ()
+    Some(binding) if binding.visible =>
+      match self.dialog {
+        Some(_) if !binding.in_dialog => return None
+        _ => ()
+      }
     _ => return None
   }
   match self.current_frame {
@@ -2057,6 +2358,14 @@ pub fn Mounted::activate(self : Mounted, callback : Activation) -> Bool {
     !same_epoch(callback.epoch, self.epoch) {
     return false
   }
+  match binding_for(self.bindings, callback.token.key()) {
+    Some(binding) =>
+      match self.dialog {
+        Some(_) if !binding.in_dialog => return false
+        _ => ()
+      }
+    None => return false
+  }
   match self.current_frame {
     Some(frame) =>
       if frame.shell_mode() is Some(_) &&
@@ -2077,9 +2386,6 @@ pub fn Mounted::next_action(self : Mounted) -> @view.SemanticAction? {
     Some(frame) => frame.shell_mode() is Some(_)
     None => false
   }
-  if !shell {
-    return self.runtime.next_action()
-  }
   while self.runtime.next_action() is Some(action) {
     let key = match action {
       @view.Activate(key) => key
@@ -2092,7 +2398,15 @@ pub fn Mounted::next_action(self : Mounted) -> @view.SemanticAction? {
       Some(frame) => frame.bounds(key) is Some(_)
       None => false
     }
-    if visible {
+    let allowed = match self.dialog {
+      Some(_) =>
+        match binding_for(self.bindings, key) {
+          Some(binding) => binding.in_dialog
+          None => false
+        }
+      None => true
+    }
+    if visible && allowed && (!shell || self.current_frame is Some(_)) {
       return Some(action)
     }
   }
@@ -2107,6 +2421,10 @@ pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
   let binding = match binding_for(self.bindings, key) {
     None => return false
     Some(value) => if value.visible { value } else { return false }
+  }
+  match self.dialog {
+    Some(_) if !binding.in_dialog => return false
+    _ => ()
   }
   match self.current_frame {
     Some(frame) =>
@@ -2308,7 +2626,112 @@ pub fn Mounted::handle_event(
         self.invalidate_layout()
         return Ok(false)
       }
-      let result = self.dispatch(input)
+      let modal = self.dialog
+      let result = match modal {
+        Some(dialog) => {
+          match input {
+            @primitives.KeyPressed(key=@primitives.Escape, repeat~, ..) => {
+              if repeat {
+                return Ok(true)
+              }
+              let tree = self.tree.unwrap()
+              let mut composing = false
+              for index in 0..<self.bindings.length() {
+                let binding = self.bindings[index]
+                if binding.in_dialog && tree.is_focused(binding.id) {
+                  match binding.field {
+                    Some(field) if field.is_composing() => {
+                      let measure = match self.measure {
+                        Some(value) => value
+                        None => return Ok(false)
+                      }
+                      let next = match
+                        field.cancel_composition(
+                          fn(document) { field_measure(measure, document) },
+                          field_admit,
+                        ) {
+                        Ok(value) => value
+                        Err(_) => return Ok(false)
+                      }
+                      self.bindings[index] = { ..binding, field: Some(next), }
+                      composing = true
+                    }
+                    _ => ()
+                  }
+                }
+              }
+              if composing {
+                return Ok(true)
+              }
+              if dialog.dismissible {
+                match binding_for(self.bindings, @view.NodeKey::new(dialog.key)) {
+                  Some(binding) =>
+                    match binding.token {
+                      Some(token) =>
+                        ignore(self.runtime.enqueue_dismissed(token))
+                      None => ()
+                    }
+                  None => ()
+                }
+              }
+              Ok(true)
+            }
+            @primitives.PointerButtonPressed(button=@primitives.Primary, ..) => {
+              let mut tree = self.tree.unwrap()
+              let modal_tree = match tree.without_subtree(1UL) {
+                Ok(value) => value
+                Err(_) => return Ok(false)
+              }
+              let focused_target = modal_tree.dispatch_input(input).target()
+              match focused_target {
+                Some(id) =>
+                  if id != dialog.root_id {
+                    match tree.with_focus(id) {
+                      Ok(value) => {
+                        tree = value
+                        self.tree = Some(tree)
+                        self.sync_focus()
+                      }
+                      Err(_) => ()
+                    }
+                  }
+                None => ()
+              }
+              let target = focused_target
+              if target == Some(dialog.root_id) {
+                if dialog.dismissible {
+                  match binding_for(self.bindings, @view.NodeKey::new(dialog.key)) {
+                    Some(binding) =>
+                      match binding.token {
+                        Some(token) =>
+                          ignore(self.runtime.enqueue_dismissed(token))
+                        None => ()
+                      }
+                    None => ()
+                  }
+                }
+                Ok(true)
+              } else {
+                self.dispatch(input, target, true)
+              }
+            }
+            _ => {
+              let tree = self.tree.unwrap()
+              let modal_tree = match tree.without_subtree(1UL) {
+                Ok(value) => value
+                Err(_) => return Ok(false)
+              }
+              let target = modal_tree.dispatch_input(input).target()
+              self.dispatch(input, target, true)
+            }
+          }
+        }
+        None => {
+          let tree = self.tree.unwrap()
+          let target = tree.dispatch_input(input).target()
+          self.dispatch(input, target, false)
+        }
+      }
       if result is Ok(_) {
         self.last_dispatched_input = event.sequence()
       }
@@ -2337,6 +2760,10 @@ fn Mounted::dispatch_composition(
     let binding = self.bindings[index]
     if !tree.is_focused(binding.id) || !field_editable(binding.view) {
       continue
+    }
+    match self.dialog {
+      Some(_) if !binding.in_dialog => continue
+      _ => ()
     }
     let field = match binding.field {
       Some(value) => value
@@ -2401,6 +2828,8 @@ fn Mounted::dispatch_composition(
 fn Mounted::dispatch(
   self : Mounted,
   input : @primitives.InputEvent,
+  target : UInt64?,
+  modal : Bool,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
   let measure = match self.measure {
     Some(value) => value
@@ -2411,14 +2840,30 @@ fn Mounted::dispatch(
     @primitives.KeyPressed(key=@primitives.Tab, modifiers~, repeat=false) if !modifiers.control() &&
       !modifiers.alt() &&
       !modifiers.meta() => {
-      let next = if modifiers.shift() {
-        tree.focus_prev()
+      let traversal = if modal {
+        match tree.without_subtree(1UL) {
+          Ok(value) => value
+          Err(_) => return Err(adapter_error("native modal traversal failed"))
+        }
       } else {
-        tree.focus_next()
+        tree
       }
-      match next {
+      let next = if modifiers.shift() {
+        traversal.focus_prev()
+      } else {
+        traversal.focus_next()
+      }
+      let focused = match next {
         Err(_) => return Err(adapter_error("native focus traversal failed"))
-        Ok(value) => tree = value
+        Ok(value) => value.focused()
+      }
+      match focused {
+        Some(id) =>
+          match tree.with_focus(id) {
+            Ok(value) => tree = value
+            Err(_) => ()
+          }
+        None => tree = tree.clear_focus()
       }
       self.tree = Some(tree)
       self.sync_focus()
@@ -2443,10 +2888,12 @@ fn Mounted::dispatch(
     }
     _ => ()
   }
-  let target = tree.dispatch_input(input).target()
   let mut consumed = false
   for index in 0..<self.bindings.length() {
     let binding = self.bindings[index]
+    if modal && !binding.in_dialog {
+      continue
+    }
     match binding.field {
       Some(field) => {
         let route = match input {
@@ -2583,6 +3030,7 @@ pub fn Mounted::dispose(self : Mounted) -> Unit {
   self.tree = None
   self.current_frame = None
   self.clipboard = []
+  self.dialog = None
   self.ready = false
 }
 

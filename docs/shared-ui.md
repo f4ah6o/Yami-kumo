@@ -3,9 +3,10 @@
 This additive development API implements the bounded YK-01 lifetime model,
 YK-02 Text/Button DOM path and the DOM parts of YK-06 TextField and YK-07 Dialog
 from the [four-platform roadmap](roadmaps/20261017-four-platform-gui/ROADMAP.md).
-Native TextField editing and host composition are implemented in the native
-adapter. Native Dialog and real OS IME/accessibility qualification remain
-unimplemented; Dialog returns `UnsupportedCapability` and IME is `NOT_RUN`.
+Native TextField editing, host composition and a bounded Dialog overlay are
+implemented in the native adapter. Real OS IME, accessibility, nested Dialogs
+and GPUI `FocusScopeSession` integration remain unimplemented; IME is
+`NOT_RUN`.
 The [architecture decision](adr/0001-shared-ui-runtime.md) records what is
 inherited from the legacy Kumo API and what remains a separate contract.
 
@@ -30,12 +31,14 @@ inherited from the legacy Kumo API and what remains a separate contract.
 - `styles/shared-ui.css`: scoped row/column rules and required fixed Card geometry, without Kumo.
 - `examples/shared_button_theme`: one immutable Button-theme fixture model,
   imported unchanged by DOM and native host runners.
-- `native/ui`: explicit GPUI Text/Button/Column/Row, AppShell and TextField
-  adapter with private native IDs, common lifetime tokens, staged
-  geometry/scene publication, one GPUI Button controller per live Button and
-  one GPUI TextField controller per focused field. A Dialog in the staged tree
-  is rejected with `UnsupportedCapability`; there is no read-only Text or
-  non-modal imitation.
+- `native/ui`: explicit GPUI Text/Button/Column/Row, AppShell, TextField and
+  bounded Dialog adapter with private native IDs, common lifetime tokens,
+  staged geometry/scene publication, one GPUI Button controller per live
+  Button and one GPUI TextField controller per focused field. A Dialog is a
+  root overlay with backdrop/panel painting, initial focus, dialog-local Tab
+  traversal, Escape/backdrop dismissal, background input/focus/activation
+  filtering and opener restoration. Nested Dialogs and `FocusScopeSession`
+  wiring are not implemented.
 - `native/examples/shared_counter`: one App Entity owning the unchanged common
   Model, plus thin Linux/Windows/macOS entrypoints.
 

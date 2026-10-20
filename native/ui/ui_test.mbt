@@ -1868,12 +1868,338 @@ test "native TextField submit and read-only behavior" {
 }
 
 ///|
-test "native adapter rejects Dialog instead of showing a non-modal imitation" {
+fn dialog_view(
+  open~ : Bool = true,
+  dismissible~ : Bool = true,
+  with_field~ : Bool = false,
+  disable_cancel~ : Bool = false,
+  initial~ : @view.NodeKey? = Some(@view.NodeKey::new("confirm")),
+) -> @view.View {
+  let children = if with_field {
+    [
+      @view.text_field(
+        @view.NodeKey::new("name"),
+        @view.TextFieldProps::new("", "Name"),
+      ),
+      @view.button(@view.NodeKey::new("confirm"), "Confirm"),
+    ]
+  } else {
+    [
+      @view.text(@view.NodeKey::new("body"), "Apply the change?"),
+      @view.button(@view.NodeKey::new("confirm"), "Confirm"),
+      @view.button(
+        @view.NodeKey::new("cancel"),
+        "Cancel",
+        disabled=disable_cancel,
+      ),
+    ]
+  }
+  @view.column(@view.NodeKey::new("root"), [
+    @view.button(@view.NodeKey::new("open"), "Open"),
+    @view.dialog(
+      @view.NodeKey::new("dialog"),
+      @view.DialogProps::new(
+        open,
+        "Save changes?",
+        dismissible~,
+        initial_focus=initial,
+      ),
+      children,
+    ),
+  ])
+}
+
+///|
+test "native Dialog paints a modal panel, focuses and dismisses once" {
+  let mounted = mount()
+  ignore(render(mounted, view=dialog_view(open=false)))
+  assert_true(mounted.focus(@view.NodeKey::new("open")))
+  let frame = match mounted.commit(dialog_view(), 640.0, 480.0, 1.0, measure) {
+    Ok(value) => value
+    Err(error) => abort(error.message().unwrap())
+  }
+  let bounds = frame.bounds(@view.NodeKey::new("dialog")).unwrap()
+  assert_true(bounds.size().width() >= 420.0)
+  assert_true(frame.bounds(@view.NodeKey::new("confirm")) is Some(_))
+  assert_true(frame.focused(@view.NodeKey::new("confirm")))
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Escape))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Dismissed(key)) => assert_eq(key, @view.NodeKey::new("dialog"))
+    _ => fail("expected Dismissed")
+  }
+  let closed = render(mounted, view=dialog_view(open=false))
+  assert_true(closed.bounds(@view.NodeKey::new("dialog")) is None)
+  assert_true(
+    mounted.handle_event(event(4L, key_down(@primitives.Enter))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Activate(key)) => assert_eq(key, @view.NodeKey::new("open"))
+    _ => fail("expected restored background activation")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native Dialog blocks background input and traps traversal" {
+  let mounted = mount()
+  let closed = render(mounted, view=dialog_view(open=false))
+  let open_bounds = closed.bounds(@view.NodeKey::new("open")).unwrap()
+  ignore(render(mounted, view=dialog_view()))
+  assert_true(
+    mounted
+    .handle_event(
+      event(
+        3L,
+        @primitives.PointerButtonPressed(
+          position=@primitives.Point::new(
+            open_bounds.left() + 4.0,
+            open_bounds.top() + 4.0,
+          ).unwrap(),
+          button=@primitives.Primary,
+          modifiers=@primitives.Modifiers::none(),
+        ),
+      ),
+    )
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Dismissed(_)) => ()
+    Some(@view.Activate(_)) => fail("background activation must be blocked")
+    _ => fail("expected backdrop dismissal")
+  }
+  ignore(render(mounted, view=dialog_view()))
+  assert_true(mounted.focus(@view.NodeKey::new("confirm")))
+  assert_true(
+    mounted.handle_event(event(4L, key_down(@primitives.Tab))).unwrap(),
+  )
+  assert_true(
+    mounted.handle_event(event(5L, key_down(@primitives.Enter))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Activate(key)) => assert_eq(key, @view.NodeKey::new("cancel"))
+    _ => fail("expected dialog-local tab traversal")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native Dialog keeps background focus and activation out while open" {
+  let mounted = mount()
+  ignore(render(mounted, view=dialog_view()))
+  assert_false(mounted.focus(@view.NodeKey::new("open")))
+  assert_true(mounted.callback(@view.NodeKey::new("open")) is None)
+  assert_true(mounted.focus(@view.NodeKey::new("confirm")))
+  mounted.dispose()
+}
+
+///|
+test "native Dialog ignores Escape and backdrop when not dismissible" {
+  let mounted = mount()
+  ignore(render(mounted, view=dialog_view(dismissible=false)))
+  assert_true(
+    mounted.handle_event(event(2L, key_down(@primitives.Escape))).unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted
+    .handle_event(
+      event(
+        3L,
+        @primitives.PointerButtonPressed(
+          position=@primitives.Point::new(2.0, 2.0).unwrap(),
+          button=@primitives.Primary,
+          modifiers=@primitives.Modifiers::none(),
+        ),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  mounted.dispose()
+}
+
+///|
+test "native Dialog cancels composition before dismissing" {
+  let mounted = mount()
+  ignore(
+    render(
+      mounted,
+      view=dialog_view(
+        with_field=true,
+        initial=Some(@view.NodeKey::new("name")),
+      ),
+    ),
+  )
+  assert_true(
+    mounted
+    .handle_event(
+      composition_event(
+        2L,
+        @primitives.Update(text="にほん", cursor_utf16=3),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Escape))).unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted.handle_event(event(4L, key_down(@primitives.Escape))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Dismissed(key)) => assert_eq(key, @view.NodeKey::new("dialog"))
+    _ => fail("expected Dismissed after composition cancel")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native Dialog can focus and edit a nested TextField" {
+  let mounted = mount()
+  let frame = render(mounted, view=dialog_view(with_field=true, initial=Some(@view.NodeKey::new("name"))))
+  assert_true(frame.focused(@view.NodeKey::new("name")))
+  assert_true(
+    mounted
+    .handle_event(event(2L, @primitives.TextInput(text="a")))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, value)) => {
+      assert_eq(key, @view.NodeKey::new("name"))
+      assert_eq(value, "a")
+    }
+    _ => fail("expected TextChanged")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native Dialog routes a pointer click to a nested TextField" {
+  let mounted = mount()
+  let frame = render(
+    mounted,
+    view=dialog_view(with_field=true, initial=Some(@view.NodeKey::new("confirm"))),
+  )
+  let field = frame.bounds(@view.NodeKey::new("name")).unwrap()
+  assert_true(
+    mounted
+    .handle_event(
+      event(
+        2L,
+        @primitives.PointerButtonPressed(
+          position=@primitives.Point::new(
+            field.left() + 12.0,
+            field.top() + 24.0,
+          ).unwrap(),
+          button=@primitives.Primary,
+          modifiers=@primitives.Modifiers::none(),
+        ),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(
+    mounted
+    .handle_event(event(3L, @primitives.TextInput(text="a")))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, value)) => {
+      assert_eq(key, @view.NodeKey::new("name"))
+      assert_eq(value, "a")
+    }
+    _ => fail("expected TextChanged from dialog field")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native Dialog supports a Dialog root without a background tree" {
+  let mounted = mount()
+  let open = @view.dialog(
+    @view.NodeKey::new("dialog"),
+    @view.DialogProps::new(true, "Root"),
+    [@view.button(@view.NodeKey::new("ok"), "OK")],
+  )
+  let frame = match mounted.commit(open, 640.0, 480.0, 1.0, measure) {
+    Ok(value) => value
+    Err(error) => abort(error.message().unwrap())
+  }
+  assert_true(frame.bounds(@view.NodeKey::new("dialog")) is Some(_))
+  let closed = @view.dialog(
+    @view.NodeKey::new("dialog"),
+    @view.DialogProps::new(false, "Root"),
+    [@view.button(@view.NodeKey::new("ok"), "OK")],
+  )
+  match mounted.commit(closed, 640.0, 480.0, 1.0, measure) {
+    Ok(value) => assert_true(value.bounds(@view.NodeKey::new("dialog")) is None)
+    Err(error) => abort(error.message().unwrap())
+  }
+  mounted.dispose()
+}
+
+///|
+test "native Dialog falls back when the focused child becomes disabled" {
+  let mounted = mount()
+  ignore(render(mounted, view=dialog_view()))
+  assert_true(mounted.focus(@view.NodeKey::new("cancel")))
+  let frame = render(mounted, view=dialog_view(disable_cancel=true))
+  assert_true(frame.focused(@view.NodeKey::new("confirm")))
+  mounted.dispose()
+}
+
+///|
+test "native Dialog ignores Escape repeat after cancelling composition" {
+  let mounted = mount()
+  ignore(
+    render(
+      mounted,
+      view=dialog_view(
+        with_field=true,
+        initial=Some(@view.NodeKey::new("name")),
+      ),
+    ),
+  )
+  assert_true(
+    mounted
+    .handle_event(
+      composition_event(
+        2L,
+        @primitives.Update(text="にほん", cursor_utf16=3),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(
+    mounted.handle_event(event(3L, key_down(@primitives.Escape))).unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted
+    .handle_event(event(4L, key_down(@primitives.Escape, repeat=true)))
+    .unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted.handle_event(event(5L, key_down(@primitives.Escape))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.Dismissed(key)) => assert_eq(key, @view.NodeKey::new("dialog"))
+    _ => fail("expected Dismissed on the next independent press")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native Dialog rejects an open dialog without a focusable target" {
   let mounted = mount()
   let modal = @view.dialog(
     @view.NodeKey::new("dialog"),
-    @view.DialogProps::new(true, "Confirm"),
-    [@view.button(@view.NodeKey::new("ok"), "OK")],
+    @view.DialogProps::new(true, "Empty", initial_focus=None),
+    [@view.text(@view.NodeKey::new("body"), "No actions")],
   )
   let view = @view.column(@view.NodeKey::new("root"), [modal])
   assert_true(mounted.commit(view, 640.0, 480.0, 1.0, measure) is Err(_))
