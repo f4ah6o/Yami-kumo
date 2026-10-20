@@ -289,6 +289,8 @@ pub struct Mounted {
   priv mut clipboard : Array[ClipboardRequest]
   priv mut next_field_generation : UInt64
   priv mut dialog : DialogState?
+  priv mut text_epoch : UInt64
+  priv mut last_text_sequence : Int64
 }
 
 ///|
@@ -317,6 +319,8 @@ pub fn Mounted::new(
     clipboard: [],
     next_field_generation: 1UL,
     dialog: None,
+    text_epoch: 0UL,
+    last_text_sequence: 0L,
   }
 }
 
@@ -3076,6 +3080,150 @@ fn Mounted::dispatch_composition(
 }
 
 ///|
+///|
+/// Apply one ordered observation from an armed portable text-input session.
+/// The runner owns begin/update/cancel/end; this adapter maps the portable
+/// preview/commit/cancel onto the focused editable field. A rejected field
+/// transaction is an adapter error, never a rewritten host event.
+pub fn Mounted::text_input(
+  self : Mounted,
+  epoch : UInt64,
+  event : @text_host.TextInputEvent,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  if !self.ready || self.is_disposed() || event.window() != self.window {
+    return Ok(false)
+  }
+  if event.epoch() != epoch {
+    return Ok(false)
+  }
+  if self.text_epoch != epoch {
+    self.text_epoch = epoch
+    self.last_text_sequence = 0L
+  }
+  if event.sequence() <= 0L || event.sequence() <= self.last_text_sequence {
+    return Ok(false)
+  }
+  let kind = event.kind()
+  if kind is @text_host.Geometry(..) {
+    self.last_text_sequence = event.sequence()
+    return Ok(true)
+  }
+  let measure = match self.measure {
+    Some(value) => value
+    None => return Ok(false)
+  }
+  let focused = match self.scope {
+    Some(scope) => scope.focused()
+    None => return Ok(false)
+  }
+  for index = 0; index < self.bindings.length(); index = index + 1 {
+    let binding = self.bindings[index]
+    if focused != Some(binding.id) || !field_editable(binding.view) {
+      continue
+    }
+    let field = match binding.field {
+      Some(value) => value
+      None => return Ok(false)
+    }
+    match kind {
+      @text_host.Preedit(text~, cursor~) => {
+        if text.length() > 16_384 {
+          return Err(adapter_error("native TextField preedit is too long"))
+        }
+        let offset = if cursor < 0 { text.length() } else { cursor }
+        let selection = match @text.TextSelection::new(offset, offset) {
+          Err(_) =>
+            return Err(
+              adapter_error("native TextField preedit cursor is outside the text"),
+            )
+          Ok(value) => value
+        }
+        let next = match
+          field.update_composition(
+            text,
+            selection,
+            fn(document) { field_measure(measure, document) },
+            field_admit,
+          ) {
+          Err(error) =>
+            return Err(
+              adapter_error(
+                "native TextField preedit rejected: " +
+                field_error_reason(error),
+              ),
+            )
+          Ok(value) => value
+        }
+        self.bindings[index] = { ..binding, field: Some(next), }
+      }
+      @text_host.Commit(text~) => {
+        let next = match
+          field.commit_composition(
+            text,
+            fn(document) { field_measure(measure, document) },
+            field_admit,
+          ) {
+          Err(error) =>
+            return Err(
+              adapter_error(
+                "native TextField commit rejected: " +
+                field_error_reason(error),
+              ),
+            )
+          Ok(value) => value
+        }
+        if next.document().text() != field.document().text() {
+          match binding.token {
+            Some(token) =>
+              ignore(
+                self.runtime.enqueue_text_changed(token, next.document().text()),
+              )
+            None => ()
+          }
+        }
+        self.bindings[index] = { ..binding, field: Some(next), }
+      }
+      @text_host.Cancel =>
+        match
+          field.cancel_composition(
+            fn(document) { field_measure(measure, document) },
+            field_admit,
+          ) {
+          Err(error) =>
+            return Err(
+              adapter_error(
+                "native TextField cancel rejected: " +
+                field_error_reason(error),
+              ),
+            )
+          Ok(next) => self.bindings[index] = { ..binding, field: Some(next), }
+        }
+      @text_host.FocusLost =>
+        if field.is_composing() {
+          match
+            field.cancel_composition(
+              fn(document) { field_measure(measure, document) },
+              field_admit,
+            ) {
+            Err(error) =>
+              return Err(
+                adapter_error(
+                  "native TextField focus-loss cancel rejected: " +
+                  field_error_reason(error),
+                ),
+              )
+            Ok(next) => self.bindings[index] = { ..binding, field: Some(next), }
+          }
+        }
+      @text_host.Geometry(..) => ()
+    }
+    self.last_text_sequence = event.sequence()
+    self.change = fresh_epoch()
+    return Ok(true)
+  }
+  Ok(false)
+}
+
 fn Mounted::dispatch(
   self : Mounted,
   input : @primitives.InputEvent,
@@ -3277,6 +3425,8 @@ pub fn Mounted::dispose(self : Mounted) -> Unit {
   self.current_frame = None
   self.clipboard = []
   self.dialog = None
+  self.text_epoch = 0UL
+  self.last_text_sequence = 0L
   self.ready = false
 }
 

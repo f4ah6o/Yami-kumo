@@ -86,8 +86,10 @@ Dialog overlay with initial focus, Tab trapping, Escape/backdrop dismissal and
 opener restoration. Native `0.2.9` moves to GPUI `0.10.3` and replaces that
 adapter-local modal filter with the live `element.FocusScopeSession`: admission,
 Tab trapping, dismissal and opener restoration come from the session, and a
-rebuilt frame adopts its new tree without closing the open scope. Nested Dialogs
-remain open. The current external-input route remains unqualified at runtime, and
+rebuilt frame adopts its new tree without closing the open scope. The adapter
+also applies portable `text_host.TextInputEvent` observations through
+`Mounted::text_input`; no sample drives the host begin/update/end cycle yet.
+Nested Dialogs remain open. The current external-input route remains unqualified at runtime, and
 real OS IME/AX are `NOT_RUN`, as detailed below.
 
 These checks cover labeled Text and Button rendering, readback of a completed

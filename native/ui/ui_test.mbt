@@ -2306,3 +2306,151 @@ test "native focus scope drops the acquisition on window blur" {
   assert_true(!refocused.focused(key()))
   mounted.dispose()
 }
+
+///|
+fn text_host_event(
+  sequence : Int64,
+  epoch : UInt64,
+  kind : @text_host.TextInputEventKind,
+) -> @text_host.TextInputEvent {
+  @text_host.TextInputEvent::new(
+    @platform.WindowId::new(1L),
+    sequence,
+    epoch,
+    kind,
+  )
+}
+
+///|
+test "native TextField applies portable preedit and commit" {
+  let mounted = mount()
+  ignore(
+    render(
+      mounted,
+      view=dialog_view(
+        with_field=true,
+        initial=Some(@view.NodeKey::new("name")),
+      ),
+    ),
+  )
+  assert_true(
+    mounted
+    .text_input(
+      7UL,
+      text_host_event(1L, 7UL, @text_host.Preedit(text="にほん", cursor=3)),
+    )
+    .unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted
+    .text_input(7UL, text_host_event(2L, 7UL, @text_host.Commit(text="日本語")))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, value)) => {
+      assert_eq(key, @view.NodeKey::new("name"))
+      assert_eq(value, "日本語")
+    }
+    _ => fail("expected committed text")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native portable text input rejects stale epochs and replayed records" {
+  let mounted = mount()
+  ignore(
+    render(
+      mounted,
+      view=dialog_view(
+        with_field=true,
+        initial=Some(@view.NodeKey::new("name")),
+      ),
+    ),
+  )
+  assert_true(
+    mounted
+    .text_input(7UL, text_host_event(1L, 7UL, @text_host.Preedit(text="に", cursor=1)))
+    .unwrap(),
+  )
+  assert_true(
+    !mounted
+    .text_input(8UL, text_host_event(2L, 7UL, @text_host.Commit(text="二")))
+    .unwrap(),
+  )
+  assert_true(
+    !mounted
+    .text_input(7UL, text_host_event(1L, 7UL, @text_host.Preedit(text="に", cursor=1)))
+    .unwrap(),
+  )
+  assert_true(
+    mounted
+    .text_input(7UL, text_host_event(2L, 7UL, @text_host.Commit(text="二")))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(_, value)) => assert_eq(value, "二")
+    _ => fail("expected committed text")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native portable text input ignores unfocused and read-only fields" {
+  let mounted = mount()
+  ignore(render(mounted, view=dialog_view()))
+  assert_true(
+    !mounted
+    .text_input(7UL, text_host_event(1L, 7UL, @text_host.Commit(text="x")))
+    .unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  mounted.dispose()
+
+  let read_only = mount()
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(
+      @view.NodeKey::new("name"),
+      @view.TextFieldProps::new("", "Name", read_only=true),
+    ),
+  ])
+  ignore(render(read_only, view=view))
+  assert_true(read_only.focus(@view.NodeKey::new("name")))
+  assert_true(
+    !read_only
+    .text_input(7UL, text_host_event(1L, 7UL, @text_host.Commit(text="x")))
+    .unwrap(),
+  )
+  assert_true(read_only.next_action() is None)
+  read_only.dispose()
+}
+
+///|
+test "native portable text input cancels composition on focus loss" {
+  let mounted = mount()
+  ignore(
+    render(
+      mounted,
+      view=dialog_view(
+        with_field=true,
+        initial=Some(@view.NodeKey::new("name")),
+      ),
+    ),
+  )
+  assert_true(
+    mounted
+    .text_input(7UL, text_host_event(1L, 7UL, @text_host.Preedit(text="にほん", cursor=3)))
+    .unwrap(),
+  )
+  assert_true(
+    mounted
+    .text_input(7UL, text_host_event(2L, 7UL, @text_host.FocusLost))
+    .unwrap(),
+  )
+  assert_true(
+    mounted.text_input(7UL, text_host_event(3L, 7UL, @text_host.Cancel)).unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  mounted.dispose()
+}

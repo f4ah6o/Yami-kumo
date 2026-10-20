@@ -10,6 +10,10 @@
   tree while keeping the open scope, so a Dialog survives a view topology change
   without losing focus. Removing the Dialog from the view restores the opener
   and cancels a removed field's composition through the session boundary hook.
+- Add `Mounted::text_input` for portable `text_host.TextInputEvent` observations.
+  It applies preedit/commit/cancel to the focused editable field, rejects stale
+  epochs and replayed records, and leaves the host begin/update/end cycle to the
+  runner.
 - Pin GPUI `0.10.3`.
 
 ## native-0.2.8 - 2026-10-20
