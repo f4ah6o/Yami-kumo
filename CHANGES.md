@@ -12,6 +12,13 @@
 - Keep generated Kumo contract code in MoonBit's canonical formatted layout.
 - Format the package README example as valid MoonBit code blocks.
 
+## native-0.2.7 - 2026-10-20
+
+### Fixed
+
+- Include `ui/` in the native Mooncakes archive. Native `0.2.6` omitted the
+  TextField adapter package that its own examples and consumers import.
+
 ## 0.2.2 - 2026-10-20
 
 ### Fixed

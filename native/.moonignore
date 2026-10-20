@@ -4,6 +4,8 @@
 !/moon.mod
 !/README.md
 !/LICENSE
+!/ui/
+!/ui/**
 !/components/
 !/components/**
 !/sample/
