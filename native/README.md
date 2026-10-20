@@ -89,8 +89,16 @@ Tab trapping, dismissal and opener restoration come from the session, and a
 rebuilt frame adopts its new tree without closing the open scope. The adapter
 also applies portable `text_host.TextInputEvent` observations through
 `Mounted::text_input`; no sample drives the host begin/update/end cycle yet.
-Nested Dialogs remain open. The current external-input route remains unqualified at runtime, and
-real OS IME/AX are `NOT_RUN`, as detailed below.
+Native `0.2.10` stacks nested and sibling Dialogs: every open Dialog keeps its
+own overlay root and live scope, only the innermost level admits input and
+semantic actions, Tab stays in that level, and Escape/backdrop dismiss the
+innermost dismissible level. A non-dismissible inner level consumes both
+instead of falling through to its parent. Closing an outer level revokes the
+whole deeper suffix and restores the enclosing focus once. Overlay roots now
+stay stable for a Dialog key at a level, so a rebuilt open Dialog keeps its
+live scope instead of relying on the adapter filters. The DOM `<dialog>`
+contract remains single-level. The current external-input route remains
+unqualified at runtime, and real OS IME/AX are `NOT_RUN`, as detailed below.
 
 These checks cover labeled Text and Button rendering, readback of a completed
 native frame, and a host-delivered click that changes the sample's App Entity

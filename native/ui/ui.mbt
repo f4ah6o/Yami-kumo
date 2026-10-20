@@ -62,35 +62,42 @@ priv struct Binding {
   button : @button.Button?
   field : @text_field.TextField?
   field_generation : UInt64
-  in_dialog : Bool
+  /// Deepest open Dialog that contains this node, or -1 outside every Dialog.
+  dialog_level : Int32
   visible : Bool
 }
 
 ///|
+/// One open modal level. `root_id` is the adapter-owned overlay root element and
+/// stays stable while the same Dialog key occupies the level, so frame adoption
+/// can retain the live session scope. `restore` is the focus observed in the
+/// enclosing scope when this level opened; it is the expected focus after this
+/// level is removed.
 priv struct DialogState {
   key : String
   root_id : UInt64
   panel_id : UInt64
-  opener : UInt64?
+  restore : UInt64?
   dismissible : Bool
   handle : @element.FocusScopeHandle?
 }
 
 ///|
-/// The focus transition an accepted frame asks the live session to perform.
-/// `focused` in the candidate is the exact post-publication acquisition used by
-/// paint and observations; publication reconciles the session to it.
-priv struct OpenPlan {
+/// One newly opened Dialog level in the accepted frame.
+priv struct DialogOpenPlan {
   root : UInt64
   initial : UInt64
-  previous : UInt64?
 }
 
 ///|
-priv enum FocusPlan {
-  Restore(UInt64?)
-  Open(OpenPlan)
-  Close
+/// The modal transition an accepted frame asks the live session to perform.
+/// Removals are detected by frame adoption from a missing overlay root; `opens`
+/// are applied outermost first. `reconcile` is false when a level was removed,
+/// because the session owns the restored acquisition for that frame.
+priv struct DialogPlan {
+  adopt : UInt64?
+  opens : Array[DialogOpenPlan]
+  reconcile : Bool
 }
 
 ///|
@@ -288,7 +295,7 @@ pub struct Mounted {
   priv mut focus_return : UInt64?
   priv mut clipboard : Array[ClipboardRequest]
   priv mut next_field_generation : UInt64
-  priv mut dialog : DialogState?
+  priv mut dialogs : Array[DialogState]
   priv mut text_epoch : UInt64
   priv mut last_text_sequence : Int64
 }
@@ -318,7 +325,7 @@ pub fn Mounted::new(
     focus_return: None,
     clipboard: [],
     next_field_generation: 1UL,
-    dialog: None,
+    dialogs: [],
     text_epoch: 0UL,
     last_text_sequence: 0L,
   }
@@ -600,10 +607,14 @@ fn element_focusable(tree : @element.ElementTree, id : UInt64) -> Bool {
 }
 
 ///|
-fn binding_in_dialog(bindings : Array[Binding], id : UInt64) -> Bool {
+fn binding_at_level(
+  bindings : Array[Binding],
+  id : UInt64,
+  level : Int32,
+) -> Bool {
   for binding in bindings {
     if binding.id == id {
-      return binding.in_dialog
+      return binding.dialog_level == level
     }
   }
   false
@@ -859,7 +870,11 @@ fn make_dialog_panel(
       ),
     )
   for child in view.children() {
-    panel = panel.with_child(make_element(child, bindings))
+    // Each open Dialog owns its own overlay; a nested Dialog is never laid out
+    // inside its parent's panel.
+    if child.kind() != @view.Dialog {
+      panel = panel.with_child(make_element(child, bindings))
+    }
   }
   panel
 }
@@ -1455,33 +1470,37 @@ priv struct Candidate {
   frame : Frame
   next_id : UInt64
   next_field_generation : UInt64
-  dialog : DialogState?
+  dialogs : Array[DialogState]
   focused : UInt64?
-  plan : FocusPlan
+  plan : DialogPlan
   cancel_pending : Bool
 }
 
 ///|
-fn find_open_dialog(
-  view : @view.View,
-) -> Result[@view.View?, @diagnostics.FrameworkError] {
-  let mut found : @view.View? = None
-  if view.kind() == @view.Dialog && view.dialog_open() {
-    found = Some(view)
+/// Collect open Dialogs outermost first. A closed Dialog hides its whole
+/// subtree, so an open child of a closed ancestor is not reachable.
+fn collect_open_dialogs(view : @view.View, dialogs : Array[@view.View]) -> Unit {
+  if view.kind() == @view.Dialog {
+    if !view.dialog_open() {
+      return
+    }
+    dialogs.push(view)
   }
   for child in view.children() {
-    match find_open_dialog(child) {
-      Err(error) => return Err(error)
-      Ok(Some(value)) =>
-        match found {
-          Some(_) =>
-            return Err(adapter_error("multiple native Dialogs are unsupported"))
-          None => found = Some(value)
-        }
-      Ok(None) => ()
+    collect_open_dialogs(child, dialogs)
+  }
+}
+
+///|
+/// Deepest open Dialog containing `key`, or -1 outside every Dialog.
+fn dialog_level_for(dialogs : Array[@view.View], key : String) -> Int32 {
+  let mut level = -1
+  for index in 0..<dialogs.length() {
+    if view_contains_key(dialogs[index], key) {
+      level = index
     }
   }
-  Ok(found)
+  level
 }
 
 ///|
@@ -1498,9 +1517,12 @@ fn view_contains_key(view : @view.View, key : String) -> Bool {
 }
 
 ///|
+/// First focusable stop that belongs to exactly this Dialog level. Deeper
+/// Dialogs own their own stops, so an inner field is never an outer initial.
 fn dialog_focus_id(
   dialog : @view.View,
   bindings : Array[Binding],
+  level : Int32,
 ) -> Result[UInt64, @diagnostics.FrameworkError] {
   let props = match dialog.dialog_props() {
     Some(value) => value
@@ -1509,7 +1531,7 @@ fn dialog_focus_id(
   match props.initial_focus() {
     Some(key) => {
       for binding in bindings {
-        if binding.in_dialog && binding.view.key() == key {
+        if binding.dialog_level == level && binding.view.key() == key {
           if binding.view.kind() == @view.Button ||
             binding.view.kind() == @view.TextField {
             if binding.view.disabled() {
@@ -1524,7 +1546,7 @@ fn dialog_focus_id(
     }
     None => {
       for binding in bindings {
-        if binding.in_dialog &&
+        if binding.dialog_level == level &&
           (
             binding.view.kind() == @view.Button ||
             binding.view.kind() == @view.TextField
@@ -1547,10 +1569,8 @@ fn Mounted::prepare(
   scale : Double,
   measure : @components.TextMeasure,
 ) -> Result[Candidate, @diagnostics.FrameworkError] {
-  let dialog_view = match find_open_dialog(view) {
-    Err(error) => return Err(error)
-    Ok(value) => value
-  }
+  let dialog_views : Array[@view.View] = []
+  collect_open_dialogs(view, dialog_views)
   if width <= 0.0 || height <= 0.0 || scale <= 0.0 {
     return Err(adapter_error("positive viewport and scale required"))
   }
@@ -1674,10 +1694,7 @@ fn Mounted::prepare(
       } else {
         0UL
       },
-      in_dialog: match dialog_view {
-        Some(dialog) => view_contains_key(dialog, node.key().value())
-        None => false
-      },
+      dialog_level: dialog_level_for(dialog_views, node.key().value()),
       visible,
     })
   }
@@ -1709,129 +1726,157 @@ fn Mounted::prepare(
     Ok(value) => value
   }
   let main_tree = painted.tree()
-  let mut tree = main_tree
   let old_focus = match self.scope {
     Some(scope) => scope.focused()
     None => None
   }
-  let previous_dialog = self.dialog
-  let opening = match dialog_view {
-    Some(dialog) =>
-      match previous_dialog {
-        Some(previous) => previous.key != dialog.key().value()
-        None => true
-      }
-    None => false
+  let previous_dialogs = self.dialogs
+  let mut common = 0
+  while common < previous_dialogs.length() &&
+        common < dialog_views.length() &&
+        previous_dialogs[common].key == dialog_views[common].key().value() {
+    common += 1
   }
-  let closing = dialog_view is None && previous_dialog is Some(_)
-  let mut next_dialog : DialogState? = None
-  let mut focus : UInt64? = None
-  let mut plan : FocusPlan = Restore(None)
-  match dialog_view {
-    Some(dialog) => {
-      let panel = make_dialog_panel(dialog, bindings)
-      let root_id = next_id
+  let removal = common < previous_dialogs.length()
+  let all_nodes = main_tree.nodes()
+  let next_dialogs : Array[DialogState] = []
+  let opens : Array[DialogOpenPlan] = []
+  for level in 0..<dialog_views.length() {
+    let dialog = dialog_views[level]
+    let panel = make_dialog_panel(dialog, bindings)
+    let retained = level < common
+    let root_id = if retained {
+      previous_dialogs[level].root_id
+    } else {
+      let id = next_id
       next_id += 8UL
-      let overlay = @element.Element::root(
-          root_id,
-          @layout.FlexTreeStyle::new(@layout.FlowDirection::column())
-          .with_align(@layout.AlignItems::center())
-          .with_justify(@layout.JustifyContent::center()),
-        )
-        .with_pointer_events(true)
-        .with_child(panel)
-      let dialog_painted = match
-        overlay.request_layout_with_device_scale(viewport.size(), scale) {
-        Err(_) => return Err(adapter_error("native Dialog layout failed"))
-        Ok(requested) =>
-          match requested.prepaint() {
-            Err(_) => return Err(adapter_error("native Dialog prepaint failed"))
-            Ok(value) => value
-          }
-      }
-      let dialog_tree = dialog_painted.tree()
-      let all_nodes = main_tree.nodes()
-      for node in dialog_tree.nodes() {
-        all_nodes.push(node)
-      }
-      tree = match @element.ElementTree::new(all_nodes) {
-        Err(_) => return Err(adapter_error("native Dialog tree rejected"))
-        Ok(value) => value
-      }
-      let initial = match dialog_focus_id(dialog, bindings) {
-        Err(error) => return Err(error)
-        Ok(value) => value
-      }
-      let panel_id = match binding_for(bindings, dialog.key()) {
-        Some(binding) => binding.id
-        None => return Err(adapter_error("native Dialog binding is absent"))
-      }
-      if opening {
-        let previous = match old_focus {
-          Some(id) if element_focusable(tree, id) => Some(id)
-          _ => None
-        }
-        focus = Some(initial)
-        plan = Open({ root: root_id, initial, previous, })
-      } else {
-        let retained = match old_focus {
-          Some(id) if element_focusable(tree, id) &&
-            binding_in_dialog(bindings, id) => Some(id)
-          _ => None
-        }
-        focus = Some(
-          match retained {
-            Some(id) => id
-            None => initial
-          },
-        )
-        plan = Restore(focus)
-      }
-      let opener = if opening {
-        old_focus
-      } else {
-        match previous_dialog {
-          Some(previous) => previous.opener
-          None => old_focus
-        }
-      }
-      next_dialog = Some({
-        key: dialog.key().value(),
-        root_id,
-        panel_id,
-        opener,
-        dismissible: match dialog.dialog_props() {
-          Some(props) => props.dismissible()
-          None => false
-        },
-        handle: match previous_dialog {
-          Some(previous) => previous.handle
-          None => None
-        },
-      })
+      id
     }
-    None =>
-      if closing {
-        focus = match previous_dialog {
-          Some(previous) =>
-            match previous.opener {
-              Some(id) if element_focusable(tree, id) => Some(id)
-              _ => None
-            }
-          None => None
+    let overlay = @element.Element::root(
+        root_id,
+        @layout.FlexTreeStyle::new(@layout.FlowDirection::column())
+        .with_align(@layout.AlignItems::center())
+        .with_justify(@layout.JustifyContent::center()),
+      )
+      .with_pointer_events(true)
+      .with_child(panel)
+    let dialog_painted = match
+      overlay.request_layout_with_device_scale(viewport.size(), scale) {
+      Err(_) => return Err(adapter_error("native Dialog layout failed"))
+      Ok(requested) =>
+        match requested.prepaint() {
+          Err(_) => return Err(adapter_error("native Dialog prepaint failed"))
+          Ok(value) => value
         }
-        plan = Close
+    }
+    for node in dialog_painted.tree().nodes() {
+      all_nodes.push(node)
+    }
+    let initial = match dialog_focus_id(dialog, bindings, level) {
+      Err(error) => return Err(error)
+      Ok(value) => value
+    }
+    let panel_id = match binding_for(bindings, dialog.key()) {
+      Some(binding) => binding.id
+      None => return Err(adapter_error("native Dialog binding is absent"))
+    }
+    next_dialogs.push({
+      key: dialog.key().value(),
+      root_id,
+      panel_id,
+      restore: if retained {
+        previous_dialogs[level].restore
       } else {
-        focus = match old_focus {
-          Some(id) if element_focusable(tree, id) => Some(id)
-          _ => None
-        }
-        plan = Restore(focus)
+        None
+      },
+      dismissible: match dialog.dialog_props() {
+        Some(props) => props.dismissible()
+        None => false
+      },
+      handle: if retained {
+        previous_dialogs[level].handle
+      } else {
+        None
+      },
+    })
+    if !retained {
+      opens.push({ root: root_id, initial, })
+    }
+  }
+  let tree = match @element.ElementTree::new(all_nodes) {
+    Err(_) => return Err(adapter_error("native Dialog tree rejected"))
+    Ok(value) => value
+  }
+  // Expected acquisition per level. Retained levels keep a live focus that
+  // still belongs to that level; otherwise the level's initial stop wins.
+  let level_focus : Array[UInt64?] = []
+  let mut enclosing : UInt64? = if common == 0 && previous_dialogs.length() > 0 {
+    match previous_dialogs[0].restore {
+      Some(id) if element_focusable(tree, id) &&
+        binding_at_level(bindings, id, -1) => Some(id)
+      _ => None
+    }
+  } else {
+    match old_focus {
+      Some(id) if element_focusable(tree, id) &&
+        binding_at_level(bindings, id, -1) => Some(id)
+      _ => None
+    }
+  }
+  for level in 0..<next_dialogs.length() {
+    let retained = level < common
+    let initial = match dialog_focus_id(dialog_views[level], bindings, level) {
+      Err(error) => return Err(error)
+      Ok(value) => value
+    }
+    let expected = if retained {
+      match old_focus {
+        Some(id) if element_focusable(tree, id) &&
+          binding_at_level(bindings, id, level) => Some(id)
+        _ => Some(initial)
       }
+    } else {
+      Some(initial)
+    }
+    if !retained {
+      next_dialogs[level] = { ..next_dialogs[level], restore: enclosing, }
+    }
+    level_focus.push(expected)
+    enclosing = expected
+  }
+  let top = next_dialogs.length() - 1
+  let mut focus : UInt64? = if top < 0 {
+    match old_focus {
+      Some(id) if element_focusable(tree, id) => Some(id)
+      _ => None
+    }
+  } else {
+    level_focus[top]
+  }
+  if removal && opens.length() == 0 {
+    focus = match previous_dialogs[common].restore {
+      Some(id) if element_focusable(tree, id) &&
+        binding_at_level(bindings, id, common - 1) => Some(id)
+      _ => None
+    }
   }
   if !self.window_focused {
     focus = None
   }
+  let adopt = if removal {
+    None
+  } else {
+    match old_focus {
+      Some(id) if element_focusable(tree, id) &&
+        (
+          previous_dialogs.length() == 0 ||
+          binding_at_level(bindings, id, previous_dialogs.length() - 1)
+        ) => Some(id)
+      _ => None
+    }
+  }
+  let reconcile = !(removal && opens.length() == 0)
+  let plan : DialogPlan = { adopt, opens, reconcile, }
   let mut cancel_pending = match self.current_frame {
     Some(frame) =>
       frame.snapshot.viewport() != viewport || frame.snapshot.scale() != scale
@@ -1876,15 +1921,20 @@ fn Mounted::prepare(
     color(245, 247, 250)
   }
   let observations = []
+  // Main content first, then each Dialog level in stack order: its backdrop,
+  // panel and level-local content. A deeper backdrop therefore covers the
+  // entire enclosing level.
   let paint_order : Array[Int32] = []
   for index in 0..<bindings.length() {
-    if !bindings[index].in_dialog {
+    if bindings[index].dialog_level < 0 {
       paint_order.push(index)
     }
   }
-  for index in 0..<bindings.length() {
-    if bindings[index].in_dialog {
-      paint_order.push(index)
+  for level in 0..<next_dialogs.length() {
+    for index in 0..<bindings.length() {
+      if bindings[index].dialog_level == level {
+        paint_order.push(index)
+      }
     }
   }
   for index in paint_order {
@@ -1895,9 +1945,11 @@ fn Mounted::prepare(
         None => return Err(adapter_error("visible binding has no layout node"))
       }
       if binding.view.kind() == @view.Dialog {
-        let dialog = match next_dialog {
-          Some(value) => value
-          None => return Err(adapter_error("native Dialog state is absent"))
+        let level = binding.dialog_level
+        let dialog = if level >= 0 && level < next_dialogs.length() {
+          next_dialogs[level]
+        } else {
+          return Err(adapter_error("native Dialog state is absent"))
         }
         match
           @scene.SceneItem::quad(
@@ -2186,7 +2238,7 @@ fn Mounted::prepare(
     tree,
     next_id,
     next_field_generation,
-    dialog: next_dialog,
+    dialogs: next_dialogs,
     focused: focus,
     plan,
     cancel_pending,
@@ -2240,6 +2292,42 @@ pub fn Mounted::stage(
 }
 
 ///|
+/// Adopt the rebuilt tree, then open the new Dialog suffix outermost first.
+/// Frame adoption owns removals: a missing overlay root revokes that suffix and
+/// restores once, so this only re-opens levels the target view added.
+fn Mounted::apply_dialog_plan(
+  self : Mounted,
+  scope : @element.FocusScopeSession,
+  tree : @element.ElementTree,
+  plan : DialogPlan,
+) -> Result[Array[@element.FocusScopeHandle], @diagnostics.FrameworkError] {
+  let hook : (@element.FocusScopeBoundary) -> Result[
+    Unit,
+    @element.FocusScopeError,
+  ] = boundary => self.cancel_interactions(boundary)
+  match scope.adopt_tree(scope.target(), tree, plan.adopt, hook) {
+    Err(_) => return Err(adapter_error("native focus scope publication failed"))
+    Ok(_) => ()
+  }
+  let handles : Array[@element.FocusScopeHandle] = []
+  for open in plan.opens {
+    match
+      scope.open_scope(scope.target(), open.root, hook, initial=open.initial) {
+      Err(_) => {
+        // A partial publication would leave scopes the owner never received.
+        // Revoke the whole newly opened suffix before reporting failure.
+        if handles.length() > 0 {
+          ignore(scope.close_scope(scope.target(), handles[0], hook))
+        }
+        return Err(adapter_error("native Dialog scope open failed"))
+      }
+      Ok(handle) => handles.push(handle)
+    }
+  }
+  Ok(handles)
+}
+
+///|
 /// Publish the staged runtime and accepted host geometry together. Rejected
 /// foreign, reused or stale preparations leave both unchanged. No fallible
 /// layout/measurement/scene work runs after the common runtime commit.
@@ -2275,52 +2363,30 @@ pub fn Mounted::publish(
       created
     }
   }
-  let mut opened : @element.FocusScopeHandle? = None
-  let applied = match candidate.plan {
-    Restore(focused) =>
-      scope.adopt_tree(scope.target(), tree, focused, fn(boundary) {
-        self.cancel_interactions(boundary)
-      })
-    Open(open_plan) => {
-      let root = open_plan.root
-      let initial = open_plan.initial
-      let previous = open_plan.previous
-      match
-        scope.adopt_tree(scope.target(), tree, previous, fn(boundary) {
-          self.cancel_interactions(boundary)
-        }) {
-        Err(error) => Err(error)
-        Ok(_) =>
-          match
-            scope.open_scope(
-              scope.target(),
-              root,
-              fn(boundary) { self.cancel_interactions(boundary) },
-              initial~,
-            ) {
-            Err(error) => Err(error)
-            Ok(handle) => {
-              opened = Some(handle)
-              Ok(())
-            }
-          }
-      }
-    }
-    Close =>
-      scope.adopt_tree(scope.target(), tree, None, fn(boundary) {
-        self.cancel_interactions(boundary)
-      })
-  }
-  match applied {
-    Err(_) => {
+  let scopes_before = scope.scope_count()
+  let handles = match self.apply_dialog_plan(scope, tree, candidate.plan) {
+    Err(error) => {
       self.ready = false
-      return Err(adapter_error("native focus scope publication failed"))
+      return Err(error)
     }
-    Ok(_) => ()
+    Ok(value) => value
   }
-  // The painted acquisition is authoritative for this frame. A session that
-  // restored a different surviving owner is reconciled to it once here.
-  if scope.focused() != candidate.focused {
+  let revoked = scope.scope_count() < scopes_before
+  // New levels are the tail of the stack and are opened outermost first.
+  let first_open = candidate.dialogs.length() - handles.length()
+  for index in 0..<handles.length() {
+    let level = first_open + index
+    candidate.dialogs[level] = {
+      ..candidate.dialogs[level],
+      handle: Some(handles[index]),
+    }
+  }
+  // A frame that adopted a live scope removal already restored exactly once
+  // inside the session and stays as is. Every other frame, including a removal
+  // whose scope was closed earlier (for example by Escape), reconciles to the
+  // painted acquisition.
+  if (candidate.plan.reconcile || !revoked) &&
+    scope.focused() != candidate.focused {
     let reconciled = match candidate.focused {
       Some(id) => scope.request_focus(scope.target(), id)
       None => scope.clear_focus(scope.target())
@@ -2352,14 +2418,7 @@ pub fn Mounted::publish(
   self.bindings = candidate.bindings
   self.scope = Some(scope)
   self.measure = Some(prepared.measure)
-  match opened {
-    Some(handle) =>
-      self.dialog = match candidate.dialog {
-        Some(dialog) => Some({ ..dialog, handle: Some(handle), })
-        None => None
-      }
-    None => self.dialog = candidate.dialog
-  }
+  self.dialogs = candidate.dialogs
   let focused_now = scope.focused()
   let observations = []
   for observation in candidate.frame.observations {
@@ -2449,15 +2508,22 @@ pub fn Mounted::invalidate_layout(self : Mounted) -> Unit {
 }
 
 ///|
+/// A background binding is frozen under an open Dialog stack; only the
+/// innermost level admits semantic actions, focus and controller input.
+fn Mounted::admits_binding(self : Mounted, binding : Binding) -> Bool {
+  self.dialogs.length() == 0 ||
+  binding.dialog_level == self.dialogs.length() - 1
+}
+
+///|
 pub fn Mounted::callback(self : Mounted, key : @view.NodeKey) -> Activation? {
   if !self.ready || self.is_disposed() {
     return None
   }
   match binding_for(self.bindings, key) {
     Some(binding) if binding.visible =>
-      match self.dialog {
-        Some(_) if !binding.in_dialog => return None
-        _ => ()
+      if !self.admits_binding(binding) {
+        return None
       }
     _ => return None
   }
@@ -2481,11 +2547,7 @@ pub fn Mounted::activate(self : Mounted, callback : Activation) -> Bool {
     return false
   }
   match binding_for(self.bindings, callback.token.key()) {
-    Some(binding) =>
-      match self.dialog {
-        Some(_) if !binding.in_dialog => return false
-        _ => ()
-      }
+    Some(binding) => if !self.admits_binding(binding) { return false }
     None => return false
   }
   match self.current_frame {
@@ -2520,13 +2582,9 @@ pub fn Mounted::next_action(self : Mounted) -> @view.SemanticAction? {
       Some(frame) => frame.bounds(key) is Some(_)
       None => false
     }
-    let allowed = match self.dialog {
-      Some(_) =>
-        match binding_for(self.bindings, key) {
-          Some(binding) => binding.in_dialog
-          None => false
-        }
-      None => true
+    let allowed = match binding_for(self.bindings, key) {
+      Some(binding) => self.admits_binding(binding)
+      None => false
     }
     if visible && allowed && (!shell || self.current_frame is Some(_)) {
       return Some(action)
@@ -2544,9 +2602,8 @@ pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
     None => return false
     Some(value) => if value.visible { value } else { return false }
   }
-  match self.dialog {
-    Some(_) if !binding.in_dialog => return false
-    _ => ()
+  if !self.admits_binding(binding) {
+    return false
   }
   match self.current_frame {
     Some(frame) =>
@@ -2810,9 +2867,13 @@ fn Mounted::route(
 ///|
 fn Mounted::close_dialog(
   self : Mounted,
-  dialog : DialogState,
+  level : Int32,
   key : @primitives.Key?,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
+  if level < 0 || level >= self.dialogs.length() {
+    return Ok(())
+  }
+  let dialog = self.dialogs[level]
   let scope = match self.scope {
     Some(value) => value
     None => return Ok(())
@@ -2825,6 +2886,7 @@ fn Mounted::close_dialog(
     Unit,
     @element.FocusScopeError,
   ] = boundary => self.cancel_interactions(boundary)
+  // Closing an outer level revokes every deeper level in the session suffix.
   let closed = match key {
     Some(value) =>
       scope.close_scope(scope.target(), handle, hook, dismissal_key=value)
@@ -2836,6 +2898,33 @@ fn Mounted::close_dialog(
     Err(_) => return Err(adapter_error("native Dialog scope close failed"))
   }
   self.sync_focus()
+  Ok(())
+}
+
+///|
+/// Close one level and report exactly that Dialog as dismissed. A deeper level
+/// revoked by the same close is removed silently.
+fn Mounted::dismiss_dialog(
+  self : Mounted,
+  level : Int32,
+  key : @primitives.Key?,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if level < 0 || level >= self.dialogs.length() {
+    return Ok(())
+  }
+  let dialog = self.dialogs[level]
+  match self.close_dialog(level, key) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
+  match binding_for(self.bindings, @view.NodeKey::new(dialog.key)) {
+    Some(binding) =>
+      match binding.token {
+        Some(token) => ignore(self.runtime.enqueue_dismissed(token))
+        None => ()
+      }
+    None => ()
+  }
   Ok(())
 }
 
@@ -2895,98 +2984,81 @@ pub fn Mounted::handle_event(
         self.invalidate_layout()
         return Ok(false)
       }
-      let dialog = self.dialog
+      let top = self.dialogs.length() - 1
       let admitted = match self.route(input) {
         Err(error) => return Err(error)
         Ok(value) => value
       }
-      let result = match dialog {
-        Some(dialog) =>
-          match input {
-            @primitives.KeyPressed(key=@primitives.Escape, repeat~, ..) => {
-              if repeat {
-                return Ok(true)
-              }
-              let focused = match self.scope {
-                Some(scope) => scope.focused()
-                None => None
-              }
-              let mut composing = false
-              for index = 0; index < self.bindings.length(); index = index + 1 {
-                let binding = self.bindings[index]
-                let dialog_field = binding.in_dialog &&
-                  (match focused {
-                    Some(id) => binding.id == id
-                    None => false
-                  })
-                if dialog_field {
-                  match binding.field {
-                    Some(field) if field.is_composing() => {
-                      let measure = match self.measure {
-                        Some(value) => value
-                        None => return Ok(false)
-                      }
-                      let next = match
-                        field.cancel_composition(
-                          fn(document) { field_measure(measure, document) },
-                          field_admit,
-                        ) {
-                        Ok(value) => value
-                        Err(_) => return Ok(false)
-                      }
-                      self.bindings[index] = { ..binding, field: Some(next), }
-                      composing = true
+      let result = if top < 0 {
+        self.dispatch(input, admitted)
+      } else {
+        let dialog = self.dialogs[top]
+        match input {
+          @primitives.KeyPressed(key=@primitives.Escape, repeat~, ..) => {
+            if repeat {
+              return Ok(true)
+            }
+            let focused = match self.scope {
+              Some(scope) => scope.focused()
+              None => None
+            }
+            let mut composing = false
+            for index = 0; index < self.bindings.length(); index = index + 1 {
+              let binding = self.bindings[index]
+              let dialog_field = binding.dialog_level == top &&
+                (match focused {
+                  Some(id) => binding.id == id
+                  None => false
+                })
+              if dialog_field {
+                match binding.field {
+                  Some(field) if field.is_composing() => {
+                    let measure = match self.measure {
+                      Some(value) => value
+                      None => return Ok(false)
                     }
-                    _ => ()
+                    let next = match
+                      field.cancel_composition(
+                        fn(document) { field_measure(measure, document) },
+                        field_admit,
+                      ) {
+                      Ok(value) => value
+                      Err(_) => return Ok(false)
+                    }
+                    self.bindings[index] = { ..binding, field: Some(next), }
+                    composing = true
                   }
+                  _ => ()
                 }
               }
-              if composing {
-                return Ok(true)
+            }
+            if composing {
+              return Ok(true)
+            }
+            if dialog.dismissible {
+              match self.dismiss_dialog(top, Some(@primitives.Escape)) {
+                Err(error) => return Err(error)
+                Ok(_) => ()
               }
+            }
+            Ok(true)
+          }
+          @primitives.PointerButtonPressed(button=@primitives.Primary, ..) =>
+            if admitted == Some(dialog.root_id) {
+              // The innermost backdrop owns the press. A non-dismissible level
+              // consumes it instead of falling through to an outer Dialog.
               if dialog.dismissible {
-                match self.close_dialog(dialog, Some(@primitives.Escape)) {
+                match self.dismiss_dialog(top, None) {
                   Err(error) => return Err(error)
                   Ok(_) => ()
                 }
-                match
-                  binding_for(self.bindings, @view.NodeKey::new(dialog.key)) {
-                  Some(binding) =>
-                    match binding.token {
-                      Some(token) =>
-                        ignore(self.runtime.enqueue_dismissed(token))
-                      None => ()
-                    }
-                  None => ()
-                }
               }
               Ok(true)
+            } else {
+              self.dispatch(input, admitted)
             }
-            @primitives.PointerButtonPressed(button=@primitives.Primary, ..) =>
-              if admitted == Some(dialog.root_id) {
-                if dialog.dismissible {
-                  match self.close_dialog(dialog, None) {
-                    Err(error) => return Err(error)
-                    Ok(_) => ()
-                  }
-                  match
-                    binding_for(self.bindings, @view.NodeKey::new(dialog.key)) {
-                    Some(binding) =>
-                      match binding.token {
-                        Some(token) =>
-                          ignore(self.runtime.enqueue_dismissed(token))
-                        None => ()
-                      }
-                    None => ()
-                  }
-                }
-                Ok(true)
-              } else {
-                self.dispatch(input, admitted)
-              }
-            _ => self.dispatch(input, admitted)
-          }
-        None => self.dispatch(input, admitted)
+          _ => self.dispatch(input, admitted)
+        }
       }
       if result is Ok(_) {
         self.last_dispatched_input = event.sequence()
@@ -3017,9 +3089,8 @@ fn Mounted::dispatch_composition(
     if focused != Some(binding.id) || !field_editable(binding.view) {
       continue
     }
-    match self.dialog {
-      Some(_) if !binding.in_dialog => continue
-      _ => ()
+    if !self.admits_binding(binding) {
+      continue
     }
     let field = match binding.field {
       Some(value) => value
@@ -3079,7 +3150,6 @@ fn Mounted::dispatch_composition(
   Ok(false)
 }
 
-///|
 ///|
 /// Apply one ordered observation from an armed portable text-input session.
 /// The runner owns begin/update/cancel/end; this adapter maps the portable
@@ -3224,6 +3294,7 @@ pub fn Mounted::text_input(
   Ok(false)
 }
 
+///|
 fn Mounted::dispatch(
   self : Mounted,
   input : @primitives.InputEvent,
@@ -3260,16 +3331,16 @@ fn Mounted::dispatch(
           match scope.request_focus(scope.target(), id) {
             Ok(_) => ()
             Err(_) =>
-              if self.dialog is None {
+              if self.dialogs.length() == 0 {
                 ignore(scope.clear_focus(scope.target()))
               }
           }
         None =>
-          if self.dialog is None {
+          if self.dialogs.length() == 0 {
             ignore(scope.clear_focus(scope.target()))
           }
       }
-      if self.dialog is None && target is Some(_) && previous != target {
+      if self.dialogs.length() == 0 && target is Some(_) && previous != target {
         self.focus_return = previous
       }
       self.sync_focus()
@@ -3277,12 +3348,12 @@ fn Mounted::dispatch(
     _ => ()
   }
   let mut consumed = false
-  let modal = self.dialog is Some(_)
+  let modal = self.dialogs.length() > 0
   for index = 0; index < self.bindings.length(); index = index + 1 {
     let binding = self.bindings[index]
     // Scope admission already rejects background targets. This filter only keeps
     // background controller state (hover, held press) frozen under an open Dialog.
-    if modal && !binding.in_dialog {
+    if modal && !self.admits_binding(binding) {
       continue
     }
     match binding.field {
@@ -3424,7 +3495,7 @@ pub fn Mounted::dispose(self : Mounted) -> Unit {
   self.scope = None
   self.current_frame = None
   self.clipboard = []
-  self.dialog = None
+  self.dialogs = []
   self.text_epoch = 0UL
   self.last_text_sequence = 0L
   self.ready = false
