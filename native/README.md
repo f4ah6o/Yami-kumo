@@ -11,22 +11,24 @@ Install the native module with:
 moon add f4ah6o/yami_kumo_native
 ```
 
-Building this module for MoonBit's native/LLVM targets requires Python 3
-(`python3`) on `PATH`. GPUI 0.10.0 runs a Python prebuild during compilation to
-propagate macOS CoreText framework link settings. Python is needed only while
-building; the resulting application has no Python runtime dependency.
+Building this module for MoonBit's native/LLVM targets needs only the MoonBit
+toolchain, with a `moon` that supports `.mbtx` prebuild scripts (the pinned
+`0.10.15+943464bfa` toolchain does). GPUI's CoreText framework-link hook is a
+MoonBit script that moon compiles to WebAssembly and runs with the bundled
+`moonrun`, and the Linux helpers are POSIX shell scripts. Neither Python nor
+Node is involved, and the resulting application has no build-tool runtime
+dependency. The repository's native UI test lanes still run Python drivers.
 
 Windows native builds also require the Visual C++ compiler and SDK on `PATH`.
 Run the build from a Visual Studio Developer PowerShell, or initialize the
 environment with `VsDevCmd.bat -arch=x64 -host_arch=x64` before running the
-Windows validation script. The script locates Git Bash from Git for Windows,
-checks for an importable Python 3.11 or newer interpreter, and ignores Windows
-Store execution aliases. Set `YAMI_GIT_BASH` to `bash.exe` if automatic Git
-discovery cannot find it. Set `YAMI_PYTHON_PATH` to the executable when it is
-not on `PATH`; the script temporarily provides a `python3` forwarder so Moon's
-prebuild uses that interpreter without relocating it. Pass `-TestsOnly` to run
-the native package tests without opening the visible sample window.
-The runner checks argument boundaries, stdout, stderr, and exit status through the forwarder before running native tests.
+Windows validation script. The script locates Git Bash from Git for Windows and
+ignores Windows Store execution aliases. Set `YAMI_GIT_BASH` to `bash.exe` if
+automatic Git discovery cannot find it. The test drivers need an importable
+Python 3.11 or newer interpreter; set `YAMI_PYTHON_PATH` to the executable when
+it is not on `PATH`. Pass `-TestsOnly` to run the native package tests without
+opening the visible sample window. The runner checks argument boundaries,
+stdout, stderr, and exit status before running native tests.
 
 The module source is MIT licensed; the package includes [LICENSE](LICENSE).
 
@@ -45,10 +47,10 @@ MoonBit `0.10.14` cannot discover the pinned GPUI packages because it does
 not recognize the `max_concurrent_tests` package setting. Build it with the immutable GPUI revision recorded in
 [`tests/native-ui/gpui-revision.txt`](../tests/native-ui/gpui-revision.txt)
 using `GPUI_SOURCE=/path/to/gpui.mbt sh scripts/native_ui_workspace.sh ...`
-from the repository root. The shared UI lane pins the same revision in
+from the repository root. The shared UI lane records its own revision in
 [`tests/shared-ui/gpui-revision.txt`](../tests/shared-ui/gpui-revision.txt).
-This is a source-workspace change, not a new package release; the published
-module dependency declarations have not been advanced.
+Native `0.2.14` advances the published dependency to GPUI `0.10.6`, which
+carries the build-path changes; both source-workspace pins follow it.
 
 ## Platform status
 
@@ -116,8 +118,10 @@ whole deeper suffix and restores the enclosing focus once. Overlay roots now
 stay stable for a Dialog key at a level, so a rebuilt open Dialog keeps its
 live scope instead of relying on the adapter filters. The DOM `<dialog>`
 contract remains single-level. The current external-input route remains
-unqualified at runtime, and real OS IME/AX are `NOT_RUN`, as detailed below. Native `0.2.13` moves to GPUI `0.10.5` and
-`f4ah6o/yami_kumo` `0.2.3`, adds a macOS Shared Settings lane (portable text
+unqualified at runtime, and real OS IME/AX are `NOT_RUN`, as detailed below. Native `0.2.14` moves to GPUI `0.10.6`,
+whose prebuild hook and Linux compiler helpers no longer need Python, so
+native builds require only the MoonBit toolchain. Native `0.2.13` moved to GPUI `0.10.5` and
+`f4ah6o/yami_kumo` `0.2.3`, added a macOS Shared Settings lane (portable text
 input plus Dialog AX publication), and accepts a committed string that arrives
 without a preedit instead of failing with `NoComposition`.
 

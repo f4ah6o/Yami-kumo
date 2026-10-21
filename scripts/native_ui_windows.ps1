@@ -64,9 +64,6 @@ if (-not [string]::IsNullOrWhiteSpace($env:MSYS2_ENV_CONV_EXCL)) {
 if (-not ($msysEnvConversionExclusions | Where-Object { $_ -ceq 'CL=' })) {
   $msysEnvConversionExclusions += 'CL='
 }
-if (-not ($msysEnvConversionExclusions | Where-Object { $_ -ceq 'YAMI_SELECTED_PYTHON_PATH=' })) {
-  $msysEnvConversionExclusions += 'YAMI_SELECTED_PYTHON_PATH='
-}
 $env:MSYS2_ENV_CONV_EXCL = $msysEnvConversionExclusions -join ';'
 
 function Convert-ToBashPath([string]$Path) {
@@ -144,68 +141,32 @@ foreach ($candidatePath in $pythonCandidates) {
   }
 }
 if ($null -eq $pythonPath) {
-  throw "Python 3.11 or newer is required. Install Python or set YAMI_PYTHON_PATH to its executable; Microsoft Store aliases are ignored."
+  throw "Python 3.11 or newer is required to run the native UI test drivers. Install Python or set YAMI_PYTHON_PATH to its executable; Microsoft Store aliases are ignored."
 }
 $pythonPath = (Resolve-Path -LiteralPath $pythonPath).Path
 $bashPython = Convert-ToBashPath $pythonPath
-Write-Output "Using Python: $pythonPath"
-$pythonDirectory = Split-Path -Path $pythonPath -Parent
-$pythonShimDirectory = Join-Path ([IO.Path]::GetTempPath()) ("yami-native-ui-python-$PID-" + [guid]::NewGuid().ToString('N'))
-$forwarderSource = Join-Path $PSScriptRoot 'native_ui_python_forwarder.c'
-$forwarderPath = Join-Path $pythonShimDirectory 'python3.exe'
-$forwarderObject = Join-Path $pythonShimDirectory 'python3_forwarder.obj'
-$temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')
-$originalPath = $env:PATH
-New-Item -ItemType Directory -Path $pythonShimDirectory | Out-Null
-try {
-  # Moon runs GPUI's Python prebuild by the name `python3`. A native forwarder
-  # keeps the selected interpreter at its original path, which preserves venv
-  # discovery, and inherits the runner's stdio while forwarding argv and exit.
-  if (-not (Test-Path -LiteralPath $forwarderSource -PathType Leaf)) {
-    throw "Python forwarder source was not found: $forwarderSource"
-  }
-  & cl.exe /nologo /O2 /W4 /DUNICODE /D_UNICODE "/Fo:$forwarderObject" "/Fe:$forwarderPath" $forwarderSource /link Shell32.lib
-  if ($LASTEXITCODE -ne 0) {
-    throw "Could not build the Python forwarder (cl.exe exit code $LASTEXITCODE)"
-  }
-  $env:PATH = "$pythonShimDirectory;$pythonDirectory;$originalPath"
-  $env:YAMI_SELECTED_PYTHON_PATH = $pythonPath
-  $env:YAMI_PYTHON_BIN = $bashPython
-  $env:YAMI_PYTHON_FORWARDER_PATH = $forwarderPath
-  $forwarderTest = Join-Path $yamiRoot 'tests\native-ui\test_windows_python_forwarder.py'
-  & $pythonPath $forwarderTest
-  if ($LASTEXITCODE -ne 0) {
-    throw "Python forwarder contract test failed with exit code $LASTEXITCODE"
-  }
-  Write-Output "Using Python 3 alias for Moon prebuild: $(Join-Path $pythonShimDirectory 'python3.exe')"
-  moon version --all
+Write-Output "Using Python for test drivers: $pythonPath"
+$env:YAMI_PYTHON_BIN = $bashPython
+moon version --all
 
-  $env:YAMI_NATIVE_UI_EVIDENCE_DIR = $EvidenceDirectory
-  Invoke-BashChecked @($workspaceScript, "sh", $testsScript)
-  if ($TestsOnly) {
-    Write-Output 'Tests-only mode passed; skipping the visible Windows sample E2E.'
-    return
-  }
-  $driverArguments = @(
-    $workspaceScript, $bashPython, $driverScript,
-    "--platform", "windows", "--evidence-dir", $bashEvidence,
-    "--log", "$bashEvidence/native-ui.log"
-  )
-  if ($SharedCounter) {
-    $driverArguments += @("--candidate-sha", $env:YAMI_SHARED_UI_CANDIDATE_SHA)
-  }
-  $driverArguments += @("--", "moon", "run", $examplePackage, "--target", "native")
-  Invoke-BashChecked $driverArguments
-  if (-not $SharedCounter) {
-    $settingsDriver = "$bashYamiRoot/tests/native-ui/drive_settings.py"
-    $settingsCommand = "moon build '$bashYamiRoot/native/examples/windows' --target native --target-dir '$bashEvidence/settings-target' >/dev/null && exec $bashPython '$settingsDriver' --platform windows --evidence-dir '$bashEvidence' --log '$bashEvidence/settings-windows.log' -- '$bashEvidence/settings-target/native/debug/build/f4ah6o/yami_kumo_native/examples/windows/windows.exe' --settings-e2e"
-    Invoke-BashChecked @($workspaceScript, "sh", "-c", $settingsCommand)
-  }
-} finally {
-  $env:PATH = $originalPath
-  $resolvedShimDirectory = [IO.Path]::GetFullPath($pythonShimDirectory)
-  if ($resolvedShimDirectory.StartsWith("$temporaryRoot\", [StringComparison]::OrdinalIgnoreCase) -and
-      (Split-Path -Path $resolvedShimDirectory -Leaf).StartsWith("yami-native-ui-python-$PID-", [StringComparison]::OrdinalIgnoreCase)) {
-    Remove-Item -LiteralPath $resolvedShimDirectory -Recurse -Force
-  }
+$env:YAMI_NATIVE_UI_EVIDENCE_DIR = $EvidenceDirectory
+Invoke-BashChecked @($workspaceScript, "sh", $testsScript)
+if ($TestsOnly) {
+  Write-Output 'Tests-only mode passed; skipping the visible Windows sample E2E.'
+  return
+}
+$driverArguments = @(
+  $workspaceScript, $bashPython, $driverScript,
+  "--platform", "windows", "--evidence-dir", $bashEvidence,
+  "--log", "$bashEvidence/native-ui.log"
+)
+if ($SharedCounter) {
+  $driverArguments += @("--candidate-sha", $env:YAMI_SHARED_UI_CANDIDATE_SHA)
+}
+$driverArguments += @("--", "moon", "run", $examplePackage, "--target", "native")
+Invoke-BashChecked $driverArguments
+if (-not $SharedCounter) {
+  $settingsDriver = "$bashYamiRoot/tests/native-ui/drive_settings.py"
+  $settingsCommand = "moon build '$bashYamiRoot/native/examples/windows' --target native --target-dir '$bashEvidence/settings-target' >/dev/null && exec $bashPython '$settingsDriver' --platform windows --evidence-dir '$bashEvidence' --log '$bashEvidence/settings-windows.log' -- '$bashEvidence/settings-target/native/debug/build/f4ah6o/yami_kumo_native/examples/windows/windows.exe' --settings-e2e"
+  Invoke-BashChecked @($workspaceScript, "sh", "-c", $settingsCommand)
 }
