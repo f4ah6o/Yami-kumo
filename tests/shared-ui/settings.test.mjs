@@ -158,7 +158,10 @@ test('Shared Settings drives validation, composition, dialog and completion in r
         {
           schemaVersion: 'settings-lane/v1',
           fixtureId: 'settings-flow',
-          candidateSha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+          candidateSha: execFileSync('git', ['rev-parse', 'HEAD'], {
+            cwd: root,
+            encoding: 'utf8',
+          }).trim(),
           platform: 'web',
           backend: 'dom',
           target: 'js',

@@ -38,7 +38,8 @@ export function laneKey(lane) {
 export function validateLane(lane, candidateSha) {
   assert.equal(lane.schemaVersion, SCHEMA, 'lane schema');
   assert.ok(typeof lane.fixtureId === 'string' && lane.fixtureId.length > 0, 'fixtureId');
-  if (candidateSha) assert.equal(lane.candidateSha, candidateSha, `stale candidate for ${lane.fixtureId}`);
+  if (candidateSha)
+    assert.equal(lane.candidateSha, candidateSha, `stale candidate for ${lane.fixtureId}`);
   assert.ok(['web', 'linux', 'windows', 'macos'].includes(lane.platform), 'platform');
   assert.ok(['model', 'dom', 'gpui-native', 'gpui-canvas'].includes(lane.backend), 'backend');
   assert.ok(['js', 'native', 'wasm', 'wasm-gc'].includes(lane.target), 'target');
@@ -90,7 +91,16 @@ export function buildMatrix(lanes, candidateSha) {
 }
 
 export function renderMatrix(matrix) {
-  const lines = ['# Shared Settings evidence matrix', '', `Candidate: \`${matrix.candidateSha}\``, '', '## Required', '', '| Row | Status |', '| --- | --- |'];
+  const lines = [
+    '# Shared Settings evidence matrix',
+    '',
+    `Candidate: \`${matrix.candidateSha}\``,
+    '',
+    '## Required',
+    '',
+    '| Row | Status |',
+    '| --- | --- |',
+  ];
   for (const row of matrix.required) lines.push(`| ${row.key} | ${row.status} |`);
   lines.push('', '## Declared NOT_RUN', '', '| Row | Reason |', '| --- | --- |');
   for (const row of matrix.declaredNotRun) lines.push(`| ${row.key} | ${row.reason} |`);
