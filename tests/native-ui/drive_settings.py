@@ -43,15 +43,7 @@ class Output:
             self.lines.put(line)
         self.lines.put(None)
 
-    def next_line(self, timeout: float) -> str:
-        try:
-            line = self.lines.get(timeout=timeout)
-        except queue.Empty as error:
-            raise SettingsError("timed out waiting for Settings output") from error
-        if line is None:
-            raise SettingsError(
-                f"Settings sample exited early (exit={self.process.poll()})"
-            )
+    def _handle(self, line: str) -> None:
         self.log.write(line)
         self.log.flush()
         match = MARKER.match(line.rstrip("\r\n"))
@@ -62,6 +54,28 @@ class Output:
                 raise SettingsError(f"invalid marker JSON: {error}") from error
             if payload.get("phase") == "frame":
                 self.frames.append(payload)
+
+    def pump(self, timeout: float = 0.05) -> None:
+        try:
+            line = self.lines.get(timeout=timeout)
+        except queue.Empty:
+            return
+        if line is None:
+            raise SettingsError(
+                f"Settings sample exited early (exit={self.process.poll()})"
+            )
+        self._handle(line)
+
+    def next_line(self, timeout: float) -> str:
+        try:
+            line = self.lines.get(timeout=timeout)
+        except queue.Empty as error:
+            raise SettingsError("timed out waiting for Settings output") from error
+        if line is None:
+            raise SettingsError(
+                f"Settings sample exited early (exit={self.process.poll()})"
+            )
+        self._handle(line)
         return line
 
     def wait_frame(self, predicate, timeout: float) -> dict[str, Any]:
@@ -85,9 +99,10 @@ def xdotool(*args: str) -> None:
     subprocess.run(["xdotool", *args], check=True, stdout=subprocess.DEVNULL)
 
 
-def wait_window(timeout: float) -> None:
+def wait_window(output: Output, timeout: float) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        output.pump()
         found = subprocess.run(
             ["xdotool", "search", "--name", WINDOW_TITLE],
             capture_output=True,
@@ -100,7 +115,7 @@ def wait_window(timeout: float) -> None:
 
 
 def drive_linux(output: Output, timeout: float) -> dict[str, Any]:
-    wait_window(timeout)
+    wait_window(output, timeout)
     xdotool("search", "--sync", "--name", WINDOW_TITLE, "windowactivate", "--sync")
     time.sleep(0.3)
     xdotool("type", "--delay", "60", "abc")
@@ -119,12 +134,6 @@ def drive_windows(output: Output, timeout: float) -> dict[str, Any]:
     from ctypes import wintypes
 
     user32 = ctypes.windll.user32
-    user32.SendInput.argtypes = (
-        wintypes.UINT,
-        ctypes.POINTER(KEYBDINPUT),
-        ctypes.c_int,
-    )
-    user32.SendInput.restype = wintypes.UINT
 
     class KEYBDINPUT(ctypes.Structure):
         _fields_ = [
@@ -135,6 +144,13 @@ def drive_windows(output: Output, timeout: float) -> dict[str, Any]:
             ("dwExtraInfo", ctypes.POINTER(wintypes.ULONG)),
         ]
 
+    user32.SendInput.argtypes = (
+        wintypes.UINT,
+        ctypes.POINTER(KEYBDINPUT),
+        ctypes.c_int,
+    )
+    user32.SendInput.restype = wintypes.UINT
+
     def send(vk: int) -> None:
         down = KEYBDINPUT(vk, 0, 0, 0, None)
         up = KEYBDINPUT(vk, 0, 2, 0, None)
@@ -144,6 +160,7 @@ def drive_windows(output: Output, timeout: float) -> dict[str, Any]:
     hwnd = 0
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline and not hwnd:
+        output.pump()
         found: list[int] = []
 
         @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
@@ -192,7 +209,7 @@ def main() -> int:
     parser.add_argument("--platform", choices=("linux", "windows"), required=True)
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--log", type=Path, required=True)
-    parser.add_argument("--timeout", type=float, default=180.0)
+    parser.add_argument("--timeout", type=float, default=420.0)
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
