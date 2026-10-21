@@ -38,6 +38,22 @@ pub fn NativeDialogAXPort::new(
 }
 
 ///|
+/// The Wayland text route rejects a zero-size caret rectangle before it starts
+/// a native session. An unlaid-out first frame can carry that empty rect, so
+/// substitute the documented 1x18 fallback while keeping its origin.
+fn settings_caret(caret : @primitives.Rect) -> @primitives.Rect {
+  let size = caret.size()
+  if size.width() > 0.0 && size.height() > 0.0 {
+    caret
+  } else {
+    match @primitives.Rect::new(caret.left(), caret.top(), 1.0, 18.0) {
+      Ok(value) => value
+      Err(_) => caret
+    }
+  }
+}
+
+///|
 fn settings_window_size() -> (Double, Double) {
   (640.0, 480.0)
 }
@@ -269,7 +285,7 @@ pub fn run_native_settings_sample(
                     epoch,
                     @text_host.TextInputState::new(
                       state.document(),
-                      state.caret(),
+                      settings_caret(state.caret()),
                     ),
                   ) {
                   Err(error) => return Err(error)
@@ -277,7 +293,7 @@ pub fn run_native_settings_sample(
                 }
                 session = Some({ epoch, binding: state.binding_id(), })
                 last_document = state.document().text()
-                last_caret = state.caret()
+                last_caret = settings_caret(state.caret())
               }
               None => ()
             }
@@ -294,13 +310,13 @@ pub fn run_native_settings_sample(
             match mounted.focused_text() {
               Some(state) => {
                 if state.document().text() != last_document ||
-                  state.caret() != last_caret {
+                  settings_caret(state.caret()) != last_caret {
                   let epoch = match
                     (port.update)(
                       current.epoch,
                       @text_host.TextInputState::new(
                         state.document(),
-                        state.caret(),
+                        settings_caret(state.caret()),
                       ),
                     ) {
                     Err(error) => return Err(error)
@@ -308,7 +324,7 @@ pub fn run_native_settings_sample(
                   }
                   session = Some({ epoch, binding: current.binding, })
                   last_document = state.document().text()
-                  last_caret = state.caret()
+                  last_caret = settings_caret(state.caret())
                 }
               }
               None => ()
