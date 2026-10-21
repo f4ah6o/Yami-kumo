@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -148,6 +150,27 @@ test('Shared Settings drives validation, composition, dialog and completion in r
     );
 
     assert.deepEqual(errors, []);
+    const evidence = resolve(root, '_build/shared-ui/web');
+    mkdirSync(evidence, { recursive: true });
+    writeFileSync(
+      resolve(evidence, 'settings-web.json'),
+      `${JSON.stringify(
+        {
+          schemaVersion: 'settings-lane/v1',
+          fixtureId: 'settings-flow',
+          candidateSha: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
+          platform: 'web',
+          backend: 'dom',
+          target: 'js',
+          layer: 'runtime',
+          status: 'pass',
+          claims: { flow: 'pass', composition: 'synthetic', ime: 'NOT_RUN' },
+          command: ['node --test tests/shared-ui/settings.test.mjs'],
+        },
+        null,
+        2,
+      )}\n`,
+    );
   } finally {
     await browser?.close();
     await new Promise((done) => server.close(done));
