@@ -50,7 +50,7 @@ using `GPUI_SOURCE=/path/to/gpui.mbt sh scripts/native_ui_workspace.sh ...`
 from the repository root. The shared UI lane records its own revision in
 [`tests/shared-ui/gpui-revision.txt`](../tests/shared-ui/gpui-revision.txt).
 Native `0.2.14` advances the published dependency to GPUI `0.10.6`, which
-carries the build-path changes; the native source-workspace pin follows it.
+carries the build-path changes; both source-workspace pins follow it.
 
 ## Platform status
 
