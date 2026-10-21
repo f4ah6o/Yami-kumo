@@ -107,7 +107,11 @@ sh "$yami_root/scripts/native_ui_workspace.sh" \
 sh "$yami_root/scripts/native_ui_workspace.sh" sh -c '
   set -eu
   moon build "$YAMI_NATIVE_MODULE_ROOT/examples/ubuntu" --target native --target-dir "$YAMI_NATIVE_WORKSPACE_ROOT/target" >/dev/null
-  executable="$YAMI_NATIVE_WORKSPACE_ROOT/target/native/debug/build/f4ah6o/yami_kumo_native/examples/ubuntu/ubuntu"
+  executable=$(find "$YAMI_NATIVE_WORKSPACE_ROOT/target" -type f -perm -u+x -name "ubuntu*" | head -n 1)
+  if [ -z "$executable" ]; then
+    echo "Settings binary not found after build" >&2
+    exit 2
+  fi
   exec python3 "$YAMI_NATIVE_YAMI_ROOT/tests/native-ui/drive_settings.py" \
     --platform linux \
     --evidence-dir "$YAMI_NATIVE_UI_EVIDENCE_DIR" \

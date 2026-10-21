@@ -170,6 +170,12 @@ def drive_windows(output: Output, timeout: float) -> dict[str, Any]:
         user32.SendInput(1, ctypes.byref(down), ctypes.sizeof(down))
         user32.SendInput(1, ctypes.byref(up), ctypes.sizeof(up))
 
+    def send_text(character: str) -> None:
+        down = KEYBDINPUT(0, ord(character), 0x0004, 0, None)
+        up = KEYBDINPUT(0, ord(character), 0x0004 | 0x0002, 0, None)
+        user32.SendInput(1, ctypes.byref(down), ctypes.sizeof(down))
+        user32.SendInput(1, ctypes.byref(up), ctypes.sizeof(up))
+
     hwnd = 0
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline and not hwnd:
@@ -196,11 +202,19 @@ def drive_windows(output: Output, timeout: float) -> dict[str, Any]:
     if not hwnd:
         raise SettingsError(f"window {WINDOW_TITLE!r} did not appear")
     user32.ShowWindow(hwnd, 9)
+    user32.BringWindowToTop(hwnd)
     user32.SetForegroundWindow(hwnd)
+    focus_deadline = time.monotonic() + 5.0
+    while time.monotonic() < focus_deadline:
+        output.pump()
+        if user32.GetForegroundWindow() == hwnd:
+            break
+        time.sleep(0.05)
+    else:
+        raise SettingsError("sample window did not become foreground for SendInput")
     time.sleep(0.3)
     for character in "abc":
-        vk = user32.VkKeyScanW(ord(character)) & 0xFF
-        send(vk)
+        send_text(character)
     typed = output.wait_frame(lambda f: f.get("name") == "abc", 10.0)
     send(0x09)
     time.sleep(0.3)
