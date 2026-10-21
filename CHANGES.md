@@ -1,5 +1,23 @@
 # Changes
 
+## Unreleased
+
+### Added
+
+- Windows Settings lane: run the shared model through `windows.TextHostRoute`
+  with `--settings-e2e`, and record the text transport (`imm32` commit or the
+  WM_CHAR key path), host environment and exit reason in
+  `settings-windows.json`/`.log`. IME and UIA stay `NOT_RUN`.
+
+### Fixed
+
+- The Windows Settings driver builds Win32 `INPUT`/`KEYBDINPUT` records for
+  `SendInput` and reuses the native UI driver's foreground guard, so `abc`,
+  Tab and Enter reach the sample window.
+- Re-commit the Settings frame after a resize or scale event. The invalidation
+  cleared the layout-ready state, so the following IMM32 commit was rejected
+  before it could reach the focused field.
+
 ## native-0.2.14 - 2026-10-21
 
 ### Changed
