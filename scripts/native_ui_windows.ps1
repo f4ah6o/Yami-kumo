@@ -165,3 +165,8 @@ if ($SharedCounter) {
 }
 $driverArguments += @("--", "moon", "run", $examplePackage, "--target", "native")
 Invoke-BashChecked $driverArguments
+if (-not $SharedCounter -and $env:YAMI_SETTINGS_LANE -eq '1') {
+  $settingsDriver = "$bashYamiRoot/tests/native-ui/drive_settings.py"
+  $settingsCommand = "moon build '$bashYamiRoot/native/examples/windows' --target native --target-dir '$bashEvidence/settings-target' >/dev/null && exec $bashPython '$settingsDriver' --platform windows --evidence-dir '$bashEvidence' --log '$bashEvidence/settings-windows.log' -- '$bashEvidence/settings-target/native/debug/build/f4ah6o/yami_kumo_native/examples/windows/windows.exe' --settings-e2e"
+  Invoke-BashChecked @($workspaceScript, "sh", "-c", $settingsCommand)
+}

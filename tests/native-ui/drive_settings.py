@@ -114,6 +114,73 @@ def drive_linux(output: Output, timeout: float) -> dict[str, Any]:
     return {"typed": typed, "dialog": dialog, "saved": saved}
 
 
+def drive_windows(output: Output, timeout: float) -> dict[str, Any]:
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    user32.SendInput.argtypes = (
+        wintypes.UINT,
+        ctypes.POINTER(KEYBDINPUT),
+        ctypes.c_int,
+    )
+    user32.SendInput.restype = wintypes.UINT
+
+    class KEYBDINPUT(ctypes.Structure):
+        _fields_ = [
+            ("wVk", wintypes.WORD),
+            ("wScan", wintypes.WORD),
+            ("dwFlags", wintypes.DWORD),
+            ("time", wintypes.DWORD),
+            ("dwExtraInfo", ctypes.POINTER(wintypes.ULONG)),
+        ]
+
+    def send(vk: int) -> None:
+        down = KEYBDINPUT(vk, 0, 0, 0, None)
+        up = KEYBDINPUT(vk, 0, 2, 0, None)
+        user32.SendInput(1, ctypes.byref(down), ctypes.sizeof(down))
+        user32.SendInput(1, ctypes.byref(up), ctypes.sizeof(up))
+
+    hwnd = 0
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline and not hwnd:
+        found: list[int] = []
+
+        @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        def callback(window: int, _param: int) -> bool:
+            length = user32.GetWindowTextLengthW(window)
+            if length <= 0:
+                return True
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(window, buffer, length + 1)
+            if buffer.value == WINDOW_TITLE:
+                found.append(window)
+                return False
+            return True
+
+        user32.EnumWindows(callback, 0)
+        if found:
+            hwnd = found[0]
+        else:
+            time.sleep(0.2)
+    if not hwnd:
+        raise SettingsError(f"window {WINDOW_TITLE!r} did not appear")
+    user32.ShowWindow(hwnd, 9)
+    user32.SetForegroundWindow(hwnd)
+    time.sleep(0.3)
+    for character in "abc":
+        vk = user32.VkKeyScanW(ord(character)) & 0xFF
+        send(vk)
+    typed = output.wait_frame(lambda f: f.get("name") == "abc", 10.0)
+    send(0x09)
+    time.sleep(0.3)
+    send(0x0D)
+    dialog = output.wait_frame(lambda f: f.get("dialog") is True, 10.0)
+    send(0x0D)
+    saved = output.wait_frame(lambda f: f.get("status") == "saved", 10.0)
+    return {"typed": typed, "dialog": dialog, "saved": saved}
+
+
 def write_report(path: Path, report: dict[str, Any]) -> None:
     temporary = path.with_name(f".{path.name}.tmp")
     temporary.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
@@ -122,6 +189,7 @@ def write_report(path: Path, report: dict[str, Any]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--platform", choices=("linux", "windows"), required=True)
     parser.add_argument("--evidence-dir", type=Path, required=True)
     parser.add_argument("--log", type=Path, required=True)
     parser.add_argument("--timeout", type=float, default=180.0)
@@ -138,17 +206,21 @@ def main() -> int:
     )
     output = Output(process, args.log)
     try:
-        frames = drive_linux(output, args.timeout)
+        frames = drive_linux(output, args.timeout) if args.platform == "linux" else drive_windows(output, args.timeout)
         process.terminate()
         report = {
-            "platform": "linux",
+            "platform": args.platform,
             "status": "passed",
             "windowTitle": WINDOW_TITLE,
             "frames": frames,
             "startedAt": started,
             "finishedAt": datetime.now(timezone.utc).isoformat(),
             "command": command,
-            "input": "xdotool XTest -> Weston X11 backend -> Wayland client",
+            "input": (
+                "xdotool XTest -> Weston X11 backend -> Wayland client"
+                if args.platform == "linux"
+                else "Win32 SendInput to the visible HWND"
+            ),
             "claims": {
                 "settings.flow": "PASS",
                 "settings.text": "PASS (key path, no IME engine)",
@@ -156,12 +228,12 @@ def main() -> int:
                 "settings.ax": "NOT_RUN",
             },
         }
-        write_report(args.evidence_dir / "settings-linux.json", report)
+        write_report(args.evidence_dir / f"settings-{args.platform}.json", report)
         print("Shared Settings Linux lane passed", flush=True)
         return 0
     except (SettingsError, OSError, subprocess.SubprocessError) as error:
         report = {
-            "platform": "linux",
+            "platform": args.platform,
             "status": "failed",
             "windowTitle": WINDOW_TITLE,
             "error": str(error),
@@ -169,7 +241,7 @@ def main() -> int:
             "finishedAt": datetime.now(timezone.utc).isoformat(),
             "command": command,
         }
-        write_report(args.evidence_dir / "settings-linux.json", report)
+        write_report(args.evidence_dir / f"settings-{args.platform}.json", report)
         print(f"Shared Settings Linux lane failed: {error}", file=sys.stderr)
         return 1
     finally:
