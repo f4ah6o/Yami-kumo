@@ -1,0 +1,4 @@
+import {
+  "moonbitlang/core/debug",
+  "f4ah6o/yami_kumo/ui/core",
+}

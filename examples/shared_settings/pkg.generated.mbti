@@ -1,0 +1,62 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "f4ah6o/yami_kumo/examples/shared_settings"
+
+import {
+  "f4ah6o/yami_kumo/ui/core",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn settings_brand() -> @core.NodeKey
+
+pub fn settings_cancel() -> @core.NodeKey
+
+pub fn settings_confirm() -> @core.NodeKey
+
+pub fn settings_content() -> @core.NodeKey
+
+pub fn settings_dialog() -> @core.NodeKey
+
+pub fn settings_dialog_body() -> @core.NodeKey
+
+pub fn settings_hint() -> @core.NodeKey
+
+pub fn settings_name() -> @core.NodeKey
+
+pub fn settings_save() -> @core.NodeKey
+
+pub fn settings_shell() -> @core.NodeKey
+
+pub fn settings_status() -> @core.NodeKey
+
+pub fn settings_title() -> @core.NodeKey
+
+// Errors
+
+// Types and methods
+pub(all) enum Action {
+  Ui(@core.SemanticAction)
+  SaveFinished
+} derive(Eq, @debug.Debug)
+pub fn Action::equal(Self, Self) -> Bool
+pub fn Action::not_equal(Self, Self) -> Bool
+pub fn Action::to_repr(Self) -> @debug.Repr
+
+pub struct Model {
+  // private fields
+} derive(Eq, @debug.Debug)
+pub fn Model::dialog_open(Self) -> Bool
+pub fn Model::equal(Self, Self) -> Bool
+pub fn Model::error(Self) -> String?
+pub fn Model::name(Self) -> String
+pub fn Model::new() -> Self
+pub fn Model::not_equal(Self, Self) -> Bool
+pub fn Model::saved(Self) -> Bool
+pub fn Model::saving(Self) -> Bool
+pub fn Model::to_repr(Self) -> @debug.Repr
+pub fn Model::update(Self, Action) -> Self
+pub fn Model::view(Self) -> @core.View
+
+// Type aliases
+
+// Traits

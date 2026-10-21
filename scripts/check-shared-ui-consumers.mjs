@@ -40,6 +40,7 @@ const packages = [
   'ui/theme',
   'examples/shared_counter',
   'examples/shared_button_theme',
+  'examples/shared_settings',
 ];
 const commonPackages = packages.map((name) => `f4ah6o/yami_kumo/${name}`);
 const forbiddenPublic =
@@ -193,6 +194,18 @@ fn main {
   emit("counter-two-activations", counts)
   runtime.dispose()
   ensure(!runtime.enqueue_activate(increment), "disposed callback accepted")
+
+  let mut settings = @shared_settings.Model::new()
+  settings = settings.update(@shared_settings.Ui(@core.Activate(@shared_settings.settings_save())))
+  ensure(settings.error() is Some(_), "empty settings name must be rejected")
+  settings = settings.update(@shared_settings.Ui(@core.TextChanged(@shared_settings.settings_name(), "闇雲")))
+  settings = settings.update(@shared_settings.Ui(@core.Activate(@shared_settings.settings_save())))
+  ensure(settings.dialog_open(), "named settings draft must open the dialog")
+  settings = settings.update(@shared_settings.Ui(@core.Confirmed(@shared_settings.settings_dialog())))
+  ensure(settings.saving(), "confirmation must start the simulated save")
+  settings = settings.update(@shared_settings.SaveFinished)
+  ensure(settings.saved(), "completion must mark the save")
+  ensure(settings.view().key() == @shared_settings.settings_shell(), "settings view identity")
 
   let gates = @runtime.Runtime::new()
   let mut gated_model = @shared_counter.Model::new()
