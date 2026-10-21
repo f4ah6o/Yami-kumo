@@ -1,9 +1,11 @@
 # Shared Dialog contract (YK-07)
 
-Status: contract for implementation. No `ui/core` Dialog, DOM dialog adapter or
-native modal adapter exists in this repository yet. The contract keeps the
-application's open state authoritative and maps it to the browser top layer or
-the GPUI focus-scope controller.
+Status: implemented, bounded. `ui/core` owns the Dialog view and props, the DOM
+adapter uses `<dialog>`/`showModal`, and `native/ui` drives the live
+`element.FocusScopeSession`. The application keeps `open` authoritative and the
+hosts map it to the browser top layer or the focus-scope controller. The native
+adapter supports nested and sibling Dialog stacks; the DOM adapter remains
+single-level.
 
 ## Ownership
 
@@ -12,9 +14,11 @@ host, not state changes: the application validates the request, updates its
 model, and re-renders. The host must not report a closed dialog as open or
 invent a confirmation.
 
-One dialog is the MVP. Nested overlays, menus and popovers are separate work.
-Dialog is a root-level overlay: it does not consume flex layout space and is
-painted after the main content.
+Nested native dialogs are supported: the innermost open level owns input and
+Tab, closing an outer level revokes the deeper suffix and restores the enclosing
+focus once. The DOM adapter still renders one level; menus and popovers are
+separate work. Dialog is a root-level overlay: it does not consume flex layout
+space and is painted after the main content.
 
 ## Public API
 
