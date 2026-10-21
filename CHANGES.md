@@ -1,5 +1,14 @@
 # Changes
 
+## 0.2.3 - 2026-10-21
+
+### Added
+
+- Publish `examples/shared_settings`, the single model/view/update source for
+  the four-profile Shared Settings consumer. The model owns the draft name,
+  validation, confirmation dialog, simulated save and completion; the DOM and
+  native entries import it unchanged.
+
 ## native-0.2.12 - 2026-10-21
 
 ### Fixed

@@ -18,6 +18,8 @@
 !/examples/shared_button_theme/
 !/examples/shared_counter/**
 !/examples/shared_counter/
+!/examples/shared_settings/**
+!/examples/shared_settings/
 !/dom/moon.pkg
 !/dom/*.mbt
 !/styles/
