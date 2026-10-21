@@ -1,5 +1,23 @@
 # Changes
 
+## native-0.2.13 - 2026-10-21
+
+### Added
+
+- Run the shared Settings model on macOS: `native/examples/common/settings_runner.mbt`
+  drives text input, focus, the simulated save, TextField AX and Dialog AX, and
+  the macOS entry builds the dialog port from `Host::publish_dialog_accessibility`.
+  The DOM entry imports the same `examples/shared_settings` package.
+- Move to GPUI `0.10.5` and `f4ah6o/yami_kumo` `0.2.3`, which publishes the
+  Settings model.
+
+### Fixed
+
+- A committed string without a preedit (plain ASCII or a direct input-method
+  commit) was applied through `commit_composition` and failed with
+  `NoComposition`, aborting the host loop. It now replaces the selection, and
+  Cancel without a preedit is a no-op.
+
 ## 0.2.3 - 2026-10-21
 
 ### Added

@@ -116,7 +116,10 @@ whole deeper suffix and restores the enclosing focus once. Overlay roots now
 stay stable for a Dialog key at a level, so a rebuilt open Dialog keeps its
 live scope instead of relying on the adapter filters. The DOM `<dialog>`
 contract remains single-level. The current external-input route remains
-unqualified at runtime, and real OS IME/AX are `NOT_RUN`, as detailed below.
+unqualified at runtime, and real OS IME/AX are `NOT_RUN`, as detailed below. Native `0.2.13` moves to GPUI `0.10.5` and
+`f4ah6o/yami_kumo` `0.2.3`, adds a macOS Shared Settings lane (portable text
+input plus Dialog AX publication), and accepts a committed string that arrives
+without a preedit instead of failing with `NoComposition`.
 
 These checks cover labeled Text and Button rendering, readback of a completed
 native frame, and a host-delivered click that changes the sample's App Entity

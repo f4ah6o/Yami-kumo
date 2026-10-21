@@ -106,6 +106,18 @@ fn main {
       host.revoke_text_field_accessibility(window, token)
     },
   )
+  let dialog_ax_port = @common.NativeDialogAXPort::new(
+    fn(window, existing, title, bounds) {
+      host.publish_dialog_accessibility(
+        window,
+        existing,
+        @mac_host.DialogAccessibilitySnapshot::new(title, bounds, true),
+      )
+    },
+    fn(window, token) {
+      host.revoke_dialog_accessibility(window, token)
+    },
+  )
   let result = @common.run_native_entry(
     host,
     @common.Macos,
@@ -114,6 +126,7 @@ fn main {
     accessibility_port=Some(accessibility_port),
     text_port=Some(text_port),
     text_accessibility_port=Some(text_ax_port),
+    settings_dialog_port=Some(dialog_ax_port),
   )
   let stopped = host.stop()
   match result {
