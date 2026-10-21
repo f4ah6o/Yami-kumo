@@ -196,6 +196,17 @@ try {
   }
   $driverArguments += @("--", "moon", "run", $examplePackage, "--target", "native")
   Invoke-BashChecked $driverArguments
+  if (-not $SharedCounter) {
+    $settingsDriver = "$bashYamiRoot/tests/native-ui/drive_settings.py"
+    $settingsArguments = @(
+      $workspaceScript, $bashPython, $settingsDriver,
+      "--platform", "windows",
+      "--evidence-dir", $bashEvidence,
+      "--log", "$bashEvidence/settings-windows.log",
+      "--", "moon", "run", "$bashYamiRoot/native/examples/windows", "--target", "native", "--", "--settings-e2e"
+    )
+    Invoke-BashChecked $settingsArguments
+  }
 } finally {
   $env:PATH = $originalPath
   $resolvedShimDirectory = [IO.Path]::GetFullPath($pythonShimDirectory)
