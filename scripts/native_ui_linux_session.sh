@@ -104,12 +104,16 @@ sh "$yami_root/scripts/native_ui_workspace.sh" \
     --linux-origin-y 0 \
     -- moon run "$yami_root/native/examples/ubuntu" --target native
 
-sh "$yami_root/scripts/native_ui_workspace.sh" \
-  python3 "$yami_root/tests/native-ui/drive_settings.py" \
+sh "$yami_root/scripts/native_ui_workspace.sh" sh -c '
+  set -eu
+  moon build "$YAMI_NATIVE_MODULE_ROOT/examples/ubuntu" --target native --target-dir "$YAMI_NATIVE_WORKSPACE_ROOT/target" >/dev/null
+  executable="$YAMI_NATIVE_WORKSPACE_ROOT/target/native/debug/build/f4ah6o/yami_kumo_native/examples/ubuntu/ubuntu"
+  exec python3 "$YAMI_NATIVE_YAMI_ROOT/tests/native-ui/drive_settings.py" \
     --platform linux \
-    --evidence-dir "$evidence_dir" \
-    --log "$evidence_dir/settings-linux.log" \
-    -- moon run "$yami_root/native/examples/ubuntu" --target native -- --settings-e2e
+    --evidence-dir "$YAMI_NATIVE_UI_EVIDENCE_DIR" \
+    --log "$YAMI_NATIVE_UI_EVIDENCE_DIR/settings-linux.log" \
+    -- "$executable" --settings-e2e
+'
 
 sh "$yami_root/scripts/native_ui_workspace.sh" \
   python3 "$yami_root/tests/button-contract/drive_linux.py"

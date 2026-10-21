@@ -284,7 +284,7 @@ def main() -> int:
             "command": command,
         }
         write_report(args.evidence_dir / f"settings-{args.platform}.json", report)
-        print(f"Shared Settings Linux lane failed: {error}", file=sys.stderr)
+        print(f"Shared Settings {args.platform} lane failed: {error}", file=sys.stderr)
         return 1
     finally:
         if process.poll() is None:
