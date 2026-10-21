@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import queue
 import re
 import subprocess
@@ -22,6 +23,18 @@ from typing import Any
 
 MARKER = re.compile(r"^(YAMI_NATIVE_UI_SETTINGS) (\{.*\})$")
 WINDOW_TITLE = "Yami-kumo Shared Settings"
+
+
+def candidate_sha() -> str:
+    sha = os.environ.get("YAMI_SHARED_UI_CANDIDATE_SHA") or os.environ.get("GITHUB_SHA")
+    if sha:
+        return sha.strip()
+    root = os.environ.get("YAMI_NATIVE_YAMI_ROOT")
+    if root:
+        return subprocess.check_output(
+            ["git", "-C", root, "rev-parse", "HEAD"], text=True
+        ).strip()
+    return "0" * 40
 
 
 class SettingsError(RuntimeError):
@@ -226,8 +239,14 @@ def main() -> int:
         frames = drive_linux(output, args.timeout) if args.platform == "linux" else drive_windows(output, args.timeout)
         process.terminate()
         report = {
+            "schemaVersion": "settings-lane/v1",
+            "fixtureId": "settings-flow",
+            "candidateSha": candidate_sha(),
             "platform": args.platform,
-            "status": "passed",
+            "backend": "gpui-native",
+            "target": "native",
+            "layer": "runtime",
+            "status": "pass",
             "windowTitle": WINDOW_TITLE,
             "frames": frames,
             "startedAt": started,
@@ -250,8 +269,14 @@ def main() -> int:
         return 0
     except (SettingsError, OSError, subprocess.SubprocessError) as error:
         report = {
+            "schemaVersion": "settings-lane/v1",
+            "fixtureId": "settings-flow",
+            "candidateSha": candidate_sha(),
             "platform": args.platform,
-            "status": "failed",
+            "backend": "gpui-native",
+            "target": "native",
+            "layer": "runtime",
+            "status": "fail",
             "windowTitle": WINDOW_TITLE,
             "error": str(error),
             "startedAt": started,
