@@ -99,7 +99,9 @@ without `text_host` return a typed error for `--text-e2e`. The local
 live Japanese input source and records preedit, commit, candidate and
 physical-keyboard claims separately. On 2026-10-21 the local live Kotoeri run
 passed preedit, commit, committed-document and candidate-visibility claims;
-candidate anchoring and physical-keyboard input remain `NOT_RUN`. The sample also publishes the focused
+candidate anchoring and physical-keyboard input remain `NOT_RUN`. Run
+`sh scripts/prove_macos_text.sh` to execute both proofs under a user-activity
+assertion and copy their JSON to a timestamped evidence directory. The sample also publishes the focused
 TextField's role, value, focus and frame; `--text-ax-proof` verifies them with a
 dedicated AXUIElement client. Native `0.2.11` adds that publish/proof path;
 the value and focus are copied from the focused field each frame. The console session must be unlocked and
