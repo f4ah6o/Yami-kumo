@@ -3300,20 +3300,41 @@ pub fn Mounted::text_input(
         self.bindings[index] = { ..binding, field: Some(next), }
       }
       @text_host.Commit(text~) => {
-        let next = match
-          field.commit_composition(
-            text,
-            fn(document) { field_measure(measure, document) },
-            field_admit,
-          ) {
-          Err(error) =>
-            return Err(
-              adapter_error(
-                "native TextField commit rejected: " +
-                field_error_reason(error),
-              ),
-            )
-          Ok(value) => value
+        // A committed string can arrive without a preedit: plain ASCII keys and
+        // some input methods commit directly. Only use the composition path when
+        // this field owns an active preview.
+        let next = if field.is_composing() {
+          match
+            field.commit_composition(
+              text,
+              fn(document) { field_measure(measure, document) },
+              field_admit,
+            ) {
+            Err(error) =>
+              return Err(
+                adapter_error(
+                  "native TextField commit rejected: " +
+                  field_error_reason(error),
+                ),
+              )
+            Ok(value) => value
+          }
+        } else {
+          match
+            field.replace_selection(
+              text,
+              fn(document) { field_measure(measure, document) },
+              field_admit,
+            ) {
+            Err(error) =>
+              return Err(
+                adapter_error(
+                  "native TextField commit rejected: " +
+                  field_error_reason(error),
+                ),
+              )
+            Ok(value) => value
+          }
         }
         // The preview already carries the final text in many IMEs. Compare the
         // committed value, not the visible document, or an equal preview/commit
@@ -3329,19 +3350,21 @@ pub fn Mounted::text_input(
         self.bindings[index] = { ..binding, field: Some(next), }
       }
       @text_host.Cancel =>
-        match
-          field.cancel_composition(
-            fn(document) { field_measure(measure, document) },
-            field_admit,
-          ) {
-          Err(error) =>
-            return Err(
-              adapter_error(
-                "native TextField cancel rejected: " +
-                field_error_reason(error),
-              ),
-            )
-          Ok(next) => self.bindings[index] = { ..binding, field: Some(next), }
+        if field.is_composing() {
+          match
+            field.cancel_composition(
+              fn(document) { field_measure(measure, document) },
+              field_admit,
+            ) {
+            Err(error) =>
+              return Err(
+                adapter_error(
+                  "native TextField cancel rejected: " +
+                  field_error_reason(error),
+                ),
+              )
+            Ok(next) => self.bindings[index] = { ..binding, field: Some(next), }
+          }
         }
       @text_host.FocusLost =>
         if field.is_composing() {

@@ -8,6 +8,7 @@ import {
   "f4ah6o/yami_kumo_native/sample",
   "f4ah6o/yami_kumo_native/text_sample",
   "f4ah6o/yami_kumo_native/ui",
+  "f4ah6o/yami_kumo/examples/shared_settings",
   "moonbitlang/core/env",
 }
 

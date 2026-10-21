@@ -2358,6 +2358,61 @@ test "native TextField applies portable preedit and commit" {
 }
 
 ///|
+test "native TextField applies a committed insertion without a preedit" {
+  let mounted = mount()
+  ignore(
+    render(
+      mounted,
+      view=dialog_view(
+        with_field=true,
+        initial=Some(@view.NodeKey::new("name")),
+      ),
+    ),
+  )
+  assert_true(
+    mounted
+    .text_input(7UL, text_host_event(1L, 7UL, @text_host.Commit(text="abc")))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, value)) => {
+      assert_eq(key, @view.NodeKey::new("name"))
+      assert_eq(value, "abc")
+    }
+    _ => fail("expected a committed insertion")
+  }
+  mounted.dispose()
+}
+
+///|
+test "native TextField accepts a cancel without a preedit" {
+  let mounted = mount()
+  ignore(
+    render(
+      mounted,
+      view=dialog_view(
+        with_field=true,
+        initial=Some(@view.NodeKey::new("name")),
+      ),
+    ),
+  )
+  assert_true(
+    mounted.text_input(7UL, text_host_event(1L, 7UL, @text_host.Cancel)).unwrap(),
+  )
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted
+    .text_input(7UL, text_host_event(2L, 7UL, @text_host.Commit(text="ok")))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(_, value)) => assert_eq(value, "ok")
+    _ => fail("expected a committed insertion after cancel")
+  }
+  mounted.dispose()
+}
+
+///|
 test "native portable text input rejects stale epochs and replayed records" {
   let mounted = mount()
   ignore(

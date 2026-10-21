@@ -97,8 +97,20 @@ pub fn run_native_entry(
   accessibility_port~ : NativeButtonAXPort? = None,
   text_port~ : NativeTextInputPort? = None,
   text_accessibility_port~ : NativeTextAXPort? = None,
+  settings_dialog_port~ : NativeDialogAXPort? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let args = @env.args()
+  if args.contains("--settings-e2e") ||
+    @env.get_env_var("YAMI_NATIVE_UI_SETTINGS_E2E") == Some("1") {
+    return run_native_settings_sample(
+      host,
+      platform,
+      measure,
+      text_port~,
+      accessibility_port=text_accessibility_port,
+      dialog_port=settings_dialog_port,
+    )
+  }
   if args.contains("--text-e2e") ||
     @env.get_env_var("YAMI_NATIVE_UI_TEXT_E2E") == Some("1") {
     return run_native_text_sample(
