@@ -22,6 +22,7 @@ if [ -z "$python_bin" ]; then
 fi
 
 PYTHONDONTWRITEBYTECODE=1 "$python_bin" "$YAMI_NATIVE_YAMI_ROOT/tests/native-ui/test_drive_native_ui.py"
+PYTHONDONTWRITEBYTECODE=1 "$python_bin" "$YAMI_NATIVE_YAMI_ROOT/tests/native-ui/test_drive_settings.py"
 
 moon test "$YAMI_NATIVE_MODULE_ROOT/components" \
   --target native --deny-warn --no-parallelize
