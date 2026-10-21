@@ -112,7 +112,7 @@ pub fn run_native_settings_sample(
   let mut ticks = 0
   let mut destroyed = false
   let mut last_sequence : Int64 = 0
-  let tick_limit = if platform is Macos { 2000 } else { 600 }
+  let tick_limit = if platform is Macos { 20000 } else { 6000 }
   while !destroyed && ticks < tick_limit {
     ticks += 1
     let mut drained = 0

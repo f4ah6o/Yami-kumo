@@ -112,7 +112,7 @@ def xdotool(*args: str) -> None:
     subprocess.run(["xdotool", *args], check=True, stdout=subprocess.DEVNULL)
 
 
-def wait_window(output: Output, timeout: float) -> None:
+def wait_window(output: Output, timeout: float) -> int:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         output.pump()
@@ -122,15 +122,17 @@ def wait_window(output: Output, timeout: float) -> None:
             text=True,
         )
         if found.stdout.strip():
-            return
+            return int(found.stdout.split()[0])
         time.sleep(0.2)
     raise SettingsError(f"window {WINDOW_TITLE!r} did not appear")
 
 
 def drive_linux(output: Output, timeout: float) -> dict[str, Any]:
-    wait_window(output, timeout)
+    window = wait_window(output, timeout)
     xdotool("search", "--sync", "--name", WINDOW_TITLE, "windowactivate", "--sync")
-    time.sleep(0.3)
+    xdotool("mousemove", "--window", str(window), "120", "160")
+    xdotool("click", "--clearmodifiers", "1")
+    time.sleep(0.4)
     xdotool("type", "--delay", "60", "abc")
     try:
         typed = output.wait_frame(lambda f: f.get("name") == "abc", 6.0)
