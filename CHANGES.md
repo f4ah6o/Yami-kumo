@@ -1,5 +1,17 @@
 # Changes
 
+## native-0.2.14 - 2026-10-21
+
+### Changed
+
+- Move to GPUI `0.10.6`, which replaces the Python macOS prebuild hook with a
+  MoonBit `.mbtx` script and the Linux C toolchain wrappers with POSIX shell
+  scripts. Native builds now require only the MoonBit toolchain, with a `moon`
+  that supports `.mbtx` prebuild scripts.
+- Remove the Windows `python3` forwarder from the native UI runner. The test
+  lanes still execute the Python drivers, but the build no longer needs an
+  interpreter.
+
 ## native-0.2.13 - 2026-10-21
 
 ### Added

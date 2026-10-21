@@ -30,8 +30,10 @@ are deliberately distinguished from registry consumers.
 - Runtime dependency: code required by the installed application. The common
   slice uses MoonBit core; DOM uses browser APIs; the later native adapter uses
   GPUI and its OS host. None of these is described as dependency-free.
-- Build/test dependency: MoonBit, Node, Python, browser automation, the existing
-  Vite+ toolchain and legacy Kumo extraction. They do not enter the new common
+- Build dependency: the MoonBit toolchain (moon with `.mbtx` prebuild support)
+  and a C compiler. The published native adapter needs no Python or Node.
+- Test dependency: Node, Python drivers, browser automation, the existing Vite+
+  toolchain and legacy Kumo extraction. They do not enter the new common
   runtime simply because the repository uses them.
 - Standard theme: a future bounded, independent light/dark theme. This slice
   uses browser-default controls. Legacy Kumo CSS/theme remains supported by its
