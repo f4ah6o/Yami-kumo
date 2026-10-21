@@ -1,0 +1,12 @@
+import {
+  "f4ah6o/yami_kumo/ui/dom",
+  "f4ah6o/yami_kumo/examples/shared_settings",
+}
+
+supported_targets = "js"
+
+pkgtype(kind: "foreign_library")
+
+options(
+  link: { "js": { "format": "esm" } },
+)
