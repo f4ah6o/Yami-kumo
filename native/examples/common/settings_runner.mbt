@@ -108,6 +108,7 @@ pub fn run_native_settings_sample(
   let mut dirty = true
   let mut focus_initialized = false
   let mut text_suspended = false
+  let mut text_transport_failed = false
   let mut ticks = 0
   let mut destroyed = false
   let mut last_sequence : Int64 = 0
@@ -273,27 +274,41 @@ pub fn run_native_settings_sample(
       }
       match session {
         None =>
-          if focused && !text_suspended {
+          if focused && !text_suspended && !text_transport_failed {
             match mounted.focused_text() {
               Some(state) => {
-                let epoch = match (port.begin)(window, state.binding_id()) {
-                  Err(error) => return Err(error)
-                  Ok(value) => value
+                match (port.begin)(window, state.binding_id()) {
+                  Err(_) => {
+                    // The host may not provide a text-input session (for
+                    // example Weston without text-input-v1). Keep running on
+                    // the key path and report the transport as unavailable.
+                    text_transport_failed = true
+                    emit_native_marker(
+                      "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\"}",
+                    )
+                  }
+                  Ok(epoch) =>
+                    match
+                      (port.update)(
+                        epoch,
+                        @text_host.TextInputState::new(
+                          state.document(),
+                          settings_caret(state.caret()),
+                        ),
+                      ) {
+                      Err(_) => {
+                        text_transport_failed = true
+                        emit_native_marker(
+                          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\"}",
+                        )
+                      }
+                      Ok(epoch) => {
+                        session = Some({ epoch, binding: state.binding_id(), })
+                        last_document = state.document().text()
+                        last_caret = settings_caret(state.caret())
+                      }
+                    }
                 }
-                let epoch = match
-                  (port.update)(
-                    epoch,
-                    @text_host.TextInputState::new(
-                      state.document(),
-                      settings_caret(state.caret()),
-                    ),
-                  ) {
-                  Err(error) => return Err(error)
-                  Ok(value) => value
-                }
-                session = Some({ epoch, binding: state.binding_id(), })
-                last_document = state.document().text()
-                last_caret = settings_caret(state.caret())
               }
               None => ()
             }
