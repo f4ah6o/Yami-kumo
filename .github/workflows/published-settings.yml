@@ -55,6 +55,7 @@ jobs:
           set -o pipefail
           moon version --all
           cat moon.mod
+          moon update
           moon test --target native --deny-warn 2>&1 | tee contract.log
       - name: Retain the contract result
         if: always()
