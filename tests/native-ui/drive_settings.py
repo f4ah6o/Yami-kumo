@@ -132,7 +132,12 @@ def drive_linux(output: Output, timeout: float) -> dict[str, Any]:
     xdotool("search", "--sync", "--name", WINDOW_TITLE, "windowactivate", "--sync")
     time.sleep(0.3)
     xdotool("type", "--delay", "60", "abc")
-    typed = output.wait_frame(lambda f: f.get("name") == "abc", 10.0)
+    try:
+        typed = output.wait_frame(lambda f: f.get("name") == "abc", 6.0)
+    except SettingsError:
+        # Some text routes publish a composition and commit only on Enter.
+        xdotool("key", "--clearmodifiers", "Return")
+        typed = output.wait_frame(lambda f: f.get("name") == "abc", 10.0)
     xdotool("key", "--clearmodifiers", "Tab")
     time.sleep(0.3)
     xdotool("key", "--clearmodifiers", "Return")
@@ -215,7 +220,11 @@ def drive_windows(output: Output, timeout: float) -> dict[str, Any]:
     time.sleep(0.3)
     for character in "abc":
         send_text(character)
-    typed = output.wait_frame(lambda f: f.get("name") == "abc", 10.0)
+    try:
+        typed = output.wait_frame(lambda f: f.get("name") == "abc", 6.0)
+    except SettingsError:
+        send(0x0D)
+        typed = output.wait_frame(lambda f: f.get("name") == "abc", 10.0)
     send(0x09)
     time.sleep(0.3)
     send(0x0D)
