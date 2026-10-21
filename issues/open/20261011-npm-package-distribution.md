@@ -6,6 +6,16 @@
 - Inspected baseline: [`955c5bbc31f279976049a6b14a02424410010c6d`](https://github.com/f4ah6o/Yami-kumo/tree/955c5bbc31f279976049a6b14a02424410010c6d).
 - Preview package name: `@f4ah6o/yami-kumo`; registry scope access and publishing permissions still require verification.
 
+## Trusted Publishing preparation — 2026-10-20
+
+- `npm-publish.yml` adds manual main-only validation and optional OIDC publishing
+  of the exact packed artifact after JS/TS/browser/React consumer acceptance.
+- Publishing defaults to false; only the publish job has `id-token: write` and
+  uses GitHub environment `npm`. Releases remain explicit preview versions.
+- See [setup and bootstrap instructions](../../docs/npm-trusted-publishing.md).
+  npm publisher registration, scope ownership, first registry publication and
+  registry-installed acceptance remain pending. Registry lookup returned E404.
+
 ## Implementation checkpoint — 2026-10-16
 
 - [PR #23](https://github.com/f4ah6o/Yami-kumo/pull/23) merged the installable `@f4ah6o/yami-kumo@0.1.0-preview.1` tarball implementation into `main` (merge commit `3dd5dba259318afcbe460ebce33c41f3154c25c3`).

@@ -11,7 +11,7 @@ npm install ./f4ah6o-yami-kumo-0.1.0-preview.1.tgz
 
 The proposed registry name is `@f4ah6o/yami-kumo`. This preview is not a claim
 of registry publication or scope ownership. The npm version is independent of
-Mooncakes: this preview uses the `f4ah6o/yami_kumo` 0.1.1 implementation.
+Mooncakes; `BUILD.json` records the actual Mooncakes source version.
 
 ```js
 import { appShell, button, fragment, input, renderHtml, textComponent } from '@f4ah6o/yami-kumo';
@@ -100,9 +100,11 @@ CI uses the repository's MoonBit/compiler-core pin; see `.github/workflows/ci.ym
 Before any registry release: agree an explicit version/name, confirm scope
 ownership with authenticated `npm whoami`/access checks, inspect `npm pack
 --dry-run --json`, and pass all isolated consumer tests and independent review
-on that source SHA. Publish only the reviewed `dist/npm` with explicit preview
-tag; then rerun consumers against the actual registry version. There is no
-automatic publish workflow in this change.
+on that source SHA. The manual `npm-publish.yml` workflow defaults to validation
+only and can publish the exact tested tarball using OIDC after one-time npm
+Trusted Publisher setup. See the repository's
+[release setup guide](https://github.com/f4ah6o/Yami-kumo/blob/main/docs/npm-trusted-publishing.md)
+for registration fields, first-publication bootstrap and release steps.
 
 MIT project license and upstream Kumo, Tailwind and MoonBit core notices are
 included under `LICENSE` and `licenses/`. Generated CSS is adapted only by
