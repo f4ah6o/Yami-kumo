@@ -105,4 +105,10 @@ sh "$yami_root/scripts/native_ui_workspace.sh" \
     -- moon run "$yami_root/native/examples/ubuntu" --target native
 
 sh "$yami_root/scripts/native_ui_workspace.sh" \
+  python3 "$yami_root/tests/native-ui/drive_settings.py" \
+    --evidence-dir "$evidence_dir" \
+    --log "$evidence_dir/settings-linux.log" \
+    -- moon run "$yami_root/native/examples/ubuntu" --target native -- --settings-e2e
+
+sh "$yami_root/scripts/native_ui_workspace.sh" \
   python3 "$yami_root/tests/button-contract/drive_linux.py"
