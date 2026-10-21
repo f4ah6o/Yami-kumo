@@ -58,11 +58,11 @@ turn the scripted backend into an actual macOS backend.
 `0.10.6`, native `0.2.13` and `0.2.14` as published and not yanked. Downloaded
 archives were SHA-256 checked against the index:
 
-| Archive | SHA-256 |
-| --- | --- |
-| gpui 0.10.5 | `fd263202a731411a13b7c929ff2475a98c8da4a584651e9b34b87ac51888c104` |
-| gpui 0.10.6 | `1f525737423f7ca83410fd23184f9bdea0a8eda81e7711b6e6dee968d7ab8b88` |
-| yami_kumo 0.2.3 | `1c46f9f144bd972db7d9dc839aa409a84f389a407d175e5dd751e1d93e3f2b0d` |
+| Archive                 | SHA-256                                                            |
+| ----------------------- | ------------------------------------------------------------------ |
+| gpui 0.10.5             | `fd263202a731411a13b7c929ff2475a98c8da4a584651e9b34b87ac51888c104` |
+| gpui 0.10.6             | `1f525737423f7ca83410fd23184f9bdea0a8eda81e7711b6e6dee968d7ab8b88` |
+| yami_kumo 0.2.3         | `1c46f9f144bd972db7d9dc839aa409a84f389a407d175e5dd751e1d93e3f2b0d` |
 | yami_kumo_native 0.2.13 | `b22334465b36ca873839a4a00c1d590c934f9c7c5067ee576b64eda119c9dbeb` |
 | yami_kumo_native 0.2.14 | `d76663c866f6c8845b5a9c5211799e2ccb537647a1b5b1667d37092547c4eb14` |
 
@@ -75,16 +75,16 @@ JustifyContent start/end; these are independent of the Dialog transport.
 Local audit environment: Linux, moon `0.1.20261020`, moonc
 `0.10.16+b1a0e846e`. CI uses its explicit `0.10.15+943464bfa` pin.
 
-| Command / target | Observed result |
-| --- | --- |
-| This standalone consumer, published 0.10.5 / 0.2.13 | PASS, 1/1 |
-| The same consumer with published 0.10.6 / 0.2.14 | PASS, 1/1 |
-| Native `moon test ui --target native --deny-warn`, #59 source with published 0.10.5 | PASS, 86/86 |
-| Native `moon check examples/macos --target native --deny-warn`, #59 source | PASS; Linux type checking, not a macOS link/runtime test |
-| Native `moon test ui --target native --deny-warn`, main `8d793337894584132e0e03180367378a7de31bdd` with published 0.10.6 | PASS, 86/86 |
-| GPUI main `cfc66b872bfd9613e2a81b499cac0602c84d653b`, `moon test platform/macos --target all` | PASS, 14 each wasm/wasm-gc/JS, 15 native; Linux host |
-| GPUI `python3 scripts/check_contracts.py` | PASS; production release evidence remains pending |
-| Real macOS Settings input and AX tree proof in this audit | NOT_RUN; this execution environment is Linux |
+| Command / target                                                                                                         | Observed result                                          |
+| ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| This standalone consumer, published 0.10.5 / 0.2.13                                                                      | PASS, 1/1                                                |
+| The same consumer with published 0.10.6 / 0.2.14                                                                         | PASS, 1/1                                                |
+| Native `moon test ui --target native --deny-warn`, #59 source with published 0.10.5                                      | PASS, 86/86                                              |
+| Native `moon check examples/macos --target native --deny-warn`, #59 source                                               | PASS; Linux type checking, not a macOS link/runtime test |
+| Native `moon test ui --target native --deny-warn`, main `8d793337894584132e0e03180367378a7de31bdd` with published 0.10.6 | PASS, 86/86                                              |
+| GPUI main `cfc66b872bfd9613e2a81b499cac0602c84d653b`, `moon test platform/macos --target all`                            | PASS, 14 each wasm/wasm-gc/JS, 15 native; Linux host     |
+| GPUI `python3 scripts/check_contracts.py`                                                                                | PASS; production release evidence remains pending        |
+| Real macOS Settings input and AX tree proof in this audit                                                                | NOT_RUN; this execution environment is Linux             |
 
 The historical window-activation limitation has not been re-tested here.
 No result in this audit establishes that it has been resolved or persists.
