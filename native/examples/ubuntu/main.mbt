@@ -36,11 +36,35 @@ fn main {
   let capture : @common.NativeFrameCapture = fn(window) {
     @testing.capture_frame(host, window)
   }
-  let result = @common.run_native_sample(
+  let route = @ubuntu_host.TextHostRoute::new(host)
+  let text_begin : @common.NativeTextBegin = fn(window, root) {
+    route.begin_text_input(window, root)
+  }
+  let text_update : @common.NativeTextUpdate = fn(epoch, state) {
+    route.update_text_input(epoch, state)
+  }
+  let text_cancel : @common.NativeTextCancel = fn(epoch) {
+    route.cancel_text_input(epoch)
+  }
+  let text_end : @common.NativeTextEnd = fn(epoch) {
+    route.end_text_input(epoch)
+  }
+  let text_next : @common.NativeTextNext = fn(timeout) {
+    route.next_text_input(timeout_ms=timeout)
+  }
+  let text_port = @common.NativeTextInputPort::new(
+    text_begin, text_update, text_cancel, text_end, text_next,
+  )
+  let next_platform : @common.NativePlatformNext = fn(timeout) {
+    route.next_platform_event(timeout_ms=timeout)
+  }
+  let result = @common.run_native_entry(
     host,
     @common.Linux,
     ubuntu_measure,
     capture,
+    text_port=Some(text_port),
+    settings_platform_next=Some(next_platform),
   )
   let stopped = host.stop()
   match result {

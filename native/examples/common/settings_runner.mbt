@@ -1,4 +1,12 @@
 ///|
+/// Optional platform-record source while a host text route owns the queue.
+/// Route-backed hosts park ordinary records in their own ordered queue, so the
+/// runner must not read `Host::next_event` directly.
+pub type NativePlatformNext = (
+  Int32
+) -> Result[@platform.Event?, @diagnostics.FrameworkError]
+
+///|
 pub type NativeDialogAXPublish = (
   @platform.WindowId,
   Int64,
@@ -56,6 +64,7 @@ pub fn run_native_settings_sample(
   text_port~ : NativeTextInputPort? = None,
   accessibility_port~ : NativeTextAXPort? = None,
   dialog_port~ : NativeDialogAXPort? = None,
+  next_platform_event~ : NativePlatformNext? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let port = match text_port {
     Some(value) => value
@@ -134,9 +143,17 @@ pub fn run_native_settings_sample(
         _ => ()
       }
     }
-    let event = match host.next_event(timeout_ms=16) {
-      Err(error) => return Err(error)
-      Ok(value) => value
+    let event = match next_platform_event {
+      Some(next) =>
+        match next(16) {
+          Err(error) => return Err(error)
+          Ok(value) => value
+        }
+      None =>
+        match host.next_event(timeout_ms=16) {
+          Err(error) => return Err(error)
+          Ok(value) => value
+        }
     }
     match event {
       None => ()
