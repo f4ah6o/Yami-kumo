@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- Windows Settings lane: run the shared model through `windows.TextHostRoute`
+  with `--settings-e2e`, and record the text transport (`imm32` commit or the
+  WM_CHAR key path), host environment and exit reason in
+  `settings-windows.json`/`.log`. IME and UIA stay `NOT_RUN`.
+
 ### Fixed
 
 - Qualify the Shared Settings Linux lane key-input path on Weston + Xvfb.
@@ -9,12 +16,21 @@
   when `begin_text_session` fails (Weston advertises no
   `zwp_text_input_manager_v1`), drains queued actions before committing a
   frame so typed text cannot be reverted by a field rebuild, and retries the
-  scope focus until it reports the `name` field. The Linux driver waits on
-  the compositor output window, logs X focus diagnostics (`windowfocus`,
-  `windowactivate`, `getwindowfocus`), and the report records which text
-  transport carried the input (`direct-keyboard` vs `text-input-v1`), keeping
-  `settings.ime` and `settings.ax` as `NOT_RUN`. `settings-linux.json` now
-  records `status: pass` with `name: "abc"`, `dialog: true`, `status: saved`.
+  initial scope focus until it reports the `name` field without overriding
+  later focus moves. The Linux driver waits on the compositor output
+  window, logs X focus diagnostics (`windowfocus`, `windowactivate`,
+  `getwindowfocus`), waits for the `save` focus frame after Tab, and the
+  report records which text transport carried the input
+  (`direct-keyboard` vs `text-input-v1`), keeping `settings.ime` and
+  `settings.ax` as `NOT_RUN`. The `ubuntu-wayland` CI job enables the lane.
+  `settings-linux.json` now records `status: pass` with `name: "abc"`,
+  `dialog: true`, `status: saved`.
+- The Windows Settings driver builds Win32 `INPUT`/`KEYBDINPUT` records for
+  `SendInput` and reuses the native UI driver's foreground guard, so `abc`,
+  Tab and Enter reach the sample window.
+- Re-commit the Settings frame after a resize or scale event. The invalidation
+  cleared the layout-ready state, so the following IMM32 commit was rejected
+  before it could reach the focused field.
 
 ## native-0.2.14 - 2026-10-21
 

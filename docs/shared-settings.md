@@ -1,15 +1,14 @@
 # Shared Settings qualification
 
-Status: one Settings consumer, four entry points. Web runs the full flow in CI.
-The Linux lane is qualified: `settings-linux.json` records `status: pass` with
-`name: "abc"`, `dialog: true` and `status: saved`, typed through the compositor
-key path (`route: "direct-keyboard"` — Weston advertises no
-`zwp_text_input_manager_v1`, so the runner arms the host's direct
-keyboard-text mode instead of a text-input-v1 session; the marker/report show
-which route carried the text). The Windows lane driver is checked in but runs
-only when `YAMI_SETTINGS_LANE=1`; its text path is not qualified yet, so CI
-does not claim it. macOS runs text composition and TextField AX, while its
-key-driven dialog is `NOT_RUN` in the current GUI session.
+Status: one Settings consumer, four entry points. Web, Windows and Linux run
+the full flow in CI. The Linux lane is qualified on Weston + Xvfb:
+`settings-linux.json` records `status: pass` with `name: "abc"`,
+`dialog: true` and `status: saved`, typed through the compositor key path
+(`direct-keyboard` — Weston advertises no `zwp_text_input_manager_v1`, so the
+runner arms the host's direct keyboard-text mode instead of a text-input-v1
+session; the marker/report show which route carried the text). macOS runs text
+composition and TextField AX, while its key-driven dialog is `NOT_RUN` in the
+current GUI session.
 
 ## One source
 
@@ -20,39 +19,84 @@ host tick (DOM timer, native frame) so both observe the same transitions.
 
 ## Lanes
 
-| Lane    | Command                                                                  | What it proves                                                                                                             |
-| ------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Web     | `node --test tests/shared-ui/settings.test.mjs`                          | Real Chromium: validation, synthetic composition, dialog cancel/confirm, focus restore, simulated save, two roots, dispose |
-| Linux   | `scripts/native_ui_linux.sh` (`drive_settings.py --platform linux`)      | Weston+Xvfb output window focus, key-path text via direct keyboard mode, Tab traversal, dialog, save                       |
-| Windows | `scripts/native_ui_windows.ps1` (`drive_settings.py --platform windows`) | Visible HWND, SendInput text, Tab traversal, dialog, save                                                                  |
-| macOS   | `--settings-e2e` native sample (manual)                                  | Composition entry, TextField AX; dialog input `NOT_RUN`                                                                    |
+| Lane    | Command                                                                  | What it proves                                                                                                                  |
+| ------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Web     | `node --test tests/shared-ui/settings.test.mjs`                          | Real Chromium: validation, synthetic composition, dialog cancel/confirm, focus restore, simulated save, two roots, dispose      |
+| Linux   | `scripts/native_ui_linux.sh` (`drive_settings.py --platform linux`)      | Weston+Xvfb output window focus, direct-keyboard text route, Tab traversal, dialog, save; the report names the transport        |
+| Windows | `scripts/native_ui_windows.ps1` (`drive_settings.py --platform windows`) | Visible HWND, IMM32 text route (WM_CHAR key path when unavailable), Tab traversal, dialog, save; the report names the transport |
+| macOS   | `--settings-e2e` native sample (manual)                                  | Composition entry, TextField AX; dialog input `NOT_RUN`                                                                         |
 
 Native frame markers:
 
 ```
 YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"...","status":"editing|saving|saved","dialog":false,"focus":"name|save|confirm|cancel|other","error":""}
 YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"character|tab|enter|..."}
-YAMI_NATIVE_UI_SETTINGS {"phase":"text","status":"key-path|session|unavailable","route":"direct-keyboard|text-input-v1|none"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"text","status":"started|key-path|unavailable","transport":"imm32|text-input-v1","route":"direct-keyboard|none"}
 ```
 
-The `phase":"text"` marker records which transport carried the text so the
-report can distinguish the compositor key path (`direct-keyboard`) from a
-portable session (`text-input-v1`); `unavailable` means neither exists. The
-Linux driver also logs the X windows it enumerated, the `windowfocus` /
-`windowactivate` results and `getwindowfocus` before/after, and the session
-script saves the compositor's `wayland-info` advertisement list into the
-evidence directory.
+### Linux text transport
+
+Weston advertises no `zwp_text_input_manager_v1`, so the portable
+`begin_text_input` session fails and the runner arms the host's direct
+keyboard-text mode instead: characters reach the field as committed text via
+kind-13 `TextInput` records. Markers distinguish the routes — `unavailable`
+(with `operation`/`error`) logs the failed portable attempt, `key-path` with
+`route: "direct-keyboard"` records the armed fallback, and `started` would
+record a real portable session (`transport: "text-input-v1"`). The Linux
+driver also logs the X windows it enumerated, the `windowfocus` /
+`windowactivate` results and `getwindowfocus` before/after in
+`settings-linux.log`, and the session script saves the compositor's
+`wayland-info` advertisement list and `weston.log` into the evidence
+directory. `settings.ime` and `settings.ax` stay `NOT_RUN`.
+
+Measured 2026-10-22 on Weston + Xvfb: `abc` arrived via `direct-keyboard`,
+Tab focused Save, Enter opened and confirmed the dialog, and the simulated
+save completed. The `ubuntu-wayland` CI job runs this lane with
+`YAMI_SETTINGS_LANE=1` and retains `settings-linux.json` in the
+`yami-native-ui-ubuntu` artifact.
+
+### Windows text transport
+
+`native/examples/windows` builds a `windows.TextHostRoute` and passes it to the
+Settings runner for `--settings-e2e`. When the name field gains focus the
+runner starts the opt-in IMM32 session and records which path delivered text:
+
+```
+YAMI_NATIVE_UI_SETTINGS {"phase":"text","status":"started","transport":"imm32","epoch":1}
+YAMI_NATIVE_UI_SETTINGS {"phase":"text","status":"unavailable","operation":"begin_text_input","error":"..."}
+YAMI_NATIVE_UI_SETTINGS {"phase":"commit","text":"a","epoch":1}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"character"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"exit","reason":"window-closed|tick-limit","ticks":1200}
+```
+
+The driver records `textTransport` as `imm32-commit` only after a commit
+marker; a WM_CHAR `Character` delivery is recorded as `key-character` and is
+never relabelled as IMM. `settings.ime` and `settings.ax` stay `NOT_RUN`.
+
+Measured 2026-10-22 JST on Windows 11 (10.0.26200) with Microsoft IME and ATOK
+installed: `abc` arrived as IMM32 commits, Tab focused Save, Enter opened and
+confirmed the dialog, and the simulated save completed. The Windows CI job
+re-runs this lane and retains `settings-windows.json` in the
+`yami-native-ui-windows` artifact; the report records name `abc`, dialog `true`,
+status `saved`, the transport, and the host environment. The CI result is the
+qualifying artifact; the local run above is the same contract.
 
 ## Evidence
 
 Each lane writes a `settings-lane/v1` report:
 
-- Web: `_build/shared-ui/web/settings-web.json`
-- Linux/Windows: `settings-<platform>.json` in the lane evidence directory,
-  alongside `settings-linux.log` (driver X-focus diagnostics + markers),
-  `wayland-info.log` and `weston.log`
+- Web: `_build/shared-ui/web/settings-web.json` (retained in the
+  `shared-ui-evidence` artifact)
+- Linux/Windows: `settings-<platform>.json` in the lane evidence directory;
+  Linux also retains `settings-linux.log` (driver X-focus diagnostics +
+  markers), `wayland-info.log` and `weston.log`
 
-Aggregate them after downloading the lane artifacts into one directory:
+The native report also records `result` (`name`, `dialog`, `status`),
+`textTransport`, `textMarkers` and the host `environment`.
+
+Aggregate them after downloading the `yami-native-ui-windows`,
+`yami-native-ui-ubuntu` and `shared-ui-evidence` artifacts from the same
+candidate run into one directory:
 
 ```sh
 node tests/shared-ui/matrix.mjs --dir <evidence-dir> --candidate-sha <sha>
@@ -66,4 +110,5 @@ candidate SHA differs. `NOT_RUN` rows never satisfy a required row.
 
 Ubuntu/Windows real IME and accessibility providers, macOS key-driven dialog,
 AX set-value and dialog actions are outside this qualification. A build-only,
-marker-only or synthetic-composition result is not an IME or AX pass.
+marker-only or synthetic-composition result is not an IME or AX pass, and the
+Windows WM_CHAR key path is not an IME qualification.
