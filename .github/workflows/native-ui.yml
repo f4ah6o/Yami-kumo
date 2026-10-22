@@ -41,7 +41,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Setup MoonBit
         uses: hustcer/setup-moonbit@v1.23
@@ -68,6 +68,7 @@ jobs:
       - name: Run shared component and controller tests, then real Wayland UI proof
         shell: bash
         env:
+          YAMI_SETTINGS_LANE: "1"
           GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
           YAMI_NATIVE_UI_EVIDENCE_DIR: ${{ github.workspace }}/Yami-kumo/_build/native-ui/ubuntu
         run: sh Yami-kumo/scripts/native_ui_linux.sh
@@ -75,7 +76,7 @@ jobs:
       - name: Setup Vite+ for the shared Web and Native Button contract
         uses: voidzero-dev/setup-vp@v1.16.1
         with:
-          node-version: 'lts'
+          node-version: "lts"
           run-install: false
 
       - name: Compare the same Button fixtures with real Kumo and Native host evidence
@@ -101,7 +102,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 35
     env:
-      MOONBIT_NEW_NATIVE: '0'
+      MOONBIT_NEW_NATIVE: "0"
       CL: /EHsc
     steps:
       - name: Checkout Yami-kumo
@@ -134,7 +135,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Setup MoonBit
         uses: hustcer/setup-moonbit@v1.23
@@ -194,7 +195,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: "3.12"
 
       - name: Setup MoonBit
         uses: hustcer/setup-moonbit@v1.23

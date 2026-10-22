@@ -1,8 +1,8 @@
 # Shared Settings qualification
 
 Status: one Settings consumer, four entry points. Web and Windows run the full
-flow in CI. The Linux lane is implemented but gated off and delegated to
-`issues/open/20261022-settings-linux-lane.md`; macOS runs text composition and
+flow in CI. The Linux lane is now enabled in this change; its full flow must
+pass on the candidate CI run before qualification is claimed. macOS runs text composition and
 TextField AX, while its key-driven dialog is `NOT_RUN` in the current GUI
 session.
 
@@ -18,7 +18,7 @@ host tick (DOM timer, native frame) so both observe the same transitions.
 | Lane    | Command                                                                  | What it proves                                                                                                                  |
 | ------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | Web     | `node --test tests/shared-ui/settings.test.mjs`                          | Real Chromium: validation, synthetic composition, dialog cancel/confirm, focus restore, simulated save, two roots, dispose      |
-| Linux   | `YAMI_SETTINGS_LANE=1 scripts/native_ui_linux.sh` (delegated; not CI)    | Driver checked in; text path not qualified                                                                                      |
+| Linux   | `YAMI_SETTINGS_LANE=1 scripts/native_ui_linux.sh`                        | Weston direct keyboard text, Tab focus, Dialog cancel/reopen/confirm, save; candidate CI evidence required                      |
 | Windows | `scripts/native_ui_windows.ps1` (`drive_settings.py --platform windows`) | Visible HWND, IMM32 text route (WM_CHAR key path when unavailable), Tab traversal, dialog, save; the report names the transport |
 | macOS   | `--settings-e2e` native sample (manual)                                  | Composition entry, TextField AX; dialog input `NOT_RUN`                                                                         |
 
@@ -26,6 +26,8 @@ Native frame markers:
 
 ```
 YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"...","status":"editing|saving|saved","dialog":false,"focus":"name|save|confirm|cancel|other","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"character|tab|enter|..."}
+YAMI_NATIVE_UI_SETTINGS {"phase":"text","status":"key-path|unavailable","route":"direct-keyboard|none"}
 ```
 
 ### Windows text transport
@@ -83,3 +85,19 @@ Ubuntu/Windows real IME and accessibility providers, macOS key-driven dialog,
 AX set-value and dialog actions are outside this qualification. A build-only,
 marker-only or synthetic-composition result is not an IME or AX pass, and the
 Windows WM_CHAR key path is not an IME qualification.
+
+## Linux delivery and integration
+
+On Weston without text-input-v1, the runner enables the host's direct keyboard
+text route. The driver focuses the compositor's X output window (the Wayland
+surface is not an X window). Pending TextChanged actions are applied before
+rendering, preventing stale props from resetting the caret. Initial focus is
+retried only until observed, so Tab and modal focus are preserved afterward.
+The text session marker identifies IMM32 on Windows and text-input-v1 on Linux;
+direct keyboard fallback is recorded separately and does not qualify IME.
+
+Both native drivers require name `abc`, an observed Save focus, Dialog cancel
+with focus restoration, reopening and confirmation, and saved name `abc`.
+Each step waits for a new frame. Missing input or transport evidence fails the
+lane. IME and accessibility remain NOT_RUN because these drivers do not exercise
+an IME engine or inspect native accessibility providers.
