@@ -90,6 +90,28 @@ class TransportTests(unittest.TestCase):
         )
 
 
+class LinuxTransportTests(unittest.TestCase):
+    def test_direct_keyboard_is_not_relabelled_as_imm(self):
+        markers = [{"phase": "text", "status": "key-path", "route": "direct-keyboard"},
+                   {"phase": "key", "key": "character"}]
+        self.assertEqual(driver.classify_text_transport(markers, "linux"), "direct-keyboard")
+
+    def test_linux_portable_commit_is_not_imm(self):
+        self.assertEqual(driver.classify_text_transport([{"phase": "commit", "text": "abc"}], "linux"),
+                         "text-input-v1-commit")
+
+    def test_keyboard_marker_without_armed_route_is_not_linux_text_evidence(self):
+        self.assertIsNone(driver.classify_text_transport([{"phase": "key", "key": "character"}], "linux"))
+
+
+class FreshFrameTests(unittest.TestCase):
+    def test_old_dialog_frame_cannot_satisfy_reopen(self):
+        output = driver.Output.__new__(driver.Output)
+        output.frames = [{"dialog": True}]
+        with self.assertRaises(driver.SettingsError):
+            output.wait_frame(lambda f: f.get("dialog"), 0, after=1)
+
+
 class ReportTests(unittest.TestCase):
     def frames(self):
         return {

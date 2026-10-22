@@ -69,13 +69,20 @@ def parse_marker(line: str) -> dict[str, Any] | None:
     return payload
 
 
-def classify_text_transport(markers: list[dict[str, Any]]) -> str | None:
+def classify_text_transport(markers: list[dict[str, Any]], platform: str = "windows") -> str | None:
     """Name the host path that delivered committed text, if any.
 
     A `commit` can only come from the portable text route (IMM32 on Windows),
     while `key` with `character` means WM_CHAR reached the ordinary key path.
     The report must not claim IMM when only the key path fired.
     """
+    if platform == "linux":
+        for marker in reversed(markers):
+            if marker.get("phase") == "text" and marker.get("status") == "key-path":
+                return "direct-keyboard"
+        if any(marker.get("phase") == "commit" for marker in markers):
+            return "text-input-v1-commit"
+        return None
     if any(marker.get("phase") == "commit" for marker in markers):
         return "imm32-commit"
     if any(
@@ -88,7 +95,7 @@ def classify_text_transport(markers: list[dict[str, Any]]) -> str | None:
 
 def text_marker_summary(markers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Keep the transport and key markers, dropping the bulky frame copies."""
-    keys = ("phase", "status", "transport", "epoch", "key", "text", "operation", "error")
+    keys = ("phase", "status", "transport", "route", "epoch", "key", "text", "operation", "error")
     return [
         {key: marker[key] for key in keys if key in marker}
         for marker in markers
@@ -258,10 +265,10 @@ class Output:
         self._handle(line)
         return line
 
-    def wait_frame(self, predicate, timeout: float) -> dict[str, Any]:
+    def wait_frame(self, predicate, timeout: float, after: int = 0) -> dict[str, Any]:
         deadline = time.monotonic() + timeout
         while True:
-            for frame in self.frames:
+            for frame in self.frames[after:]:
                 if predicate(frame):
                     return frame
             remaining = deadline - time.monotonic()
@@ -275,31 +282,122 @@ class Output:
         self.log.close()
 
 
+def driver_log(output: Output, message: str) -> None:
+    output.log.write(f"DRIVER {message}\n")
+    output.log.flush()
+
+
 def xdotool(*args: str) -> None:
     subprocess.run(["xdotool", *args], check=True, stdout=subprocess.DEVNULL)
 
 
+def x11_window_names() -> list[tuple[int, str]]:
+    listing = subprocess.run(
+        ["xdotool", "search", "--name", ".*"], capture_output=True, text=True
+    )
+    windows: list[tuple[int, str]] = []
+    for token in listing.stdout.split():
+        name = subprocess.run(
+            ["xdotool", "getwindowname", token], capture_output=True, text=True
+        ).stdout.strip()
+        windows.append((int(token), name))
+    return windows
+
+
 def wait_window(output: Output, timeout: float) -> int:
+    """Locate the X window the lane should drive.
+
+    The sample title lives on the Wayland surface, not on any X window, so
+    under Weston/Xvfb the only client-visible window is the compositor
+    output ("Weston Compositor - screen0"). Prefer an X window that already
+    carries the sample title in case a compositor propagates it, then fall
+    back to the compositor output window. Every candidate is logged into
+    the evidence log.
+    """
     deadline = time.monotonic() + timeout
+    logged: set[int] = set()
     while time.monotonic() < deadline:
         output.pump()
-        found = subprocess.run(
+        titled = subprocess.run(
             ["xdotool", "search", "--name", WINDOW_TITLE],
             capture_output=True,
             text=True,
         )
-        if found.stdout.strip():
-            return int(found.stdout.split()[0])
+        if titled.stdout.strip():
+            window = int(titled.stdout.split()[0])
+            driver_log(output, f"found app-titled X window {window}")
+            return window
+        windows = x11_window_names()
+        for window, name in windows:
+            if window not in logged:
+                logged.add(window)
+                driver_log(output, f"X window {window}: {name!r}")
+        for window, name in windows:
+            if "Weston" in name:
+                driver_log(output, f"using compositor window {window}: {name!r}")
+                return window
         time.sleep(0.2)
-    raise SettingsError(f"window {WINDOW_TITLE!r} did not appear")
+    raise SettingsError(
+        f"no compositor or app-titled X window appeared (want {WINDOW_TITLE!r})"
+    )
+
+
+def focus_window(output: Output, window: int) -> dict[str, Any]:
+    """Point the X input focus at the window and log what happened.
+
+    Weston runs without an X window manager inside Xvfb, so windowactivate
+    (EWMH/_NET_ACTIVE_WINDOW) has no effect; XSetInputFocus (windowfocus)
+    is the primitive that works here. Both are attempted and logged so the
+    evidence shows which one took.
+    """
+    before = subprocess.run(
+        ["xdotool", "getwindowfocus", "-f"], capture_output=True, text=True
+    ).stdout.strip()
+    driver_log(output, f"getwindowfocus before: {before}")
+    focused = subprocess.run(
+        ["xdotool", "windowfocus", "--sync", str(window)],
+        capture_output=True,
+        text=True,
+    )
+    driver_log(
+        output,
+        f"windowfocus {window}: rc={focused.returncode} {focused.stderr.strip()}",
+    )
+    activated = subprocess.run(
+        ["xdotool", "windowactivate", "--sync", str(window)],
+        capture_output=True,
+        text=True,
+    )
+    driver_log(
+        output,
+        f"windowactivate {window}: rc={activated.returncode} "
+        f"{activated.stderr.strip()}",
+    )
+    after = subprocess.run(
+        ["xdotool", "getwindowfocus", "-f"], capture_output=True, text=True
+    ).stdout.strip()
+    driver_log(output, f"getwindowfocus after: {after}")
+    if focused.returncode != 0 and activated.returncode != 0:
+        raise SettingsError(
+            f"could not focus compositor window {window} "
+            f"(windowfocus rc={focused.returncode}, "
+            f"windowactivate rc={activated.returncode})"
+        )
+    return {
+        "window": window,
+        "focusBefore": before,
+        "focusAfter": after,
+        "windowfocusRc": focused.returncode,
+        "windowactivateRc": activated.returncode,
+    }
 
 
 def drive_linux(output: Output, timeout: float) -> dict[str, Any]:
     window = wait_window(output, timeout)
-    xdotool("search", "--sync", "--name", WINDOW_TITLE, "windowactivate", "--sync")
-    xdotool("mousemove", "--window", str(window), "120", "160")
-    xdotool("click", "--clearmodifiers", "1")
-    time.sleep(0.4)
+    focus = focus_window(output, window)
+    # The runner pre-focuses the name field; wait for that frame marker
+    # before typing so key delivery is ordered against the app loop.
+    output.wait_frame(lambda f: f.get("focus") == "name", min(timeout, 30.0))
     xdotool("type", "--delay", "60", "abc")
     try:
         typed = output.wait_frame(lambda f: f.get("name") == "abc", 6.0)
@@ -307,13 +405,25 @@ def drive_linux(output: Output, timeout: float) -> dict[str, Any]:
         # Some text routes publish a composition and commit only on Enter.
         xdotool("key", "--clearmodifiers", "Return")
         typed = output.wait_frame(lambda f: f.get("name") == "abc", 10.0)
-    xdotool("key", "--clearmodifiers", "Tab")
-    time.sleep(0.3)
-    xdotool("key", "--clearmodifiers", "Return")
-    dialog = output.wait_frame(lambda f: f.get("dialog") is True, 10.0)
-    xdotool("key", "--clearmodifiers", "Return")
-    saved = output.wait_frame(lambda f: f.get("status") == "saved", 10.0)
-    return {"typed": typed, "dialog": dialog, "saved": saved}
+    def key(name: str) -> None:
+        xdotool("key", "--clearmodifiers", name)
+
+    flow = drive_dialog(output, key, "Tab", "Return", "Escape")
+    return {"typed": typed, **flow, "x11Focus": focus}
+
+
+def drive_dialog(output: Output, key, tab, enter, escape) -> dict[str, Any]:
+    def step(value, predicate):
+        after = len(output.frames)
+        key(value)
+        return output.wait_frame(predicate, 10.0, after=after)
+
+    save_focus = step(tab, lambda f: f.get("focus") == "save")
+    step(enter, lambda f: f.get("dialog") is True and f.get("focus") == "confirm")
+    cancelled = step(escape, lambda f: f.get("dialog") is False and f.get("focus") == "save")
+    dialog = step(enter, lambda f: f.get("dialog") is True and f.get("focus") == "confirm")
+    saved = step(enter, lambda f: f.get("status") == "saved" and f.get("name") == "abc" and f.get("dialog") is False)
+    return {"saveFocus": save_focus, "cancelled": cancelled, "dialog": dialog, "saved": saved}
 
 
 def drive_windows(output: Output, timeout: float) -> dict[str, Any]:
@@ -362,13 +472,7 @@ def drive_windows(output: Output, timeout: float) -> dict[str, Any]:
             raise
         send_key(0x0D)
         typed = output.wait_frame(lambda frame: frame.get("name") == "abc", 10.0)
-    send_key(0x09)
-    time.sleep(0.2)
-    send_key(0x0D)
-    dialog = output.wait_frame(lambda frame: frame.get("dialog") is True, 10.0)
-    send_key(0x0D)
-    saved = output.wait_frame(lambda frame: frame.get("status") == "saved", 10.0)
-    return {"typed": typed, "dialog": dialog, "saved": saved}
+    return {"typed": typed, **drive_dialog(output, send_key, 0x09, 0x0D, 0x1B)}
 
 
 def write_report(path: Path, report: dict[str, Any]) -> None:
@@ -420,6 +524,7 @@ def build_pass_report(
             "settings.text": (
                 "PASS (IMM32 commit)"
                 if transport == "imm32-commit"
+                else f"PASS ({transport}, no IME engine)" if platform == "linux"
                 else "PASS (WM_CHAR key path, no IME engine)"
             ),
             "settings.ime": "NOT_RUN",
@@ -489,7 +594,7 @@ def main() -> int:
             if args.platform == "linux"
             else drive_windows(output, args.timeout)
         )
-        transport = classify_text_transport(output.markers)
+        transport = classify_text_transport(output.markers, args.platform)
         if transport is None:
             raise SettingsError(
                 "text reached the model without a text-transport marker"

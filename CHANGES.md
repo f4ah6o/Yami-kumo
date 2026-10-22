@@ -18,6 +18,18 @@
   cleared the layout-ready state, so the following IMM32 commit was rejected
   before it could reach the focused field.
 
+- Qualify the Shared Settings Linux lane key-input path on Weston + Xvfb.
+  `settings_runner` now falls back to the host's direct keyboard-text mode
+  when `begin_text_session` fails (Weston advertises no
+  `zwp_text_input_manager_v1`), drains queued actions before committing a
+  frame so typed text cannot be reverted by a field rebuild, and retries the
+  scope focus until it reports the `name` field. The Linux driver waits on
+  the compositor output window, logs X focus diagnostics (`windowfocus`,
+  `windowactivate`, `getwindowfocus`), and the report records which text
+  transport carried the input (`direct-keyboard` vs `text-input-v1`), keeping
+  `settings.ime` and `settings.ax` as `NOT_RUN`. The integrated candidate must retain a passing `settings-linux.json`
+  before the lane is qualified.
+
 ## native-0.2.14 - 2026-10-21
 
 ### Changed

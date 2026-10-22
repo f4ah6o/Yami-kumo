@@ -21,27 +21,15 @@ function lane(fixtureId, platform, backend, target, layer, status = 'pass') {
 
 const required = [
   lane('settings-flow', 'web', 'dom', 'js', 'runtime'),
+  lane('settings-flow', 'linux', 'gpui-native', 'native', 'runtime'),
   lane('settings-flow', 'windows', 'gpui-native', 'native', 'runtime'),
 ];
 
-test('two passing flow lanes produce a matrix', () => {
+test('three passing flow lanes produce a matrix', () => {
   const matrix = buildMatrix(required, sha);
   assert.equal(matrix.status, 'pass');
-  assert.equal(matrix.required.length, 2);
+  assert.equal(matrix.required.length, 3);
   assert.ok(matrix.declaredNotRun.every((row) => row.status === 'not-run'));
-});
-
-test('a declared Linux flow lane stays NOT_RUN', () => {
-  const matrix = buildMatrix(
-    [...required, lane('settings-flow', 'linux', 'gpui-native', 'native', 'runtime', 'not-run')],
-    sha,
-  );
-  assert.ok(
-    matrix.declaredNotRun.some(
-      (row) =>
-        row.key === 'settings-flow:linux/gpui-native/native/runtime' && row.status === 'not-run',
-    ),
-  );
 });
 
 test('a missing required lane fails', () => {
@@ -49,7 +37,10 @@ test('a missing required lane fails', () => {
 });
 
 test('a declared NOT_RUN lane cannot satisfy a required row', () => {
-  const lanes = [lane('settings-flow', 'web', 'dom', 'js', 'runtime', 'not-run'), required[1]];
+  const lanes = [
+    lane('settings-flow', 'web', 'dom', 'js', 'runtime', 'not-run'),
+    ...required.slice(1),
+  ];
   assert.throws(() => buildMatrix(lanes, sha), /not passing/);
 });
 

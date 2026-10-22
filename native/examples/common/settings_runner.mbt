@@ -7,6 +7,16 @@ pub type NativePlatformNext = (
 ) -> Result[@platform.Event?, @diagnostics.FrameworkError]
 
 ///|
+/// Optional direct-keyboard text transport used when the host has no portable
+/// text-input session (for example Weston without text-input-v1). Arming it
+/// keeps typed characters on the compositor key path as committed text input;
+/// disarming it on focus loss keeps stale epochs from being delivered.
+pub type NativeDirectText = (
+  @platform.WindowId,
+  Bool,
+) -> Result[Unit, @diagnostics.FrameworkError]
+
+///|
 pub type NativeDialogAXPublish = (
   @platform.WindowId,
   Int64,
@@ -70,6 +80,54 @@ fn settings_status(settings : @shared_settings.Model) -> String {
 }
 
 ///|
+priv struct SettingsTextRoute {
+  key_path_armed : Bool
+  transport_failed : Bool
+}
+
+///|
+/// Text-input fallback when the host has no portable session (for example
+/// Weston without text-input-v1). Arms the direct keyboard-text route so typed
+/// characters reach the field as committed text, and reports the transport as
+/// unavailable only when no route exists at all. Markers are emitted on state
+/// transitions so the log shows which route carried the text.
+fn settings_key_path_fallback(
+  direct_text : NativeDirectText?,
+  window : @platform.WindowId,
+  route : SettingsTextRoute,
+) -> SettingsTextRoute {
+  match direct_text {
+    Some(arm) =>
+      match (arm)(window, true) {
+        Ok(_) => {
+          if !route.key_path_armed {
+            emit_native_marker(
+              "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"key-path\",\"route\":\"direct-keyboard\"}",
+            )
+          }
+          { ..route, key_path_armed: true }
+        }
+        Err(_) => {
+          if !route.key_path_armed && !route.transport_failed {
+            emit_native_marker(
+              "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\",\"route\":\"none\"}",
+            )
+          }
+          { key_path_armed: route.key_path_armed, transport_failed: true }
+        }
+      }
+    None => {
+      if !route.transport_failed {
+        emit_native_marker(
+          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\",\"route\":\"none\"}",
+        )
+      }
+      { key_path_armed: route.key_path_armed, transport_failed: true }
+    }
+  }
+}
+
+///|
 /// Drive the Shared Settings model on a host that exposes portable text input.
 /// The same model source is used by the DOM entry; this runner only delivers
 /// host events, the committed text transport and the simulated-save tick.
@@ -81,6 +139,7 @@ pub fn run_native_settings_sample(
   accessibility_port~ : NativeTextAXPort? = None,
   dialog_port~ : NativeDialogAXPort? = None,
   next_platform_event~ : NativePlatformNext? = None,
+  direct_text~ : NativeDirectText? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let port = match text_port {
     Some(value) => value
@@ -105,10 +164,13 @@ pub fn run_native_settings_sample(
   let mut last_document = ""
   let mut last_caret = @primitives.Rect::new(0.0, 0.0, 0.0, 0.0).unwrap()
   let mut saving_frames = 0
+  let gate = PresentationGate::{ rendered: false, pending_stale: false, }
+  let mut pending_frame : String? = None
   let mut dirty = true
   let mut focus_initialized = false
   let mut text_suspended = false
   let mut text_transport_failed = false
+  let mut key_path_armed = false
   let mut ticks = 0
   let mut destroyed = false
   let mut last_sequence : Int64 = 0
@@ -124,7 +186,7 @@ pub fn run_native_settings_sample(
   while !destroyed && ticks < tick_limit {
     ticks += 1
     let mut drained = 0
-    while drained < 32 {
+    while drained < 32 && gate.input_ready() {
       let current = match session {
         Some(value) => value
         None => break
@@ -207,13 +269,26 @@ pub fn run_native_settings_sample(
             // Invalidation clears the commit-ready state; without a new frame
             // the next text observation would be rejected before it reaches the
             // focused field.
+            gate.invalidate_layout(pending_frame is Some(_))
             mounted.invalidate_layout()
             dirty = true
+          }
+          @platform.FrameCompleted => {
+            match pending_frame {
+              Some(marker) => {
+                pending_frame = None
+                if gate.completed_frame_is_current() {
+                  emit_native_marker(marker)
+                }
+              }
+              None => ()
+            }
           }
           @platform.FocusChanged(focused) => {
             ignore(mounted.handle_event(value))
             text_suspended = !focused
             if !focused {
+              focus_initialized = false
               match session {
                 Some(current) => {
                   match end_text_session(port, current) {
@@ -224,6 +299,13 @@ pub fn run_native_settings_sample(
                   last_document = ""
                 }
                 None => ()
+              }
+              if key_path_armed {
+                key_path_armed = false
+                match direct_text {
+                  Some(arm) => ignore(arm(window, false))
+                  None => ()
+                }
               }
             }
             dirty = true
@@ -258,9 +340,22 @@ pub fn run_native_settings_sample(
       }
       Some(_) => ()
     }
-    if dirty && !destroyed {
+    if dirty && pending_frame is None && !destroyed {
+      // Drain queued actions before rendering: a TextChanged enqueued by the
+      // previous dispatch must update the model first, or the committed view
+      // rebuilds the field with a stale value and resets its caret.
+      while mounted.next_action() is Some(action) {
+        let next = settings.update(@shared_settings.Ui(action))
+        if next != settings {
+          settings = next
+        }
+      }
+      let (width, height, scale) = match host.window_metrics(window) {
+        Err(error) => return Err(error)
+        Ok(metrics) => metrics
+      }
       let frame = match
-        mounted.commit(settings.view(), width, height, 1.0, measure) {
+        mounted.commit(settings.view(), width, height, scale, measure) {
         Err(error) => return Err(error)
         Ok(value) => value
       }
@@ -272,39 +367,33 @@ pub fn run_native_settings_sample(
           dirty = true
         }
       }
-      // The simulated save completes after three committed frames so the
-      // loading state is observable without a host timer.
-      if settings.saving() {
-        saving_frames += 1
-        dirty = true
-        if saving_frames >= 3 {
-          saving_frames = 0
-          settings = settings.update(@shared_settings.SaveFinished)
-        }
-      } else {
-        saving_frames = 0
-      }
       let focused = frame.focused(@shared_settings.settings_name())
       if !focus_initialized {
-        focus_initialized = true
-        if !focused && mounted.focus(@shared_settings.settings_name()) {
+        if focused {
+          focus_initialized = true
+        } else if mounted.focus(@shared_settings.settings_name()) {
           dirty = true
         }
       }
+      // A rejected focus request (for example while the host reports the
+      // window unfocused) is retried on the next commit rather than giving
+      // the lane a permanently unfocused field.
       match session {
         None =>
-          if focused && !text_suspended && !text_transport_failed {
+          if focused && !text_suspended && !text_transport_failed && !key_path_armed {
             match mounted.focused_text() {
               Some(state) => {
                 match (port.begin)(window, state.binding_id()) {
                   Err(error) => {
-                    // The host may not provide a text-input session (for
-                    // example Weston without text-input-v1). Keep running on
-                    // the key path and report the transport as unavailable.
-                    text_transport_failed = true
                     emit_native_marker(
                       "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\",\"operation\":\"begin_text_input\",\"error\":\"\{json_escape(format_framework_error(error))}\"}",
                     )
+                    let route = settings_key_path_fallback(direct_text, window, {
+                      key_path_armed,
+                      transport_failed: text_transport_failed,
+                    })
+                    key_path_armed = route.key_path_armed
+                    text_transport_failed = route.transport_failed
                   }
                   Ok(epoch) =>
                     match
@@ -316,17 +405,32 @@ pub fn run_native_settings_sample(
                         ),
                       ) {
                       Err(error) => {
-                        text_transport_failed = true
+                        ignore((port.end)(epoch))
                         emit_native_marker(
                           "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\",\"operation\":\"update_text_input\",\"error\":\"\{json_escape(format_framework_error(error))}\"}",
                         )
+                        let route = settings_key_path_fallback(
+                          direct_text,
+                          window,
+                          {
+                            key_path_armed,
+                            transport_failed: text_transport_failed,
+                          },
+                        )
+                        key_path_armed = route.key_path_armed
+                        text_transport_failed = route.transport_failed
                       }
                       Ok(epoch) => {
                         session = Some({ epoch, binding: state.binding_id(), })
                         last_document = state.document().text()
                         last_caret = settings_caret(state.caret())
+                        let transport = match platform {
+                          Windows => "imm32"
+                          Linux => "text-input-v1"
+                          Macos => "appkit"
+                        }
                         emit_native_marker(
-                          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"started\",\"transport\":\"imm32\",\"epoch\":\{epoch}}",
+                          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"started\",\"transport\":\"\{transport}\",\"epoch\":\{epoch}}",
                         )
                       }
                     }
@@ -439,9 +543,29 @@ pub fn run_native_settings_sample(
       } else {
         "other"
       }
-      emit_native_marker(
-        "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"frame\",\"name\":\"\{json_escape(settings.name())}\",\"status\":\"\{settings_status(settings)}\",\"dialog\":\{settings.dialog_open()},\"focus\":\"\{focus}\",\"error\":\"\{json_escape(error_text)}\"}",
-      )
+      let marker = "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"frame\",\"name\":\"\{json_escape(settings.name())}\",\"status\":\"\{settings_status(settings)}\",\"dialog\":\{settings.dialog_open()},\"focus\":\"\{focus}\",\"error\":\"\{json_escape(error_text)}\"}"
+      match host.present(window, frame.snapshot()) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+      gate.mark_presented()
+      if platform is Macos {
+        emit_native_marker(marker)
+      } else {
+        pending_frame = Some(marker)
+      }
+      // The simulated save completes after three committed frames so the
+      // loading state is observable without a host timer.
+      if settings.saving() {
+        saving_frames += 1
+        dirty = true
+        if saving_frames >= 3 {
+          saving_frames = 0
+          settings = settings.update(@shared_settings.SaveFinished)
+        }
+      } else {
+        saving_frames = 0
+      }
     }
   }
   match session {
@@ -451,6 +575,12 @@ pub fn run_native_settings_sample(
         Ok(_) => ()
       }
     None => ()
+  }
+  if key_path_armed {
+    match direct_text {
+      Some(arm) => ignore(arm(window, false))
+      None => ()
+    }
   }
   if ax_token != 0 {
     match accessibility_port {

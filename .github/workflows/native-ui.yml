@@ -68,6 +68,7 @@ jobs:
       - name: Run shared component and controller tests, then real Wayland UI proof
         shell: bash
         env:
+          YAMI_SETTINGS_LANE: '1'
           GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
           YAMI_NATIVE_UI_EVIDENCE_DIR: ${{ github.workspace }}/Yami-kumo/_build/native-ui/ubuntu
         run: sh Yami-kumo/scripts/native_ui_linux.sh
