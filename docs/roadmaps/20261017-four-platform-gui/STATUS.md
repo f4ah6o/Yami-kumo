@@ -1,4 +1,4 @@
-# M4 status — 2026-10-21
+# M4 status — 2026-10-22
 
 States below describe `main`. Rows whose implementation PRs are still open name
 the candidate PR; `PR pending` is not current `main` behavior.
@@ -35,8 +35,8 @@ the current implementation state; use this file and the linked code/tests.
 | YK-05 | Partial              | Theme, spacing, AppShell and compact mode; general layout, drawers and full shell AX remain open.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | YK-06 | Bounded DOM + native | DOM `<input>` and native `TextField` with composition, focus restoration and clipboard requests are merged. The adapter consumes `platform.EventKind::Composition` today and exposes `Mounted::text_input` and `Mounted::focused_text` for portable `text_host` observations; the `text_sample` runner drives the host begin/update/commit/focus-loss cycle on macOS. macOS live Kotoeri preedit, commit, committed document and candidate visibility PASS (synthetic HID posting, not physical keyboard); candidate anchoring and physical keyboard are `NOT_RUN`. The sample publishes TextField AX and `--text-ax-proof` observes role/value/focus PASS; AX set-value is `NOT_RUN`. [Shared TextField contract](../../shared-textfield.md). |
 | YK-07 | Bounded DOM + native | DOM `<dialog>` plus a native overlay whose input admission, Tab trapping, dismissal and opener restoration come from the live `element.FocusScopeSession`; a rebuilt frame adopts its tree without closing the scope, with stable overlay roots. Native supports nested and sibling Dialog stacks (innermost owns input; outer close revokes the suffix); the DOM contract remains single-level. [Shared Dialog contract](../../shared-dialog.md).                                                                                                                                                                                                                                                                                             |
-| YK-08 | Partial              | The shared `examples/shared_settings` model and its DOM entry drive the full flow in real Chromium (validation, composition, dialog cancel/confirm, focus restore, simulated save, two roots, dispose). The macOS native lane runs the same model with composition entry and TextField AX; key-driven Tab/Enter is `NOT_RUN` because the current GUI session refuses window activation, so AppKit never marks the window focused and `Mounted::handle_event` rejects Input events. Ubuntu/Windows lanes and the evidence matrix remain open.                                                                                                                                                                                                   |
-| YK-09 | Published, bounded   | Published `f4ah6o/yami_kumo@0.2.3` (includes `examples/shared_settings`) and `f4ah6o/yami_kumo_native@0.2.13` (GPUI `0.10.5`). `0.2.0`/`0.2.1` and native `0.2.6` are superseded packaging failures; use `0.2.3`/`0.2.13`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| YK-08 | Partial, delegated   | The shared `examples/shared_settings` model drives the full flow in real Chromium (validation, composition, dialog cancel/confirm, focus restore, simulated save, two roots, dispose). The published-package consumer (`tests/published-settings`, scripted host) passes for `0.10.5/0.2.13` and `0.10.6/0.2.14` on Linux/macOS. The macOS native lane runs composition entry and TextField AX; key-driven Tab/Enter remains `NOT_RUN` (window activation refused). Ubuntu/Windows lane drivers, the `settings-lane/v1` report shape and `tests/shared-ui/matrix.mjs` are in place, but CI runs them only with `YAMI_SETTINGS_LANE=1`; real text/IME evidence is delegated to the two lane issues.                                             |
+| YK-09 | Published, bounded   | Published `f4ah6o/yami_kumo@0.2.3` (includes `examples/shared_settings`) and `f4ah6o/yami_kumo_native@0.2.14` (GPUI `0.10.6`). `0.2.0`/`0.2.1` and native `0.2.6` are superseded packaging failures; use `0.2.3`/`0.2.14`. The npm tarball consumer installs without a MoonBit compiler and passes JavaScript/TypeScript/React/browser checks.                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## GPUI packets
 
@@ -54,15 +54,15 @@ the current implementation state; use this file and the linked code/tests.
 
 ## Dependency pins
 
-| Consumer           | GPUI reference       | State                                     |
-| ------------------ | -------------------- | ----------------------------------------- |
-| gpui.mbt published | `0.10.5` (`c72a6be`) | Current release                           |
-| Yami shared source | `c72a6be`            | Source workspace; 0.10.5 pin              |
-| Yami native module | `0.10.0` / `e2c8bd5` | Source workspace; merged via #40          |
-| app-demo           | `0.10.5`             | macOS/Web/Windows preview                 |
-| gpui-conformance   | `0.7.2` (`b16210d9`) | Baseline pin; candidate overrides exist   |
-| M3 target          | `0.10.0`             | Reached for the bounded text slice        |
-| M4 target          | `0.10.5`             | Shared Settings; four-profile matrix open |
+| Consumer           | GPUI reference       | State                                         |
+| ------------------ | -------------------- | --------------------------------------------- |
+| gpui.mbt published | `0.10.5` (`c72a6be`) | Current release                               |
+| Yami shared source | `c72a6be`            | Source workspace; 0.10.5 pin                  |
+| Yami native module | `0.10.0` / `e2c8bd5` | Source workspace; merged via #40              |
+| app-demo           | `0.10.5`             | macOS/Web/Windows preview                     |
+| gpui-conformance   | `0.7.2` (`b16210d9`) | Baseline pin; candidate overrides exist       |
+| M3 target          | `0.10.0`             | Reached for the bounded text slice            |
+| M4 target          | `0.10.6`             | Shared Settings; OS lanes delegated to issues |
 
 ## Boundaries
 
