@@ -44,7 +44,7 @@ jobs:
           python-version: '3.12'
 
       - name: Setup MoonBit
-        uses: hustcer/setup-moonbit@v1.23
+        uses: hustcer/setup-moonbit@v1.22
         with:
           version: 0.10.15+943464bfa
           core-version: 0.10.15+943464bfa
@@ -138,7 +138,7 @@ jobs:
           python-version: '3.12'
 
       - name: Setup MoonBit
-        uses: hustcer/setup-moonbit@v1.23
+        uses: hustcer/setup-moonbit@v1.22
         with:
           version: 0.10.15+943464bfa
           core-version: 0.10.15+943464bfa
@@ -198,7 +198,7 @@ jobs:
           python-version: '3.12'
 
       - name: Setup MoonBit
-        uses: hustcer/setup-moonbit@v1.23
+        uses: hustcer/setup-moonbit@v1.22
         with:
           version: 0.10.15+943464bfa
           core-version: 0.10.15+943464bfa
