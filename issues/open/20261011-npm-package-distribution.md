@@ -1,6 +1,6 @@
 # Publish Yami-kumo as a consumable JavaScript/TypeScript npm package
 
-- Status: published as `@f12o/yami-kumo@0.1.0-preview.1`; registry install verified. Trusted-publishing bootstrap for later releases remains pending.
+- Status: published; registry install verified; trusted publishing exercised for `0.1.0-preview.2`.
 - Tracking: repository Markdown issue packet; GitHub Issues is currently disabled for this repository.
 - Repository: `f4ah6o/Yami-kumo`.
 - Inspected baseline: [`955c5bbc31f279976049a6b14a02424410010c6d`](https://github.com/f4ah6o/Yami-kumo/tree/955c5bbc31f279976049a6b14a02424410010c6d).
@@ -23,6 +23,18 @@
 - On PR #23 HEAD `73e66ca585b98fe38c6c2c9256a0624a75737e42`, [CI](https://github.com/f4ah6o/Yami-kumo/actions/runs/38857614457) and [Native UI proof](https://github.com/f4ah6o/Yami-kumo/actions/runs/38857614583) completed with 6/6 jobs successful. Tests include packed-tarball JS/TS/browser/React consumers and existing Button checks.
 - The package is **not confirmed published to the npm registry**: name/scope ownership, authentication, explicit release version, and registry-installed consumer verification remain open. Tarball completion is not a registry release.
 - This PR updates a documentation issue only. The sections below preserve the design and acceptance contract; completed preview requirements are marked separately from the remaining release gate.
+
+## Automation checkpoint — 2026-10-23
+
+- GitHub environment `npm` allows only `main`; the npm trusted publisher is
+  registered for `f4ah6o/Yami-kumo`, workflow `npm-publish.yml`, environment
+  `npm`.
+- `publish=true` run <https://github.com/f4ah6o/Yami-kumo/actions/runs/39861636099>
+  published `0.1.0-preview.2` without an OTP.
+- A clean registry install of `0.1.0-preview.2` passes root, `/dom` and
+  `/react` smoke checks; npm reports SLSA provenance.
+- The bootstrap left `latest` on `preview.1`; use `@preview` or the exact
+  version until the tag is moved.
 
 ## Publication checkpoint — 2026-10-23
 

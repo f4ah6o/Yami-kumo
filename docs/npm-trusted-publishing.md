@@ -68,6 +68,15 @@ as `@f12o/yami-kumo@0.1.0-preview.1` (tarball SHA-256
 registry install passed the root, `/dom` and `/react` smoke checks. The
 `@f4ah6o` npm organization does not exist, so the package scope is `@f12o`.
 
+Trusted publishing is now configured: GitHub environment `npm` allows only
+`main`, and the npm trusted publisher points at `f4ah6o/Yami-kumo`, workflow
+`npm-publish.yml`, environment `npm`. A `publish=true` run on main published
+`0.1.0-preview.2` without an OTP
+([run 39861636099](https://github.com/f4ah6o/Yami-kumo/actions/runs/39861636099));
+the registry reports SLSA provenance for that version. Install by dist-tag
+`@preview` or the exact version, because the bootstrap set `latest` to
+`preview.1`.
+
 ## Failure handling
 
 1. Version/source/evidence mismatch: correct the manifest or dispatch inputs and
