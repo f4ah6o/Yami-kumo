@@ -235,7 +235,9 @@ def drive_linux(output: Output, timeout: float) -> dict[str, Any]:
         xdotool("key", "--clearmodifiers", "Return")
         typed = output.wait_frame(lambda f: f.get("name") == "abc", 10.0)
     xdotool("key", "--clearmodifiers", "Tab")
-    time.sleep(0.3)
+    # Tab must move scope focus to Save and keep it there; activating the
+    # dialog from the name field would not prove traversal worked.
+    output.wait_frame(lambda f: f.get("focus") == "save", 10.0)
     xdotool("key", "--clearmodifiers", "Return")
     dialog = output.wait_frame(lambda f: f.get("dialog") is True, 10.0)
     xdotool("key", "--clearmodifiers", "Return")

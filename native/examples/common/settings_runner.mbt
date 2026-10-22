@@ -168,6 +168,7 @@ pub fn run_native_settings_sample(
   let mut text_suspended = false
   let mut text_transport_failed = false
   let mut key_path_armed = false
+  let mut initial_focus = false
   let mut ticks = 0
   let mut destroyed = false
   let mut last_sequence : Int64 = 0
@@ -341,12 +342,15 @@ pub fn run_native_settings_sample(
         saving_frames = 0
       }
       let focused = frame.focused(@shared_settings.settings_name())
-      if !focused && mounted.focus(@shared_settings.settings_name()) {
+      if focused {
+        initial_focus = true
+      } else if !initial_focus && mounted.focus(@shared_settings.settings_name()) {
         dirty = true
       }
-      // A rejected focus request (for example while the host reports the
-      // window unfocused) is retried on the next commit rather than giving
-      // the lane a permanently unfocused field.
+      // A rejected initial focus request (for example while the host reports
+      // the window unfocused) is retried on the next commit rather than giving
+      // the lane a permanently unfocused field. Once the name field reports
+      // focused, later focus moves made by input (Tab traversal) are kept.
       match session {
         None =>
           if focused && !text_suspended && !text_transport_failed && !key_path_armed {
