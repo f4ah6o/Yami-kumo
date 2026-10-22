@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { createRoot } from 'react-dom/client';
-import { AppShell, type AppShellProps } from '@f4ah6o/yami-kumo/react';
-import '@f4ah6o/yami-kumo/styles.css';
+import { AppShell, type AppShellProps } from '@f12o/yami-kumo/react';
+import '@f12o/yami-kumo/styles.css';
 
 function App() {
   const [count, setCount] = React.useState(0);

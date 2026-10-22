@@ -4,7 +4,7 @@
 - Tracking: repository Markdown issue packet; GitHub Issues is currently disabled for this repository.
 - Repository: `f4ah6o/Yami-kumo`.
 - Inspected baseline: [`955c5bbc31f279976049a6b14a02424410010c6d`](https://github.com/f4ah6o/Yami-kumo/tree/955c5bbc31f279976049a6b14a02424410010c6d).
-- Preview package name: `@f4ah6o/yami-kumo`; registry scope access and publishing permissions still require verification.
+- Preview package name: `@f12o/yami-kumo`; registry scope access and publishing permissions still require verification.
 
 ## Trusted Publishing preparation — 2026-10-20
 
@@ -18,7 +18,7 @@
 
 ## Implementation checkpoint — 2026-10-16
 
-- [PR #23](https://github.com/f4ah6o/Yami-kumo/pull/23) merged the installable `@f4ah6o/yami-kumo@0.1.0-preview.1` tarball implementation into `main` (merge commit `3dd5dba259318afcbe460ebce33c41f3154c25c3`).
+- [PR #23](https://github.com/f4ah6o/Yami-kumo/pull/23) merged the installable `@f12o/yami-kumo@0.1.0-preview.1` tarball implementation into `main` (merge commit `3dd5dba259318afcbe460ebce33c41f3154c25c3`).
 - The packed artifact exposes ESM, TypeScript declarations, DOM and React entries, CSS, and applicable licenses. The private starter, Mooncakes module, and native code remain separate.
 - On PR #23 HEAD `73e66ca585b98fe38c6c2c9256a0624a75737e42`, [CI](https://github.com/f4ah6o/Yami-kumo/actions/runs/38857614457) and [Native UI proof](https://github.com/f4ah6o/Yami-kumo/actions/runs/38857614583) completed with 6/6 jobs successful. Tests include packed-tarball JS/TS/browser/React consumers and existing Button checks.
 - The package is **not confirmed published to the npm registry**: name/scope ownership, authentication, explicit release version, and registry-installed consumer verification remain open. Tarball completion is not a registry release.
@@ -28,7 +28,7 @@
 
 - Trusted-publishing workflow `publish=false` completed/success on main:
   <https://github.com/f4ah6o/Yami-kumo/actions/runs/39809538188>
-- Artifact `npm-release`: `f4ah6o-yami-kumo-0.1.0-preview.1.tgz`,
+- Artifact `npm-release`: `f12o-yami-kumo-0.1.0-preview.1.tgz`,
   SHA-256 `e36f25edb350de769b3df5ca00d08d0d599180912864e7f8aa2464be75430880`.
 - `npm-consumers.json` status `PASS` for JavaScript, TypeScript, React and
   browser consumers; `npm publish --dry-run` passed.
@@ -71,10 +71,10 @@ These paths describe the original proposed contract. PR #23 now provides them in
 
 | Import path                    | Contract                                                                                                                  |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| `@f4ah6o/yami-kumo`            | React-independent node/component composition and safe HTML rendering, usable in Node for rendering and in browser bundles |
-| `@f4ah6o/yami-kumo/dom`        | Explicit browser enhancement after markup insertion; importing the module does not initialize listeners                   |
-| `@f4ah6o/yami-kumo/react`      | Existing `AppShell` and `AppShellProps`, preserving semantic slots and responsive behavior                                |
-| `@f4ah6o/yami-kumo/styles.css` | Ordered, prebuilt Kumo/component/shell styles; no consumer Tailwind build or source scanning required                     |
+| `@f12o/yami-kumo`            | React-independent node/component composition and safe HTML rendering, usable in Node for rendering and in browser bundles |
+| `@f12o/yami-kumo/dom`        | Explicit browser enhancement after markup insertion; importing the module does not initialize listeners                   |
+| `@f12o/yami-kumo/react`      | Existing `AppShell` and `AppShellProps`, preserving semantic slots and responsive behavior                                |
+| `@f12o/yami-kumo/styles.css` | Ordered, prebuilt Kumo/component/shell styles; no consumer Tailwind build or source scanning required                     |
 
 ### JavaScript/TypeScript boundary
 

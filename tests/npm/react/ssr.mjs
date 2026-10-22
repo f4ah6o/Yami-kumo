@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createElement } from 'react';
 import { renderToString } from 'react-dom/server';
-import { AppShell } from '@f4ah6o/yami-kumo/react';
+import { AppShell } from '@f12o/yami-kumo/react';
 const html = renderToString(
   createElement(AppShell, { brand: 'React SSR', children: createElement('button', null, 'Child') }),
 );

@@ -1,5 +1,5 @@
-import { appShell, button, fragment, input, renderHtml, type Html } from '@f4ah6o/yami-kumo';
-import { enhanceYamiKumo } from '@f4ah6o/yami-kumo/dom';
+import { appShell, button, fragment, input, renderHtml, type Html } from '@f12o/yami-kumo';
+import { enhanceYamiKumo } from '@f12o/yami-kumo/dom';
 const node: Html = appShell({
   brand: 'Brand',
   children: fragment([

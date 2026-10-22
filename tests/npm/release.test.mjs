@@ -20,7 +20,7 @@ test('release gates reject wrong identity and unverified or altered artifacts', 
     json('package.json', { private: true });
     json('package/package.json', manifest);
     const build = { version: manifest.version, sourceSha: 'source-sha', sourceDirty: false };
-    const filename = `f4ah6o-yami-kumo-${manifest.version}.tgz`;
+    const filename = manifest.name.replace(/^@/, '').replace('/', '-') + `-${manifest.version}.tgz`;
     const evidence = {
       status: 'PASS',
       consumers: ['javascript', 'typescript', 'browser', 'react'],
