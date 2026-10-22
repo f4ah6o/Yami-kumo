@@ -6,7 +6,7 @@ The package contains release-compiled MoonBit ESM; consumers need neither a
 source checkout nor a MoonBit compiler. CommonJS is not supported.
 
 ```sh
-npm install ./f12o-yami-kumo-0.1.0-preview.1.tgz
+npm install ./f12o-yami-kumo-0.1.0-preview.2.tgz
 ```
 
 The proposed registry name is `@f12o/yami-kumo`. This preview is not a claim
