@@ -113,6 +113,13 @@ sh "$yami_root/scripts/native_ui_workspace.sh" \
     --linux-origin-y 0 \
     -- moon run "$yami_root/native/examples/ubuntu" --target native
 
+
+
+sh "$yami_root/scripts/native_ui_workspace.sh" \
+  python3 "$yami_root/tests/button-contract/drive_linux.py"
+
+# Settings explicitly changes X focus; run it after the existing Button lane
+# so its compositor focus state cannot become another fixture's initial state.
 if [ "${YAMI_SETTINGS_LANE:-}" = 1 ]; then
 sh "$yami_root/scripts/native_ui_workspace.sh" sh -c '
   set -eu
@@ -129,6 +136,3 @@ sh "$yami_root/scripts/native_ui_workspace.sh" sh -c '
     -- "$executable" --settings-e2e
 '
 fi
-
-sh "$yami_root/scripts/native_ui_workspace.sh" \
-  python3 "$yami_root/tests/button-contract/drive_linux.py"
