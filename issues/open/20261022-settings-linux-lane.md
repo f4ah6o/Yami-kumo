@@ -1,10 +1,10 @@
 # Shared Settings Linux レーン — Wayland 入力経路の資格付け
 
-状態：candidate CI pending（単独ブランチのローカルPASSは統合候補のPASSではない）
+状態：done／Linux CI 実機 PASS（2026-10-22）
 Model: deepseek-v4.1-flash:1017-cloud
 作成日：2026-10-22 JST
 作業先：`f4ah6o/Yami-kumo`。段階：M4。依存：YK-08、PR #61。
-ブランチ：`feat/settings-linux-lane-20261022`（既存 `feat/settings-linux-lane-20261021` / PR #61 を引き継ぐ）
+ブランチ：`feat/settings-linux-lane-20261022`（PR #71 として main にマージ）
 
 ## 概要
 
@@ -48,11 +48,11 @@ Linux（Weston + Xvfb）実機で Shared Settings レーンのキー入力経路
 
 ## 受け入れ条件
 
-- [ ] Linux 実機で `settings-linux.json` が `status: pass`、`name: "abc"`、`dialog: true`、`status: saved` を記録する。
-- [ ] key 経路か text-input-v1 かを log で判定でき、IME は `NOT_RUN` と明記される。
-- [ ] `node tests/shared-ui/matrix.mjs --dir <evidence> --candidate-sha <sha>` が PASS する（required を絞る場合は理由とともに更新）。
-- [ ] CI の `ubuntu-wayland` が green。
-- [ ] `docs/shared-settings.md` と STATUS に実測結果を追記。
+- [x] Linux 実機で `settings-linux.json` が `status: pass`、`name: "abc"`、`dialog: true`、`status: saved` を記録する。
+- [x] key 経路か text-input-v1 かを log で判定でき、IME は `NOT_RUN` と明記される。
+- [x] `node tests/shared-ui/matrix.mjs --dir <evidence> --candidate-sha <sha>` が PASS する（required を絞る場合は理由とともに更新）。
+- [x] CI の `ubuntu-wayland` が green。
+- [x] `docs/shared-settings.md` と STATUS に実測結果を追記。
 
 ## テスト計画
 
@@ -75,6 +75,18 @@ Linux（Weston + Xvfb）実機で Shared Settings レーンのキー入力経路
 項目案：
 
 - Linux Settings lane: run the shared model over `ubuntu.TextHostRoute` with `next_platform_event`, and record key-path text separately from text-input-v1/IME.
+
+## 結果（2026-10-22）
+
+Linux CI（`ubuntu-wayland`）でレーンが PASS した。
+
+- candidate: `b6e61afc62345c8622083315cc06438b45ae0ce0`（PR #71）
+- run: <https://github.com/f4ah6o/Yami-kumo/actions/runs/39771524292>
+- artifact: `yami-native-ui-ubuntu` の `settings-linux.json` / `settings-linux.log`
+- report: `status: pass`、name `abc`、dialog `true`、status `saved`、textTransport `direct-keyboard`
+- matrix: Web/Linux/Windows の flow が required PASS。IME/AT-SPI は `NOT_RUN`
+
+Weston が text-input-v1 を広告しないため `Host::set_direct_keyboard_text` の key 経路で文字を届けている。日本語 IME 変換や AT-SPI ツリーの資格付けではない。
 
 ## 注記
 
