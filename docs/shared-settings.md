@@ -23,7 +23,7 @@ host tick (DOM timer, native frame) so both observe the same transitions.
 | Lane    | Command                                                                  | What it proves                                                                                                             |
 | ------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | Web     | `node --test tests/shared-ui/settings.test.mjs`                          | Real Chromium: validation, synthetic composition, dialog cancel/confirm, focus restore, simulated save, two roots, dispose |
-| Linux   | `scripts/native_ui_linux.sh` (`drive_settings.py --platform linux`)      | Weston+Xvfb output window focus, key-path text via direct keyboard mode, Tab traversal, dialog, save                         |
+| Linux   | `scripts/native_ui_linux.sh` (`drive_settings.py --platform linux`)      | Weston+Xvfb output window focus, key-path text via direct keyboard mode, Tab traversal, dialog, save                       |
 | Windows | `scripts/native_ui_windows.ps1` (`drive_settings.py --platform windows`) | Visible HWND, SendInput text, Tab traversal, dialog, save                                                                  |
 | macOS   | `--settings-e2e` native sample (manual)                                  | Composition entry, TextField AX; dialog input `NOT_RUN`                                                                    |
 
