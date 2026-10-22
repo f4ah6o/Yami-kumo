@@ -69,7 +69,7 @@ jobs:
         shell: bash
         env:
           GPUI_SOURCE: ${{ github.workspace }}/gpui.mbt
-          YAMI_SETTINGS_LANE: "1"
+          YAMI_SETTINGS_LANE: '1'
           YAMI_NATIVE_UI_EVIDENCE_DIR: ${{ github.workspace }}/Yami-kumo/_build/native-ui/ubuntu
         run: sh Yami-kumo/scripts/native_ui_linux.sh
 
