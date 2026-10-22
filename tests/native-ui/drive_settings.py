@@ -449,6 +449,8 @@ def build_fail_report(
         "layer": "runtime",
         "status": "fail",
         "windowTitle": WINDOW_TITLE,
+        # The matrix schema requires a declared reason on every non-pass lane.
+        "reason": error,
         "error": error,
         "textMarkers": text_marker_summary(markers),
         "sampleExit": exit_marker,

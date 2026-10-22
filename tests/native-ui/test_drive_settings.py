@@ -160,6 +160,7 @@ class ReportTests(unittest.TestCase):
             command=["windows.exe", "--settings-e2e"],
         )
         self.assertEqual(report["status"], "fail")
+        self.assertEqual(report["reason"], report["error"])
         self.assertEqual(report["sampleExit"]["reason"], "tick-limit")
         self.assertEqual(
             report["textMarkers"],
