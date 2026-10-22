@@ -14,12 +14,12 @@ host tick (DOM timer, native frame) so both observe the same transitions.
 
 ## Lanes
 
-| Lane    | Command                                                                  | What it proves                                                                                                             |
-| ------- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| Web     | `node --test tests/shared-ui/settings.test.mjs`                          | Real Chromium: validation, synthetic composition, dialog cancel/confirm, focus restore, simulated save, two roots, dispose |
-| Linux   | `scripts/native_ui_linux.sh` (`drive_settings.py --platform linux`)      | Visible Wayland window, key-path text, Tab traversal, dialog, save                                                         |
+| Lane    | Command                                                                  | What it proves                                                                                                                  |
+| ------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| Web     | `node --test tests/shared-ui/settings.test.mjs`                          | Real Chromium: validation, synthetic composition, dialog cancel/confirm, focus restore, simulated save, two roots, dispose      |
+| Linux   | `scripts/native_ui_linux.sh` (`drive_settings.py --platform linux`)      | Visible Wayland window, key-path text, Tab traversal, dialog, save                                                              |
 | Windows | `scripts/native_ui_windows.ps1` (`drive_settings.py --platform windows`) | Visible HWND, IMM32 text route (WM_CHAR key path when unavailable), Tab traversal, dialog, save; the report names the transport |
-| macOS   | `--settings-e2e` native sample (manual)                                  | Composition entry, TextField AX; dialog input `NOT_RUN`                                                                    |
+| macOS   | `--settings-e2e` native sample (manual)                                  | Composition entry, TextField AX; dialog input `NOT_RUN`                                                                         |
 
 Native frame markers:
 
