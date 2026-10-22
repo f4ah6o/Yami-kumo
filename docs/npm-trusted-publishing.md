@@ -56,6 +56,16 @@ meet npm's OIDC minimum (Node 22.14.0 and npm 11.5.1). npm generates provenance
 automatically for trusted publishing. `publish=false` does not test npm OIDC
 authentication or confirm package ownership.
 
+## Validation status (2026-10-23)
+
+A `publish=false` run on main completed/success
+([run 39809538188](https://github.com/f4ah6o/Yami-kumo/actions/runs/39809538188))
+and produced `f4ah6o-yami-kumo-0.1.0-preview.1.tgz`
+(SHA-256 `e36f25edb350de769b3df5ca00d08d0d599180912864e7f8aa2464be75430880`)
+with four passing consumers. Registry publication is still pending: the scope
+is not authenticated here and the package returns E404, so the first version
+needs the interactive bootstrap above.
+
 ## Failure handling
 
 1. Version/source/evidence mismatch: correct the manifest or dispatch inputs and
