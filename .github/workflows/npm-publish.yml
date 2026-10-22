@@ -40,7 +40,7 @@ jobs:
           node-version: '24'
           run-install: true
       - name: Setup MoonBit
-        uses: hustcer/setup-moonbit@v1.23
+        uses: hustcer/setup-moonbit@v1.22
         with:
           version: 0.10.14+7d59c7ec9
           setup-core: true
