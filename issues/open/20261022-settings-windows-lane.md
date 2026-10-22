@@ -1,10 +1,10 @@
 # Shared Settings Windows レーン — 実機での入力経路資格付け
 
-状態：open／レーン実装済み・入力経路未達
+状態：done／Windows CI 実機 PASS（2026-10-22）
 Model: deepseek-v4.1-flash:1017-cloud
 作成日：2026-10-22 JST
 作業先：`f4ah6o/Yami-kumo`。段階：M4。依存：YK-08、PR #61。
-ブランチ：`feat/settings-windows-lane-20261022`（既存 `feat/settings-linux-lane-20261021` / PR #61 を引き継ぐ）
+ブランチ：`feat/settings-windows-lane-20261022`（PR #68 として main にマージ）
 
 ## 概要
 
@@ -48,12 +48,12 @@ Windows 実機で Shared Settings レーンの文字入力経路を資格付け�
 
 ## 受け入れ条件
 
-- [ ] Windows 実機で `settings-windows.json` が `status: pass`、`name: "abc"`、`dialog: true`、`status: saved` を記録する。
-- [ ] `settings-windows.log` に text transport の開始または unavailable の marker が残る。
-- [ ] `node tests/shared-ui/matrix.mjs --dir <evidence> --candidate-sha <sha>` が PASS する（required を絞る場合は理由とともに更新）。
-- [ ] IME / UIA が `NOT_RUN` と明記され、PASS に置換されていない。
-- [ ] CI の `windows-d3d11` が green。
-- [ ] `docs/shared-settings.md` と STATUS に実測結果を追記。
+- [x] Windows 実機で `settings-windows.json` が `status: pass`、`name: "abc"`、`dialog: true`、`status: saved` を記録する。
+- [x] `settings-windows.log` に text transport の開始または unavailable の marker が残る。
+- [x] `node tests/shared-ui/matrix.mjs --dir <evidence> --candidate-sha <sha>` が PASS する（required を絞る場合は理由とともに更新）。
+- [x] IME / UIA が `NOT_RUN` と明記され、PASS に置換されていない。
+- [x] CI の `windows-d3d11` が green。
+- [x] `docs/shared-settings.md` と STATUS に実測結果を追記。
 
 ## テスト計画
 
@@ -76,6 +76,19 @@ Windows 実機で Shared Settings レーンの文字入力経路を資格付け�
 項目案：
 
 - Windows Settings lane: run the shared model through `windows.TextHostRoute`, with `--settings-e2e` and a CI lane report. Text delivery and IME scope are recorded separately.
+
+## 結果（2026-10-22）
+
+Windows CI（`windows-d3d11`）でレーンが PASS した。
+
+- candidate: `a573175d4bea9122aa311e42804c08072c50c6b4`（PR #68）
+- run: <https://github.com/f4ah6o/Yami-kumo/actions/runs/39765015110>
+- artifact: `yami-native-ui-windows` の `settings-windows.json` / `settings-windows.log`
+- report: `status: pass`、name `abc`、dialog `true`、status `saved`、textTransport `imm32-commit`
+- environment: `Windows-2025Server-10.0.26100-SP0`、Microsoft IME、moon `0.1.20261012`
+- matrix: Web と Windows が required PASS、Linux flow は `NOT_RUN`（別 issue へ委譲）
+
+ASCII 入力の IMM32 commit であり、日本語 IME 変換や UIA/AX ツリーの資格付けではない。`settings.ime` と `settings.ax` は引き続き `NOT_RUN`。
 
 ## 注記
 
