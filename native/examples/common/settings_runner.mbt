@@ -112,7 +112,15 @@ pub fn run_native_settings_sample(
   let mut ticks = 0
   let mut destroyed = false
   let mut last_sequence : Int64 = 0
-  let tick_limit = if platform is Macos { 20000 } else { 6000 }
+  // Windows keeps the lane alive longer than any driver wait so a failed
+  // assertion is reported by the driver, not by a truncated sample loop.
+  let tick_limit = if platform is Macos {
+    20000
+  } else if platform is Windows {
+    12000
+  } else {
+    6000
+  }
   while !destroyed && ticks < tick_limit {
     ticks += 1
     let mut drained = 0
@@ -138,6 +146,12 @@ pub fn run_native_settings_sample(
         Ok(value) => value
       }
       if handled {
+        // Keep the transport visible in the retained log: `commit` comes from
+        // the portable text route, while `key` with `character` means WM_CHAR
+        // reached the ordinary key path.
+        emit_native_marker(
+          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"\{text_event_phase(event.kind())}\",\{text_event_json(event.kind())},\"epoch\":\{current.epoch}}",
+        )
         dirty = true
         while mounted.next_action() is Some(action) {
           let next = settings.update(@shared_settings.Ui(action))
@@ -189,8 +203,13 @@ pub fn run_native_settings_sample(
             destroyed = true
             dirty = false
           }
-          @platform.Resized(..) | @platform.ScaleChanged =>
+          @platform.Resized(..) | @platform.ScaleChanged => {
+            // Invalidation clears the commit-ready state; without a new frame
+            // the next text observation would be rejected before it reaches the
+            // focused field.
             mounted.invalidate_layout()
+            dirty = true
+          }
           @platform.FocusChanged(focused) => {
             ignore(mounted.handle_event(value))
             text_suspended = !focused
@@ -278,13 +297,13 @@ pub fn run_native_settings_sample(
             match mounted.focused_text() {
               Some(state) => {
                 match (port.begin)(window, state.binding_id()) {
-                  Err(_) => {
+                  Err(error) => {
                     // The host may not provide a text-input session (for
                     // example Weston without text-input-v1). Keep running on
                     // the key path and report the transport as unavailable.
                     text_transport_failed = true
                     emit_native_marker(
-                      "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\"}",
+                      "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\",\"operation\":\"begin_text_input\",\"error\":\"\{json_escape(format_framework_error(error))}\"}",
                     )
                   }
                   Ok(epoch) =>
@@ -296,16 +315,19 @@ pub fn run_native_settings_sample(
                           settings_caret(state.caret()),
                         ),
                       ) {
-                      Err(_) => {
+                      Err(error) => {
                         text_transport_failed = true
                         emit_native_marker(
-                          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\"}",
+                          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\",\"operation\":\"update_text_input\",\"error\":\"\{json_escape(format_framework_error(error))}\"}",
                         )
                       }
                       Ok(epoch) => {
                         session = Some({ epoch, binding: state.binding_id(), })
                         last_document = state.document().text()
                         last_caret = settings_caret(state.caret())
+                        emit_native_marker(
+                          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"started\",\"transport\":\"imm32\",\"epoch\":\{epoch}}",
+                        )
                       }
                     }
                 }
@@ -451,6 +473,10 @@ pub fn run_native_settings_sample(
     }
   }
   mounted.dispose()
+  let reason = if destroyed { "window-closed" } else { "tick-limit" }
+  emit_native_marker(
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"exit\",\"reason\":\"\{reason}\",\"ticks\":\{ticks}}",
+  )
   if destroyed || ticks >= tick_limit {
     Ok(())
   } else {

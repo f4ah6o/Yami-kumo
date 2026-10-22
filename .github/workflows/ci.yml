@@ -54,6 +54,7 @@ jobs:
           path: |
             _build/shared-ui-consumers
             _build/shared-ui-dom
+            _build/shared-ui/web
           if-no-files-found: error
 
   npm-package:

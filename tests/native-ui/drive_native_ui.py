@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import ctypes
 from dataclasses import dataclass
 import json
 import math
@@ -443,6 +444,8 @@ def _windows_user32() -> tuple[Any, Any]:
     user32.GetWindowTextLengthW.restype = ctypes.c_int
     user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
     user32.GetWindowTextW.restype = ctypes.c_int
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
     user32.IsWindowVisible.argtypes = [wintypes.HWND]
     user32.IsWindowVisible.restype = wintypes.BOOL
     user32.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
@@ -464,7 +467,7 @@ def _windows_user32() -> tuple[Any, Any]:
     return (user32, (ctypes, wintypes, POINT, INPUT, MOUSEINPUT, KEYBDINPUT))
 
 
-def _windows_window(title: str, timeout: float = 20.0) -> tuple[int, Any, Any]:
+def _windows_window(title: str, timeout: float = 20.0, pid: int | None = None) -> tuple[int, Any, Any]:
     user32, types = _windows_user32()
     ctypes, wintypes, _, _, _, _ = types
     callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
@@ -480,6 +483,11 @@ def _windows_window(title: str, timeout: float = 20.0) -> tuple[int, Any, Any]:
             text = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, text, length + 1)
             if text.value == title:
+                if pid is not None:
+                    owner = wintypes.DWORD()
+                    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+                    if owner.value != pid:
+                        return True
                 found.append(hwnd)
             return True
 
@@ -494,16 +502,33 @@ def _windows_window(title: str, timeout: float = 20.0) -> tuple[int, Any, Any]:
     raise E2EError(f"could not find visible native window titled {title!r}")
 
 
+def _windows_foreground_title(user32: Any, handle: int) -> str:
+    if not handle:
+        return "<none>"
+    length = user32.GetWindowTextLengthW(handle)
+    if length <= 0:
+        return "<untitled>"
+    buffer = ctypes.create_unicode_buffer(length + 1)
+    user32.GetWindowTextW(handle, buffer, length + 1)
+    return buffer.value
+
+
 def _windows_focus(user32: Any, hwnd: int) -> None:
     user32.ShowWindow(hwnd, 9)  # SW_RESTORE
     user32.BringWindowToTop(hwnd)
     user32.SetForegroundWindow(hwnd)
     deadline = time.monotonic() + 3.0
+    last_foreground = 0
     while time.monotonic() < deadline:
-        if user32.GetForegroundWindow() == hwnd:
+        last_foreground = user32.GetForegroundWindow()
+        if last_foreground == hwnd:
             return
         time.sleep(0.05)
-    raise E2EError("Windows native sample did not become the foreground window for SendInput")
+    raise E2EError(
+        "Windows native sample did not become the foreground window for "
+        f"SendInput (hwnd={hwnd}, foreground={last_foreground} "
+        f"({_windows_foreground_title(user32, last_foreground)}))"
+    )
 
 
 def _require_foreground(user32: Any, hwnd: int) -> None:
