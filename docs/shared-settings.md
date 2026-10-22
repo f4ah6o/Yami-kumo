@@ -1,9 +1,10 @@
 # Shared Settings qualification
 
 Status: one Settings consumer, four entry points. Web and Windows run the full
-flow in CI; the Ubuntu lane is qualified in PR #61 and macOS runs text
-composition and TextField AX, while its key-driven dialog is `NOT_RUN` in the
-current GUI session.
+flow in CI. The Linux lane is implemented but gated off and delegated to
+`issues/open/20261022-settings-linux-lane.md`; macOS runs text composition and
+TextField AX, while its key-driven dialog is `NOT_RUN` in the current GUI
+session.
 
 ## One source
 
@@ -17,7 +18,7 @@ host tick (DOM timer, native frame) so both observe the same transitions.
 | Lane    | Command                                                                  | What it proves                                                                                                                  |
 | ------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | Web     | `node --test tests/shared-ui/settings.test.mjs`                          | Real Chromium: validation, synthetic composition, dialog cancel/confirm, focus restore, simulated save, two roots, dispose      |
-| Linux   | `scripts/native_ui_linux.sh` (`drive_settings.py --platform linux`)      | Visible Wayland window, key-path text, Tab traversal, dialog, save                                                              |
+| Linux   | `YAMI_SETTINGS_LANE=1 scripts/native_ui_linux.sh` (delegated; not CI)     | Driver checked in; text path not qualified                                                                                       |
 | Windows | `scripts/native_ui_windows.ps1` (`drive_settings.py --platform windows`) | Visible HWND, IMM32 text route (WM_CHAR key path when unavailable), Tab traversal, dialog, save; the report names the transport |
 | macOS   | `--settings-e2e` native sample (manual)                                  | Composition entry, TextField AX; dialog input `NOT_RUN`                                                                         |
 
@@ -47,9 +48,11 @@ never relabelled as IMM. `settings.ime` and `settings.ax` stay `NOT_RUN`.
 
 Measured 2026-10-22 JST on Windows 11 (10.0.26200) with Microsoft IME and ATOK
 installed: `abc` arrived as IMM32 commits, Tab focused Save, Enter opened and
-confirmed the dialog, and the simulated save completed. The retained report
-records name `abc`, dialog `true`, status `saved`; the log header records the OS
-build, `moon version --all` and the installed IME names.
+confirmed the dialog, and the simulated save completed. The Windows CI job
+re-runs this lane and retains `settings-windows.json` in the
+`yami-native-ui-windows` artifact; the report records name `abc`, dialog `true`,
+status `saved`, the transport, and the host environment. The CI result is the
+qualifying artifact; the local run above is the same contract.
 
 ## Evidence
 

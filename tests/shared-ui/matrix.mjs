@@ -10,10 +10,13 @@ import { fileURLToPath } from 'node:url';
 const SCHEMA = 'settings-lane/v1';
 const REQUIRED = [
   'settings-flow:web/dom/js/runtime',
-  'settings-flow:linux/gpui-native/native/runtime',
   'settings-flow:windows/gpui-native/native/runtime',
 ];
 const DECLARED_NOT_RUN = [
+  {
+    key: 'settings-flow:linux/gpui-native/native/runtime',
+    reason: 'Delegated to issues/open/20261022-settings-linux-lane.md; the lane is gated off in CI.',
+  },
   {
     key: 'settings-ime:linux/gpui-native/native/host',
     reason: 'The Wayland lane installs no input-method engine.',
