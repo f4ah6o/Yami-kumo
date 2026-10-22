@@ -24,6 +24,20 @@
 - The package is **not confirmed published to the npm registry**: name/scope ownership, authentication, explicit release version, and registry-installed consumer verification remain open. Tarball completion is not a registry release.
 - This PR updates a documentation issue only. The sections below preserve the design and acceptance contract; completed preview requirements are marked separately from the remaining release gate.
 
+## Validation checkpoint — 2026-10-23
+
+- Trusted-publishing workflow `publish=false` completed/success on main:
+  <https://github.com/f4ah6o/Yami-kumo/actions/runs/39809538188>
+- Artifact `npm-release`: `f4ah6o-yami-kumo-0.1.0-preview.1.tgz`,
+  SHA-256 `e36f25edb350de769b3df5ca00d08d0d599180912864e7f8aa2464be75430880`.
+- `npm-consumers.json` status `PASS` for JavaScript, TypeScript, React and
+  browser consumers; `npm publish --dry-run` passed.
+- Registry publication remains blocked: `npm whoami` returns E401 (no
+  authenticated maintainer in this environment), the package lookup returns
+  E404, and trusted publishing cannot create a nonexistent package. The first
+  version still needs an interactive maintainer bootstrap as described in
+  `docs/npm-trusted-publishing.md`. Registry-installed acceptance is `NOT_RUN`.
+
 ## Historical problem (2026-10-11 baseline)
 
 At the inspected baseline, Yami-kumo could be copied as an application starter and its MoonBit library could be consumed through Mooncakes, but JavaScript/TypeScript applications could not yet install a supported npm library with stable imports, declarations, and packaged styles.
