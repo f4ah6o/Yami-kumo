@@ -1,6 +1,6 @@
 # Publish Yami-kumo as a consumable JavaScript/TypeScript npm package
 
-- Status: preview implementation merged in PR #23; npm registry publication remains pending.
+- Status: published as `@f12o/yami-kumo@0.1.0-preview.1`; registry install verified. Trusted-publishing bootstrap for later releases remains pending.
 - Tracking: repository Markdown issue packet; GitHub Issues is currently disabled for this repository.
 - Repository: `f4ah6o/Yami-kumo`.
 - Inspected baseline: [`955c5bbc31f279976049a6b14a02424410010c6d`](https://github.com/f4ah6o/Yami-kumo/tree/955c5bbc31f279976049a6b14a02424410010c6d).
@@ -23,6 +23,19 @@
 - On PR #23 HEAD `73e66ca585b98fe38c6c2c9256a0624a75737e42`, [CI](https://github.com/f4ah6o/Yami-kumo/actions/runs/38857614457) and [Native UI proof](https://github.com/f4ah6o/Yami-kumo/actions/runs/38857614583) completed with 6/6 jobs successful. Tests include packed-tarball JS/TS/browser/React consumers and existing Button checks.
 - The package is **not confirmed published to the npm registry**: name/scope ownership, authentication, explicit release version, and registry-installed consumer verification remain open. Tarball completion is not a registry release.
 - This PR updates a documentation issue only. The sections below preserve the design and acceptance contract; completed preview requirements are marked separately from the remaining release gate.
+
+## Publication checkpoint — 2026-10-23
+
+- The `@f4ah6o` npm organization does not exist for the authenticated account
+  (`Scope not found` on publish), so the preview moved to `@f12o`.
+- Bootstrap publish: `@f12o/yami-kumo@0.1.0-preview.1`, tarball SHA-256
+  `1dcd2afa6cf4fc1c69790b4cb5ee501a9f2ad36a426830ae576a9264760a7899`.
+- Registry lookup returns 200 and `npm view` reports `0.1.0-preview.1`.
+- Clean consumer (`npm install --save-exact @f12o/yami-kumo@0.1.0-preview.1`)
+  passes root, `/dom` and `/react` smoke checks; `styles.css` and `BUILD.json`
+  are present.
+- Later releases still need the GitHub `npm` environment and npm trusted
+  publisher registration; the bootstrap OTP flow is not a release automation.
 
 ## Validation checkpoint — 2026-10-23
 
@@ -69,8 +82,8 @@ MoonBit remains the implementation of the existing framework-independent HTML va
 
 These paths describe the original proposed contract. PR #23 now provides them in a tested preview tarball, not a published registry release.
 
-| Import path                    | Contract                                                                                                                  |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Import path                  | Contract                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `@f12o/yami-kumo`            | React-independent node/component composition and safe HTML rendering, usable in Node for rendering and in browser bundles |
 | `@f12o/yami-kumo/dom`        | Explicit browser enhancement after markup insertion; importing the module does not initialize listeners                   |
 | `@f12o/yami-kumo/react`      | Existing `AppShell` and `AppShellProps`, preserving semantic slots and responsive behavior                                |

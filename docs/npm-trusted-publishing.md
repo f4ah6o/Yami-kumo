@@ -62,9 +62,11 @@ A `publish=false` run on main completed/success
 ([run 39809538188](https://github.com/f4ah6o/Yami-kumo/actions/runs/39809538188))
 and produced `f12o-yami-kumo-0.1.0-preview.1.tgz`
 (SHA-256 `e36f25edb350de769b3df5ca00d08d0d599180912864e7f8aa2464be75430880`)
-with four passing consumers. Registry publication is still pending: the scope
-is not authenticated here and the package returns E404, so the first version
-needs the interactive bootstrap above.
+with four passing consumers. The first version was then bootstrapped manually
+as `@f12o/yami-kumo@0.1.0-preview.1` (tarball SHA-256
+`1dcd2afa6cf4fc1c69790b4cb5ee501a9f2ad36a426830ae576a9264760a7899`) and a clean
+registry install passed the root, `/dom` and `/react` smoke checks. The
+`@f4ah6o` npm organization does not exist, so the package scope is `@f12o`.
 
 ## Failure handling
 
