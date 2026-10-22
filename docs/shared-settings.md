@@ -1,8 +1,10 @@
 # Shared Settings qualification
 
-Status: one Settings consumer, four entry points. Web and Linux/Windows run the
-full flow in CI; macOS runs text composition and TextField AX, while its
-key-driven dialog is `NOT_RUN` in the current GUI session.
+Status: one Settings consumer, four entry points. Web runs the full flow in CI.
+The Linux/Windows lane drivers are checked in but run only when
+`YAMI_SETTINGS_LANE=1`; their text paths are not qualified yet, so CI does not
+claim them. macOS runs text composition and TextField AX, while its key-driven
+dialog is `NOT_RUN` in the current GUI session.
 
 ## One source
 
