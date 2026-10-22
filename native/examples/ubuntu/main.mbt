@@ -58,6 +58,12 @@ fn main {
   let next_platform : @common.NativePlatformNext = fn(timeout) {
     route.next_platform_event(timeout_ms=timeout)
   }
+  // Weston installs no text-input-v1 manager, so the settings lane falls
+  // back to the compositor key path armed through the host's direct
+  // keyboard-text mode.
+  let direct_text : @common.NativeDirectText = fn(window, enabled) {
+    host.set_direct_keyboard_text(window, enabled)
+  }
   let result = @common.run_native_entry(
     host,
     @common.Linux,
@@ -65,6 +71,7 @@ fn main {
     capture,
     text_port=Some(text_port),
     settings_platform_next=Some(next_platform),
+    settings_direct_text=Some(direct_text),
   )
   let stopped = host.stop()
   match result {

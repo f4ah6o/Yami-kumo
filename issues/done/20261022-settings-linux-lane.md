@@ -1,6 +1,6 @@
 # Shared Settings Linux レーン — Wayland 入力経路の資格付け
 
-状態：open／レーン実装済み・テキスト経路未達
+状態：done（2026-10-22: settings-linux.json pass）
 Model: deepseek-v4.1-flash:1017-cloud
 作成日：2026-10-22 JST
 作業先：`f4ah6o/Yami-kumo`。段階：M4。依存：YK-08、PR #61。

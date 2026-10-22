@@ -80,6 +80,15 @@ if ! python3 "$gpui_root/scripts/wait_wayland_ready.py" \
   exit 1
 fi
 
+# Record which Wayland interfaces the compositor advertises; the log shows
+# whether zwp_text_input_manager_v1 exists and therefore which text route
+# the settings lane could take.
+if command -v wayland-info >/dev/null 2>&1; then
+  wayland-info > "$evidence_dir/wayland-info.log" 2>&1 || true
+elif command -v weston-info >/dev/null 2>&1; then
+  weston-info > "$evidence_dir/wayland-info.log" 2>&1 || true
+fi
+
 if [ "${YAMI_SHARED_UI_NATIVE:-}" = 1 ]; then
   : "${YAMI_SHARED_UI_CANDIDATE_SHA:?exact candidate SHA is required}"
   sh "$yami_root/scripts/native_ui_workspace.sh" \

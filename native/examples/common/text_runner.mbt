@@ -99,6 +99,7 @@ pub fn run_native_entry(
   text_accessibility_port~ : NativeTextAXPort? = None,
   settings_dialog_port~ : NativeDialogAXPort? = None,
   settings_platform_next~ : NativePlatformNext? = None,
+  settings_direct_text~ : NativeDirectText? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let args = @env.args()
   if args.contains("--settings-e2e") ||
@@ -111,6 +112,7 @@ pub fn run_native_entry(
       accessibility_port=text_accessibility_port,
       dialog_port=settings_dialog_port,
       next_platform_event=settings_platform_next,
+      direct_text=settings_direct_text,
     )
   }
   if args.contains("--text-e2e") ||

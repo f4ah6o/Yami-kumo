@@ -47,6 +47,7 @@ class Output:
         self.log = log_path.open("w", encoding="utf-8", errors="replace")
         self.lines: queue.Queue[str | None] = queue.Queue()
         self.frames: list[dict[str, Any]] = []
+        self.text_route: dict[str, Any] | None = None
         self._reader = threading.Thread(target=self._read, daemon=True)
         self._reader.start()
 
@@ -67,6 +68,8 @@ class Output:
                 raise SettingsError(f"invalid marker JSON: {error}") from error
             if payload.get("phase") == "frame":
                 self.frames.append(payload)
+            elif payload.get("phase") == "text":
+                self.text_route = payload
 
     def pump(self, timeout: float = 0.05) -> None:
         try:
@@ -108,31 +111,122 @@ class Output:
         self.log.close()
 
 
+def driver_log(output: Output, message: str) -> None:
+    output.log.write(f"DRIVER {message}\n")
+    output.log.flush()
+
+
 def xdotool(*args: str) -> None:
     subprocess.run(["xdotool", *args], check=True, stdout=subprocess.DEVNULL)
 
 
+def x11_window_names() -> list[tuple[int, str]]:
+    listing = subprocess.run(
+        ["xdotool", "search", "--name", ".*"], capture_output=True, text=True
+    )
+    windows: list[tuple[int, str]] = []
+    for token in listing.stdout.split():
+        name = subprocess.run(
+            ["xdotool", "getwindowname", token], capture_output=True, text=True
+        ).stdout.strip()
+        windows.append((int(token), name))
+    return windows
+
+
 def wait_window(output: Output, timeout: float) -> int:
+    """Locate the X window the lane should drive.
+
+    The sample title lives on the Wayland surface, not on any X window, so
+    under Weston/Xvfb the only client-visible window is the compositor
+    output ("Weston Compositor - screen0"). Prefer an X window that already
+    carries the sample title in case a compositor propagates it, then fall
+    back to the compositor output window. Every candidate is logged into
+    the evidence log.
+    """
     deadline = time.monotonic() + timeout
+    logged: set[int] = set()
     while time.monotonic() < deadline:
         output.pump()
-        found = subprocess.run(
+        titled = subprocess.run(
             ["xdotool", "search", "--name", WINDOW_TITLE],
             capture_output=True,
             text=True,
         )
-        if found.stdout.strip():
-            return int(found.stdout.split()[0])
+        if titled.stdout.strip():
+            window = int(titled.stdout.split()[0])
+            driver_log(output, f"found app-titled X window {window}")
+            return window
+        windows = x11_window_names()
+        for window, name in windows:
+            if window not in logged:
+                logged.add(window)
+                driver_log(output, f"X window {window}: {name!r}")
+        for window, name in windows:
+            if "Weston" in name:
+                driver_log(output, f"using compositor window {window}: {name!r}")
+                return window
         time.sleep(0.2)
-    raise SettingsError(f"window {WINDOW_TITLE!r} did not appear")
+    raise SettingsError(
+        f"no compositor or app-titled X window appeared (want {WINDOW_TITLE!r})"
+    )
+
+
+def focus_window(output: Output, window: int) -> dict[str, Any]:
+    """Point the X input focus at the window and log what happened.
+
+    Weston runs without an X window manager inside Xvfb, so windowactivate
+    (EWMH/_NET_ACTIVE_WINDOW) has no effect; XSetInputFocus (windowfocus)
+    is the primitive that works here. Both are attempted and logged so the
+    evidence shows which one took.
+    """
+    before = subprocess.run(
+        ["xdotool", "getwindowfocus", "-f"], capture_output=True, text=True
+    ).stdout.strip()
+    driver_log(output, f"getwindowfocus before: {before}")
+    focused = subprocess.run(
+        ["xdotool", "windowfocus", "--sync", str(window)],
+        capture_output=True,
+        text=True,
+    )
+    driver_log(
+        output,
+        f"windowfocus {window}: rc={focused.returncode} {focused.stderr.strip()}",
+    )
+    activated = subprocess.run(
+        ["xdotool", "windowactivate", "--sync", str(window)],
+        capture_output=True,
+        text=True,
+    )
+    driver_log(
+        output,
+        f"windowactivate {window}: rc={activated.returncode} "
+        f"{activated.stderr.strip()}",
+    )
+    after = subprocess.run(
+        ["xdotool", "getwindowfocus", "-f"], capture_output=True, text=True
+    ).stdout.strip()
+    driver_log(output, f"getwindowfocus after: {after}")
+    if focused.returncode != 0 and activated.returncode != 0:
+        raise SettingsError(
+            f"could not focus compositor window {window} "
+            f"(windowfocus rc={focused.returncode}, "
+            f"windowactivate rc={activated.returncode})"
+        )
+    return {
+        "window": window,
+        "focusBefore": before,
+        "focusAfter": after,
+        "windowfocusRc": focused.returncode,
+        "windowactivateRc": activated.returncode,
+    }
 
 
 def drive_linux(output: Output, timeout: float) -> dict[str, Any]:
     window = wait_window(output, timeout)
-    xdotool("search", "--sync", "--name", WINDOW_TITLE, "windowactivate", "--sync")
-    xdotool("mousemove", "--window", str(window), "120", "160")
-    xdotool("click", "--clearmodifiers", "1")
-    time.sleep(0.4)
+    focus = focus_window(output, window)
+    # The runner pre-focuses the name field; wait for that frame marker
+    # before typing so key delivery is ordered against the app loop.
+    output.wait_frame(lambda f: f.get("focus") == "name", min(timeout, 30.0))
     xdotool("type", "--delay", "60", "abc")
     try:
         typed = output.wait_frame(lambda f: f.get("name") == "abc", 6.0)
@@ -146,7 +240,7 @@ def drive_linux(output: Output, timeout: float) -> dict[str, Any]:
     dialog = output.wait_frame(lambda f: f.get("dialog") is True, 10.0)
     xdotool("key", "--clearmodifiers", "Return")
     saved = output.wait_frame(lambda f: f.get("status") == "saved", 10.0)
-    return {"typed": typed, "dialog": dialog, "saved": saved}
+    return {"typed": typed, "dialog": dialog, "saved": saved, "x11Focus": focus}
 
 
 def drive_windows(output: Output, timeout: float) -> dict[str, Any]:
@@ -263,6 +357,12 @@ def main() -> int:
     try:
         frames = drive_linux(output, args.timeout) if args.platform == "linux" else drive_windows(output, args.timeout)
         process.terminate()
+        text_route = output.text_route or {}
+        text_claim = (
+            f"PASS ({text_route.get('route', 'key path')}, no IME engine)"
+            if args.platform == "linux"
+            else "PASS (key path, no IME engine)"
+        )
         report = {
             "schemaVersion": "settings-lane/v1",
             "fixtureId": "settings-flow",
@@ -274,6 +374,7 @@ def main() -> int:
             "status": "pass",
             "windowTitle": WINDOW_TITLE,
             "frames": frames,
+            "textTransport": text_route,
             "startedAt": started,
             "finishedAt": datetime.now(timezone.utc).isoformat(),
             "command": command,
@@ -284,7 +385,7 @@ def main() -> int:
             ),
             "claims": {
                 "settings.flow": "PASS",
-                "settings.text": "PASS (key path, no IME engine)",
+                "settings.text": text_claim,
                 "settings.ime": "NOT_RUN",
                 "settings.ax": "NOT_RUN",
             },
