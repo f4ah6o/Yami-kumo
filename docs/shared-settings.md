@@ -101,3 +101,7 @@ with focus restoration, reopening and confirmation, and saved name `abc`.
 Each step waits for a new frame. Missing input or transport evidence fails the
 lane. IME and accessibility remain NOT_RUN because these drivers do not exercise
 an IME engine or inspect native accessibility providers.
+
+Frame markers are emitted after host presentation completes (synchronously on
+macOS, on FrameCompleted on Linux/Windows). Layout uses current window metrics,
+including scale, and stale resize completions are discarded.

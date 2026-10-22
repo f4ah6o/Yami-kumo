@@ -164,6 +164,8 @@ pub fn run_native_settings_sample(
   let mut last_document = ""
   let mut last_caret = @primitives.Rect::new(0.0, 0.0, 0.0, 0.0).unwrap()
   let mut saving_frames = 0
+  let gate = PresentationGate::{ rendered: false, pending_stale: false, }
+  let mut pending_frame : String? = None
   let mut dirty = true
   let mut focus_initialized = false
   let mut text_suspended = false
@@ -184,7 +186,7 @@ pub fn run_native_settings_sample(
   while !destroyed && ticks < tick_limit {
     ticks += 1
     let mut drained = 0
-    while drained < 32 {
+    while drained < 32 && gate.input_ready() {
       let current = match session {
         Some(value) => value
         None => break
@@ -267,8 +269,20 @@ pub fn run_native_settings_sample(
             // Invalidation clears the commit-ready state; without a new frame
             // the next text observation would be rejected before it reaches the
             // focused field.
+            gate.invalidate_layout(pending_frame is Some(_))
             mounted.invalidate_layout()
             dirty = true
+          }
+          @platform.FrameCompleted => {
+            match pending_frame {
+              Some(marker) => {
+                pending_frame = None
+                if gate.completed_frame_is_current() {
+                  emit_native_marker(marker)
+                }
+              }
+              None => ()
+            }
           }
           @platform.FocusChanged(focused) => {
             ignore(mounted.handle_event(value))
@@ -326,7 +340,7 @@ pub fn run_native_settings_sample(
       }
       Some(_) => ()
     }
-    if dirty && !destroyed {
+    if dirty && pending_frame is None && !destroyed {
       // Drain queued actions before rendering: a TextChanged enqueued by the
       // previous dispatch must update the model first, or the committed view
       // rebuilds the field with a stale value and resets its caret.
@@ -336,8 +350,12 @@ pub fn run_native_settings_sample(
           settings = next
         }
       }
+      let (width, height, scale) = match host.window_metrics(window) {
+        Err(error) => return Err(error)
+        Ok(metrics) => metrics
+      }
       let frame = match
-        mounted.commit(settings.view(), width, height, 1.0, measure) {
+        mounted.commit(settings.view(), width, height, scale, measure) {
         Err(error) => return Err(error)
         Ok(value) => value
       }
@@ -348,18 +366,6 @@ pub fn run_native_settings_sample(
           settings = next
           dirty = true
         }
-      }
-      // The simulated save completes after three committed frames so the
-      // loading state is observable without a host timer.
-      if settings.saving() {
-        saving_frames += 1
-        dirty = true
-        if saving_frames >= 3 {
-          saving_frames = 0
-          settings = settings.update(@shared_settings.SaveFinished)
-        }
-      } else {
-        saving_frames = 0
       }
       let focused = frame.focused(@shared_settings.settings_name())
       if !focus_initialized {
@@ -418,7 +424,11 @@ pub fn run_native_settings_sample(
                         session = Some({ epoch, binding: state.binding_id(), })
                         last_document = state.document().text()
                         last_caret = settings_caret(state.caret())
-                        let transport = if platform is Windows { "imm32" } else { "text-input-v1" }
+                        let transport = match platform {
+                          Windows => "imm32"
+                          Linux => "text-input-v1"
+                          Macos => "appkit"
+                        }
                         emit_native_marker(
                           "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"started\",\"transport\":\"\{transport}\",\"epoch\":\{epoch}}",
                         )
@@ -533,9 +543,29 @@ pub fn run_native_settings_sample(
       } else {
         "other"
       }
-      emit_native_marker(
-        "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"frame\",\"name\":\"\{json_escape(settings.name())}\",\"status\":\"\{settings_status(settings)}\",\"dialog\":\{settings.dialog_open()},\"focus\":\"\{focus}\",\"error\":\"\{json_escape(error_text)}\"}",
-      )
+      let marker = "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"frame\",\"name\":\"\{json_escape(settings.name())}\",\"status\":\"\{settings_status(settings)}\",\"dialog\":\{settings.dialog_open()},\"focus\":\"\{focus}\",\"error\":\"\{json_escape(error_text)}\"}"
+      match host.present(window, frame.snapshot()) {
+        Err(error) => return Err(error)
+        Ok(_) => ()
+      }
+      gate.mark_presented()
+      if platform is Macos {
+        emit_native_marker(marker)
+      } else {
+        pending_frame = Some(marker)
+      }
+      // The simulated save completes after three committed frames so the
+      // loading state is observable without a host timer.
+      if settings.saving() {
+        saving_frames += 1
+        dirty = true
+        if saving_frames >= 3 {
+          saving_frames = 0
+          settings = settings.update(@shared_settings.SaveFinished)
+        }
+      } else {
+        saving_frames = 0
+      }
     }
   }
   match session {
