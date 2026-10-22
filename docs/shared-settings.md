@@ -18,7 +18,7 @@ host tick (DOM timer, native frame) so both observe the same transitions.
 | Lane    | Command                                                                  | What it proves                                                                                                                  |
 | ------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
 | Web     | `node --test tests/shared-ui/settings.test.mjs`                          | Real Chromium: validation, synthetic composition, dialog cancel/confirm, focus restore, simulated save, two roots, dispose      |
-| Linux   | `YAMI_SETTINGS_LANE=1 scripts/native_ui_linux.sh` (delegated; not CI)     | Driver checked in; text path not qualified                                                                                       |
+| Linux   | `YAMI_SETTINGS_LANE=1 scripts/native_ui_linux.sh` (delegated; not CI)    | Driver checked in; text path not qualified                                                                                      |
 | Windows | `scripts/native_ui_windows.ps1` (`drive_settings.py --platform windows`) | Visible HWND, IMM32 text route (WM_CHAR key path when unavailable), Tab traversal, dialog, save; the report names the transport |
 | macOS   | `--settings-e2e` native sample (manual)                                  | Composition entry, TextField AX; dialog input `NOT_RUN`                                                                         |
 

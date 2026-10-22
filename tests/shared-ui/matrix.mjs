@@ -15,7 +15,8 @@ const REQUIRED = [
 const DECLARED_NOT_RUN = [
   {
     key: 'settings-flow:linux/gpui-native/native/runtime',
-    reason: 'Delegated to issues/open/20261022-settings-linux-lane.md; the lane is gated off in CI.',
+    reason:
+      'Delegated to issues/open/20261022-settings-linux-lane.md; the lane is gated off in CI.',
   },
   {
     key: 'settings-ime:linux/gpui-native/native/host',
