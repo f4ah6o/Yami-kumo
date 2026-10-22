@@ -5,6 +5,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const SCHEMA = 'settings-lane/v1';
 const REQUIRED = [
@@ -127,4 +128,5 @@ function main() {
   console.log(renderMatrix(matrix));
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+// Compare native paths: the Windows CLI argument is `C:\...`, not a file URL.
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) main();
