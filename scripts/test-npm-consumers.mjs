@@ -79,9 +79,10 @@ for (const name of ['javascript', 'typescript', 'browser', 'react']) {
   dirs[name] = dir;
   await cp(path.join(root, 'tests/npm', name), dir, { recursive: true });
   run('npm', ['install', '--save-exact', tarball], dir);
+  const installed = path.join(dir, 'node_modules/@f4ah6o/yami-kumo');
   assert.equal(
-    await realpath(path.join(dir, 'node_modules/@f4ah6o/yami-kumo')),
-    path.join(dir, 'node_modules/@f4ah6o/yami-kumo'),
+    await realpath(installed),
+    path.join(await realpath(dir), 'node_modules/@f4ah6o/yami-kumo'),
   );
   run('npm', ['ls', '--all'], dir);
   console.log(`PASS install/dependency graph: ${name}`);
