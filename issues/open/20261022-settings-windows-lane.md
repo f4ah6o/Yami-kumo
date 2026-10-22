@@ -38,7 +38,7 @@ Windows 実機で Shared Settings レーンの文字入力経路を資格付け�
 
 ## 提案する方針
 
-1. 実機で再現する。
+1. 実機で再現する（CI では既定 off。`YAMI_SETTINGS_LANE=1` を設定して実行する）。
    - `pwsh scripts/native_ui_windows.ps1` を実行し、`_build/native-ui/windows/settings-windows.log` と `settings-windows.json` を保存する。
    - 直接駆動する場合は workspace wrapper で `moon build` してから `windows.exe --settings-e2e` を起動し、`drive_settings.py --platform windows` を当てる。
 2. `platform/windows` の `WM_CHAR` / `WM_IME_*` と `windows/text_host.mbt` の写像を確認する。`Inserted` が出るなら `TextInputEvent::Commit` まで届いているかを marker で確認する。

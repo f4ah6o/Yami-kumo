@@ -38,7 +38,7 @@ Linux（Weston + Xvfb）実機で Shared Settings レーンのキー入力経路
 
 ## 提案する方針
 
-1. 実機で再現する。
+1. 実機で再現する（CI では既定 off。`YAMI_SETTINGS_LANE=1` を設定して実行する）。
    - `sh scripts/native_ui_linux.sh` を実行し、`_build/native-ui/linux/settings-linux.log` と `settings-linux.json` を保存する。
    - 直接駆動する場合は workspace wrapper で `moon build` してから `ubuntu --settings-e2e` を起動し、`drive_settings.py --platform linux` を当てる。
 2. `xdotool getwindowfocus` と `windowactivate` の結果、`GetForeground` 相当の焦点を log に残す。クリック座標はフィールド上に固定し、`focus:"name"` だけで判断しない。

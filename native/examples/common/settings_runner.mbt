@@ -1,4 +1,12 @@
 ///|
+/// Optional platform-record source while a host text route owns the queue.
+/// Route-backed hosts park ordinary records in their own ordered queue, so the
+/// runner must not read `Host::next_event` directly.
+pub type NativePlatformNext = (
+  Int32
+) -> Result[@platform.Event?, @diagnostics.FrameworkError]
+
+///|
 pub type NativeDialogAXPublish = (
   @platform.WindowId,
   Int64,
@@ -30,6 +38,22 @@ pub fn NativeDialogAXPort::new(
 }
 
 ///|
+/// The Wayland text route rejects a zero-size caret rectangle before it starts
+/// a native session. An unlaid-out first frame can carry that empty rect, so
+/// substitute the documented 1x18 fallback while keeping its origin.
+fn settings_caret(caret : @primitives.Rect) -> @primitives.Rect {
+  let size = caret.size()
+  if size.width() > 0.0 && size.height() > 0.0 {
+    caret
+  } else {
+    match @primitives.Rect::new(caret.left(), caret.top(), 1.0, 18.0) {
+      Ok(value) => value
+      Err(_) => caret
+    }
+  }
+}
+
+///|
 fn settings_window_size() -> (Double, Double) {
   (640.0, 480.0)
 }
@@ -56,6 +80,7 @@ pub fn run_native_settings_sample(
   text_port~ : NativeTextInputPort? = None,
   accessibility_port~ : NativeTextAXPort? = None,
   dialog_port~ : NativeDialogAXPort? = None,
+  next_platform_event~ : NativePlatformNext? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let port = match text_port {
     Some(value) => value
@@ -83,10 +108,11 @@ pub fn run_native_settings_sample(
   let mut dirty = true
   let mut focus_initialized = false
   let mut text_suspended = false
+  let mut text_transport_failed = false
   let mut ticks = 0
   let mut destroyed = false
   let mut last_sequence : Int64 = 0
-  let tick_limit = if platform is Macos { 2000 } else { 600 }
+  let tick_limit = if platform is Macos { 20000 } else { 6000 }
   while !destroyed && ticks < tick_limit {
     ticks += 1
     let mut drained = 0
@@ -134,9 +160,17 @@ pub fn run_native_settings_sample(
         _ => ()
       }
     }
-    let event = match host.next_event(timeout_ms=16) {
-      Err(error) => return Err(error)
-      Ok(value) => value
+    let event = match next_platform_event {
+      Some(next) =>
+        match next(16) {
+          Err(error) => return Err(error)
+          Ok(value) => value
+        }
+      None =>
+        match host.next_event(timeout_ms=16) {
+          Err(error) => return Err(error)
+          Ok(value) => value
+        }
     }
     match event {
       None => ()
@@ -240,27 +274,41 @@ pub fn run_native_settings_sample(
       }
       match session {
         None =>
-          if focused && !text_suspended {
+          if focused && !text_suspended && !text_transport_failed {
             match mounted.focused_text() {
               Some(state) => {
-                let epoch = match (port.begin)(window, state.binding_id()) {
-                  Err(error) => return Err(error)
-                  Ok(value) => value
+                match (port.begin)(window, state.binding_id()) {
+                  Err(_) => {
+                    // The host may not provide a text-input session (for
+                    // example Weston without text-input-v1). Keep running on
+                    // the key path and report the transport as unavailable.
+                    text_transport_failed = true
+                    emit_native_marker(
+                      "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\"}",
+                    )
+                  }
+                  Ok(epoch) =>
+                    match
+                      (port.update)(
+                        epoch,
+                        @text_host.TextInputState::new(
+                          state.document(),
+                          settings_caret(state.caret()),
+                        ),
+                      ) {
+                      Err(_) => {
+                        text_transport_failed = true
+                        emit_native_marker(
+                          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\"}",
+                        )
+                      }
+                      Ok(epoch) => {
+                        session = Some({ epoch, binding: state.binding_id(), })
+                        last_document = state.document().text()
+                        last_caret = settings_caret(state.caret())
+                      }
+                    }
                 }
-                let epoch = match
-                  (port.update)(
-                    epoch,
-                    @text_host.TextInputState::new(
-                      state.document(),
-                      state.caret(),
-                    ),
-                  ) {
-                  Err(error) => return Err(error)
-                  Ok(value) => value
-                }
-                session = Some({ epoch, binding: state.binding_id(), })
-                last_document = state.document().text()
-                last_caret = state.caret()
               }
               None => ()
             }
@@ -277,13 +325,13 @@ pub fn run_native_settings_sample(
             match mounted.focused_text() {
               Some(state) => {
                 if state.document().text() != last_document ||
-                  state.caret() != last_caret {
+                  settings_caret(state.caret()) != last_caret {
                   let epoch = match
                     (port.update)(
                       current.epoch,
                       @text_host.TextInputState::new(
                         state.document(),
-                        state.caret(),
+                        settings_caret(state.caret()),
                       ),
                     ) {
                     Err(error) => return Err(error)
@@ -291,7 +339,7 @@ pub fn run_native_settings_sample(
                   }
                   session = Some({ epoch, binding: current.binding, })
                   last_document = state.document().text()
-                  last_caret = state.caret()
+                  last_caret = settings_caret(state.caret())
                 }
               }
               None => ()
