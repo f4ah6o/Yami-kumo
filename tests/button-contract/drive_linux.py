@@ -95,6 +95,9 @@ def main() -> None:
             case_env = dict(env, YAMI_NATIVE_UI_EVIDENCE_DIR=str(directory), YAMI_NATIVE_UI_DISABLED="1" if case["disabled"] else "0", YAMI_NATIVE_UI_WINDOW_TITLE=f"Button contract {uuid.uuid4().hex}")
             # --sync waits forever when the previous case ended here already.
             # Per-operation delivery is acknowledged by host sequence markers.
+            # A previous lane may leave Weston focused; require a real focus
+            # transition instead of waiting for an event that already happened.
+            inject("windowfocus", isolated_root_window())
             inject("mousemove", "790", "590")
             process = subprocess.Popen(command, cwd=workspace, env=case_env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
             output = ProcessOutput(process, directory / "host.log")
