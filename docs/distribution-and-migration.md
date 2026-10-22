@@ -10,10 +10,10 @@ claims remain bounded by the Settings qualification.
 | --------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------ |
 | MoonBit               | `f4ah6o/yami_kumo@0.2.3`                  | Library plus published `examples/shared_settings`; `moon add f4ah6o/yami_kumo@0.2.3` |
 | Native                | `f4ah6o/yami_kumo_native@0.2.14`          | GPUI `0.10.6`; macOS/Linux/Windows samples                                           |
-| JavaScript/TypeScript | `@f12o/yami-kumo@0.1.0-preview.1` tarball | Release-compiled ESM plus declarations; no compiler at install time                  |
+| JavaScript/TypeScript | `@f12o/yami-kumo@0.1.0-preview.2` tarball | Release-compiled ESM plus declarations; no compiler at install time                  |
 | Web                   | built `web/` output                       | Deployed on Pages; no MoonBit toolchain required to serve it                         |
 
-The preview is published as `@f12o/yami-kumo@0.1.0-preview.1` after a
+The preview is published as `@f12o/yami-kumo@0.1.0-preview.2` after a
 maintainer bootstrap under the `@f12o` scope; the `@f4ah6o` npm organization
 does not exist for the authenticated account. A clean consumer installs the
 registry version and renders through the root, `/dom` and `/react` entries.

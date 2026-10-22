@@ -1,6 +1,6 @@
 {
   "name": "@f12o/yami-kumo",
-  "version": "0.1.0-preview.1",
+  "version": "0.1.0-preview.2",
   "description": "MoonBit-powered, React-independent Kumo HTML components and an optional React AppShell",
   "license": "MIT",
   "repository": {
