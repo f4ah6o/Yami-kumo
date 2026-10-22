@@ -13,7 +13,7 @@ assert.match(
   /^\d+\.\d+\.\d+-preview\.\d+$/,
   'only explicit preview versions are enabled',
 );
-assert.equal(manifest.name, '@f4ah6o/yami-kumo');
+assert.equal(manifest.name, '@f12o/yami-kumo');
 assert.equal(manifest.publishConfig.access, 'public');
 assert.equal(manifest.publishConfig.tag, 'preview');
 assert.equal(readJson('package.json').private, true);
@@ -27,7 +27,7 @@ if (process.argv.includes('--artifact')) {
     'react',
     'typescript',
   ]);
-  const filename = `f4ah6o-yami-kumo-${manifest.version}.tgz`;
+  const filename = manifest.name.replace(/^@/, '').replace('/', '-') + `-${manifest.version}.tgz`;
   assert.equal(evidence.tarball, filename);
   assert.deepEqual(
     readdirSync('dist').filter((name) => name.endsWith('.tgz')),

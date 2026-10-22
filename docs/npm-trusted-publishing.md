@@ -1,7 +1,7 @@
 # npm Trusted Publishing
 
 The `npm trusted publishing` workflow (`.github/workflows/npm-publish.yml`)
-prepares `@f4ah6o/yami-kumo` from a manually selected **main** revision.
+prepares `@f12o/yami-kumo` from a manually selected **main** revision.
 It defaults to validation only. Pushes, tags and pull requests never publish.
 The current release policy accepts only `X.Y.Z-preview.N` and uses `preview`.
 The private root manifest and Mooncakes releases are independent.
@@ -12,12 +12,12 @@ The private root manifest and Mooncakes releases are independent.
    `npm/package.json` (`0.1.0-preview.1` currently), leaving `publish` unchecked.
    Download `npm-release` and inspect its tarball, manifest, `BUILD.json`, licenses
    and `npm-consumers.json`. Confirm the source revision and CI/review results.
-2. Confirm ownership of the npm `@f4ah6o` scope using an authenticated maintainer
+2. Confirm ownership of the npm `@f12o` scope using an authenticated maintainer
    account. An unauthenticated registry lookup returned E404 on 2026-10-20;
    existence and ownership are not established by this preparation.
    If the package does not exist, bootstrap its first version interactively
    from that reviewed tarball using `npm login`, then
-   `npm publish ./f4ah6o-yami-kumo-0.1.0-preview.1.tgz --access public --tag preview --ignore-scripts`.
+   `npm publish ./f12o-yami-kumo-0.1.0-preview.1.tgz --access public --tag preview --ignore-scripts`.
    This is a separate release action, not performed by this preparation.
    After bootstrap, bump `npm/package.json` to an unused preview version in a PR.
    An already published version cannot be published again.
@@ -60,11 +60,13 @@ authentication or confirm package ownership.
 
 A `publish=false` run on main completed/success
 ([run 39809538188](https://github.com/f4ah6o/Yami-kumo/actions/runs/39809538188))
-and produced `f4ah6o-yami-kumo-0.1.0-preview.1.tgz`
+and produced `f12o-yami-kumo-0.1.0-preview.1.tgz`
 (SHA-256 `e36f25edb350de769b3df5ca00d08d0d599180912864e7f8aa2464be75430880`)
-with four passing consumers. Registry publication is still pending: the scope
-is not authenticated here and the package returns E404, so the first version
-needs the interactive bootstrap above.
+with four passing consumers. The first version was then bootstrapped manually
+as `@f12o/yami-kumo@0.1.0-preview.1` (tarball SHA-256
+`1dcd2afa6cf4fc1c69790b4cb5ee501a9f2ad36a426830ae576a9264760a7899`) and a clean
+registry install passed the root, `/dom` and `/react` smoke checks. The
+`@f4ah6o` npm organization does not exist, so the package scope is `@f12o`.
 
 ## Failure handling
 

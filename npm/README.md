@@ -6,17 +6,17 @@ The package contains release-compiled MoonBit ESM; consumers need neither a
 source checkout nor a MoonBit compiler. CommonJS is not supported.
 
 ```sh
-npm install ./f4ah6o-yami-kumo-0.1.0-preview.1.tgz
+npm install ./f12o-yami-kumo-0.1.0-preview.1.tgz
 ```
 
-The proposed registry name is `@f4ah6o/yami-kumo`. This preview is not a claim
+The proposed registry name is `@f12o/yami-kumo`. This preview is not a claim
 of registry publication or scope ownership. The npm version is independent of
 Mooncakes; `BUILD.json` records the actual Mooncakes source version.
 
 ```js
-import { appShell, button, fragment, input, renderHtml, textComponent } from '@f4ah6o/yami-kumo';
-import { enhanceYamiKumo } from '@f4ah6o/yami-kumo/dom';
-import '@f4ah6o/yami-kumo/styles.css';
+import { appShell, button, fragment, input, renderHtml, textComponent } from '@f12o/yami-kumo';
+import { enhanceYamiKumo } from '@f12o/yami-kumo/dom';
+import '@f12o/yami-kumo/styles.css';
 
 document.querySelector('#app').innerHTML = renderHtml(
   appShell({
@@ -54,8 +54,8 @@ state, trigger/scrim handlers, focus containment and dismissal; importing `/dom`
 does not add shell controllers. The preview does not claim full Kumo parity.
 
 ```tsx
-import { AppShell, type AppShellProps } from '@f4ah6o/yami-kumo/react';
-import '@f4ah6o/yami-kumo/styles.css';
+import { AppShell, type AppShellProps } from '@f12o/yami-kumo/react';
+import '@f12o/yami-kumo/styles.css';
 
 const props: AppShellProps = {
   brand: 'Workspace',

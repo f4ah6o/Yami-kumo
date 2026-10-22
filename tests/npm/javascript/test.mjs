@@ -12,7 +12,7 @@ import {
   layerCardPrimary,
   layerCardSecondary,
   renderHtml,
-} from '@f4ah6o/yami-kumo';
+} from '@f12o/yami-kumo';
 const require = createRequire(import.meta.url);
 for (const name of ['react', 'react-dom', '@cloudflare/kumo'])
   assert.throws(() => require.resolve(name));
@@ -117,7 +117,7 @@ attrs.title = 'after';
 assert.match(renderHtml(immutable), /title="before"/);
 let listeners = 0;
 globalThis.document = { addEventListener: () => listeners++ };
-const { enhanceYamiKumo } = await import('@f4ah6o/yami-kumo/dom');
+const { enhanceYamiKumo } = await import('@f12o/yami-kumo/dom');
 assert.equal(listeners, 0);
 enhanceYamiKumo();
 enhanceYamiKumo();

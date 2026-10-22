@@ -6,18 +6,19 @@ claims remain bounded by the Settings qualification.
 
 ## Channels
 
-| Channel               | Artifact                                    | Notes                                                                                |
-| --------------------- | ------------------------------------------- | ------------------------------------------------------------------------------------ |
-| MoonBit               | `f4ah6o/yami_kumo@0.2.3`                    | Library plus published `examples/shared_settings`; `moon add f4ah6o/yami_kumo@0.2.3` |
-| Native                | `f4ah6o/yami_kumo_native@0.2.14`            | GPUI `0.10.6`; macOS/Linux/Windows samples                                           |
-| JavaScript/TypeScript | `@f4ah6o/yami-kumo@0.1.0-preview.1` tarball | Release-compiled ESM plus declarations; no compiler at install time                  |
-| Web                   | built `web/` output                         | Deployed on Pages; no MoonBit toolchain required to serve it                         |
+| Channel               | Artifact                                  | Notes                                                                                |
+| --------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------ |
+| MoonBit               | `f4ah6o/yami_kumo@0.2.3`                  | Library plus published `examples/shared_settings`; `moon add f4ah6o/yami_kumo@0.2.3` |
+| Native                | `f4ah6o/yami_kumo_native@0.2.14`          | GPUI `0.10.6`; macOS/Linux/Windows samples                                           |
+| JavaScript/TypeScript | `@f12o/yami-kumo@0.1.0-preview.1` tarball | Release-compiled ESM plus declarations; no compiler at install time                  |
+| Web                   | built `web/` output                       | Deployed on Pages; no MoonBit toolchain required to serve it                         |
 
-The npm package is not yet on the registry. The trusted-publishing workflow
-validates a packed tarball, but the first publication needs a maintainer login
-and scope ownership because trusted publishing cannot create a nonexistent
-package. Treat "tarball install passes" and "registry install passes" as
-separate states.
+The preview is published as `@f12o/yami-kumo@0.1.0-preview.1` after a
+maintainer bootstrap under the `@f12o` scope; the `@f4ah6o` npm organization
+does not exist for the authenticated account. A clean consumer installs the
+registry version and renders through the root, `/dom` and `/react` entries.
+Trusted publishing still needs the GitHub environment and npm publisher
+registration before later releases can run without a manual OTP.
 
 ## Choosing a migration path
 
@@ -26,7 +27,7 @@ separate states.
 | MoonBit application using `f4ah6o/yami_kumo` | the same module at `0.2.3`  | imports, `ui/core`, `ui/runtime`, `html`, `dom`              |
 | Native application using `yami_kumo_native`  | `0.2.14` with GPUI `0.10.6` | `Mounted`, TextField, Dialog, focus scopes                   |
 | JavaScript or TypeScript app                 | the npm tarball             | no MoonBit checkout, compiler, Tailwind or React requirement |
-| React app using the starter `AppShell`       | `@f4ah6o/yami-kumo/react`   | real React children and callbacks                            |
+| React app using the starter `AppShell`       | `@f12o/yami-kumo/react`     | real React children and callbacks                            |
 | App that only serves the demo                | the built `web/` directory  | static hosting                                               |
 
 ## Staged migration

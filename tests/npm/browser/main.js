@@ -7,9 +7,9 @@ import {
   layerCard,
   fragment,
   renderHtml,
-} from '@f4ah6o/yami-kumo';
-import { enhanceYamiKumo } from '@f4ah6o/yami-kumo/dom';
-import '@f4ah6o/yami-kumo/styles.css';
+} from '@f12o/yami-kumo';
+import { enhanceYamiKumo } from '@f12o/yami-kumo/dom';
+import '@f12o/yami-kumo/styles.css';
 
 document.querySelector('#app').innerHTML = renderHtml(
   appShell({
