@@ -1,0 +1,68 @@
+name: Published Settings contract
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  published-settings:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+        release:
+          - gpui: '0.10.5'
+            native: '0.2.13'
+          - gpui: '0.10.6'
+            native: '0.2.14'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: hustcer/setup-moonbit@v1.23
+        with:
+          version: 0.10.15+943464bfa
+          core-version: 0.10.15+943464bfa
+      - name: Select the published dependency pair
+        working-directory: tests/published-settings
+        env:
+          GPUI_VERSION: ${{ matrix.release.gpui }}
+          NATIVE_VERSION: ${{ matrix.release.native }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          path = Path('moon.mod')
+          source = path.read_text()
+          source = source.replace('gpui@0.10.5', 'gpui@' + os.environ['GPUI_VERSION'])
+          source = source.replace('yami_kumo_native@0.2.13', 'yami_kumo_native@' + os.environ['NATIVE_VERSION'])
+          path.write_text(source)
+          PY
+      - name: Test the published Settings runner with a scripted host
+        working-directory: tests/published-settings
+        run: |
+          set -o pipefail
+          moon version --all
+          cat moon.mod
+          moon update
+          moon test --target native --deny-warn 2>&1 | tee contract.log
+      - name: Retain the contract result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-settings-${{ matrix.os }}-${{ matrix.release.native }}
+          path: |
+            tests/published-settings/moon.mod
+            tests/published-settings/contract.log
+          if-no-files-found: error
