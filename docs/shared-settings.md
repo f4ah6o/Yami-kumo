@@ -1,10 +1,9 @@
 # Shared Settings qualification
 
-Status: one Settings consumer, four entry points. Web and Windows run the full
-flow in CI. The Linux lane is now enabled in this change; its full flow must
-pass on the candidate CI run before qualification is claimed. macOS runs text composition and
-TextField AX, while its key-driven dialog is `NOT_RUN` in the current GUI
-session.
+Status: one Settings consumer, four entry points. Web, Linux and Windows run
+the full flow in CI; Linux qualifies its Weston direct-keyboard route and
+Windows its IMM32 route. macOS runs text composition and TextField AX, while
+its key-driven dialog is `NOT_RUN` in the current GUI session.
 
 ## One source
 
