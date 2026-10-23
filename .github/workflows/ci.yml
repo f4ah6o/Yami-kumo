@@ -1,6 +1,3 @@
-name: CI
-
-on:
   push:
     branches: [main]
   pull_request:
@@ -24,11 +21,9 @@ jobs:
           node-version: 'lts'
           run-install: true
       - name: Setup MoonBit
-        uses: hustcer/setup-moonbit@v1.22
+        uses: ./.github/actions/setup-moonbit-unix
         with:
           version: 0.10.14+7d59c7ec9
-          setup-core: true
-          core-version: 0.10.14+7d59c7ec9
       - name: Check shared pure packages on every compiler target
         run: |
           moon check --target all --deny-warn
@@ -70,11 +65,9 @@ jobs:
           node-version: 'lts'
           run-install: true
       - name: Setup MoonBit
-        uses: hustcer/setup-moonbit@v1.22
+        uses: ./.github/actions/setup-moonbit-unix
         with:
           version: 0.10.14+7d59c7ec9
-          setup-core: true
-          core-version: 0.10.14+7d59c7ec9
       - name: Check regenerated pnpm lockfile
         run: |
           pnpm install --lockfile-only --no-frozen-lockfile
@@ -120,12 +113,9 @@ jobs:
           python -B tests/button-contract/test_driver.py
 
       - name: Setup MoonBit
-        uses: hustcer/setup-moonbit@v1.22
+        uses: ./.github/actions/setup-moonbit-unix
         with:
           version: 0.10.14+7d59c7ec9
-          setup-core: true
-          core-version: 0.10.14+7d59c7ec9
-
       - name: Build MoonBit parity module
         run: pnpm run moon:build
 
@@ -162,6 +152,5 @@ jobs:
           version: 0.10.14+7d59c7ec9
           setup-core: true
           core-version: 0.10.14+7d59c7ec9
-
       - name: Compile and import the MoonBit renderer on Windows
         run: node scripts/check-moonbit-build.mjs
