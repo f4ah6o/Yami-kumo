@@ -1,3 +1,6 @@
+name: CI
+
+on:
   push:
     branches: [main]
   pull_request:
@@ -152,5 +155,6 @@ jobs:
           version: 0.10.14+7d59c7ec9
           setup-core: true
           core-version: 0.10.14+7d59c7ec9
+
       - name: Compile and import the MoonBit renderer on Windows
         run: node scripts/check-moonbit-build.mjs
