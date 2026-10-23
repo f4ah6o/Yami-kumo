@@ -1,3 +1,6 @@
+name: Native UI proof
+
+on:
   push:
     branches: [main]
   pull_request:
@@ -136,8 +139,8 @@ jobs:
         uses: hustcer/setup-moonbit@v1.22
         with:
           version: 0.10.15+943464bfa
-          setup-core: true
           core-version: 0.10.15+943464bfa
+
       - name: Verify MSVC and MoonBit environment
         shell: pwsh
         run: |
