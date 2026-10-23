@@ -40,11 +40,9 @@ jobs:
           node-version: '24'
           run-install: true
       - name: Setup MoonBit
-        uses: hustcer/setup-moonbit@v1.22
+        uses: ./.github/actions/setup-moonbit-unix
         with:
           version: 0.10.14+7d59c7ec9
-          setup-core: true
-          core-version: 0.10.14+7d59c7ec9
       - name: Install consumer browser
         run: pnpm exec playwright install --with-deps chromium
       - name: Build and test the packed JS, TS, browser and React consumers
