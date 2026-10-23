@@ -9,7 +9,7 @@ The private root manifest and Mooncakes releases are independent.
 ## One-time setup
 
 1. Merge the workflow and run it from `main` with `version` equal to
-   `npm/package.json` (`0.1.0-preview.1` currently), leaving `publish` unchecked.
+   `npm/package.json` (`0.1.0-preview.2` currently), leaving `publish` unchecked.
    Download `npm-release` and inspect its tarball, manifest, `BUILD.json`, licenses
    and `npm-consumers.json`. Confirm the source revision and CI/review results.
 2. Confirm ownership of the npm `@f12o` scope using an authenticated maintainer
@@ -73,9 +73,8 @@ Trusted publishing is now configured: GitHub environment `npm` allows only
 `npm-publish.yml`, environment `npm`. A `publish=true` run on main published
 `0.1.0-preview.2` without an OTP
 ([run 39861636099](https://github.com/f4ah6o/Yami-kumo/actions/runs/39861636099));
-the registry reports SLSA provenance for that version. Install by dist-tag
-`@preview` or the exact version, because the bootstrap set `latest` to
-`preview.1`.
+the registry reports SLSA provenance for that version. `latest` and `preview`
+both point at `0.1.0-preview.2`.
 
 ## Failure handling
 

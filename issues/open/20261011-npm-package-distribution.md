@@ -33,8 +33,7 @@
   published `0.1.0-preview.2` without an OTP.
 - A clean registry install of `0.1.0-preview.2` passes root, `/dom` and
   `/react` smoke checks; npm reports SLSA provenance.
-- The bootstrap left `latest` on `preview.1`; use `@preview` or the exact
-  version until the tag is moved.
+- `latest` and `preview` both point at `0.1.0-preview.2` (moved 2026-10-23).
 
 ## Publication checkpoint — 2026-10-23
 

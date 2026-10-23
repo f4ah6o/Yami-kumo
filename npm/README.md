@@ -14,9 +14,9 @@ npm install ./f12o-yami-kumo-0.1.0-preview.2.tgz
 ```
 
 `0.1.0-preview.2` is published as `@f12o/yami-kumo` through GitHub OIDC trusted
-publishing with SLSA provenance. Use the `preview` tag or the exact version;
-the bootstrap left `latest` on `preview.1`. The npm version is independent of
-Mooncakes; `BUILD.json` records the actual Mooncakes source version.
+publishing with SLSA provenance. Both `latest` and `preview` point at
+`0.1.0-preview.2`. The npm version is independent of Mooncakes; `BUILD.json`
+records the actual Mooncakes source version.
 
 ```js
 import { appShell, button, fragment, input, renderHtml, textComponent } from '@f12o/yami-kumo';
