@@ -37,7 +37,7 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - uses: ./.github/actions/setup-moonbit-unix
+      - uses: ./Yami-kumo/.github/actions/setup-moonbit-unix
         with:
           version: 0.10.15+943464bfa
       - name: Test actual adapter and App on all compiler targets
@@ -97,7 +97,7 @@ jobs:
           python-version: '3.12'
 
       - name: Setup MoonBit
-        uses: ./.github/actions/setup-moonbit-unix
+        uses: ./Yami-kumo/.github/actions/setup-moonbit-unix
         with:
           version: 0.10.15+943464bfa
       - name: Install Wayland, Mesa, fonts, Xvfb, and host input tools
@@ -231,7 +231,7 @@ jobs:
           python-version: '3.12'
 
       - name: Setup MoonBit
-        uses: ./.github/actions/setup-moonbit-unix
+        uses: ./Yami-kumo/.github/actions/setup-moonbit-unix
         with:
           version: 0.10.15+943464bfa
       - name: Verify Xcode and MoonBit environment
