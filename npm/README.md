@@ -6,11 +6,16 @@ The package contains release-compiled MoonBit ESM; consumers need neither a
 source checkout nor a MoonBit compiler. CommonJS is not supported.
 
 ```sh
+# Published preview (dist-tag `preview`)
+npm install @f12o/yami-kumo@preview
+
+# Or from a packed tarball
 npm install ./f12o-yami-kumo-0.1.0-preview.2.tgz
 ```
 
-The proposed registry name is `@f12o/yami-kumo`. This preview is not a claim
-of registry publication or scope ownership. The npm version is independent of
+`0.1.0-preview.2` is published as `@f12o/yami-kumo` through GitHub OIDC trusted
+publishing with SLSA provenance. Use the `preview` tag or the exact version;
+the bootstrap left `latest` on `preview.1`. The npm version is independent of
 Mooncakes; `BUILD.json` records the actual Mooncakes source version.
 
 ```js
