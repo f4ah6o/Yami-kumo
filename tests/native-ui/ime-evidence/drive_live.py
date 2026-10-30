@@ -54,6 +54,8 @@ try:
  time.sleep(.3)
  subprocess.run(['import','-window','root',str(out/'candidates.png')],check=True)
  send('Up')
+ time.sleep(.3)
+ subprocess.run(['import','-window','root',str(out/'candidate-selected.png')],check=True)
  result['observations']['conversion']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='日本',12)
  result['stage']='commit'
  start=len(o.markers); send('Return')
@@ -74,6 +76,12 @@ try:
   return o.wait_frame(lambda f:f.get('dialog') is dialog and f.get('focus')==focus and f.get('name')=='日本',12,after=after)
  result['observations']['field_open']=step('Return',True,'confirm')
  subprocess.run(['import','-window','root',str(out/'dialog.png')],check=True)
+ if os.environ.get('YAMI_IME_BACKGROUND_POINT'):
+  x,y=os.environ['YAMI_IME_BACKGROUND_POINT'].split(',')
+  d.xdotool('mousemove','--sync',x,y,'click','1')
+  time.sleep(.3)
+  subprocess.run(['import','-window','root',str(out/'after-background-click.png')],check=True)
+  result['observations']['background_click']={'x':int(x),'y':int(y)}
  send('x')
  # A fresh later frame must retain the model after background key delivery.
  result['observations']['after_background_key']=step('shift+Tab',True,'cancel')
