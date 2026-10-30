@@ -202,7 +202,7 @@ SHA-256 `be4c27ccca8205e4d56157aa14957c652ff1002cf75e9774f3d39685c386daba`.
 The Ubuntu example built with the same gpui candidate; binary SHA-256
 `e7fb60e3d75aa3d3a3efced5e1d562538061bb79d760f159f6f7a17f15c03bbf`.
 
-Receipt retirement remains deliberately unavailable. ACK proves only that the
+General receipt retirement remains deliberately unavailable. ACK proves only that the
 native FIFO removed its exact head; it does not prove that the original owner
 has applied the observation. Before retiring a receipt, the runner needs a
 receipt-specific proof for every applicable stage:
@@ -214,9 +214,24 @@ receipt-specific proof for every applicable stage:
 | Platform or unsupported | Its effect was applied to the original owner, or a specific documented terminal policy resolved it without changing its meaning. | Non-text and unsupported prefixes can remain unresolved; a blank poll is not a terminal receipt. |
 | Destroyed, cutoff and generated lifecycle | Earlier admissions, pending actions and any generated lifecycle records are resolved, and the host supplies an explicit terminal proof. | Native cutoff is not a seal and `can_stop()` remains false. Records received after Destroyed are retained pending admission proof. |
 
-Accordingly, the 64-entry limit is backpressure, not a retirement policy. Full
-capacity stops another admission and leaves the owner and host live; it does
-not establish a successful exit. The ledger records only positively observed
+One experimental terminal-only operation validates the exact ACKed Destroyed
+receipt, the original live field generation, a resolved pre-Destroyed prefix,
+no pending action and no active preedit. It can then retire an individually
+identified earlier Commit receipt whose terminal action has already been
+reflected into the same model. The Destroyed receipt, any post-Destroyed
+records and host remain owned. Wrong binding/epoch, pending action, active
+preedit and repeat retirement are rejected. This is an explicit policy for a
+destroyed target; it does not prove scene/geometry publication, normal-running
+retirement, native cutoff, release or host stop. It is currently exercised by
+scripted fixtures only, not by the control socket or a real native run. The
+source-override common suite passed **41/41** against gpui `5cd2f23` (raw log
+SHA-256 `7bf1beb75dfeae58fb30df6e729d84a3a379a7957bfd873044cdc95bd6f8a8be`).
+The corresponding Ubuntu example built successfully (binary SHA-256
+`a1be81ae9c28bea57b71cf1fbe4026e4c1194f9fafa2654aa1d9f7e5e94f12e4`).
+
+For all other records, the 64-entry limit remains backpressure. Full capacity
+stops another admission and leaves the owner and host live; it does not
+establish a successful exit. The ledger records only positively observed
 stages: native ACK, session application, a required terminal action, and a
 terminal action's model reflection. It associates a text stage only with a
 unique matching window, root, epoch, sequence, payload and original lease;

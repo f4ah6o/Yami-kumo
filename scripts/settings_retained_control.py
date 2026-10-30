@@ -21,6 +21,7 @@ REPLIES = {
     b"K": "host acknowledged the receipt; owner application is not implied",
     b"J": "text session applied; model and geometry are not implied",
     b"L": "terminal field applied; its model action remains required",
+    b"T": "destroyed event validated for the original owner; shutdown is not implied",
     b"C": "text cutoff completed; host shutdown is not yet authorized",
     b"D": "proved-complete host stopped",
     b"R": "stop refused; owner and host remain retained",

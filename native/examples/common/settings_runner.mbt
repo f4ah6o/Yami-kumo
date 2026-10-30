@@ -51,6 +51,7 @@ pub(all) enum NativeReceiptStage {
   ReceiptSessionApplied
   ReceiptActionRequired
   ReceiptModelApplied
+  ReceiptTerminalResolved
 }
 
 ///|
@@ -66,6 +67,7 @@ fn receipt_stage_rank(stage : NativeReceiptStage) -> Int {
     ReceiptSessionApplied => 1
     ReceiptActionRequired => 2
     ReceiptModelApplied => 3
+    ReceiptTerminalResolved => 4
   }
 }
 
@@ -530,6 +532,8 @@ pub struct SettingsRunOwner {
   // Destroyed record. Later observations remain owned but are not delivered
   // to a destroyed target without separate host admission proof.
   priv mut retained_destroyed_prefix : Int?
+  // Exact ACKed native Destroyed receipt after explicit terminal validation.
+  priv mut terminal_destroyed_sequence : Int32?
   // The exact receipt paired with an observation not yet dispatched.
   priv mut receipt_pre_dispatch : NativeRetainedReceipt?
   priv mut resume_pre_dispatch : Bool
@@ -776,6 +780,101 @@ pub fn SettingsRunOwner::receipt_stage_for_sequence(
     }
   }
   if found < 0 { None } else { self.acknowledged_receipt_stage(found) }
+}
+
+///|
+/// Resolve only an already ACKed Destroyed observation for the original
+/// field. This is a terminal policy, not a host cutoff or permission to stop.
+pub fn SettingsRunOwner::resolve_destroyed_receipt(
+  self : SettingsRunOwner, sequence : Int64,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.cutoff_done || sequence <= 0L ||
+    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) ||
+    self.terminal_destroyed_sequence is Some(_) || self.terminal_applied is Some(_) ||
+    !self.held_platform.is_empty() || self.held_tab is Some(_) ||
+    !(self.retained_destroyed_prefix is Some(0)) {
+    return Err(runner_error("terminal_destroyed", "terminal owner or prefix is unresolved"))
+  }
+  let session = match self.session { Some(value) => value; None => return Err(runner_error("terminal_destroyed", "session unavailable")) }
+  let owner = match self.terminal_owner { Some(value) => value; None => return Err(runner_error("terminal_destroyed", "owner unavailable")) }
+  if !owner.matches_session(self.window, session.epoch, session.binding) ||
+    !self.mounted.terminal_field_can_cutoff(owner) {
+    return Err(runner_error("terminal_destroyed", "field, preedit or action remains unresolved"))
+  }
+  let event = match self.inflight {
+    Some(OrderedPlatform(value)) if value.window() == self.window && value.kind() is @platform.Destroyed => value
+    _ => return Err(runner_error("terminal_destroyed", "destroyed event is unavailable"))
+  }
+  if !(self.receipt_stage_for_sequence(sequence) is Some(ReceiptAcknowledgedOnly)) {
+    return Err(runner_error("terminal_destroyed", "native receipt is missing or ambiguous"))
+  }
+  let mut found = -1
+  for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
+    let receipt = self.acknowledged_receipts[i].receipt
+    match receipt.event {
+      Some(OrderedPlatform(candidate)) if receipt.sequence.to_int64() == sequence &&
+        receipt.window == self.window && receipt.root == session.binding &&
+        receipt.epoch == session.epoch && candidate.window() == event.window() &&
+        candidate.sequence() == sequence && candidate.sequence() == event.sequence() &&
+        candidate.kind() is @platform.Destroyed => {
+          if found >= 0 { return Err(runner_error("terminal_destroyed", "ambiguous native receipt")) }
+          found = i
+        }
+      _ => ()
+    }
+  }
+  if found < 0 { return Err(runner_error("terminal_destroyed", "original receipt unavailable")) }
+  self.terminal_destroyed_sequence = Some(self.acknowledged_receipts[found].receipt.sequence)
+  self.acknowledged_receipts[found].stage = ReceiptTerminalResolved
+  self.destroyed = true
+  self.gate.invalidate_layout(self.pending_frame is Some(_))
+  self.mounted.invalidate_layout()
+  Ok(())
+}
+
+///|
+/// Retire one committed receipt only after model reflection and a validated
+/// later native Destroyed receipt. Later input, terminal receipt and host stay
+/// owned; no scene, cutoff or successful shutdown is implied.
+pub fn SettingsRunOwner::retire_destroyed_model_receipt(
+  self : SettingsRunOwner, sequence : Int64,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.cutoff_done || sequence <= 0L ||
+    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) ||
+    self.terminal_applied is Some(_) || !self.held_platform.is_empty() ||
+    self.held_tab is Some(_) || !(self.retained_destroyed_prefix is Some(0)) {
+    return Err(runner_error("terminal_retire", "terminal stages are unresolved"))
+  }
+  let terminal = match self.terminal_destroyed_sequence {
+    Some(value) if sequence < value.to_int64() => value
+    _ => return Err(runner_error("terminal_retire", "earlier model receipt required"))
+  }
+  ignore(terminal)
+  let session = match self.session { Some(value) => value; None => return Err(runner_error("terminal_retire", "session unavailable")) }
+  let owner = match self.terminal_owner { Some(value) => value; None => return Err(runner_error("terminal_retire", "owner unavailable")) }
+  if !owner.matches_session(self.window, session.epoch, session.binding) ||
+    !self.mounted.terminal_field_can_cutoff(owner) {
+    return Err(runner_error("terminal_retire", "field, preedit or action remains unresolved"))
+  }
+  let mut found = -1
+  for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
+    if self.acknowledged_receipts[i].receipt.sequence.to_int64() == sequence {
+      if found >= 0 { return Err(runner_error("terminal_retire", "ambiguous native receipt")) }
+      found = i
+    }
+  }
+  if found < 0 || !(self.acknowledged_receipt_stage(found) is Some(ReceiptModelApplied)) {
+    return Err(runner_error("terminal_retire", "model reflection is not proven"))
+  }
+  let receipt = self.acknowledged_receipts[found].receipt
+  match receipt.event {
+    Some(OrderedText(value)) if receipt.window == self.window && receipt.root == session.binding &&
+      receipt.epoch == session.epoch && value.window() == self.window && value.epoch() == session.epoch &&
+      value.sequence() <= self.terminal_model_sequence && value.kind() is @text_host.Commit(_) => ()
+    _ => return Err(runner_error("terminal_retire", "original commit owner does not match"))
+  }
+  ignore(self.acknowledged_receipts.remove(found))
+  Ok(())
 }
 
 ///|
@@ -1242,6 +1341,7 @@ pub fn SettingsRunOwner::new(
     acknowledged_receipts: [],
     entered_target: None,
     retained_destroyed_prefix: None,
+    terminal_destroyed_sequence: None,
     receipt_pre_dispatch: None,
     resume_pre_dispatch: false,
     bounded_resume: false,

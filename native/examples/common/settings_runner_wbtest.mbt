@@ -1752,16 +1752,17 @@ test "resize then failed ack retains commit across destroyed window" {
     OrderedPlatform(@platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted)),
     OrderedPlatform(@platform.Event::new(window, 3L, 1.0, @platform.Resized(width=800.0, height=600.0))),
     OrderedText(@text_host.TextInputEvent::new(window, 1L, 7UL, @text_host.Commit(text="日本"))),
-    OrderedPlatform(@platform.Event::new(window, 4L, 1.0, @platform.Destroyed)),
+    OrderedPlatform(@platform.Event::new(window, 5L, 1.0, @platform.Destroyed)),
   ]
   let native_sequence = Ref(1)
+  let binding = Ref(0UL)
   let fail_once = Ref(true)
   let ordered = NativeOrderedTextPort::with_retained_receipts(
     fn(_) {
       if records.is_empty() { return Ok(None) }
       let record = records[0]
       let sequence = native_sequence.val
-      Ok(Some(NativeRetainedReceipt::new(Some(record), window, sequence, 0UL, 0UL, fn() {
+      Ok(Some(NativeRetainedReceipt::new(Some(record), window, sequence, binding.val, if binding.val == 0UL { 0UL } else { 7UL }, fn() {
         if record is OrderedText(_) && fail_once.val {
           fail_once.val = false
           return Err(runner_error("test_ack", "injected failure"))
@@ -1774,7 +1775,7 @@ test "resize then failed ack retains commit across destroyed window" {
     fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "cutoff")) },
   )
   let port = NativeTextInputPort::new(
-    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_, root) { binding.val = root; Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
     fn(_) { Ok(()) }, fn(_) { Ok(None) },
   )
   let entry = SettingsEntryController::start(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered))
@@ -1786,8 +1787,39 @@ test "resize then failed ack retains commit across destroyed window" {
   assert_eq(owner.pending_records().length(), 1)
   assert_true(entry.advance_once(1L) is Err(_))
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_true(owner.resolve_destroyed_receipt(5L) is Err(_))
+  assert_true(owner.retire_destroyed_model_receipt(4L) is Err(_))
   assert_true(entry.terminal_step(ApplyNext).unwrap() is ModelApplied(1L, true))
   assert_eq(owner.model().name(), "日本")
+  assert_true(owner.receipt_stage_for_sequence(4L) is Some(ReceiptModelApplied))
+  assert_true(owner.resolve_destroyed_receipt(4L) is Err(_))
+  let original_session = owner.session.unwrap()
+  owner.session = Some({ epoch: original_session.epoch, binding: original_session.binding + 1UL, })
+  assert_true(owner.resolve_destroyed_receipt(5L) is Err(_))
+  owner.session = Some({ epoch: original_session.epoch + 1UL, binding: original_session.binding, })
+  assert_true(owner.resolve_destroyed_receipt(5L) is Err(_))
+  owner.session = Some(original_session)
+  owner.terminal_applied = Some((1L, true))
+  assert_true(owner.resolve_destroyed_receipt(5L) is Err(_))
+  owner.terminal_applied = None
+  assert_true(owner.receipt_stage_for_sequence(4L) is Some(ReceiptModelApplied))
+  owner.resolve_destroyed_receipt(5L).unwrap()
+  assert_true(owner.receipt_stage_for_sequence(5L) is Some(ReceiptTerminalResolved))
+  assert_true(owner.retire_destroyed_model_receipt(5L) is Err(_))
+  owner.terminal_applied = Some((1L, true))
+  assert_true(owner.retire_destroyed_model_receipt(4L) is Err(_))
+  owner.terminal_applied = None
+  owner.session = Some({ epoch: original_session.epoch, binding: original_session.binding + 1UL, })
+  assert_true(owner.retire_destroyed_model_receipt(4L) is Err(_))
+  owner.session = Some(original_session)
+  assert_true(owner.acknowledged_receipt_identity(3) is Some((_, 4, _, 7UL)))
+  owner.acknowledged_receipts[3].stage = ReceiptActionRequired
+  assert_true(owner.retire_destroyed_model_receipt(4L) is Err(_))
+  owner.acknowledged_receipts[3].stage = ReceiptModelApplied
+  owner.retire_destroyed_model_receipt(4L).unwrap()
+  assert_true(owner.receipt_stage_for_sequence(4L) is None)
+  assert_true(owner.receipt_stage_for_sequence(5L) is Some(ReceiptTerminalResolved))
+  assert_true(owner.retire_destroyed_model_receipt(4L) is Err(_))
   assert_true(entry.terminal_step(ApplyNext) is Err(_))
   assert_eq(owner.model().name(), "日本")
   assert_false(owner.can_stop())
@@ -1851,6 +1883,52 @@ test "terminal receipt identity cannot be replaced by later poll" {
   assert_true(entry.terminal_step(ApplyNext) is Err(_))
   assert_eq(owner.pending_records().length(), 1)
   assert_eq(owner.model().name(), "")
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "destroyed terminal policy preserves active preedit until observed resolution" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding, })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  owner.terminal_owner = Some(lease)
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.mounted.validate_terminal_text_delivery(lease, preedit).unwrap()
+  assert_true(owner.mounted.text_input(7UL, preedit).unwrap())
+  owner.mounted.note_terminal_text_delivery(lease, preedit).unwrap()
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  owner.mounted.invalidate_layout()
+  owner.suspended = true
+  let destroyed = @platform.Event::new(owner.window, 3L, 1.0, @platform.Destroyed)
+  owner.inflight = Some(OrderedPlatform(destroyed))
+  owner.retained_destroyed_prefix = Some(0)
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedPlatform(destroyed)), owner.window, 3, binding, 7UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  assert_true(owner.resolve_destroyed_receipt(3L) is Err(_))
+  assert_true(owner.terminal_destroyed_sequence is None)
+  assert_true(owner.receipt_stage_for_sequence(3L) is Some(ReceiptAcknowledgedOnly))
+  assert_eq(owner.model().name(), "")
+  // An independently observed pre-Destroyed Cancel remains a real ordered
+  // observation; the terminal operation itself never manufactures one.
+  owner.retained_destroyed_prefix = Some(1)
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 2L, 7UL, @text_host.Cancel)))
+  owner.reconcile_terminal_observation().unwrap()
+  owner.resolve_destroyed_receipt(3L).unwrap()
+  assert_true(owner.receipt_stage_for_sequence(3L) is Some(ReceiptTerminalResolved))
+  assert_eq(owner.model().name(), "")
+  assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
 }
 

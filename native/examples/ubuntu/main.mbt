@@ -194,6 +194,7 @@ fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
           Some(@common.ReceiptSessionApplied) => control_reply(74)
           Some(@common.ReceiptActionRequired) => control_reply(76)
           Some(@common.ReceiptModelApplied) => control_reply(77)
+          Some(@common.ReceiptTerminalResolved) => control_reply(84)
           None => control_reply(69)
         }
       }
