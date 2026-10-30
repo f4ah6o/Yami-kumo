@@ -7,7 +7,7 @@ import socket
 import struct
 import sys
 
-COMMANDS = {"status": b"s", "receipt": b"t", "stage": b"j", "owned": b"o", "reconcile": b"d", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resume": b"u", "cutoff": b"c", "stop": b"q"}
+COMMANDS = {"status": b"s", "receipt": b"t", "prefix": b"b", "stage": b"j", "owned": b"o", "reconcile": b"d", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resume": b"u", "cutoff": b"c", "stop": b"q"}
 REPLIES = {
     b"S": "suspended; owner and host retained",
     b"N": "no suspended owner; inspect the application's reason log",
@@ -22,7 +22,10 @@ REPLIES = {
     b"J": "text session applied; model and geometry are not implied",
     b"Y": "entered target recorded and acknowledged; scene and shutdown are not implied",
     b"P": "non-input platform event handled locally; geometry and shutdown are not implied",
+    b"H": "pointer move passed local dispatch without a pending action; scene and geometry are not implied",
     b"Z": "owned text observation applied without a model action; geometry is not implied",
+    b"X": "local retained prefix resolved; this is not native proof or permission to ACK",
+    b"Q": "local retained prefix unresolved or unavailable; owner remains retained",
     b"L": "terminal field applied; its model action remains required",
     b"T": "destroyed event validated for the original owner; shutdown is not implied",
     b"W": "owned text reconciled; scene and shutdown are not implied",

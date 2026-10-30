@@ -2100,6 +2100,9 @@ test "platform stage refuses wrong payload and ambiguous receipt sequence" {
   })
   owner.note_handled_platform(resize)
   assert_true(owner.receipt_stage_for_sequence(1L) is Some(ReceiptAcknowledgedOnly))
+  let wrong_scale = @platform.Event::new(owner.window, 1L, 2.0, @platform.FrameCompleted)
+  owner.note_handled_platform(wrong_scale)
+  assert_true(owner.receipt_stage_for_sequence(1L) is Some(ReceiptAcknowledgedOnly))
   owner.acknowledged_receipts.push({
     receipt: NativeRetainedReceipt::new(Some(OrderedPlatform(frame)), owner.window, 1, 0UL, 0UL, fn() { Ok(()) }),
     stage: ReceiptAcknowledgedOnly,
@@ -2109,6 +2112,189 @@ test "platform stage refuses wrong payload and ambiguous receipt sequence" {
   assert_true(owner.acknowledged_receipts[0].stage is ReceiptAcknowledgedOnly)
   assert_true(owner.acknowledged_receipts[1].stage is ReceiptAcknowledgedOnly)
   assert_false(owner.can_stop())
+}
+
+///|
+test "retained pointer move requires dispatch and an empty action queue" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let sequence = Ref(1)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      let index = sequence.val
+      let event = match index {
+        1 | 2 => Some(OrderedPlatform(@platform.Event::new(window, index.to_int64(), 1.0, @platform.FrameCompleted)))
+        3 => Some(OrderedPlatform(@platform.Event::new(window, 3L, 1.0,
+          @platform.Input(@primitives.PointerMoved(position=@primitives.Point::new(10.0, 10.0).unwrap())))))
+        4 => None
+        _ => return Ok(None)
+      }
+      Ok(Some(NativeRetainedReceipt::new(event, window, index, 0UL, 0UL, fn() {
+        sequence.val += 1
+        Ok(())
+      })))
+    },
+    fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  assert_true(owner.drive() is Err(_))
+  assert_eq(owner.mounted.last_dispatched_input_sequence(), 3L)
+  assert_true(owner.receipt_stage_for_sequence(3L) is Some(ReceiptPointerMovedHandled))
+  assert_true(owner.pending_receipt_identity() is Some((_, 4, _, _)))
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "pending action retains pointer move without dispatch" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let owner_ref : Ref[SettingsRunOwner?] = Ref(None)
+  let activated = Ref(false)
+  let sequence = Ref(1)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      let index = sequence.val
+      let event = match index {
+        1 | 2 => @platform.Event::new(window, index.to_int64(), 1.0, @platform.FrameCompleted)
+        3 => {
+          let owner = owner_ref.val.unwrap()
+          activated.val = owner.mounted.activate(owner.mounted.callback(@shared_settings.settings_save()).unwrap())
+          @platform.Event::new(window, 3L, 1.0,
+            @platform.Input(@primitives.PointerMoved(position=@primitives.Point::new(10.0, 10.0).unwrap())))
+        }
+        _ => return Ok(None)
+      }
+      Ok(Some(NativeRetainedReceipt::new(Some(OrderedPlatform(event)), window, index, 0UL, 0UL, fn() {
+        sequence.val += 1
+        Ok(())
+      })))
+    },
+    fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  owner_ref.val = Some(owner)
+  assert_true(owner.drive() is Err(_))
+  assert_true(activated.val)
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(event)) && event.sequence() == 3L)
+  assert_true(owner.receipt_stage_for_sequence(3L) is Some(ReceiptAcknowledgedOnly))
+  assert_true(owner.mounted.has_pending_actions())
+  assert_eq(owner.mounted.last_dispatched_input_sequence(), 0L)
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "rejected pointer move remains owned and does not advance stage" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let owner_ref : Ref[SettingsRunOwner?] = Ref(None)
+  let advanced = Ref(false)
+  let sequence = Ref(1)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      let index = sequence.val
+      let event = match index {
+        1 | 2 => @platform.Event::new(window, index.to_int64(), 1.0, @platform.FrameCompleted)
+        3 => {
+          let owner = owner_ref.val.unwrap()
+          advanced.val = owner.mounted.handle_event(@platform.Event::new(window, 4L, 1.0, @platform.FocusChanged(true))).unwrap()
+          @platform.Event::new(window, 3L, 1.0,
+            @platform.Input(@primitives.PointerMoved(position=@primitives.Point::new(10.0, 10.0).unwrap())))
+        }
+        _ => return Ok(None)
+      }
+      Ok(Some(NativeRetainedReceipt::new(Some(OrderedPlatform(event)), window, index, 0UL, 0UL, fn() {
+        sequence.val += 1
+        Ok(())
+      })))
+    },
+    fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  owner_ref.val = Some(owner)
+  assert_true(owner.drive() is Err(_))
+  assert_true(advanced.val)
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(event)) && event.sequence() == 3L)
+  assert_true(owner.receipt_stage_for_sequence(3L) is Some(ReceiptAcknowledgedOnly))
+  assert_eq(owner.mounted.last_dispatched_input_sequence(), 0L)
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "local unsupported prefix snapshot requires consecutive resolved original owner" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.entered_target = Some((5, 11L, 4))
+  let frame = @platform.Event::new(owner.window, 1L, 1.0, @platform.FrameCompleted)
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedPlatform(frame)), owner.window, 1, 0UL, 0UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  owner.note_handled_platform(frame)
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::entered(owner.window, 2, binding, 7UL, 5, 11L, 4, fn() { Ok(()) }),
+    stage: ReceiptOwnerEntered,
+  })
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedText(preedit)), owner.window, 3, binding, 7UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  owner.deliver_owned_observation(preedit).unwrap()
+  let pending = NativeRetainedReceipt::new(None, owner.window, 4, binding, 7UL, fn() { Ok(()) })
+  owner.pending_host_receipt = Some(pending)
+  owner.receipt_pre_dispatch = Some(pending)
+  owner.suspended = true
+  assert_true(owner.unsupported_prefix_has_observed_stages())
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  // The snapshot is not permission to ACK; existing policy still refuses it.
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  owner.acknowledged_receipts[2].stage = ReceiptSessionApplied
+  assert_false(owner.unsupported_prefix_has_observed_stages())
+  owner.acknowledged_receipts[2].stage = ReceiptNoModelAction
+  owner.buffered.push(OrderedText(preedit))
+  assert_false(owner.unsupported_prefix_has_observed_stages())
+  ignore(owner.buffered.pop())
+  owner.host_epoch = Some(8UL)
+  assert_false(owner.unsupported_prefix_has_observed_stages())
+  owner.host_epoch = Some(7UL)
+  owner.session = Some({ epoch: 7UL, binding: binding + 1UL })
+  assert_false(owner.unsupported_prefix_has_observed_stages())
+  owner.session = Some({ epoch: 7UL, binding })
+  let save = owner.mounted.callback(@shared_settings.settings_save()).unwrap()
+  assert_true(owner.mounted.activate(save))
+  assert_false(owner.unsupported_prefix_has_observed_stages())
+  assert_true(owner.pending_receipt_identity() is Some((_, 4, _, 7UL)))
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+  // Invalidating the mounted frame makes the captured owner's token/geometry
+  // unusable for this snapshot even though its epoch and binding still match.
+  ignore(owner.mounted.next_action())
+  owner.mounted.invalidate_layout()
+  assert_false(owner.unsupported_prefix_has_observed_stages())
 }
 
 ///|

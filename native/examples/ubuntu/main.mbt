@@ -164,6 +164,11 @@ fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
       115 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, control_pending_sequence(entry))
       // t: inspect the exact native receipt sequence, without ACK.
       116 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, control_receipt_sequence(entry))
+      // b: inspect only the local prefix; this is not authority to ACK.
+      98 => match entry.owner() {
+        Some(owner) if owner.unsupported_prefix_has_observed_stages() => control_reply(88)
+        _ => control_reply(81)
+      }
       // r: retry ACK only for the inspected native sequence.
       114 => match entry.retry_receipt_sequence(control_sequence()) {
         Ok(@common.ReceiptAcknowledged) => control_reply(65)
@@ -199,6 +204,7 @@ fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
           Some(@common.ReceiptAcknowledgedOnly) => control_reply(75)
           Some(@common.ReceiptOwnerEntered) => control_reply(89)
           Some(@common.ReceiptPlatformHandled) => control_reply(80)
+          Some(@common.ReceiptPointerMovedHandled) => control_reply(72)
           Some(@common.ReceiptSessionApplied) => control_reply(74)
           Some(@common.ReceiptNoModelAction) => control_reply(90)
           Some(@common.ReceiptActionRequired) => control_reply(76)
