@@ -47,10 +47,12 @@ The noncomposing fixture is not a live host or IME acceptance.
 - Source-based native and shared UI CI pins use the exact GPUI candidate SHA
   `74d182c6368ca382f697023c5d3690b6c0c2dfbf`. The published
   `native/moon.mod` still requests GPUI `0.10.6`, which does not provide the
-  required `SessionOperation::Insert`; a registry-only consumer therefore
+  required `SessionOperation::Insert`. It also requests root Yami `0.2.3`,
+  which does not provide this draft's `Runtime::has_pending_actions` and
+  `Runtime::next_text_changed_for`. A registry-only native consumer therefore
   cannot build this draft. No unreleased version is represented as published.
-  Publishing or changing the production dependency requires the reviewed GPUI
-  candidate to be released first, followed by clean-consumer verification.
+  Both reviewed GPUI and Yami runtime changes need published versions and
+  correct dependency pins, followed by clean-consumer verification.
 
 Local candidate-source checks, Debian 13 x86_64 with moonc
 `0.10.15+943464bfa`: `moon test native/ui --target native --deny-warn`
