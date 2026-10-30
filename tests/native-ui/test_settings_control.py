@@ -119,6 +119,28 @@ class ControlSocketTests(unittest.TestCase):
             self.assertEqual(self.lib.gpui_settings_control_next(2000), 0)
             self.assertEqual(peer.recv(1), b"")
 
+    def test_receipt_query_and_retry_use_native_sequence(self) -> None:
+        script = Path(__file__).resolve().parents[2] / "scripts/settings_retained_control.py"
+        query = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "receipt"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("t"))
+        self.lib.gpui_settings_control_reply_sequence(ord("S"), 42)
+        stdout, stderr = query.communicate(timeout=3)
+        self.assertEqual(query.returncode, 0, stderr)
+        self.assertIn("native receipt sequence: 42", stdout)
+        retry = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "retry-ack", "--sequence", "42"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("r"))
+        self.assertEqual(self.lib.gpui_settings_control_sequence(), 42)
+        self.lib.gpui_settings_control_reply(ord("A"))
+        stdout, stderr = retry.communicate(timeout=3)
+        self.assertEqual(retry.returncode, 0, stderr)
+        self.assertIn("application and shutdown are not implied", stdout)
+
     def test_new_process_uses_fresh_socket_and_does_not_reuse_owner(self) -> None:
         code = (
             "import ctypes,sys; lib=ctypes.CDLL(sys.argv[1]); "

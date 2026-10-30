@@ -85,8 +85,10 @@ the process retains the owner and accepts one bounded control request at a time:
 
 ```
 python3 scripts/settings_retained_control.py SOCKET status
+python3 scripts/settings_retained_control.py SOCKET receipt
 python3 scripts/settings_retained_control.py SOCKET poll
 python3 scripts/settings_retained_control.py SOCKET apply --sequence SEQUENCE
+python3 scripts/settings_retained_control.py SOCKET retry-ack --sequence NATIVE_SEQUENCE
 python3 scripts/settings_retained_control.py SOCKET cutoff
 python3 scripts/settings_retained_control.py SOCKET stop
 ```
@@ -132,9 +134,12 @@ Local raw log SHA-256:
 The later retained-route candidate uses `GPUI_SOURCE=/workspace/gpui-retained-route`
 at `5cd2f231c6cbf529396cae633f6e5a0d6c9bea41`. The adapter peeks a native
 receipt, installs its opaque receipt and event in the original owner before
-ACK, and retains both after an ACK error. It stops on lifecycle or unsupported
-records without ACK; in particular, an Entered record currently prevents a
-normal IME session from continuing. A callback fixture covers ACK failure,
+ACK, and retains both after an ACK error. Entered is accepted only after the
+original window, binding, portable and native epochs, seat and proxy are
+validated and stored; Left and unsupported records remain unacknowledged. An
+interruption in ACK before dispatch can be retried by native sequence, then
+explicitly resumed through the owner API. The socket exposes ACK retry but not
+resume. Other failure points cannot be resumed through this API. Callback fixtures cover ACK failure,
 explicit retry, identity retention and one model application; it does not
 simulate the native queue. The receipt ledger retains ACKed native identities
 and is limited to 64 entries. It stops admission at capacity; retirement and
@@ -153,7 +158,15 @@ Linux sysroot; its binary SHA-256 was
 `791be6611f7ea2858149bf35d9c2d34c88717761f3263c3f371c056946d0e5dd`.
 Neither result is a live IME or public dependency acceptance.
 
-The control transport has **8/8 PASS** local Linux socket fixture tests,
+The subsequent Entered and pre-dispatch resume fixtures passed **37/37**
+against the same source candidate (log SHA-256
+`8959523f2279200b0c474edbaccca38e6f691827122bf0d722c89debdf0749dd`). The
+rebuilt Ubuntu example has SHA-256
+`9f26085369cb9b4ce56f7b8f76b32ec02fe9d3378569708ab601f89136035e9f`.
+These are synthetic and build results; the real native callback path and live
+IME remain unverified.
+
+The control transport has **9/9 PASS** local Linux socket fixture tests,
 including same-UID requests, bounded idle clients, sequence-bound apply, fresh
 sockets in the same and a new process, and cleanup. Cross-UID peer rejection is
 implemented but has not been independently exercised in this unprivileged

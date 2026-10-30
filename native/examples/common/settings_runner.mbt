@@ -35,6 +35,7 @@ pub fn NativeOrderedTextPort::new(
 /// An unsupported observation has no portable event and remains unacknowledged.
 pub struct NativeRetainedReceipt {
   event : NativeOrderedEvent?
+  entered : (Int32, Int64, Int32)?
   window : @platform.WindowId
   sequence : Int32
   root : UInt64
@@ -48,7 +49,18 @@ pub fn NativeRetainedReceipt::new(
   root : UInt64, epoch : UInt64,
   ack : () -> Result[Unit, @diagnostics.FrameworkError],
 ) -> NativeRetainedReceipt {
-  { event, window, sequence, root, epoch, ack }
+  { event, entered: None, window, sequence, root, epoch, ack }
+}
+
+///|
+/// An Entered receipt has already been decoded by the native route; its
+/// native epoch is compared with that route's bound epoch by the adapter.
+pub fn NativeRetainedReceipt::entered(
+  window : @platform.WindowId, sequence : Int32, root : UInt64, epoch : UInt64,
+  native_epoch : Int32, seat : Int64, proxy : Int32,
+  ack : () -> Result[Unit, @diagnostics.FrameworkError],
+) -> NativeRetainedReceipt {
+  { event: None, entered: Some((native_epoch, seat, proxy)), window, sequence, root, epoch, ack }
 }
 
 ///|
@@ -349,6 +361,22 @@ pub fn SettingsEntryController::apply_sequence(
 }
 
 ///|
+/// Retry only the currently retained native receipt, never the next receipt.
+pub fn SettingsEntryController::retry_receipt_sequence(
+  self : SettingsEntryController, sequence : Int64,
+) -> Result[SettingsTerminalProgress, @diagnostics.FrameworkError] {
+  let owner = match self.outcome {
+    Suspended(value, _) => value
+    _ => return Err(runner_error("settings_entry", "no suspended owner"))
+  }
+  match owner.pending_receipt_identity() {
+    Some((_, current, _, _)) if sequence > 0L && sequence == current.to_int64() =>
+      owner.terminal_step(RetryReceiptAck)
+    _ => Err(runner_error("settings_entry", "receipt sequence is no longer pending"))
+  }
+}
+
+///|
 /// Stop only after an outcome that already proved complete owner cleanup.
 /// NotStarted and Suspended are conservative failures, leaving the host alive.
 pub fn SettingsEntryController::try_stop(
@@ -419,6 +447,10 @@ pub struct SettingsRunOwner {
   // Retain native identities even after host ACK until an explicit per-stage
   // retirement policy exists. This ledger is bounded and fails closed.
   priv acknowledged_receipts : Array[NativeRetainedReceipt]
+  priv mut entered_target : (Int32, Int64, Int32)?
+  // True only when drive failed in ACK before dispatching this observation.
+  priv mut receipt_pre_dispatch : Bool
+  priv mut resume_pre_dispatch : Bool
   priv mut cutoff_done : Bool
   priv mut completed : Bool
   priv mut running : Bool
@@ -599,16 +631,39 @@ pub fn SettingsRunOwner::acknowledged_receipt_identity(
 }
 
 ///|
+/// Continue only the program point interrupted by a failed receipt ACK. Other
+/// failures, including application and scene failures, remain suspended.
+pub fn SettingsRunOwner::resume_after_receipt_ack(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || !self.receipt_pre_dispatch ||
+    self.pending_host_receipt is Some(_) || self.cutoff_done {
+    return Err(runner_error("ordered_text", "no acknowledged pre-dispatch interruption"))
+  }
+  self.suspended = false
+  self.resume_pre_dispatch = true
+  self.drive()
+}
+
+///|
 fn SettingsRunOwner::ack_owned_receipt(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   match self.pending_host_receipt {
     None => Err(runner_error("ordered_text", "no retained receipt"))
-    Some(receipt) if receipt.event is None =>
+    Some(receipt) if receipt.event is None && receipt.entered is None =>
       Err(runner_error("ordered_text", "unsupported receipt requires an explicit policy"))
+    Some(receipt) if receipt.entered is Some(_) && receipt.entered != self.entered_target =>
+      Err(runner_error("ordered_text", "entered owner was not validated"))
     Some(_) if self.acknowledged_receipts.length() >= 64 =>
       Err(runner_error("ordered_text", "receipt ledger is full"))
-    Some(receipt) =>
+    Some(receipt) => {
+      if receipt.entered is Some(_) {
+        match self.validate_entered(receipt) {
+          Err(error) => return Err(error)
+          Ok(_) => ()
+        }
+      }
       match (receipt.ack)() {
         Err(error) => Err(error)
         Ok(_) => {
@@ -617,7 +672,56 @@ fn SettingsRunOwner::ack_owned_receipt(
           Ok(())
         }
       }
+    }
   }
+}
+
+///|
+/// Record the original session and native seat/proxy before acknowledging an
+/// Entered notification. No preedit, cancel, model action or scene is implied.
+fn SettingsRunOwner::own_entered(
+  self : SettingsRunOwner, receipt : NativeRetainedReceipt,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.entered_target is Some(_) {
+    return Err(runner_error("ordered_text", "entered target already owned"))
+  }
+  let target = match self.validate_entered(receipt) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  self.entered_target = Some(target)
+  Ok(())
+}
+
+///|
+fn SettingsRunOwner::validate_entered(
+  self : SettingsRunOwner, receipt : NativeRetainedReceipt,
+) -> Result[(Int32, Int64, Int32), @diagnostics.FrameworkError] {
+  let target = match receipt.entered {
+    Some((native_epoch, seat, proxy)) if native_epoch > 0 && seat > 0L && proxy > 0 =>
+      (native_epoch, seat, proxy)
+    _ => return Err(runner_error("ordered_text", "invalid entered target"))
+  }
+  let session = match self.session {
+    Some(value) => value
+    None => return Err(runner_error("ordered_text", "entered session unavailable"))
+  }
+  let owner = match self.terminal_owner {
+    Some(value) => value
+    None => return Err(runner_error("ordered_text", "entered owner unavailable"))
+  }
+  let focused = match self.mounted.focused_text() {
+    Some(value) => value
+    None => return Err(runner_error("ordered_text", "entered focus unavailable"))
+  }
+  if !self.host_epoch_verified ||
+    self.host_epoch != Some(session.epoch) || receipt.window != self.window ||
+    receipt.root != session.binding || receipt.epoch != session.epoch ||
+    focused.binding_id() != session.binding ||
+    !owner.matches_session(self.window, session.epoch, session.binding) {
+    return Err(runner_error("ordered_text", "entered owner mismatch"))
+  }
+  Ok(target)
 }
 
 ///|
@@ -906,6 +1010,9 @@ pub fn SettingsRunOwner::new(
     inflight: None,
     pending_host_receipt: None,
     acknowledged_receipts: [],
+    entered_target: None,
+    receipt_pre_dispatch: false,
+    resume_pre_dispatch: false,
     cutoff_done: false,
     completed: false,
     running: false,
@@ -921,7 +1028,7 @@ pub fn SettingsRunOwner::drive(
   if self.running ||
     self.completed ||
     self.suspended ||
-    self.inflight is Some(_) || self.pending_host_receipt is Some(_) ||
+    (self.inflight is Some(_) && !self.resume_pre_dispatch) || self.pending_host_receipt is Some(_) ||
     self.cutoff_done {
     return Err(
       runner_error("ordered_text", "retained state requires explicit recovery"),
@@ -1054,7 +1161,7 @@ fn SettingsRunOwner::drive_inner(
             }
         }
       Some(ordered) => {
-        match (self.held_tab, self.session) {
+        if !self.resume_pre_dispatch { match (self.held_tab, self.session) {
           (Some(tab), Some(current)) => {
             let composing = match mounted.focused_text() {
               Some(value) => value.composing()
@@ -1086,9 +1193,13 @@ fn SettingsRunOwner::drive_inner(
           (Some(_), None) =>
             return Err(runner_error("ordered_text", "held session disappeared"))
           _ => ()
-        }
+        } }
         if event is None {
-          let ingress = if self.held_tab is None &&
+          let ingress = if self.resume_pre_dispatch {
+            self.resume_pre_dispatch = false
+            self.receipt_pre_dispatch = false
+            self.inflight
+          } else if self.held_tab is None &&
             gate.input_ready() &&
             !held_platform.is_empty() {
             Some(OrderedPlatform(held_platform.remove(0)))
@@ -1113,13 +1224,22 @@ fn SettingsRunOwner::drive_inner(
                 Ok(Some(receipt)) => {
                   self.pending_host_receipt = Some(receipt)
                   self.inflight = receipt.event
+                  self.receipt_pre_dispatch = true
                   match receipt.event {
+                    None if receipt.entered is Some(_) =>
+                      match self.own_entered(receipt) {
+                        Ok(_) => ()
+                        Err(error) => return Err(error)
+                      }
                     None => return Err(runner_error("ordered_text", "unsupported receipt requires an explicit policy"))
                     Some(_) => ()
                   }
                   match self.ack_owned_receipt() {
                     Err(error) => return Err(error)
-                    Ok(_) => receipt.event
+                    Ok(_) => {
+                      self.receipt_pre_dispatch = false
+                      receipt.event
+                    }
                   }
                 }
               }

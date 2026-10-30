@@ -124,6 +124,17 @@ fn control_pending_sequence(entry : @common.SettingsEntryController) -> Int64 {
 }
 
 ///|
+fn control_receipt_sequence(entry : @common.SettingsEntryController) -> Int64 {
+  match entry.owner() {
+    Some(owner) => match owner.pending_receipt_identity() {
+      Some((_, sequence, _, _)) => sequence.to_int64()
+      None => 0L
+    }
+    None => 0L
+  }
+}
+
+///|
 /// Each request is bounded. Idle or a disconnected client never releases an
 /// unresolved owner; this experimental service does not claim completion.
 fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
@@ -148,6 +159,14 @@ fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
       0 => ()
       // s: status; report suspended separately from other unresolved states.
       115 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, control_pending_sequence(entry))
+      // t: inspect the exact native receipt sequence, without ACK.
+      116 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, control_receipt_sequence(entry))
+      // r: retry ACK only for the inspected native sequence.
+      114 => match entry.retry_receipt_sequence(control_sequence()) {
+        Ok(@common.ReceiptAcknowledged) => control_reply(65)
+        Err(error) => control_step_error(error, 69)
+        Ok(_) => control_reply(69)
+      }
       // p: one nonblocking host poll; a blank poll proves no cutoff.
       112 =>
         match entry.terminal_step(@common.PollOnce) {
@@ -259,11 +278,23 @@ fn main {
           Err(error) => Err(error)
           Ok(None) => Ok(None)
           Ok(Some(receipt)) => {
+            match receipt.event() {
+              @ubuntu_host.Lifecycle(target, @ubuntu_host.Entered) if
+                target.window == receipt.native_window() &&
+                target.sequence == receipt.native_sequence().to_int64() &&
+                retained.native_epoch() == Some(target.epoch) =>
+                return Ok(Some(@common.NativeRetainedReceipt::entered(
+                  receipt.native_window(), receipt.native_sequence(), receipt.root(),
+                  receipt.epoch(), target.epoch, target.seat, target.proxy_generation,
+                  fn() { receipt.ack() },
+                )))
+              _ => ()
+            }
             let event = match receipt.event() {
               @ubuntu_host.Text(value) => Some(@common.OrderedText(value))
               @ubuntu_host.Platform(value) => Some(@common.OrderedPlatform(value))
-              // Preserve the actual opaque receipt for an explicit lifecycle or
-              // unsupported-record policy; neither is an observed cancel.
+              // Preserve other lifecycle and unsupported records without ACK;
+              // neither is an observed cancel.
               _ => None
             }
             Ok(Some(@common.NativeRetainedReceipt::new(

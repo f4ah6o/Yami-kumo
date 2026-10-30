@@ -1528,6 +1528,146 @@ test "full receipt ledger stops admission without dropping its owner" {
 }
 
 ///|
+test "entered acknowledgment requires the original session and native target" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding, })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  let attempts = Ref(0)
+  let ack = fn() { attempts.val += 1; Ok(()) }
+  let wrong_window = NativeRetainedReceipt::entered(@platform.WindowId::new(owner.window.value() + 1L), 1, binding, 7UL, 5, 11L, 4, ack)
+  let wrong_binding = NativeRetainedReceipt::entered(owner.window, 1, binding + 1UL, 7UL, 5, 11L, 4, ack)
+  let wrong_epoch = NativeRetainedReceipt::entered(owner.window, 1, binding, 8UL, 5, 11L, 4, ack)
+  let no_seat = NativeRetainedReceipt::entered(owner.window, 1, binding, 7UL, 5, 0L, 4, ack)
+  let no_proxy = NativeRetainedReceipt::entered(owner.window, 1, binding, 7UL, 5, 11L, 0, ack)
+  for bad in [wrong_window, wrong_binding, wrong_epoch, no_seat, no_proxy] {
+    assert_true(owner.own_entered(bad) is Err(_))
+    assert_true(owner.entered_target is None)
+  }
+  assert_eq(attempts.val, 0)
+  let entered = NativeRetainedReceipt::entered(owner.window, 1, binding, 7UL, 5, 11L, 4, ack)
+  owner.host_epoch_verified = false
+  assert_true(owner.own_entered(entered) is Err(_))
+  owner.host_epoch_verified = true
+  owner.pending_host_receipt = Some(entered)
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  owner.own_entered(entered).unwrap()
+  assert_true(owner.entered_target is Some((5, 11L, 4)))
+  owner.ack_owned_receipt().unwrap()
+  assert_eq(attempts.val, 1)
+  assert_true(owner.own_entered(entered) is Err(_))
+  assert_eq(owner.acknowledged_receipt_count(), 1)
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "ack retry resumes the exact not-yet-dispatched text only once" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let records : Array[NativeOrderedEvent] = [
+    OrderedPlatform(@platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted)),
+    OrderedPlatform(@platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted)),
+    OrderedText(@text_host.TextInputEvent::new(window, 1L, 7UL, @text_host.Commit(text="日本"))),
+    OrderedPlatform(@platform.Event::new(window, 3L, 1.0, @platform.Destroyed)),
+  ]
+  let native_sequence = Ref(1)
+  let fail_once = Ref(true)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      if records.is_empty() { return Ok(None) }
+      let record = records[0]
+      let sequence = native_sequence.val
+      Ok(Some(NativeRetainedReceipt::new(Some(record), window, sequence, 0UL, 0UL, fn() {
+        if record is OrderedText(_) && fail_once.val {
+          fail_once.val = false
+          return Err(runner_error("test_ack", "injected failure"))
+        }
+        ignore(records.remove(0))
+        native_sequence.val += 1
+        Ok(())
+      })))
+    },
+    fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "cutoff")) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let entry = SettingsEntryController::start(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered))
+  let owner = entry.owner().unwrap()
+  assert_true(owner.inflight_record() is Some(OrderedText(_)))
+  assert_eq(owner.model().name(), "")
+  assert_true(entry.retry_receipt_sequence(4L) is Err(_))
+  assert_true(entry.retry_receipt_sequence(3L).unwrap() is ReceiptAcknowledged)
+  assert_true(entry.retry_receipt_sequence(3L) is Err(_))
+  assert_true(owner.resume_after_receipt_ack() is Err(_))
+  assert_eq(owner.model().name(), "日本")
+  assert_true(owner.resume_after_receipt_ack() is Err(_))
+  assert_eq(owner.model().name(), "日本")
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "entered ack retry continues original session without consuming text" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let binding = Ref(0UL)
+  let step = Ref(0)
+  let fail_once = Ref(true)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      let sequence = step.val + 1
+      let ack = fn() {
+        if step.val == 2 && fail_once.val {
+          fail_once.val = false
+          return Err(runner_error("test_ack", "injected entered failure"))
+        }
+        step.val += 1
+        Ok(())
+      }
+      if step.val == 2 {
+        return Ok(Some(NativeRetainedReceipt::entered(window, sequence, binding.val, 7UL, 5, 11L, 4, ack)))
+      }
+      let event = match step.val {
+        0 => OrderedPlatform(@platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted))
+        1 => OrderedPlatform(@platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted))
+        3 => OrderedText(@text_host.TextInputEvent::new(window, 1L, 7UL, @text_host.Commit(text="日本")))
+        4 => OrderedPlatform(@platform.Event::new(window, 3L, 1.0, @platform.Destroyed))
+        _ => return Ok(None)
+      }
+      Ok(Some(NativeRetainedReceipt::new(Some(event), window, sequence, binding.val, 7UL, ack)))
+    },
+    fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "cutoff")) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, root) { binding.val = root; Ok(7UL) }, fn(epoch, _) { Ok(epoch) },
+    fn(epoch) { Ok(epoch) }, fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let entry = SettingsEntryController::start(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered))
+  let owner = entry.owner().unwrap()
+  assert_true(owner.pending_receipt_identity() is Some((_, 3, _, 7UL)))
+  assert_true(owner.inflight_record() is None)
+  assert_true(owner.entered_target is Some((5, 11L, 4)))
+  assert_eq(step.val, 2)
+  assert_true(entry.retry_receipt_sequence(3L).unwrap() is ReceiptAcknowledged)
+  assert_eq(step.val, 3)
+  assert_true(owner.resume_after_receipt_ack() is Err(_))
+  assert_eq(owner.model().name(), "日本")
+  assert_true(owner.resume_after_receipt_ack() is Err(_))
+  assert_eq(owner.model().name(), "日本")
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
 test "entry sequence retry does not apply the next record" {
   let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
   let port = NativeTextInputPort::new(
