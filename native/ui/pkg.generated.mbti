@@ -73,8 +73,10 @@ pub struct Mounted {
   // private fields
 }
 pub fn Mounted::activate(Self, Activation) -> Bool
+pub fn Mounted::apply_terminal_commit(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn Mounted::begin_held_text(Self, UInt64) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn Mounted::callback(Self, @core.NodeKey) -> Activation?
+pub fn Mounted::capture_terminal_text_owner(Self, UInt64) -> Result[TerminalTextOwner, @diagnostics.FrameworkError]
 pub fn Mounted::commit(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Frame, @diagnostics.FrameworkError]
 pub fn Mounted::dispose(Self) -> Unit
 pub fn Mounted::finish_held_text(Self, UInt64) -> Result[Unit, @diagnostics.FrameworkError]
@@ -92,6 +94,8 @@ pub fn Mounted::next_action(Self) -> @core.SemanticAction?
 pub fn Mounted::next_clipboard(Self) -> ClipboardRequest?
 pub fn Mounted::next_focus_result(Self) -> @runtime.FocusResult?
 pub fn Mounted::next_held_text_action(Self, UInt64) -> Result[@core.SemanticAction?, @diagnostics.FrameworkError]
+pub fn Mounted::next_terminal_text_action(Self, TerminalTextOwner) -> Result[@core.SemanticAction?, @diagnostics.FrameworkError]
+pub fn Mounted::note_terminal_text_delivery(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::paste(Self, PasteRequest, String) -> Bool
 pub fn Mounted::publish(Self, Prepared) -> Result[Frame, @diagnostics.FrameworkError]
 pub fn Mounted::release_held_text_for_retry(Self, UInt64) -> Result[Unit, @diagnostics.FrameworkError]
@@ -107,6 +111,10 @@ pub struct PasteRequest {
 }
 
 pub struct Prepared {
+  // private fields
+}
+
+pub struct TerminalTextOwner {
   // private fields
 }
 

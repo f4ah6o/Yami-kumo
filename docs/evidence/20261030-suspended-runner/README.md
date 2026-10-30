@@ -12,11 +12,21 @@ that receipt. It stops polling before fetching an additional source event when
 its deferred buffers reach 64.
 
 A scripted regression reproduces frame-pending -> resize -> original-epoch
-`Commit("日本")` -> Destroyed. After the structural error the model remains
-unchanged, the commit remains in the owner buffer, Destroyed remains inflight,
-the original window and epoch/binding are retained, and the fake host has not
-been stopped. Re-entering `drive` cannot silently replay either record. This is
-retention, **not** successful application to the model or final recovery.
+`Commit("日本")` -> Destroyed. After the structural error the commit remains
+buffered, Destroyed remains inflight, the original window and epoch/binding are
+retained, and the fake host has not been stopped. An explicit experimental
+terminal operation then applies this commit once to the original mounted field
+and its model; the model becomes `日本`. Geometry is **not published**, the
+terminal record remains inflight, and this is not full recovery or shutdown.
+Repeated application fails. An ordered preedit prefix, held TextSession,
+missing sequence, wrong mounted owner, and reentrant invalidation all fail
+closed in fixtures. Reentrant failure leaves the original commit retryable.
+
+The opaque field lease is captured immediately after a successful host begin;
+the capture API relies on its caller to supply that host-issued epoch. A live
+lease cannot be replaced by another epoch because queue completion has not been
+proved. The operation handles only a terminal Commit at the buffer head; it
+does not resolve earlier preedit/cancel, or authenticate forged host events.
 
 ## Unresolved P1
 
@@ -43,8 +53,10 @@ Candidate source: gpui `74d182c6368ca382f697023c5d3690b6c0c2dfbf`, Yami base
 published dependencies lacking the candidate API. Tests use a local source
 workspace and do not establish published-package compatibility.
 
-Local native common test after the retained outcome and one-shot refusal:
-**18/18 PASS**, log SHA-256
-`697abc2b94bf0496291b58921f385791677278be88e76dce435bc38dab7c2e7f`.
-This validates a caller receiving the retained owner and seeing no fake-host
-stop; no production main or live IME test was performed.
+Local combined native UI and common fixture suite: **119/119 PASS** using
+`GPUI_SOURCE=/workspace/gpui-ordered-fence` and
+`scripts/native_ui_workspace.sh ... moon test <ui> <examples/common> --target
+native --deny-warn --no-parallelize`. This is scripted evidence only; no
+production main, live IME, or public-registry consumer was tested.
+Local raw log SHA-256:
+`243cc15e88b287b659bff42ddc846ef06c1218455320ace188366842ea1295f2`.

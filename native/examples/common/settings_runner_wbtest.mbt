@@ -872,10 +872,21 @@ test "retained Settings owner keeps buffered commit and terminal record on error
   }
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
   assert_true(owner.inflight_receipt() is None)
+  // Reconcile the original commit into its still-owned model without trying
+  // to publish a scene for the destroyed window or stop the backend.
+  owner.reconcile_terminal_commit().unwrap()
+  assert_eq(owner.model().name(), "日本")
+  assert_eq(owner.terminal_model_sequence(), 1L)
+  assert_eq(owner.pending_records().length(), 0)
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_true(owner.reconcile_terminal_commit() is Err(_))
+  assert_eq(owner.model().name(), "日本")
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
   // Automatic replay is deliberately unavailable until owner-preserving
   // geometry/terminal recovery is implemented.
   assert_true(owner.drive() is Err(_))
-  assert_eq(owner.pending_records().length(), 1)
+  assert_eq(owner.pending_records().length(), 0)
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
   assert_eq(host.stop_count(), 0)
 }
@@ -935,5 +946,54 @@ test "retained owner distinguishes session receipt from model publication" {
   assert_false(owner.mounted.held_text_input(7UL, event).unwrap())
   assert_true(owner.mounted.next_action() is None)
   assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "terminal recovery never skips a buffered preedit prefix" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let field = owner.mounted.focused_text().unwrap()
+  owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.mounted.invalidate_layout()
+  owner.suspended = true
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))))
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 2L, 7UL, @text_host.Commit(text="日本"))))
+  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 3L, 1.0, @platform.Destroyed)))
+  assert_true(owner.reconcile_terminal_commit() is Err(_))
+  assert_eq(owner.pending_records().length(), 2)
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "terminal recovery does not steal a held TextSession" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let field = owner.mounted.focused_text().unwrap()
+  owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  assert_true(owner.mounted.begin_held_text(7UL).unwrap())
+  owner.mounted.invalidate_layout()
+  owner.suspended = true
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))))
+  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 3L, 1.0, @platform.Destroyed)))
+  assert_true(owner.reconcile_terminal_commit() is Err(_))
+  assert_eq(owner.pending_records().length(), 1)
+  assert_eq(owner.model().name(), "")
   assert_eq(host.stop_count(), 0)
 }

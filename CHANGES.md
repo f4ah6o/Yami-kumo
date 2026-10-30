@@ -4,6 +4,9 @@
 
 ### Added
 
+- Draft only: reconcile a buffered terminal commit against the original
+  mounted field and Settings model, while retaining the terminal event and
+  host. Preedit prefixes, held sessions, geometry and shutdown remain open.
 - Draft only: retain Settings run state in an explicit owner so a caller that
   holds the owner can inspect the original buffered commit and the terminal
   event after a structural failure. The legacy entrypoint still discards that

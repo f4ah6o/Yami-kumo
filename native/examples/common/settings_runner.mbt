@@ -253,6 +253,9 @@ pub struct SettingsRunOwner {
   priv mounted : @ui.Mounted
   priv mut settings : @shared_settings.Model
   priv mut session : TextSession?
+  priv mut terminal_owner : @ui.TerminalTextOwner?
+  priv mut terminal_applied : (Int64, Bool)?
+  priv mut terminal_model_sequence : Int64
   priv mut ax_token : Int64
   priv mut dialog_token : Int64
   priv mut last_document : String
@@ -316,6 +319,67 @@ pub fn SettingsRunOwner::cutoff_completed(self : SettingsRunOwner) -> Bool {
 ///|
 pub fn SettingsRunOwner::last_platform_sequence(self : SettingsRunOwner) -> Int64 {
   self.last_sequence
+}
+
+///|
+/// Apply one original buffered commit to its still-owned field after a
+/// terminal window event. This deliberately does not publish a scene, finish
+/// the host session, consume the terminal record, or permit host shutdown.
+/// Any non-text prefix, held TextSession or stale identity remains suspended.
+pub fn SettingsRunOwner::reconcile_terminal_commit(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.held_tab is Some(_) {
+    return Err(runner_error("terminal_recovery", "terminal owner is unavailable"))
+  }
+  match self.inflight {
+    Some(OrderedPlatform(event)) if event.window() == self.window &&
+      (event.kind() is @platform.Destroyed || event.kind() is @platform.CloseRequested ||
+       event.kind() is @platform.ExitRequested) => ()
+    _ => return Err(runner_error("terminal_recovery", "terminal event is not retained"))
+  }
+  let owner = match self.terminal_owner {
+    Some(value) => value
+    None => return Err(runner_error("terminal_recovery", "original field owner is unavailable"))
+  }
+  if self.buffered.is_empty() {
+    return Err(runner_error("terminal_recovery", "no retained record"))
+  }
+  let event = match self.buffered[0] {
+    OrderedText(value) if value.kind() is @text_host.Commit(_) => value
+    _ => return Err(runner_error("terminal_recovery", "the next retained record is not a commit"))
+  }
+  let action_required = match self.terminal_applied {
+    Some((sequence, required)) if sequence == event.sequence() => required
+    Some(_) => return Err(runner_error("terminal_recovery", "another applied record is unresolved"))
+    None => {
+      let changed = match self.mounted.apply_terminal_commit(owner, event) {
+        Ok(value) => value
+        Err(error) => return Err(error)
+      }
+      self.terminal_applied = Some((event.sequence(), changed))
+      changed
+    }
+  }
+  if action_required {
+    let action = match self.mounted.next_terminal_text_action(owner) {
+      Ok(Some(value)) => value
+      Ok(None) => return Err(runner_error("terminal_recovery", "the model action is unavailable"))
+      Err(error) => return Err(error)
+    }
+    self.settings = self.settings.update(@shared_settings.Ui(action))
+  }
+  self.terminal_model_sequence = event.sequence()
+  self.terminal_applied = None
+  ignore(self.buffered.remove(0))
+  Ok(())
+}
+
+///|
+/// Last terminal commit reflected into the shared model; no scene or host
+/// geometry publication is implied.
+pub fn SettingsRunOwner::terminal_model_sequence(self : SettingsRunOwner) -> Int64 {
+  self.terminal_model_sequence
 }
 
 ///|
@@ -402,6 +466,9 @@ pub fn SettingsRunOwner::new(
     mounted: @ui.Mounted::new(window),
     settings: @shared_settings.Model::new(),
     session: None,
+    terminal_owner: None,
+    terminal_applied: None,
+    terminal_model_sequence: 0L,
     ax_token: 0,
     dialog_token: 0,
     last_document: "",
@@ -515,6 +582,14 @@ fn SettingsRunOwner::drive_inner(
         Ok(value) => value
       }
       if handled {
+        match self.terminal_owner {
+          Some(owner) =>
+            match mounted.note_terminal_text_delivery(owner, event) {
+              Err(error) => return Err(error)
+              Ok(_) => ()
+            }
+          None => ()
+        }
         // Keep the transport visible in the retained log: `commit` comes from
         // the portable text route, while `key` with `character` means WM_CHAR
         // reached the ordinary key path.
@@ -634,6 +709,16 @@ fn SettingsRunOwner::drive_inner(
                     match handled {
                       Err(error) => return Err(error)
                       Ok(true) => {
+                        if self.held_tab is None {
+                          match self.terminal_owner {
+                            Some(owner) =>
+                              match mounted.note_terminal_text_delivery(owner, observation) {
+                                Err(error) => return Err(error)
+                                Ok(_) => ()
+                              }
+                            None => ()
+                          }
+                        }
                         emit_native_marker(
                           "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"\{text_event_phase(observation.kind())}\",\{text_event_json(observation.kind())},\"epoch\":\{current.epoch}}",
                         )
@@ -938,6 +1023,12 @@ fn SettingsRunOwner::drive_inner(
                           epoch,
                           binding: state.binding_id(),
                         })
+                        if ordered_text is Some(_) {
+                          self.terminal_owner = Some(match mounted.capture_terminal_text_owner(epoch) {
+                            Err(error) => return Err(error)
+                            Ok(value) => value
+                          })
+                        }
                         self.last_document = state.document().text()
                         self.last_caret = settings_caret(state.caret())
                         let transport = match platform {

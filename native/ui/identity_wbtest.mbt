@@ -276,3 +276,101 @@ test "held receipt survives failure after session commit and blocks replay" {
   assert_false(second.held_text_input(8UL, current).unwrap())
   second.dispose()
 }
+
+///|
+test "terminal commit uses original invalidated field and rejects gaps and replay" {
+  let mounted = Mounted::new(@platform.WindowId::new(1L))
+  let measure : @components.TextMeasure = fn(value, size) {
+    let document = @text.TextDocument::new(value).unwrap()
+    let bounds = @primitives.Rect::new(0.0, 0.0, (value.length() + 1).to_double() * size, size).unwrap()
+    let carets = []
+    let mut offset = 0
+    let initial = @primitives.Rect::new(0.0, 0.0, 1.0, size).unwrap()
+    carets.push(@text_layout.CaretGeometry::new(0, true, initial, initial).unwrap())
+    for scalar in value.iter() {
+      offset += if scalar.to_int() > 0xFFFF { 2 } else { 1 }
+      let caret = @primitives.Rect::new(offset.to_double(), 0.0, 1.0, size).unwrap()
+      carets.push(@text_layout.CaretGeometry::new(offset, true, caret, caret).unwrap())
+    }
+    Ok(@text_layout.TextMeasurement::new(document, bounds, bounds, size * 0.8, 1, 0, carets).unwrap())
+  }
+  let key = @view.NodeKey::new("name")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(key, @view.TextFieldProps::new("", "Name")),
+  ])
+  ignore(mounted.commit(view, 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(mounted.focus(key))
+  let owner = mounted.capture_terminal_text_owner(7UL).unwrap()
+  assert_true(mounted.capture_terminal_text_owner(7UL) is Err(_))
+  mounted.invalidate_layout()
+  let gap = @text_host.TextInputEvent::new(@platform.WindowId::new(1L), 2L, 7UL, @text_host.Commit(text="誤"))
+  assert_true(mounted.apply_terminal_commit(owner, gap) is Err(_))
+  assert_true(mounted.next_terminal_text_action(owner).unwrap() is None)
+  let event = @text_host.TextInputEvent::new(@platform.WindowId::new(1L), 1L, 7UL, @text_host.Commit(text="日本"))
+  assert_true(mounted.apply_terminal_commit(owner, event).unwrap())
+  match mounted.next_terminal_text_action(owner).unwrap() {
+    Some(@view.TextChanged(action_key, value)) => {
+      assert_eq(action_key, key)
+      assert_eq(value, "日本")
+    }
+    _ => fail("the old owner's action must be retained")
+  }
+  assert_true(mounted.apply_terminal_commit(owner, event) is Err(_))
+  assert_true(mounted.next_terminal_text_action(owner).unwrap() is None)
+  assert_true(!mounted.ready)
+
+  // Reusing the same numeric window or epoch in a different Mounted instance
+  // cannot transfer the old owner capability.
+  let other = Mounted::new(@platform.WindowId::new(1L))
+  ignore(other.commit(view, 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(other.focus(key))
+  let other_old = other.capture_terminal_text_owner(7UL).unwrap()
+  // A fresh numeric epoch must not replace an unresolved owner either.
+  assert_true(other.capture_terminal_text_owner(8UL) is Err(_))
+  assert_true(other.capture_terminal_text_owner(7UL) is Err(_))
+  other.invalidate_layout()
+  assert_true(other.apply_terminal_commit(owner, event) is Err(_))
+  assert_true(other.apply_terminal_commit(other_old, event).unwrap())
+  other.dispose()
+  mounted.dispose()
+  assert_true(mounted.next_terminal_text_action(owner) is Err(_))
+}
+
+///|
+test "terminal commit reentrant invalidation keeps original record retryable" {
+  let mounted = Mounted::new(@platform.WindowId::new(1L))
+  let invalidate = Ref(false)
+  let measure : @components.TextMeasure = fn(value, size) {
+    if invalidate.val {
+      mounted.invalidate_layout()
+    }
+    let document = @text.TextDocument::new(value).unwrap()
+    let bounds = @primitives.Rect::new(0.0, 0.0, (value.length() + 1).to_double() * size, size).unwrap()
+    let carets = []
+    let mut offset = 0
+    let initial = @primitives.Rect::new(0.0, 0.0, 1.0, size).unwrap()
+    carets.push(@text_layout.CaretGeometry::new(0, true, initial, initial).unwrap())
+    for scalar in value.iter() {
+      offset += if scalar.to_int() > 0xFFFF { 2 } else { 1 }
+      let caret = @primitives.Rect::new(offset.to_double(), 0.0, 1.0, size).unwrap()
+      carets.push(@text_layout.CaretGeometry::new(offset, true, caret, caret).unwrap())
+    }
+    Ok(@text_layout.TextMeasurement::new(document, bounds, bounds, size * 0.8, 1, 0, carets).unwrap())
+  }
+  let key = @view.NodeKey::new("name")
+  let view = @view.column(@view.NodeKey::new("root"), [@view.text_field(key, @view.TextFieldProps::new("", "Name"))])
+  ignore(mounted.commit(view, 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(mounted.focus(key))
+  let owner = mounted.capture_terminal_text_owner(7UL).unwrap()
+  mounted.invalidate_layout()
+  let event = @text_host.TextInputEvent::new(@platform.WindowId::new(1L), 1L, 7UL, @text_host.Commit(text="日本"))
+  invalidate.val = true
+  assert_true(mounted.apply_terminal_commit(owner, event) is Err(_))
+  assert_true(mounted.next_terminal_text_action(owner).unwrap() is None)
+  assert_eq(binding_for(mounted.bindings, key).unwrap().field.unwrap().committed_document().text(), "")
+  invalidate.val = false
+  assert_true(mounted.apply_terminal_commit(owner, event).unwrap())
+  assert_true(mounted.next_terminal_text_action(owner).unwrap() is Some(@view.TextChanged(_, "日本")))
+  assert_true(mounted.apply_terminal_commit(owner, event) is Err(_))
+  mounted.dispose()
+}

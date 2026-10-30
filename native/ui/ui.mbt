@@ -276,6 +276,7 @@ pub fn Frame::button_palette(
 /// blocks. One existing GPUI Button owns each Button's interaction state.
 /// All access and capability comparisons are confined to the owning UI thread.
 pub struct Mounted {
+  priv identity : Epoch
   priv window : @platform.WindowId
   priv runtime : @runtime.Runtime
   priv mut bindings : Array[Binding]
@@ -299,6 +300,9 @@ pub struct Mounted {
   priv mut text_epoch : UInt64
   priv mut last_text_sequence : Int64
   priv mut held_text : HeldText?
+  priv terminal_epochs : Array[UInt64]
+  priv mut terminal_identity : Epoch?
+  priv mut terminal_required : Bool
 }
 
 ///|
@@ -400,6 +404,7 @@ pub fn Mounted::new(
   theme~ : @theme.Theme? = None,
 ) -> Mounted {
   {
+    identity: fresh_epoch(),
     window,
     runtime: @runtime.Runtime::new(),
     bindings: [],
@@ -423,6 +428,9 @@ pub fn Mounted::new(
     text_epoch: 0UL,
     last_text_sequence: 0L,
     held_text: None,
+    terminal_epochs: [],
+    terminal_identity: None,
+    terminal_required: false,
   }
 }
 
@@ -2897,6 +2905,221 @@ pub fn FocusedText::composing(self : FocusedText) -> Bool {
 }
 
 ///|
+/// A token for the field that owned a native text session before layout was
+/// invalidated. It is not a new TextSession or a permission to change focus.
+pub struct TerminalTextOwner {
+  priv identity : Epoch
+  priv session_identity : Epoch
+  priv window : @platform.WindowId
+  priv epoch : UInt64
+  priv binding : UInt64
+  priv generation : UInt64
+  priv mut revision : Int32
+  priv token : @runtime.InstanceToken
+  priv mut sequence : Int64
+  priv mut busy : Bool
+}
+
+///|
+/// Capture the existing focused field before its host session receives input.
+/// The caller must use the epoch returned for this binding by the host.
+pub fn Mounted::capture_terminal_text_owner(
+  self : Mounted,
+  epoch : UInt64,
+) -> Result[TerminalTextOwner, @diagnostics.FrameworkError] {
+  if epoch == 0UL || self.busy || self.is_disposed() || !self.ready ||
+    !self.window_focused || self.held_text is Some(_) {
+    return Err(adapter_error("terminal text owner unavailable"))
+  }
+  if self.terminal_epochs.length() >= 4096 || self.terminal_epochs.contains(epoch) {
+    return Err(adapter_error("terminal epoch is reused or capacity exhausted"))
+  }
+  // A replacement lease cannot prove that the preceding host queue and local
+  // records have been resolved. Keep the previous owner alive instead.
+  if self.terminal_identity is Some(active) && active.live {
+    return Err(adapter_error("previous terminal owner is unresolved"))
+  }
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Err(adapter_error("terminal focus unavailable"))
+  }
+  for binding in self.bindings {
+    if scope.focused() != Some(binding.id) || !binding.visible ||
+      !field_editable(binding.view) || !self.admits_binding(binding) {
+      continue
+    }
+    match (binding.field, binding.token) {
+      (Some(field), Some(token)) if self.runtime.is_current(token) => {
+        let session_identity = fresh_epoch()
+        self.terminal_epochs.push(epoch)
+        self.terminal_identity = Some(session_identity)
+        self.terminal_required = true
+        self.text_epoch = epoch
+        self.last_text_sequence = 0L
+        return Ok({
+          identity: self.identity, session_identity, window: self.window, epoch,
+          binding: binding.id, generation: binding.field_generation,
+          revision: field.revision(), token,
+          sequence: 0L,
+          busy: false,
+        })
+      }
+      _ => ()
+    }
+  }
+  Err(adapter_error("terminal text binding unavailable"))
+}
+
+///|
+/// Advance the captured lease only after the regular focused-field path has
+/// accepted the exact next host observation. This preserves the same binding
+/// identity; it does not apply the record again.
+pub fn Mounted::note_terminal_text_delivery(
+  self : Mounted,
+  owner : TerminalTextOwner,
+  event : @text_host.TextInputEvent,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.is_disposed() || self.busy || owner.busy ||
+    !self.identity.live || !owner.session_identity.live ||
+    !same_epoch(self.identity, owner.identity) ||
+    !(self.terminal_identity is Some(active) && same_epoch(active, owner.session_identity)) ||
+    event.window() != owner.window || event.epoch() != owner.epoch ||
+    owner.sequence == 9223372036854775807L || event.sequence() != owner.sequence + 1L ||
+    self.text_epoch != owner.epoch || self.last_text_sequence != event.sequence() {
+    return Err(adapter_error("terminal delivery sequence is stale"))
+  }
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Err(adapter_error("terminal focus unavailable"))
+  }
+  if scope.focused() != Some(owner.binding) || !self.runtime.is_current(owner.token) {
+    return Err(adapter_error("terminal focus or token changed"))
+  }
+  for binding in self.bindings {
+    if binding.id == owner.binding && binding.field_generation == owner.generation &&
+      binding.token == Some(owner.token) {
+      match binding.field {
+        Some(field) => {
+          owner.revision = field.revision()
+          owner.sequence = event.sequence()
+          return Ok(())
+        }
+        None => ()
+      }
+    }
+  }
+  Err(adapter_error("terminal binding changed"))
+}
+
+///|
+/// Apply one original commit after layout invalidation without publishing a
+/// scene or changing the host. This is an experimental terminal-only path:
+/// the owner and host remain live until the caller separately resolves the
+/// action, remaining records and terminal event. Pending actions fail closed.
+pub fn Mounted::apply_terminal_commit(
+  self : Mounted,
+  owner : TerminalTextOwner,
+  event : @text_host.TextInputEvent,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  if owner.busy || self.busy || self.ready || self.is_disposed() ||
+    !self.identity.live || !owner.identity.live ||
+    !same_epoch(self.identity, owner.identity) || self.held_text is Some(_) ||
+    !owner.session_identity.live ||
+    !(self.terminal_identity is Some(active) && same_epoch(active, owner.session_identity)) ||
+    event.window() != owner.window || event.window() != self.window ||
+    event.epoch() != owner.epoch || self.text_epoch != owner.epoch ||
+    owner.sequence == 9223372036854775807L ||
+    self.last_text_sequence != owner.sequence || event.sequence() != owner.sequence + 1L ||
+    event.sequence() <= 0L || self.runtime.has_pending_actions() {
+    return Err(adapter_error("terminal text owner or sequence is stale"))
+  }
+  let text = match event.kind() {
+    @text_host.Commit(text~) => text
+    _ => return Err(adapter_error("terminal record is not a commit"))
+  }
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Err(adapter_error("terminal focus unavailable"))
+  }
+  if scope.focused() != Some(owner.binding) {
+    return Err(adapter_error("terminal focus changed"))
+  }
+  let mut index = -1
+  for i in 0..<self.bindings.length() {
+    if self.bindings[i].id == owner.binding {
+      index = i
+      break
+    }
+  }
+  if index < 0 {
+    return Err(adapter_error("terminal binding disappeared"))
+  }
+  let binding = self.bindings[index]
+  let field = match binding.field {
+    Some(value) if binding.field_generation == owner.generation &&
+      value.revision() == owner.revision && binding.token == Some(owner.token) && self.runtime.is_current(owner.token) &&
+      field_editable(binding.view) && self.admits_binding(binding) => value
+    _ => return Err(adapter_error("terminal binding is stale"))
+  }
+  let measure = match self.measure {
+    Some(value) => value
+    None => return Err(adapter_error("terminal measurement unavailable"))
+  }
+  let change = self.change
+  owner.busy = true
+  self.busy = true
+  let candidate = if field.is_composing() {
+    field.commit_composition(text, fn(document) { field_measure(measure, document) }, field_admit)
+  } else {
+    field.replace_selection(text, fn(document) { field_measure(measure, document) }, field_admit)
+  }
+  self.busy = false
+  owner.busy = false
+  let next = match candidate {
+    Ok(value) => value
+    Err(_) => return Err(adapter_error("terminal commit rejected"))
+  }
+  // The provider can reenter the owner. No callback runs after these checks
+  // and before action enqueue plus binding publication on the UI thread.
+  if self.is_disposed() || !same_epoch(change, self.change) ||
+    !self.runtime.is_current(owner.token) || self.runtime.has_pending_actions() {
+    return Err(adapter_error("terminal owner changed during measurement"))
+  }
+  let value = next.committed_document().text()
+  let changed = value != field.committed_document().text()
+  if changed &&
+    !self.runtime.enqueue_text_changed(owner.token, value) {
+    return Err(adapter_error("terminal action rejected"))
+  }
+  self.bindings[index] = { ..binding, field: Some(next), }
+  owner.revision = next.revision()
+  owner.sequence = event.sequence()
+  self.last_text_sequence = event.sequence()
+  // The original field stays mounted; no geometry is published here.
+  Ok(changed)
+}
+
+///|
+/// Drain only the terminal owner's action, preserving unrelated live actions.
+pub fn Mounted::next_terminal_text_action(
+  self : Mounted,
+  owner : TerminalTextOwner,
+) -> Result[@view.SemanticAction?, @diagnostics.FrameworkError] {
+  if self.is_disposed() || self.busy || owner.busy ||
+    !self.identity.live || !owner.identity.live ||
+    !same_epoch(self.identity, owner.identity) ||
+    !owner.session_identity.live ||
+    !(self.terminal_identity is Some(active) && same_epoch(active, owner.session_identity)) ||
+    !self.runtime.is_current(owner.token) {
+    return Err(adapter_error("terminal action owner is stale"))
+  }
+  match self.runtime.next_text_changed_for(owner.token) {
+    Ok(value) => Ok(value)
+    Err(_) => Err(adapter_error("another action precedes terminal text"))
+  }
+}
+
+///|
 pub fn Mounted::focused_text(self : Mounted) -> FocusedText? {
   if !self.ready || self.is_disposed() {
     return None
@@ -2940,6 +3163,10 @@ pub fn Mounted::begin_held_text(
   self : Mounted,
   epoch : UInt64,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
+  if self.terminal_required &&
+    (self.terminal_identity is None || self.text_epoch != epoch) {
+    return Err(adapter_error("text transition epoch is stale"))
+  }
   if self.held_text is Some(_) {
     return Err(adapter_error("a text transition is already held"))
   }
@@ -3741,6 +3968,10 @@ pub fn Mounted::text_input(
   epoch : UInt64,
   event : @text_host.TextInputEvent,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
+  if self.terminal_required &&
+    (self.terminal_identity is None || self.text_epoch != epoch) {
+    return Ok(false)
+  }
   if self.held_text is Some(_) {
     return Err(adapter_error("text is held for text transition"))
   }
@@ -4090,6 +4321,11 @@ fn Mounted::dispatch(
 
 ///|
 pub fn Mounted::dispose(self : Mounted) -> Unit {
+  self.identity.live = false
+  match self.terminal_identity {
+    Some(value) => value.live = false
+    None => ()
+  }
   match self.held_text {
     Some(held) => ignore(held.session.close())
     None => ()
