@@ -3021,6 +3021,20 @@ pub fn Mounted::apply_terminal_commit(
   owner : TerminalTextOwner,
   event : @text_host.TextInputEvent,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
+  if !(event.kind() is @text_host.Commit(_)) {
+    return Err(adapter_error("terminal record is not a commit"))
+  }
+  self.apply_terminal_observation(owner, event)
+}
+
+///|
+/// Apply the next original text observation, preserving a preedit on the same
+/// field. Only a commit can create a model action. No scene is published.
+pub fn Mounted::apply_terminal_observation(
+  self : Mounted,
+  owner : TerminalTextOwner,
+  event : @text_host.TextInputEvent,
+) -> Result[Bool, @diagnostics.FrameworkError] {
   if owner.busy || self.busy || self.ready || self.is_disposed() ||
     !self.identity.live || !owner.identity.live ||
     !same_epoch(self.identity, owner.identity) || self.held_text is Some(_) ||
@@ -3033,9 +3047,9 @@ pub fn Mounted::apply_terminal_commit(
     event.sequence() <= 0L || self.runtime.has_pending_actions() {
     return Err(adapter_error("terminal text owner or sequence is stale"))
   }
-  let text = match event.kind() {
-    @text_host.Commit(text~) => text
-    _ => return Err(adapter_error("terminal record is not a commit"))
+  let kind = event.kind()
+  if !(kind is @text_host.Commit(_) || kind is @text_host.Preedit(..) || kind is @text_host.Cancel) {
+    return Err(adapter_error("terminal observation is unsupported"))
   }
   let scope = match self.scope {
     Some(value) => value
@@ -3068,10 +3082,37 @@ pub fn Mounted::apply_terminal_commit(
   let change = self.change
   owner.busy = true
   self.busy = true
-  let candidate = if field.is_composing() {
-    field.commit_composition(text, fn(document) { field_measure(measure, document) }, field_admit)
-  } else {
-    field.replace_selection(text, fn(document) { field_measure(measure, document) }, field_admit)
+  let candidate = match kind {
+    @text_host.Commit(text~) =>
+      if field.is_composing() {
+        field.commit_composition(text, fn(document) { field_measure(measure, document) }, field_admit)
+      } else {
+        field.replace_selection(text, fn(document) { field_measure(measure, document) }, field_admit)
+      }
+    @text_host.Preedit(text~, cursor~) => {
+      if text.length() > 16_384 {
+        self.busy = false
+        owner.busy = false
+        return Err(adapter_error("terminal preedit is too long"))
+      }
+      let offset = if cursor < 0 { text.length() } else { cursor }
+      let selection = match @text.TextSelection::new(offset, offset) {
+        Ok(value) => value
+        Err(_) => {
+          self.busy = false
+          owner.busy = false
+          return Err(adapter_error("terminal preedit cursor is invalid"))
+        }
+      }
+      field.update_composition(text, selection, fn(document) { field_measure(measure, document) }, field_admit)
+    }
+    @text_host.Cancel =>
+      if field.is_composing() {
+        field.cancel_composition(fn(document) { field_measure(measure, document) }, field_admit)
+      } else {
+        Ok(field)
+      }
+    _ => abort("unsupported terminal observation")
   }
   self.busy = false
   owner.busy = false

@@ -18,15 +18,17 @@ retained, and the fake host has not been stopped. An explicit experimental
 terminal operation then applies this commit once to the original mounted field
 and its model; the model becomes `日本`. Geometry is **not published**, the
 terminal record remains inflight, and this is not full recovery or shutdown.
-Repeated application fails. An ordered preedit prefix, held TextSession,
-missing sequence, wrong mounted owner, and reentrant invalidation all fail
-closed in fixtures. Reentrant failure leaves the original commit retryable.
+Repeated application fails. An ordered preedit prefix is applied to the same
+field before its commit; an observed cancel rolls back the preview without a
+model action. A held TextSession, missing sequence, wrong mounted owner, and
+reentrant invalidation all fail closed in fixtures. Reentrant failure leaves
+the original commit retryable.
 
 The opaque field lease is captured immediately after a successful host begin;
 the capture API relies on its caller to supply that host-issued epoch. A live
 lease cannot be replaced by another epoch because queue completion has not been
-proved. The operation handles only a terminal Commit at the buffer head; it
-does not resolve earlier preedit/cancel, or authenticate forged host events.
+proved. The terminal operation handles an ordered preedit, commit, or observed
+cancel at the buffer head; it does not authenticate forged host events.
 
 ## Unresolved P1
 
@@ -53,10 +55,10 @@ Candidate source: gpui `74d182c6368ca382f697023c5d3690b6c0c2dfbf`, Yami base
 published dependencies lacking the candidate API. Tests use a local source
 workspace and do not establish published-package compatibility.
 
-Local combined native UI and common fixture suite: **119/119 PASS** using
+Local combined native UI and common fixture suite: **120/120 PASS** using
 `GPUI_SOURCE=/workspace/gpui-ordered-fence` and
 `scripts/native_ui_workspace.sh ... moon test <ui> <examples/common> --target
 native --deny-warn --no-parallelize`. This is scripted evidence only; no
 production main, live IME, or public-registry consumer was tested.
 Local raw log SHA-256:
-`243cc15e88b287b659bff42ddc846ef06c1218455320ace188366842ea1295f2`.
+`bc725ef6046b98f06a824bfae801b7f56b5bb1e80a8cdbe3fef8d28aaa6763ee`.

@@ -970,6 +970,15 @@ test "terminal recovery never skips a buffered preedit prefix" {
   assert_true(owner.reconcile_terminal_commit() is Err(_))
   assert_eq(owner.pending_records().length(), 2)
   assert_eq(owner.model().name(), "")
+  owner.reconcile_terminal_observation().unwrap()
+  assert_eq(owner.pending_records().length(), 1)
+  assert_eq(owner.model().name(), "")
+  assert_eq(owner.terminal_model_sequence(), 0L)
+  owner.reconcile_terminal_commit().unwrap()
+  assert_eq(owner.pending_records().length(), 0)
+  assert_eq(owner.model().name(), "日本")
+  assert_eq(owner.terminal_model_sequence(), 2L)
+  assert_true(owner.reconcile_terminal_commit() is Err(_))
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
   assert_eq(host.stop_count(), 0)
 }
@@ -995,5 +1004,37 @@ test "terminal recovery does not steal a held TextSession" {
   assert_true(owner.reconcile_terminal_commit() is Err(_))
   assert_eq(owner.pending_records().length(), 1)
   assert_eq(owner.model().name(), "")
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "terminal observed cancel rolls back preview without changing model" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let field = owner.mounted.focused_text().unwrap()
+  owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.mounted.invalidate_layout()
+  owner.suspended = true
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))))
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 2L, 7UL, @text_host.Cancel)))
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 3L, 7UL, @text_host.Commit(text="新"))))
+  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 4L, 1.0, @platform.Destroyed)))
+  owner.reconcile_terminal_observation().unwrap()
+  assert_eq(owner.model().name(), "")
+  owner.reconcile_terminal_observation().unwrap()
+  assert_eq(owner.model().name(), "")
+  assert_eq(owner.terminal_model_sequence(), 0L)
+  owner.reconcile_terminal_observation().unwrap()
+  assert_eq(owner.model().name(), "新")
+  assert_eq(owner.terminal_model_sequence(), 3L)
+  assert_eq(owner.pending_records().length(), 0)
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
   assert_eq(host.stop_count(), 0)
 }

@@ -74,6 +74,7 @@ pub struct Mounted {
 }
 pub fn Mounted::activate(Self, Activation) -> Bool
 pub fn Mounted::apply_terminal_commit(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[Bool, @diagnostics.FrameworkError]
+pub fn Mounted::apply_terminal_observation(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn Mounted::begin_held_text(Self, UInt64) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn Mounted::callback(Self, @core.NodeKey) -> Activation?
 pub fn Mounted::capture_terminal_text_owner(Self, UInt64) -> Result[TerminalTextOwner, @diagnostics.FrameworkError]

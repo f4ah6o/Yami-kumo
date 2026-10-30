@@ -329,6 +329,18 @@ pub fn SettingsRunOwner::last_platform_sequence(self : SettingsRunOwner) -> Int6
 pub fn SettingsRunOwner::reconcile_terminal_commit(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.buffered.is_empty() || !(self.buffered[0] is OrderedText(event) && event.kind() is @text_host.Commit(_)) {
+    return Err(runner_error("terminal_recovery", "the next retained record is not a commit"))
+  }
+  self.reconcile_terminal_observation()
+}
+
+///|
+/// Reconcile one ordered preedit, commit, or observed cancel without changing
+/// the terminal event or publishing geometry.
+pub fn SettingsRunOwner::reconcile_terminal_observation(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
   if !self.suspended || self.running || self.held_tab is Some(_) {
     return Err(runner_error("terminal_recovery", "terminal owner is unavailable"))
   }
@@ -346,14 +358,15 @@ pub fn SettingsRunOwner::reconcile_terminal_commit(
     return Err(runner_error("terminal_recovery", "no retained record"))
   }
   let event = match self.buffered[0] {
-    OrderedText(value) if value.kind() is @text_host.Commit(_) => value
-    _ => return Err(runner_error("terminal_recovery", "the next retained record is not a commit"))
+    OrderedText(value) if value.kind() is @text_host.Commit(_) ||
+      value.kind() is @text_host.Preedit(..) || value.kind() is @text_host.Cancel => value
+    _ => return Err(runner_error("terminal_recovery", "the next retained record is unsupported"))
   }
   let action_required = match self.terminal_applied {
     Some((sequence, required)) if sequence == event.sequence() => required
     Some(_) => return Err(runner_error("terminal_recovery", "another applied record is unresolved"))
     None => {
-      let changed = match self.mounted.apply_terminal_commit(owner, event) {
+      let changed = match self.mounted.apply_terminal_observation(owner, event) {
         Ok(value) => value
         Err(error) => return Err(error)
       }
@@ -369,7 +382,9 @@ pub fn SettingsRunOwner::reconcile_terminal_commit(
     }
     self.settings = self.settings.update(@shared_settings.Ui(action))
   }
-  self.terminal_model_sequence = event.sequence()
+  if event.kind() is @text_host.Commit(_) {
+    self.terminal_model_sequence = event.sequence()
+  }
   self.terminal_applied = None
   ignore(self.buffered.remove(0))
   Ok(())
