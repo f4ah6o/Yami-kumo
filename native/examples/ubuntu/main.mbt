@@ -388,8 +388,29 @@ fn main {
                 @text_host.FocusLost => "focus_lost"
               }
               @ubuntu_host.Platform(value) => match value.kind() {
+                @platform.Created => "created"
                 @platform.Resized(..) => "resize"
-                _ => "platform"
+                @platform.Moved(..) => "moved"
+                @platform.ScaleChanged => "scale"
+                @platform.FocusChanged(true) => "focus_gained"
+                @platform.FocusChanged(false) => "focus_lost"
+                @platform.VisibilityChanged(true) => "visible"
+                @platform.VisibilityChanged(false) => "hidden"
+                @platform.Input(input) => match input {
+                  @primitives.KeyPressed(..) => "key_pressed"
+                  @primitives.KeyReleased(..) => "key_released"
+                  @primitives.TextInput(..) => "direct_text"
+                  @primitives.PointerMoved(..) => "pointer_moved"
+                  @primitives.PointerButtonPressed(..) => "pointer_pressed"
+                  @primitives.PointerButtonReleased(..) => "pointer_released"
+                  @primitives.Scroll(..) => "scroll"
+                }
+                @platform.Composition(_) => "composition"
+                @platform.CloseRequested => "close_requested"
+                @platform.Destroyed => "destroyed"
+                @platform.FrameCompleted => "frame_completed"
+                @platform.Wake => "wake"
+                @platform.ExitRequested => "exit_requested"
               }
               @ubuntu_host.Lifecycle(_, _) => "lifecycle"
               @ubuntu_host.Unhandled(raw) => match raw {
