@@ -1,0 +1,9 @@
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"","status":"editing","dialog":false,"focus":"other","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"text","status":"started","transport":"text-input-v1","epoch":7}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"","status":"editing","dialog":false,"focus":"name","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"","status":"editing","dialog":false,"focus":"other","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"exit","reason":"window-closed","ticks":10}
+[f4ah6o/yami_kumo_native] test examples/common/settings_runner_wbtest.mbt:51 ("queued commit survives an observed window focus loss") failed: examples/common/settings_runner_wbtest.mbt:103:3-103:28@f4ah6o/yami_kumo_native FAILED: `1 != 0`
+diff:
+-1 +0
+Total tests: 1, passed: 0, failed: 1.

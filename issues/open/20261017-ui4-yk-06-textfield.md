@@ -43,6 +43,23 @@ DOM sliceはPR #38、native sliceはPR #40で実装した。以下は未完了�
 - macOS Kotoeri、candidate window、copy/paste、AX: **NOT RUN**。synthetic compositionは実IMEの合格ではない。
 - `text_session.TextSession`のowner/revision統合は未接続。native adapterは現在`TextField`を直接保持し、共通runtime tokenでactionをgateする。
 
+### 2026-10-30: focus loss 時の observed commit 消失
+
+PR [#83](https://github.com/f4ah6o/Yami-kumo/pull/83) の field binding
+guard は旧 session の記録を別 field に適用しないが、focus loss 時に cancel が
+未取得の同 epoch `Commit` を破棄するケースを解決しない。[最小再現と FAIL
+ログ](../../docs/evidence/20261030-shared-settings-text-owner/README.md) を参照。
+これは GUI native 受入の blocker であり、portable suite の PASS は代替にならない。
+
+次に [GP-01B text-host issue](https://github.com/gpui-mbt/gpui.mbt/blob/main/issues/open/20261019-gp-01b-text-host-contract.md)
+と [text-host contract](https://github.com/gpui-mbt/gpui.mbt/blob/main/docs/text-host-contract.md)
+と [M3 coordination](https://github.com/gpui-mbt/gpui.mbt/blob/main/issues/open/20261019-m3-textfield-dialog-coordination.md)
+へ結び付け、focus / close / replacement の境界で pending observation の取得終了と
+`TextSession` の `request_end` / `complete_blur` または `complete_replacement` を
+どう同期するか確定する。既観測 commit は旧 owner に保存し、revocation 後の
+epoch / target は拒否する。空の一回の poll だけを排他 barrier と扱わず、host が
+提供する順序・quiescence の保証を調査して必要な契約変更から着手する。
+
 ## 5. 非対象
 
 inputのふりをしたCanvas編集、全キーからの文字列自作、Rich text、古い文字モデルの複製。
