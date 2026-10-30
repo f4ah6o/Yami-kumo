@@ -151,9 +151,8 @@ fn settings_key_path_fallback(
 }
 
 ///|
-/// Drive the Shared Settings model on a host that exposes portable text input.
-/// The same model source is used by the DOM entry; this runner only delivers
-/// host events, the committed text transport and the simulated-save tick.
+/// Legacy one-shot entry. Ordered callers needing retention must keep an
+/// explicit SettingsRunOwner instead of discarding it on error.
 pub fn run_native_settings_sample(
   host : &@platform.Backend,
   platform : NativeSamplePlatform,
@@ -165,6 +164,137 @@ pub fn run_native_settings_sample(
   direct_text~ : NativeDirectText? = None,
   ordered_text~ : NativeOrderedTextPort? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
+  let owner = match
+    SettingsRunOwner::new(
+      host,
+      platform,
+      measure,
+      text_port~,
+      accessibility_port~,
+      dialog_port~,
+      next_platform_event~,
+      direct_text~,
+      ordered_text~,
+    ) {
+    Err(error) => return Err(error)
+    Ok(value) => value
+  }
+  owner.drive()
+}
+
+///|
+/// Retains one Settings run and its owner state when drive returns an error.
+/// The caller must retain the host and owner; an error is not permission to
+/// stop it or to replay an observation already applied by the TextSession.
+pub struct SettingsRunOwner {
+  priv host : &@platform.Backend
+  priv platform : NativeSamplePlatform
+  priv measure : @components.TextMeasure
+  priv port : NativeTextInputPort
+  priv accessibility_port : NativeTextAXPort?
+  priv dialog_port : NativeDialogAXPort?
+  priv next_platform_event : NativePlatformNext?
+  priv direct_text : NativeDirectText?
+  priv ordered_text : NativeOrderedTextPort?
+  priv window : @platform.WindowId
+  priv mounted : @ui.Mounted
+  priv mut settings : @shared_settings.Model
+  priv mut session : TextSession?
+  priv mut ax_token : Int64
+  priv mut dialog_token : Int64
+  priv mut last_document : String
+  priv mut last_caret : @primitives.Rect
+  priv mut saving_frames : Int32
+  priv gate : PresentationGate
+  priv mut pending_frame : String?
+  priv mut dirty : Bool
+  priv mut focus_initialized : Bool
+  priv mut text_suspended : Bool
+  priv mut text_transport_failed : Bool
+  priv mut key_path_armed : Bool
+  priv mut ticks : Int32
+  priv mut destroyed : Bool
+  priv mut last_sequence : Int64
+  priv mut held_tab : @platform.Event?
+  priv buffered : Array[NativeOrderedEvent]
+  priv held_platform : Array[@platform.Event]
+  priv mut inflight : NativeOrderedEvent?
+  priv mut cutoff_done : Bool
+  priv mut completed : Bool
+  priv mut running : Bool
+}
+
+///|
+/// The model and pending records are observations, not a host or model ACK.
+/// The caller must retain the owner and its host while either is unresolved.
+pub fn SettingsRunOwner::model(
+  self : SettingsRunOwner,
+) -> @shared_settings.Model {
+  self.settings
+}
+
+///|
+pub fn SettingsRunOwner::pending_records(
+  self : SettingsRunOwner,
+) -> Array[NativeOrderedEvent] {
+  self.buffered.copy()
+}
+
+///|
+pub fn SettingsRunOwner::inflight_record(
+  self : SettingsRunOwner,
+) -> NativeOrderedEvent? {
+  self.inflight
+}
+
+///|
+pub fn SettingsRunOwner::window(self : SettingsRunOwner) -> @platform.WindowId {
+  self.window
+}
+
+///|
+pub fn SettingsRunOwner::text_owner(
+  self : SettingsRunOwner,
+) -> (UInt64, UInt64)? {
+  self.session.map(value => (value.epoch, value.binding))
+}
+
+///|
+/// A copied receipt may prove that an inflight held record was applied even
+/// if its action could not be enqueued. It does not prove model publication.
+pub fn SettingsRunOwner::inflight_receipt(
+  self : SettingsRunOwner,
+) -> @ui.HeldTextReceipt? {
+  match (self.inflight, self.session) {
+    (Some(OrderedText(event)), Some(current)) =>
+      self.mounted.held_text_receipt(current.epoch, event.sequence())
+    _ => None
+  }
+}
+
+///|
+/// Only successful, fully resolved cleanup permits the host to stop. This is
+/// not evidence of IME quiescence or an ACK for callbacks not yet delivered.
+pub fn SettingsRunOwner::can_stop(self : SettingsRunOwner) -> Bool {
+  // The legacy two-poll route has its own existing cleanup contract. The
+  // ordered route still needs an explicit host-queue terminal receipt; simply
+  // observing a destroyed window does not establish that receipt.
+  self.completed && self.ordered_text is None
+}
+
+///|
+/// Construct a run before polling any input.
+pub fn SettingsRunOwner::new(
+  host : &@platform.Backend,
+  platform : NativeSamplePlatform,
+  measure : @components.TextMeasure,
+  text_port~ : NativeTextInputPort? = None,
+  accessibility_port~ : NativeTextAXPort? = None,
+  dialog_port~ : NativeDialogAXPort? = None,
+  next_platform_event~ : NativePlatformNext? = None,
+  direct_text~ : NativeDirectText? = None,
+  ordered_text~ : NativeOrderedTextPort? = None,
+) -> Result[SettingsRunOwner, @diagnostics.FrameworkError] {
   let port = match text_port {
     Some(value) => value
     None =>
@@ -180,27 +310,82 @@ pub fn run_native_settings_sample(
     Err(error) => return Err(error)
     Ok(value) => value
   }
-  let mounted = @ui.Mounted::new(window)
-  let mut settings = @shared_settings.Model::new()
-  let mut session : TextSession? = None
-  let mut ax_token : Int64 = 0
-  let mut dialog_token : Int64 = 0
-  let mut last_document = ""
-  let mut last_caret = @primitives.Rect::new(0.0, 0.0, 0.0, 0.0).unwrap()
-  let mut saving_frames = 0
-  let gate = PresentationGate::{ rendered: false, pending_stale: false, }
-  let mut pending_frame : String? = None
-  let mut dirty = true
-  let mut focus_initialized = false
-  let mut text_suspended = false
-  let mut text_transport_failed = false
-  let mut key_path_armed = false
-  let mut ticks = 0
-  let mut destroyed = false
-  let mut last_sequence : Int64 = 0
-  let mut held_tab : @platform.Event? = None
-  let buffered : Array[NativeOrderedEvent] = []
-  let held_platform : Array[@platform.Event] = []
+  Ok({
+    host,
+    platform,
+    measure,
+    port,
+    accessibility_port,
+    dialog_port,
+    next_platform_event,
+    direct_text,
+    ordered_text,
+    window,
+    mounted: @ui.Mounted::new(window),
+    settings: @shared_settings.Model::new(),
+    session: None,
+    ax_token: 0,
+    dialog_token: 0,
+    last_document: "",
+    last_caret: @primitives.Rect::new(0.0, 0.0, 0.0, 0.0).unwrap(),
+    saving_frames: 0,
+    gate: PresentationGate::{ rendered: false, pending_stale: false, },
+    pending_frame: None,
+    dirty: true,
+    focus_initialized: false,
+    text_suspended: false,
+    text_transport_failed: false,
+    key_path_armed: false,
+    ticks: 0,
+    destroyed: false,
+    last_sequence: 0L,
+    held_tab: None,
+    buffered: [],
+    held_platform: [],
+    inflight: None,
+    cutoff_done: false,
+    completed: false,
+    running: false,
+  })
+}
+
+///|
+/// Drive the retained run. An error does not dispose this owner or its host.
+pub fn SettingsRunOwner::drive(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.running ||
+    self.completed ||
+    self.inflight is Some(_) ||
+    self.cutoff_done {
+    return Err(
+      runner_error("ordered_text", "retained state requires explicit recovery"),
+    )
+  }
+  self.running = true
+  let result = self.drive_inner()
+  self.running = false
+  result
+}
+
+///|
+fn SettingsRunOwner::drive_inner(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let host = self.host
+  let platform = self.platform
+  let measure = self.measure
+  let port = self.port
+  let accessibility_port = self.accessibility_port
+  let dialog_port = self.dialog_port
+  let next_platform_event = self.next_platform_event
+  let direct_text = self.direct_text
+  let ordered_text = self.ordered_text
+  let window = self.window
+  let mounted = self.mounted
+  let gate = self.gate
+  let buffered = self.buffered
+  let held_platform = self.held_platform
   // Windows keeps the lane alive longer than any driver wait so a failed
   // assertion is reported by the driver, not by a truncated sample loop.
   let tick_limit = if platform is Macos {
@@ -210,11 +395,11 @@ pub fn run_native_settings_sample(
   } else {
     6000
   }
-  while !destroyed && ticks < tick_limit {
-    ticks += 1
+  while !self.destroyed && self.ticks < tick_limit {
+    self.ticks += 1
     let mut drained = 0
     while ordered_text is None && drained < 32 && gate.input_ready() {
-      let current = match session {
+      let current = match self.session {
         Some(value) => value
         None => break
       }
@@ -223,9 +408,9 @@ pub fn run_native_settings_sample(
           Err(error) => return Err(error)
           Ok(_) => ()
         }
-        session = None
-        last_document = ""
-        dirty = true
+        self.session = None
+        self.last_document = ""
+        self.dirty = true
         break
       }
       let event = match (port.next)(0) {
@@ -251,12 +436,12 @@ pub fn run_native_settings_sample(
         emit_native_marker(
           "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"\{text_event_phase(event.kind())}\",\{text_event_json(event.kind())},\"epoch\":\{current.epoch}}",
         )
-        dirty = true
+        self.dirty = true
         while mounted.next_action() is Some(action) {
-          let next = settings.update(@shared_settings.Ui(action))
-          if next != settings {
-            settings = next
-            dirty = true
+          let next = self.settings.update(@shared_settings.Ui(action))
+          if next != self.settings {
+            self.settings = next
+            self.dirty = true
           }
         }
       }
@@ -266,9 +451,9 @@ pub fn run_native_settings_sample(
             Err(error) => return Err(error)
             Ok(_) => ()
           }
-          session = None
-          text_suspended = true
-          last_document = ""
+          self.session = None
+          self.text_suspended = true
+          self.last_document = ""
         }
         _ => ()
       }
@@ -291,7 +476,7 @@ pub fn run_native_settings_sample(
             }
         }
       Some(ordered) => {
-        match (held_tab, session) {
+        match (self.held_tab, self.session) {
           (Some(tab), Some(current)) => {
             let composing = match mounted.focused_text() {
               Some(value) => value.composing()
@@ -303,13 +488,15 @@ pub fn run_native_settings_sample(
             if !composing && buffered.is_empty() {
               match (ordered.end_when_drained)(current.epoch) {
                 Ok(_) => {
+                  self.cutoff_done = true
                   match mounted.finish_held_text(current.epoch) {
                     Err(error) => return Err(error)
                     Ok(_) => ()
                   }
-                  held_tab = None
-                  session = None
-                  last_document = ""
+                  self.held_tab = None
+                  self.session = None
+                  self.cutoff_done = false
+                  self.last_document = ""
                   event = Some(tab)
                   released_tab = true
                 }
@@ -323,21 +510,26 @@ pub fn run_native_settings_sample(
           _ => ()
         }
         if event is None {
-          let ingress = if held_tab is None &&
+          let ingress = if self.held_tab is None &&
             gate.input_ready() &&
             !held_platform.is_empty() {
             Some(OrderedPlatform(held_platform.remove(0)))
           } else if gate.input_ready() && !buffered.is_empty() {
             Some(buffered.remove(0))
+          } else if buffered.length() + held_platform.length() >= 64 {
+            return Err(
+              runner_error("ordered_text", "deferred input buffer is full"),
+            )
           } else {
             match (ordered.next)(16) {
               Err(error) => return Err(error)
               Ok(value) => value
             }
           }
+          self.inflight = ingress
           match ingress {
             Some(OrderedText(observation)) =>
-              if held_tab is None && !gate.input_ready() {
+              if self.held_tab is None && !gate.input_ready() {
                 if buffered.length() + held_platform.length() >= 64 {
                   return Err(
                     runner_error(
@@ -347,9 +539,9 @@ pub fn run_native_settings_sample(
                 }
                 buffered.push(OrderedText(observation))
               } else {
-                match session {
+                match self.session {
                   Some(current) if observation.epoch() == current.epoch => {
-                    let handled = if held_tab is Some(_) {
+                    let handled = if self.held_tab is Some(_) {
                       mounted.held_text_input(current.epoch, observation)
                     } else {
                       deliver_text_observation(mounted, current, observation)
@@ -360,9 +552,9 @@ pub fn run_native_settings_sample(
                         emit_native_marker(
                           "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"\{text_event_phase(observation.kind())}\",\{text_event_json(observation.kind())},\"epoch\":\{current.epoch}}",
                         )
-                        dirty = true
+                        self.dirty = true
                         while mounted.next_action() is Some(action) {
-                          settings = settings.update(
+                          self.settings = self.settings.update(
                             @shared_settings.Ui(action),
                           )
                         }
@@ -374,7 +566,7 @@ pub fn run_native_settings_sample(
                 }
               }
             Some(OrderedPlatform(value)) =>
-              if held_tab is Some(_) {
+              if self.held_tab is Some(_) {
                 match value.kind() {
                   @platform.Resized(..)
                   | @platform.ScaleChanged
@@ -435,12 +627,15 @@ pub fn run_native_settings_sample(
         }
       }
     }
+    if event is None {
+      self.inflight = None
+    }
     match event {
       None => ()
       Some(value) if value.window() == window => {
         if !released_tab &&
           !reordered_frame &&
-          value.sequence() <= last_sequence {
+          value.sequence() <= self.last_sequence {
           return Err(
             runner_error(
               "run_native_settings_sample", "host event sequence did not advance",
@@ -448,27 +643,27 @@ pub fn run_native_settings_sample(
           )
         }
         if !released_tab && !reordered_frame {
-          last_sequence = value.sequence()
+          self.last_sequence = value.sequence()
         }
         match value.kind() {
           @platform.Destroyed
           | @platform.CloseRequested
           | @platform.ExitRequested => {
-            destroyed = true
-            dirty = false
+            self.destroyed = true
+            self.dirty = false
           }
           @platform.Resized(..) | @platform.ScaleChanged => {
             // Invalidation clears the commit-ready state; without a new frame
             // the next text observation would be rejected before it reaches the
             // focused field.
-            gate.invalidate_layout(pending_frame is Some(_))
+            gate.invalidate_layout(self.pending_frame is Some(_))
             mounted.invalidate_layout()
-            dirty = true
+            self.dirty = true
           }
           @platform.FrameCompleted =>
-            match pending_frame {
+            match self.pending_frame {
               Some(marker) => {
-                pending_frame = None
+                self.pending_frame = None
                 if gate.completed_frame_is_current() {
                   emit_native_marker(marker)
                 }
@@ -477,32 +672,32 @@ pub fn run_native_settings_sample(
             }
           @platform.FocusChanged(focused) => {
             ignore(mounted.handle_event(value))
-            text_suspended = !focused
+            self.text_suspended = !focused
             if !focused {
-              focus_initialized = false
-              match session {
+              self.focus_initialized = false
+              match self.session {
                 Some(current) => {
                   match end_text_session(port, current) {
                     Err(error) => return Err(error)
                     Ok(_) => ()
                   }
-                  session = None
-                  last_document = ""
+                  self.session = None
+                  self.last_document = ""
                 }
                 None => ()
               }
-              if key_path_armed {
-                key_path_armed = false
+              if self.key_path_armed {
+                self.key_path_armed = false
                 match direct_text {
                   Some(arm) => ignore(arm(window, false))
                   None => ()
                 }
               }
             }
-            dirty = true
+            self.dirty = true
           }
           @platform.Input(input) => {
-            let hold = match (ordered_text, session, input) {
+            let hold = match (ordered_text, self.session, input) {
               (
                 Some(_),
                 Some(current),
@@ -529,7 +724,8 @@ pub fn run_native_settings_sample(
               _ => false
             }
             if hold {
-              held_tab = Some(value)
+              self.held_tab = Some(value)
+              self.inflight = None
               continue
             }
             match input {
@@ -550,25 +746,29 @@ pub fn run_native_settings_sample(
               _ => ()
             }
             ignore(mounted.handle_event(value))
-            dirty = true
+            self.dirty = true
           }
           @platform.Composition(_) => {
             ignore(mounted.handle_event(value))
-            dirty = true
+            self.dirty = true
           }
           _ => ()
         }
       }
       Some(_) => ()
     }
-    if dirty && pending_frame is None && !destroyed && held_tab is None {
+    self.inflight = None
+    if self.dirty &&
+      self.pending_frame is None &&
+      !self.destroyed &&
+      self.held_tab is None {
       // Drain queued actions before rendering: a TextChanged enqueued by the
       // previous dispatch must update the model first, or the committed view
       // rebuilds the field with a stale value and resets its caret.
       while mounted.next_action() is Some(action) {
-        let next = settings.update(@shared_settings.Ui(action))
-        if next != settings {
-          settings = next
+        let next = self.settings.update(@shared_settings.Ui(action))
+        if next != self.settings {
+          self.settings = next
         }
       }
       let (width, height, scale) = match host.window_metrics(window) {
@@ -576,35 +776,35 @@ pub fn run_native_settings_sample(
         Ok(metrics) => metrics
       }
       let frame = match
-        mounted.commit(settings.view(), width, height, scale, measure) {
+        mounted.commit(self.settings.view(), width, height, scale, measure) {
         Err(error) => return Err(error)
         Ok(value) => value
       }
-      dirty = false
+      self.dirty = false
       while mounted.next_action() is Some(action) {
-        let next = settings.update(@shared_settings.Ui(action))
-        if next != settings {
-          settings = next
-          dirty = true
+        let next = self.settings.update(@shared_settings.Ui(action))
+        if next != self.settings {
+          self.settings = next
+          self.dirty = true
         }
       }
       let focused = frame.focused(@shared_settings.settings_name())
-      if !focus_initialized {
+      if !self.focus_initialized {
         if focused {
-          focus_initialized = true
+          self.focus_initialized = true
         } else if mounted.focus(@shared_settings.settings_name()) {
-          dirty = true
+          self.dirty = true
         }
       }
       // A rejected focus request (for example while the host reports the
       // window unfocused) is retried on the next commit rather than giving
       // the lane a permanently unfocused field.
-      match session {
+      match self.session {
         None =>
           if focused &&
-            !text_suspended &&
-            !text_transport_failed &&
-            !key_path_armed {
+            !self.text_suspended &&
+            !self.text_transport_failed &&
+            !self.key_path_armed {
             match mounted.focused_text() {
               Some(state) =>
                 match (port.begin)(window, state.binding_id()) {
@@ -616,12 +816,12 @@ pub fn run_native_settings_sample(
                       direct_text,
                       window,
                       {
-                        key_path_armed,
-                        transport_failed: text_transport_failed,
+                        key_path_armed: self.key_path_armed,
+                        transport_failed: self.text_transport_failed,
                       },
                     )
-                    key_path_armed = route.key_path_armed
-                    text_transport_failed = route.transport_failed
+                    self.key_path_armed = route.key_path_armed
+                    self.text_transport_failed = route.transport_failed
                   }
                   Ok(epoch) =>
                     match
@@ -641,17 +841,20 @@ pub fn run_native_settings_sample(
                           direct_text,
                           window,
                           {
-                            key_path_armed,
-                            transport_failed: text_transport_failed,
+                            key_path_armed: self.key_path_armed,
+                            transport_failed: self.text_transport_failed,
                           },
                         )
-                        key_path_armed = route.key_path_armed
-                        text_transport_failed = route.transport_failed
+                        self.key_path_armed = route.key_path_armed
+                        self.text_transport_failed = route.transport_failed
                       }
                       Ok(epoch) => {
-                        session = Some({ epoch, binding: state.binding_id(), })
-                        last_document = state.document().text()
-                        last_caret = settings_caret(state.caret())
+                        self.session = Some({
+                          epoch,
+                          binding: state.binding_id(),
+                        })
+                        self.last_document = state.document().text()
+                        self.last_caret = settings_caret(state.caret())
                         let transport = match platform {
                           Windows => "imm32"
                           Linux => "text-input-v1"
@@ -672,13 +875,13 @@ pub fn run_native_settings_sample(
               Err(error) => return Err(error)
               Ok(_) => ()
             }
-            session = None
-            last_document = ""
+            self.session = None
+            self.last_document = ""
           } else {
             match mounted.focused_text() {
               Some(state) =>
-                if state.document().text() != last_document ||
-                  settings_caret(state.caret()) != last_caret {
+                if state.document().text() != self.last_document ||
+                  settings_caret(state.caret()) != self.last_caret {
                   let epoch = match
                     (port.update)(
                       current.epoch,
@@ -690,9 +893,9 @@ pub fn run_native_settings_sample(
                     Err(error) => return Err(error)
                     Ok(value) => value
                   }
-                  session = Some({ epoch, binding: current.binding, })
-                  last_document = state.document().text()
-                  last_caret = settings_caret(state.caret())
+                  self.session = Some({ epoch, binding: current.binding, })
+                  self.last_document = state.document().text()
+                  self.last_caret = settings_caret(state.caret())
                 }
               None => ()
             }
@@ -712,51 +915,57 @@ pub fn run_native_settings_sample(
                 focused: true,
                 editable: true,
               }
-              ax_token = match (ax.publish)(window, ax_token, snapshot) {
+              self.ax_token = match
+                (ax.publish)(window, self.ax_token, snapshot) {
                 Err(error) => return Err(error)
                 Ok(value) => value
               }
             }
             _ =>
-              if ax_token != 0 {
-                match (ax.revoke)(window, ax_token) {
+              if self.ax_token != 0 {
+                match (ax.revoke)(window, self.ax_token) {
                   Err(error) => return Err(error)
                   Ok(_) => ()
                 }
-                ax_token = 0
+                self.ax_token = 0
               }
           }
         None => ()
       }
       match dialog_port {
         Some(port) =>
-          if settings.dialog_open() {
+          if self.settings.dialog_open() {
             match frame.bounds(@shared_settings.settings_dialog()) {
               Some(bounds) =>
-                dialog_token = match
-                  (port.publish)(window, dialog_token, "Save changes?", bounds) {
+                self.dialog_token = match
+                  (port.publish)(
+                    window,
+                    self.dialog_token,
+                    "Save changes?",
+                    bounds,
+                  ) {
                   Err(error) => return Err(error)
                   Ok(value) => value
                 }
               None =>
-                if dialog_token != 0 {
-                  match (port.revoke)(window, dialog_token) {
+                if self.dialog_token != 0 {
+                  match (port.revoke)(window, self.dialog_token) {
                     Err(error) => return Err(error)
                     Ok(_) => ()
                   }
-                  dialog_token = 0
+                  self.dialog_token = 0
                 }
             }
-          } else if dialog_token != 0 {
-            match (port.revoke)(window, dialog_token) {
+          } else if self.dialog_token != 0 {
+            match (port.revoke)(window, self.dialog_token) {
               Err(error) => return Err(error)
               Ok(_) => ()
             }
-            dialog_token = 0
+            self.dialog_token = 0
           }
         None => ()
       }
-      let error_text = match settings.error() {
+      let error_text = match self.settings.error() {
         Some(value) => value
         None => ""
       }
@@ -771,7 +980,7 @@ pub fn run_native_settings_sample(
       } else {
         "other"
       }
-      let marker = "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"frame\",\"name\":\"\{json_escape(settings.name())}\",\"status\":\"\{settings_status(settings)}\",\"dialog\":\{settings.dialog_open()},\"focus\":\"\{focus}\",\"error\":\"\{json_escape(error_text)}\"}"
+      let marker = "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"frame\",\"name\":\"\{json_escape(self.settings.name())}\",\"status\":\"\{settings_status(self.settings)}\",\"dialog\":\{self.settings.dialog_open()},\"focus\":\"\{focus}\",\"error\":\"\{json_escape(error_text)}\"}"
       match host.present(window, frame.snapshot()) {
         Err(error) => return Err(error)
         Ok(_) => ()
@@ -780,19 +989,19 @@ pub fn run_native_settings_sample(
       if platform is Macos {
         emit_native_marker(marker)
       } else {
-        pending_frame = Some(marker)
+        self.pending_frame = Some(marker)
       }
       // The simulated save completes after three committed frames so the
       // loading state is observable without a host timer.
-      if settings.saving() {
-        saving_frames += 1
-        dirty = true
-        if saving_frames >= 3 {
-          saving_frames = 0
-          settings = settings.update(@shared_settings.SaveFinished)
+      if self.settings.saving() {
+        self.saving_frames += 1
+        self.dirty = true
+        if self.saving_frames >= 3 {
+          self.saving_frames = 0
+          self.settings = self.settings.update(@shared_settings.SaveFinished)
         }
       } else {
-        saving_frames = 0
+        self.saving_frames = 0
       }
     }
   }
@@ -803,11 +1012,11 @@ pub fn run_native_settings_sample(
   // provide event retention or safe production shutdown.
   if ordered_text is Some(_) &&
     (
-      !destroyed ||
-      held_tab is Some(_) ||
+      !self.destroyed ||
+      self.held_tab is Some(_) ||
       !buffered.is_empty() ||
       !held_platform.is_empty() ||
-      session is Some(_)
+      self.session is Some(_)
     ) {
     return Err(
       runner_error(
@@ -815,7 +1024,7 @@ pub fn run_native_settings_sample(
       ),
     )
   }
-  match session {
+  match self.session {
     Some(current) =>
       match end_text_session(port, current) {
         Err(error) => return Err(error)
@@ -823,26 +1032,26 @@ pub fn run_native_settings_sample(
       }
     None => ()
   }
-  if key_path_armed {
+  if self.key_path_armed {
     match direct_text {
       Some(arm) => ignore(arm(window, false))
       None => ()
     }
   }
-  if ax_token != 0 {
+  if self.ax_token != 0 {
     match accessibility_port {
       Some(ax) =>
-        match (ax.revoke)(window, ax_token) {
+        match (ax.revoke)(window, self.ax_token) {
           Err(error) => return Err(error)
           Ok(_) => ()
         }
       None => ()
     }
   }
-  if dialog_token != 0 {
+  if self.dialog_token != 0 {
     match dialog_port {
       Some(port) =>
-        match (port.revoke)(window, dialog_token) {
+        match (port.revoke)(window, self.dialog_token) {
           Err(error) => return Err(error)
           Ok(_) => ()
         }
@@ -850,11 +1059,12 @@ pub fn run_native_settings_sample(
     }
   }
   mounted.dispose()
-  let reason = if destroyed { "window-closed" } else { "tick-limit" }
+  let reason = if self.destroyed { "window-closed" } else { "tick-limit" }
   emit_native_marker(
-    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"exit\",\"reason\":\"\{reason}\",\"ticks\":\{ticks}}",
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"exit\",\"reason\":\"\{reason}\",\"ticks\":\{self.ticks}}",
   )
-  if destroyed || ticks >= tick_limit {
+  if self.destroyed || self.ticks >= tick_limit {
+    self.completed = true
     Ok(())
   } else {
     Err(

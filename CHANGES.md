@@ -4,6 +4,10 @@
 
 ### Added
 
+- Draft only: retain Settings run state in an explicit owner so a caller that
+  holds the owner can inspect the original buffered commit and the terminal
+  event after a structural failure. The legacy entrypoint still discards that
+  owner and stops the host; resumption and safe product shutdown are open.
 - Draft only: retain the most recent held TextSession transaction receipt
   before enqueueing its model action, so a later enqueue failure can be
   distinguished from rejection before the text transaction. This does not

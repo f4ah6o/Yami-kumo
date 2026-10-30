@@ -10,9 +10,7 @@ test "settings presents frames and releases a failed portable session before fal
   let released_before_fallback = Ref(false)
   let port = NativeTextInputPort::new(
     fn(_, _) { Ok(7UL) },
-    fn(_, _) {
-      Err(runner_error("test_update", "transport unavailable"))
-    },
+    fn(_, _) { Err(runner_error("test_update", "transport unavailable")) },
     fn(epoch) { Ok(epoch) },
     fn(_) {
       ended.val = true
@@ -95,6 +93,7 @@ test "Settings applies an observed commit before a later window blur" {
   assert_eq(settings.name(), "日本語")
   mounted.dispose()
 }
+
 ///|
 test "Settings held Tab applies the old-owner direct commit before focus moves" {
   let mounted = @ui.Mounted::new(@platform.WindowId::new(1L))
@@ -604,8 +603,11 @@ test "ordered Settings reports bounded-buffer overflow during a held Tab" {
     is Err(_),
   )
   assert_eq(cancels.val, 0)
-  assert_eq(events.val.length(), 1)
-  assert_true(events.val[0] is OrderedText(_))
+  // Stop polling before fetching the next record once the local buffer is
+  // full; both still-live source records remain with the host.
+  assert_eq(events.val.length(), 2)
+  assert_true(events.val[0] is OrderedPlatform(_))
+  assert_true(events.val[1] is OrderedText(_))
 }
 
 ///|
@@ -776,4 +778,78 @@ test "ordered Settings exposes lost local buffer on close after resize" {
   assert_false(rendered_commit)
   // The caller gets no returned buffer or owner. This is a known P1, not a
   // preservation or replay test: the outer entry next stops the real host.
+}
+
+///|
+test "retained Settings owner keeps buffered commit and terminal record on error" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let events : Array[NativeOrderedEvent] = [
+    OrderedPlatform(
+      @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(
+        window,
+        3L,
+        1.0,
+        @platform.Resized(width=800.0, height=600.0),
+      ),
+    ),
+    OrderedText(
+      @text_host.TextInputEvent::new(
+        window,
+        1L,
+        7UL,
+        @text_host.Commit(text="日本"),
+      ),
+    ),
+    OrderedPlatform(@platform.Event::new(window, 4L, 1.0, @platform.Destroyed)),
+  ]
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) { Ok(if events.is_empty() { None } else { Some(events.remove(0)) }) },
+    fn(_) {
+      Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "test-cutoff"))
+    },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) },
+    fn(epoch, _) { Ok(epoch) },
+    fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) },
+    fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(
+    host,
+    Linux,
+    text_runner_measure,
+    text_port=Some(port),
+    ordered_text=Some(ordered),
+  ).unwrap()
+  assert_true(owner.drive() is Err(_))
+  assert_eq(host.stop_count(), 0)
+  assert_false(owner.can_stop())
+  assert_true(owner.window() == window)
+  assert_true(owner.text_owner() is Some((7UL, _)))
+  assert_eq(owner.model().name(), "")
+  assert_eq(owner.pending_records().length(), 1)
+  match owner.pending_records()[0] {
+    OrderedText(value) => {
+      assert_eq(value.epoch(), 7UL)
+      assert_eq(value.sequence(), 1L)
+      assert_true(value.kind() is @text_host.Commit(text="日本"))
+    }
+    _ => fail("the original commit must remain owned")
+  }
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_true(owner.inflight_receipt() is None)
+  // Automatic replay is deliberately unavailable until owner-preserving
+  // geometry/terminal recovery is implemented.
+  assert_true(owner.drive() is Err(_))
+  assert_eq(owner.pending_records().length(), 1)
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_eq(host.stop_count(), 0)
 }
