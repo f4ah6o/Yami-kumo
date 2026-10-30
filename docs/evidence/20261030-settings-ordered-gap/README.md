@@ -17,13 +17,18 @@ replayed record, and then delivers window blur. It passed against that
 framework candidate. This isolates the adapter/model half of the desired
 commit-before-blur behavior. It does **not** connect the application runner to
 `OrderedTextHostRoute` or show that the host delivered this sequence.
+The full common suite was re-run at Yami source
+`341f69c9742b0cea747c9abdd49b32f54e061963` against a separate detached checkout
+of the same framework SHA: **PASS 7/7**. The retained
+[common log](common-c699.log.txt) has SHA-256
+`6245d21cfe296fcea6719c830b876baae4166837e470a805ccfe654efd4618a6`.
 
 The following separate expected-correctness regression **fails** against the
 same source pair. Append [tab-owner-repro.mbt.txt](tab-owner-repro.mbt.txt) to
 `native/ui/ui_test.mbt` and run through the candidate workspace:
 
 ```sh
-GPUI_SOURCE=/workspace/gpui-integration sh scripts/native_ui_workspace.sh \
+GPUI_SOURCE=/workspace/gpui-integration-c699 sh scripts/native_ui_workspace.sh \
   moon test /workspace/yami-ordered/native/ui --target native --deny-warn \
   --filter 'observed old-owner commit survives Tab focus transfer'
 ```
