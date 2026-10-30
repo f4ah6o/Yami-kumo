@@ -78,10 +78,37 @@ This controller is a finite caller interface, not a persistent service or an
 entrypoint policy. The port may itself skip or lose native records; the
 controller cannot repair or acknowledge records the host did not expose.
 
-Ubuntu main has not been adapted to retain this outcome. Since main is the
-final process caller, simply returning without `host.stop()` would still lose
-the owner on process exit. A live control/recovery policy is needed before
-enabling this path. The owner does not yet expose a validated same-owner resume,
+Ubuntu main has an experimental, opt-in `--settings-retained-control` path.
+Before opening a native session it creates an exclusive random Unix socket in a
+0700 directory, then starts `SettingsEntryController`. After the run suspends,
+the process retains the owner and accepts one bounded control request at a time:
+
+```
+python3 scripts/settings_retained_control.py SOCKET status
+python3 scripts/settings_retained_control.py SOCKET poll
+python3 scripts/settings_retained_control.py SOCKET apply --sequence SEQUENCE
+python3 scripts/settings_retained_control.py SOCKET cutoff
+python3 scripts/settings_retained_control.py SOCKET stop
+```
+
+The socket path is printed at startup; the active marker is printed after the
+runner returns control. Same-UID peer credentials are checked. Each connection
+sends one command byte; `apply` also carries the exact positive sequence returned
+by `status`, so a retried request cannot apply the following text record. Reads
+have bounded wait times. A disconnected client leaves the owner alive, although
+the outcome of a request disconnected after admission may be unknown. `stop` is
+refused while the owner is unresolved, including after a
+successful text cutoff. An unexpected listener failure is reported and keeps
+the owner alive, but there is no listener repair. A crash or forced process
+termination cannot preserve the in-process host; a restart creates a different
+socket and does not recover an old owner. Crash leftovers are not automatically
+removed. Never treat waiting or restart as successful recovery.
+
+The default Ubuntu path remains the legacy refusal. The opt-in path is now
+connected to the experimental retained route in gpui candidate
+`5cd2f231c6cbf529396cae633f6e5a0d6c9bea41`. It remains an experimental
+control surface, not an accepted IME lane. The owner
+does not yet expose a validated same-owner resume,
 atomic geometry/scene republish, a caller acknowledgement for accepted actions,
 or a terminal policy when the real window or field is destroyed. A successful
 ordered exit does not establish a complete native-queue terminal receipt; the
@@ -101,3 +128,34 @@ native --deny-warn --no-parallelize`. This is scripted evidence only; no
 production main, live IME, or public-registry consumer was tested.
 Local raw log SHA-256:
 `11820f46192161067c4369514fff3eaba5b91a3177b17778bbc9c559d9134696`.
+
+The later retained-route candidate uses `GPUI_SOURCE=/workspace/gpui-retained-route`
+at `5cd2f231c6cbf529396cae633f6e5a0d6c9bea41`. The adapter peeks a native
+receipt, installs its opaque receipt and event in the original owner before
+ACK, and retains both after an ACK error. It stops on lifecycle or unsupported
+records without ACK; in particular, an Entered record currently prevents a
+normal IME session from continuing. A callback fixture covers ACK failure,
+explicit retry, identity retention and one model application; it does not
+simulate the native queue. The receipt ledger retains ACKed native identities
+and is limited to 64 entries. It stops admission at capacity; retirement and
+resumption are not implemented. A safe retirement policy still needs proof of
+the relevant TextSession application, action generation and model reflection,
+geometry publication or an explicit terminal policy, and cutoff where
+applicable. No safe way to discard unresolved entries or stop the host is
+implied. The current control loop cannot recover from every interruption.
+
+For this candidate, the common native fixture suite passed 34/34 using
+`moon test <examples/common> --target native --deny-warn --no-parallelize`;
+the local raw log SHA-256 is
+`19f152959c4abeb8ebe87d8733a8c3489072107d4f3dc4d620ebcbf63955a36d`.
+The Ubuntu example built against the same source candidate and the rootless
+Linux sysroot; its binary SHA-256 was
+`791be6611f7ea2858149bf35d9c2d34c88717761f3263c3f371c056946d0e5dd`.
+Neither result is a live IME or public dependency acceptance.
+
+The control transport has **8/8 PASS** local Linux socket fixture tests,
+including same-UID requests, bounded idle clients, sequence-bound apply, fresh
+sockets in the same and a new process, and cleanup. Cross-UID peer rejection is
+implemented but has not been independently exercised in this unprivileged
+environment. A rootless sysroot native build of the opt-in Ubuntu example
+passed; its control loop and real Wayland host have not been exercised together.

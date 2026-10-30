@@ -19,6 +19,7 @@ pub(all) enum NativeOrderedEvent {
 pub struct NativeOrderedTextPort {
   next : (Int32) -> Result[NativeOrderedEvent?, @diagnostics.FrameworkError]
   end_when_drained : (UInt64) -> Result[Unit, @diagnostics.FrameworkError]
+  peek : ((Int32) -> Result[NativeRetainedReceipt?, @diagnostics.FrameworkError])?
 }
 
 ///|
@@ -26,7 +27,36 @@ pub fn NativeOrderedTextPort::new(
   next : (Int32) -> Result[NativeOrderedEvent?, @diagnostics.FrameworkError],
   end_when_drained : (UInt64) -> Result[Unit, @diagnostics.FrameworkError],
 ) -> NativeOrderedTextPort {
-  { next, end_when_drained, }
+  { next, end_when_drained, peek: None }
+}
+
+///|
+/// The callback captures the original host receipt, including its lifetime.
+/// An unsupported observation has no portable event and remains unacknowledged.
+pub struct NativeRetainedReceipt {
+  event : NativeOrderedEvent?
+  window : @platform.WindowId
+  sequence : Int32
+  root : UInt64
+  epoch : UInt64
+  ack : () -> Result[Unit, @diagnostics.FrameworkError]
+}
+
+///|
+pub fn NativeRetainedReceipt::new(
+  event : NativeOrderedEvent?, window : @platform.WindowId, sequence : Int32,
+  root : UInt64, epoch : UInt64,
+  ack : () -> Result[Unit, @diagnostics.FrameworkError],
+) -> NativeRetainedReceipt {
+  { event, window, sequence, root, epoch, ack }
+}
+
+///|
+pub fn NativeOrderedTextPort::with_retained_receipts(
+  peek : (Int32) -> Result[NativeRetainedReceipt?, @diagnostics.FrameworkError],
+  end_when_drained : (UInt64) -> Result[Unit, @diagnostics.FrameworkError],
+) -> NativeOrderedTextPort {
+  { next: fn(_) { Ok(None) }, end_when_drained, peek: Some(peek) }
 }
 
 ///|
@@ -301,6 +331,24 @@ pub fn SettingsEntryController::terminal_step(
 }
 
 ///|
+/// Apply only the named buffered text observation. A repeated request for a
+/// completed sequence cannot advance the next record after a lost response.
+pub fn SettingsEntryController::apply_sequence(
+  self : SettingsEntryController,
+  sequence : Int64,
+) -> Result[SettingsTerminalProgress, @diagnostics.FrameworkError] {
+  let owner = match self.outcome {
+    Suspended(value, _) => value
+    _ => return Err(runner_error("settings_entry", "no suspended owner"))
+  }
+  if sequence <= 0L || owner.buffered.is_empty() ||
+    !(owner.buffered[0] is OrderedText(event) && event.sequence() == sequence) {
+    return Err(runner_error("settings_entry", "text sequence is no longer pending"))
+  }
+  owner.terminal_step(ApplyNext)
+}
+
+///|
 /// Stop only after an outcome that already proved complete owner cleanup.
 /// NotStarted and Suspended are conservative failures, leaving the host alive.
 pub fn SettingsEntryController::try_stop(
@@ -366,6 +414,11 @@ pub struct SettingsRunOwner {
   priv buffered : Array[NativeOrderedEvent]
   priv held_platform : Array[@platform.Event]
   priv mut inflight : NativeOrderedEvent?
+  // The receipt is installed before ACK, alongside its locally owned event.
+  priv mut pending_host_receipt : NativeRetainedReceipt?
+  // Retain native identities even after host ACK until an explicit per-stage
+  // retirement policy exists. This ledger is bounded and fails closed.
+  priv acknowledged_receipts : Array[NativeRetainedReceipt]
   priv mut cutoff_done : Bool
   priv mut completed : Bool
   priv mut running : Bool
@@ -432,7 +485,8 @@ pub fn SettingsRunOwner::reconcile_terminal_commit(
 pub fn SettingsRunOwner::reconcile_terminal_observation(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.cutoff_done || self.held_tab is Some(_) {
+  if !self.suspended || self.running || self.cutoff_done || self.held_tab is Some(_) ||
+    self.pending_host_receipt is Some(_) {
     return Err(runner_error("terminal_recovery", "terminal owner is unavailable"))
   }
   self.running = true
@@ -504,6 +558,7 @@ pub(all) enum SettingsTerminalCommand {
   ApplyNext
   PollOnce
   TryTextCutoff
+  RetryReceiptAck
 }
 
 ///|
@@ -515,6 +570,54 @@ pub(all) enum SettingsTerminalProgress {
   RecordBuffered
   NoRecord
   TextCutoffCompleted
+  ReceiptAcknowledged
+}
+
+///|
+/// Metadata is observable while the opaque host receipt remains owned here.
+pub fn SettingsRunOwner::pending_receipt_identity(
+  self : SettingsRunOwner,
+) -> (@platform.WindowId, Int32, UInt64, UInt64)? {
+  match self.pending_host_receipt {
+    None => None
+    Some(receipt) => Some((receipt.window, receipt.sequence, receipt.root, receipt.epoch))
+  }
+}
+
+///|
+pub fn SettingsRunOwner::acknowledged_receipt_count(self : SettingsRunOwner) -> Int {
+  self.acknowledged_receipts.length()
+}
+
+///|
+pub fn SettingsRunOwner::acknowledged_receipt_identity(
+  self : SettingsRunOwner, index : Int,
+) -> (@platform.WindowId, Int32, UInt64, UInt64)? {
+  if index < 0 || index >= self.acknowledged_receipts.length() { return None }
+  let receipt = self.acknowledged_receipts[index]
+  Some((receipt.window, receipt.sequence, receipt.root, receipt.epoch))
+}
+
+///|
+fn SettingsRunOwner::ack_owned_receipt(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  match self.pending_host_receipt {
+    None => Err(runner_error("ordered_text", "no retained receipt"))
+    Some(receipt) if receipt.event is None =>
+      Err(runner_error("ordered_text", "unsupported receipt requires an explicit policy"))
+    Some(_) if self.acknowledged_receipts.length() >= 64 =>
+      Err(runner_error("ordered_text", "receipt ledger is full"))
+    Some(receipt) =>
+      match (receipt.ack)() {
+        Err(error) => Err(error)
+        Ok(_) => {
+          self.acknowledged_receipts.push(receipt)
+          self.pending_host_receipt = None
+          Ok(())
+        }
+      }
+  }
 }
 
 ///|
@@ -537,7 +640,19 @@ pub fn SettingsRunOwner::terminal_step(
   if !self.suspended || self.running || self.cutoff_done {
     return Err(runner_error("terminal_step", "owner is not suspended or is busy"))
   }
+  if self.pending_host_receipt is Some(_) && !(command is RetryReceiptAck) {
+    return Err(runner_error("terminal_step", "receipt acknowledgement is pending"))
+  }
   match command {
+    RetryReceiptAck => {
+      self.running = true
+      let result = self.ack_owned_receipt()
+      self.running = false
+      match result {
+        Ok(_) => Ok(ReceiptAcknowledged)
+        Err(error) => Err(error)
+      }
+    }
     ApplyNext => {
       if self.buffered.is_empty() {
         return Err(runner_error("terminal_step", "no buffered record"))
@@ -558,6 +673,9 @@ pub fn SettingsRunOwner::terminal_step(
       }
     }
     PollOnce => {
+      if self.acknowledged_receipts.length() >= 64 {
+        return Err(runner_error("terminal_step", "receipt ledger is full"))
+      }
       if self.buffered.length() + self.held_platform.length() >= 64 {
         return Err(runner_error("terminal_step", "local buffer is full"))
       }
@@ -572,11 +690,34 @@ pub fn SettingsRunOwner::terminal_step(
         None => return Err(runner_error("terminal_step", "ordered host is unavailable"))
       }
       self.running = true
-      let result = (ordered.next)(0)
+      let before_count = self.buffered.length()
+      let result = match ordered.peek {
+        None => (ordered.next)(0)
+        Some(peek) =>
+          match peek(0) {
+            Err(error) => Err(error)
+            Ok(None) => Ok(None)
+            Ok(Some(receipt)) => {
+              self.pending_host_receipt = Some(receipt)
+              match receipt.event {
+                None => Err(runner_error("ordered_text", "unsupported receipt requires an explicit policy"))
+                Some(record) => {
+                  self.buffered.push(record)
+                  match self.ack_owned_receipt() {
+                    Err(error) => Err(error)
+                    Ok(_) => Ok(None)
+                  }
+                }
+              }
+            }
+          }
+      }
       self.running = false
       match result {
         Err(error) => Err(error)
-        Ok(None) => Ok(NoRecord)
+        Ok(None) => if self.buffered.length() > before_count {
+          Ok(RecordBuffered)
+        } else { Ok(NoRecord) }
         Ok(Some(record)) => {
           self.buffered.push(record)
           Ok(RecordBuffered)
@@ -599,7 +740,7 @@ pub fn SettingsRunOwner::try_terminal_text_cutoff(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   if !self.suspended || self.running || self.cutoff_done ||
-    self.held_tab is Some(_) || !self.buffered.is_empty() ||
+    self.held_tab is Some(_) || self.pending_host_receipt is Some(_) || !self.buffered.is_empty() ||
     !self.held_platform.is_empty() || self.terminal_applied is Some(_) {
     return Err(runner_error("terminal_cutoff", "local records or actions remain unresolved"))
   }
@@ -763,6 +904,8 @@ pub fn SettingsRunOwner::new(
     buffered: [],
     held_platform: [],
     inflight: None,
+    pending_host_receipt: None,
+    acknowledged_receipts: [],
     cutoff_done: false,
     completed: false,
     running: false,
@@ -778,7 +921,7 @@ pub fn SettingsRunOwner::drive(
   if self.running ||
     self.completed ||
     self.suspended ||
-    self.inflight is Some(_) ||
+    self.inflight is Some(_) || self.pending_host_receipt is Some(_) ||
     self.cutoff_done {
     return Err(
       runner_error("ordered_text", "retained state requires explicit recovery"),
@@ -956,9 +1099,30 @@ fn SettingsRunOwner::drive_inner(
               runner_error("ordered_text", "deferred input buffer is full"),
             )
           } else {
-            match (ordered.next)(16) {
-              Err(error) => return Err(error)
-              Ok(value) => value
+            if ordered.peek is Some(_) && self.acknowledged_receipts.length() >= 64 {
+              return Err(runner_error("ordered_text", "receipt ledger is full"))
+            }
+            match ordered.peek {
+              None => match (ordered.next)(16) {
+                Err(error) => return Err(error)
+                Ok(value) => value
+              }
+              Some(peek) => match peek(16) {
+                Err(error) => return Err(error)
+                Ok(None) => None
+                Ok(Some(receipt)) => {
+                  self.pending_host_receipt = Some(receipt)
+                  self.inflight = receipt.event
+                  match receipt.event {
+                    None => return Err(runner_error("ordered_text", "unsupported receipt requires an explicit policy"))
+                    Some(_) => ()
+                  }
+                  match self.ack_owned_receipt() {
+                    Err(error) => return Err(error)
+                    Ok(_) => receipt.event
+                  }
+                }
+              }
             }
           }
           self.inflight = ingress
@@ -1275,8 +1439,16 @@ fn SettingsRunOwner::drive_inner(
             !self.key_path_armed {
             match mounted.focused_text() {
               Some(state) =>
-                match (port.begin)(window, state.binding_id()) {
+                match (match port.begin_with_state {
+                  None => (port.begin)(window, state.binding_id())
+                  Some(begin) => begin(window, state.binding_id(), @text_host.TextInputState::new(
+                    state.document(), settings_caret(state.caret()),
+                  ))
+                }) {
                   Err(error) => {
+                    // A retained begin may have installed a native binding even
+                    // when it reports failure; fallback would abandon that owner.
+                    if port.begin_with_state is Some(_) { return Err(error) }
                     emit_native_marker(
                       "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\",\"operation\":\"begin_text_input\",\"error\":\"\{json_escape(format_framework_error(error))}\"}",
                     )

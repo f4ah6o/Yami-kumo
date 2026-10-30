@@ -1432,3 +1432,131 @@ test "terminal measurement cannot reenter owner polling" {
   assert_eq(owner.model().name(), "日本")
   assert_eq(host.stop_count(), 0)
 }
+
+///|
+test "retained host receipt is owned before ack and retry does not replay commit" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let owner_ref : Ref[SettingsRunOwner?] = Ref(None)
+  let available = Ref(true)
+  let ack_calls = Ref(0)
+  let owned_at_ack = Ref(false)
+  let reads = Ref(0)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      reads.val += 1
+      if !available.val { return Ok(None) }
+      let owner = owner_ref.val.unwrap()
+      let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+      Ok(Some(NativeRetainedReceipt::new(
+        Some(OrderedText(event)), owner.window, 42, 9UL, 7UL,
+        fn() {
+          ack_calls.val += 1
+          owned_at_ack.val = owner.pending_records().length() == 1 &&
+            owner.pending_receipt_identity() is Some((_, 42, 9UL, 7UL)) &&
+            owner.terminal_step(ApplyNext) is Err(_)
+          if ack_calls.val == 1 {
+            return Err(runner_error("test_ack", "injected failure"))
+          }
+          available.val = false
+          Ok(())
+        },
+      )))
+    },
+    fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let field = owner.mounted.focused_text().unwrap()
+  owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.mounted.invalidate_layout()
+  owner.suspended = true
+  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 2L, 1.0, @platform.Destroyed)))
+  owner_ref.val = Some(owner)
+  assert_true(owner.terminal_step(PollOnce) is Err(_))
+  assert_true(owned_at_ack.val)
+  assert_eq(owner.pending_records().length(), 1)
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.terminal_step(PollOnce) is Err(_))
+  assert_eq(reads.val, 1)
+  assert_true(owner.terminal_step(RetryReceiptAck).unwrap() is ReceiptAcknowledged)
+  assert_true(owner.pending_receipt_identity() is None)
+  assert_eq(owner.acknowledged_receipt_count(), 1)
+  assert_true(owner.acknowledged_receipt_identity(0) is Some((_, 42, 9UL, 7UL)))
+  assert_true(owner.terminal_step(RetryReceiptAck) is Err(_))
+  assert_true(owner.terminal_step(ApplyNext).unwrap() is ModelApplied(1L, true))
+  assert_eq(owner.model().name(), "日本")
+  assert_true(owner.acknowledged_receipt_identity(0) is Some((_, 42, 9UL, 7UL)))
+  assert_true(owner.terminal_step(ApplyNext) is Err(_))
+  assert_eq(owner.model().name(), "日本")
+  assert_eq(ack_calls.val, 2)
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "full receipt ledger stops admission without dropping its owner" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let reads = Ref(0)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) { reads.val += 1; Ok(None) }, fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  owner.suspended = true
+  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 2L, 1.0, @platform.Destroyed)))
+  for i = 0; i < 64; i = i + 1 {
+    owner.acknowledged_receipts.push(NativeRetainedReceipt::new(
+      None, owner.window, i, 9UL, 7UL, fn() { Ok(()) },
+    ))
+  }
+  assert_true(owner.terminal_step(PollOnce) is Err(_))
+  assert_eq(reads.val, 0)
+  assert_eq(owner.acknowledged_receipt_count(), 64)
+  assert_true(owner.acknowledged_receipt_identity(63) is Some((_, 63, 9UL, 7UL)))
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "entry sequence retry does not apply the next record" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let field = owner.mounted.focused_text().unwrap()
+  owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.mounted.invalidate_layout()
+  owner.suspended = true
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))))
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 2L, 7UL, @text_host.Commit(text="日本"))))
+  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 3L, 1.0, @platform.Destroyed)))
+  let entry : SettingsEntryController = {
+    host,
+    outcome: Suspended(owner, runner_error("test", "terminal")),
+    stop_attempted: false,
+    stopped: false,
+  }
+  assert_true(entry.apply_sequence(1L).unwrap() is FieldApplied(1L))
+  assert_true(entry.apply_sequence(1L) is Err(_))
+  assert_eq(owner.pending_records().length(), 1)
+  assert_eq(owner.model().name(), "")
+  assert_true(entry.apply_sequence(2L).unwrap() is ModelApplied(2L, true))
+  assert_eq(owner.model().name(), "日本")
+  assert_true(entry.try_stop() is Err(_))
+  assert_eq(host.stop_count(), 0)
+}
