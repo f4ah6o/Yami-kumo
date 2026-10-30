@@ -312,12 +312,22 @@ fn main {
               @ubuntu_host.Lifecycle(target, @ubuntu_host.Entered) if
                 target.window == receipt.native_window() &&
                 target.sequence == receipt.native_sequence().to_int64() &&
-                retained.native_epoch() == Some(target.epoch) =>
+                retained.native_epoch() == Some(target.epoch) => {
+                println("YAMI_SETTINGS_IME {\"stage\":\"entered_peek\",\"native_sequence\":\{receipt.native_sequence()},\"portable_epoch\":\{receipt.epoch()},\"native_epoch\":\{target.epoch},\"seat\":\{target.seat},\"proxy\":\{target.proxy_generation}}")
                 return Ok(Some(@common.NativeRetainedReceipt::entered(
                   receipt.native_window(), receipt.native_sequence(), receipt.root(),
                   receipt.epoch(), target.epoch, target.seat, target.proxy_generation,
-                  fn() { receipt.ack() },
+                  fn() {
+                    match receipt.ack() {
+                      Ok(_) => {
+                        println("YAMI_SETTINGS_IME {\"stage\":\"entered_ack\",\"native_sequence\":\{receipt.native_sequence()}}")
+                        Ok(())
+                      }
+                      Err(error) => Err(error)
+                    }
+                  },
                 )))
+              }
               _ => ()
             }
             let event = match receipt.event() {
