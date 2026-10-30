@@ -112,6 +112,34 @@ class FreshFrameTests(unittest.TestCase):
             output.wait_frame(lambda f: f.get("dialog"), 0, after=1)
 
 
+class ObservationFenceTests(unittest.TestCase):
+    def test_buffered_pre_observation_frame_cannot_satisfy_fence(self):
+        output = driver.Output.__new__(driver.Output)
+        output.frames = []
+
+        def observe():
+            # A frame emitted before the marker may be parsed while waiting for it.
+            output.frames.append({"name": ""})
+            return {"phase": "preedit", "text": ""}
+
+        with self.assertRaises(driver.SettingsError):
+            driver.wait_frame_after_observation(output, observe, lambda f: f.get("name") == "", 0)
+
+    def test_post_observation_frame_can_satisfy_fence(self):
+        class Output:
+            frames = []
+
+            def wait_frame(self, predicate, timeout, after=0):
+                self.frames.append({"name": ""})
+                return next(frame for frame in self.frames[after:] if predicate(frame))
+
+        observation, frame = driver.wait_frame_after_observation(
+            Output(), lambda: {"phase": "preedit", "text": ""},
+            lambda f: f.get("name") == "", 1)
+        self.assertEqual(observation["phase"], "preedit")
+        self.assertEqual(frame["name"], "")
+
+
 class ReportTests(unittest.TestCase):
     def frames(self):
         return {

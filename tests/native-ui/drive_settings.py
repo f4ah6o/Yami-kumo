@@ -282,6 +282,13 @@ class Output:
         self.log.close()
 
 
+def wait_frame_after_observation(output: Output, observe, predicate, timeout: float):
+    """Fence buffered frames by consuming the triggering observation first."""
+    observation = observe()
+    after = len(output.frames)
+    return observation, output.wait_frame(predicate, timeout, after=after)
+
+
 def driver_log(output: Output, message: str) -> None:
     output.log.write(f"DRIVER {message}\n")
     output.log.flush()
