@@ -1,0 +1,152 @@
+{
+  "profile": "local nested Xvfb/Weston x11 + IBus/Mozc; exploratory callback only",
+  "framework_sha": "f67cb002731b62ae47bdb5368ebf83a3c395a2cf",
+  "consumer_sha": "0a614b49bcdd53c291b50bbb60759a02d151be46",
+  "app_source_sha": "0a614b49bcdd53c291b50bbb60759a02d151be46",
+  "app_binary_sha256": "fa2c83a7e64e38838f8b080dff4dc86a924de40f03bfd1d77ff7ccae775b9977",
+  "entered_peek_ack": "PASS",
+  "full_live_acceptance": "NOT_RUN",
+  "forced_process_termination": true,
+  "x11_window_id": "4194309",
+  "x11_window_focus_id": "4194309",
+  "x11_window_focus_rc": 0,
+  "ime_keyboard_grab": true,
+  "entered_peek_records": [
+    {
+      "stage": "entered_peek",
+      "native_sequence": 6,
+      "portable_epoch": 1,
+      "native_epoch": 1,
+      "seat": 14,
+      "proxy": 1
+    }
+  ],
+  "entered_ack_records": [
+    {
+      "stage": "entered_ack",
+      "native_sequence": 6
+    }
+  ],
+  "preedit_markers": [
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"\",\"cursor\":-1,\"epoch\":1}",
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"ｎ\",\"cursor\":1,\"epoch\":1}"
+  ],
+  "commit_markers": [],
+  "control_active": true,
+  "app_exited_before_cleanup": false,
+  "process_wchan": "do_sys_poll",
+  "process_syscall": "7 0x7ffc37b22538 0x1 0x7530 0x0 0x0 0x0 0x7ffc37b224b8 0x7f4bc47a072e",
+  "process_status": "State:\tS (sleeping)\nVmRSS:\t   85172 kB\nThreads:\t13",
+  "thread_snapshot": "    PID     TID STAT WCHAN                            COMMAND\n 211985  211985 Sl   do_sys_poll                      ubuntu.exe\n 211985  211987 Sl   futex_wait                       llvmpipe-0\n 211985  211988 Sl   futex_wait                       llvmpipe-1\n 211985  211989 Sl   futex_wait                       llvmpipe-2\n 211985  211990 Sl   futex_wait                       llvmpipe-3\n 211985  211991 Sl   futex_wait                       llvmpipe-4\n 211985  211992 Sl   futex_wait                       ubuntu.exe\n 211985  211993 Sl   futex_wait                       ubuntu.exe\n 211985  211994 Sl   futex_wait                       ubuntu.exe\n 211985  211995 Sl   futex_wait                       ubuntu.exe\n 211985  211996 Sl   futex_wait                       ubuntu.exe\n 211985  211997 SNl  futex_wait                       ubuntu.:disk$0\n 211985  211998 SNl  futex_wait                       ubuntu.:disk$1\n",
+  "control_status": {
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+    "stderr": ""
+  },
+  "control_receipt": {
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nnative receipt sequence: 11\n",
+    "stderr": ""
+  },
+  "control_generation": {
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\ncontinuation generation: none or non-text prefix\n",
+    "stderr": ""
+  },
+  "control_pending_stage": {
+    "sequence": 11,
+    "rc": 2,
+    "stdout": "step refused or failed; owner and host remain retained\n",
+    "stderr": ""
+  },
+  "control_last_ack_stage": {
+    "sequence": 10,
+    "rc": 0,
+    "stdout": "owned text observation applied without a model action; geometry is not implied\n",
+    "stderr": ""
+  },
+  "all_ack_stages": {
+    "1": {
+      "rc": 0,
+      "stdout": "non-input platform event handled locally; geometry and shutdown are not implied\n",
+      "stderr": ""
+    },
+    "2": {
+      "rc": 0,
+      "stdout": "non-input platform event handled locally; geometry and shutdown are not implied\n",
+      "stderr": ""
+    },
+    "3": {
+      "rc": 0,
+      "stdout": "non-input platform event handled locally; geometry and shutdown are not implied\n",
+      "stderr": ""
+    },
+    "4": {
+      "rc": 0,
+      "stdout": "host acknowledged the receipt; owner application is not implied\n",
+      "stderr": ""
+    },
+    "5": {
+      "rc": 0,
+      "stdout": "non-input platform event handled locally; geometry and shutdown are not implied\n",
+      "stderr": ""
+    },
+    "6": {
+      "rc": 0,
+      "stdout": "entered target recorded and acknowledged; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    "7": {
+      "rc": 0,
+      "stdout": "owned text observation applied without a model action; geometry is not implied\n",
+      "stderr": ""
+    },
+    "8": {
+      "rc": 0,
+      "stdout": "non-input platform event handled locally; geometry and shutdown are not implied\n",
+      "stderr": ""
+    },
+    "9": {
+      "rc": 0,
+      "stdout": "non-input platform event handled locally; geometry and shutdown are not implied\n",
+      "stderr": ""
+    },
+    "10": {
+      "rc": 0,
+      "stdout": "owned text observation applied without a model action; geometry is not implied\n",
+      "stderr": ""
+    }
+  },
+  "physical_evidence": [
+    "YAMI_SETTINGS_IME {\"stage\":\"physical_evidence\",\"available\":true,\"native_sequence\":11,\"physical_key\":49,\"focus_generation\":1,\"window_generation\":1,\"claimed_before_window\":true,\"prior\":\"no_press_since_focus\",\"native_epoch\":1,\"seat\":14,\"proxy\":1}"
+  ],
+  "receipt_trace": [
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"resize\",\"native_sequence\":1,\"portable_epoch\":0}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"resize\",\"native_sequence\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"focus_gained\",\"native_sequence\":2,\"portable_epoch\":0}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"focus_gained\",\"native_sequence\":2}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"resize\",\"native_sequence\":3,\"portable_epoch\":0}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"resize\",\"native_sequence\":3}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"pointer_moved\",\"native_sequence\":4,\"portable_epoch\":0}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"pointer_moved\",\"native_sequence\":4}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"frame_completed\",\"native_sequence\":5,\"portable_epoch\":0}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"frame_completed\",\"native_sequence\":5}",
+    "YAMI_SETTINGS_IME {\"stage\":\"entered_peek\",\"native_sequence\":6,\"portable_epoch\":1,\"native_epoch\":1,\"seat\":14,\"proxy\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"entered_ack\",\"native_sequence\":6}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"preedit\",\"native_sequence\":7,\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"preedit\",\"native_sequence\":7}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"frame_completed\",\"native_sequence\":8,\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"frame_completed\",\"native_sequence\":8}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"frame_completed\",\"native_sequence\":9,\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"frame_completed\",\"native_sequence\":9}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"preedit\",\"native_sequence\":10,\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"preedit\",\"native_sequence\":10}",
+    "YAMI_SETTINGS_IME {\"stage\":\"geometry_update_begin\",\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"geometry_update_ok\",\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"physical_evidence\",\"available\":true,\"native_sequence\":11,\"physical_key\":49,\"focus_generation\":1,\"window_generation\":1,\"claimed_before_window\":true,\"prior\":\"no_press_since_focus\",\"native_epoch\":1,\"seat\":14,\"proxy\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"unhandled_native\",\"kind\":\"forwarded_release\",\"native_sequence\":11,\"native_epoch\":1,\"seat\":14,\"proxy\":1,\"keysym\":110,\"known_key\":false,\"stale\":false}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"unhandled_forwarded_release\",\"native_sequence\":11,\"portable_epoch\":1}"
+  ],
+  "app_exit_code": -15,
+  "test_socket_cleanup": "removed after process exit"
+}
