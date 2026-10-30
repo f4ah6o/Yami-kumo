@@ -360,7 +360,19 @@ fn main {
                 _ => "platform"
               }
               @ubuntu_host.Lifecycle(_, _) => "lifecycle"
-              @ubuntu_host.Unhandled(_) => "unhandled"
+              @ubuntu_host.Unhandled(raw) => match raw {
+                Some(@ubuntu_host.TextSession(target, @ubuntu_host.ForwardedReleased(keysym~, key~, ..))) => {
+                  println("YAMI_SETTINGS_IME {\"stage\":\"unhandled_native\",\"kind\":\"forwarded_release\",\"native_sequence\":\{receipt.native_sequence()},\"native_epoch\":\{target.epoch},\"seat\":\{target.seat},\"proxy\":\{target.proxy_generation},\"keysym\":\{keysym},\"known_key\":\{key is Some(_)},\"stale\":\{receipt.is_native_stale()}}")
+                  "unhandled_forwarded_release"
+                }
+                Some(@ubuntu_host.TextSession(_, @ubuntu_host.ForwardedPressed(..))) => "unhandled_forwarded_press"
+                Some(@ubuntu_host.TextSession(_, @ubuntu_host.Commit(..))) => "unhandled_commit"
+                Some(@ubuntu_host.TextSession(_, @ubuntu_host.Preedit(..))) => "unhandled_preedit"
+                Some(@ubuntu_host.TextSession(_, @ubuntu_host.Entered)) => "unhandled_entered"
+                Some(@ubuntu_host.TextSession(_, @ubuntu_host.Left)) => "unhandled_left"
+                Some(@ubuntu_host.Platform(_)) => "unhandled_platform"
+                None => "unhandled_raw"
+              }
             }
             println("YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"\{record_kind}\",\"native_sequence\":\{receipt.native_sequence()},\"portable_epoch\":\{receipt.epoch()}}")
             Ok(Some(@common.NativeRetainedReceipt::new(
