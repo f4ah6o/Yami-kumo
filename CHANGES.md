@@ -4,6 +4,10 @@
 
 ### Added
 
+- Draft only: connect the Ubuntu Settings experiment to ordered ingress and
+  hold an uncomposed Tab until the admitted text prefix and cutoff complete.
+  This runner is not production-ready: resize, close, buffer overflow and
+  preedit recovery during the hold can stop the host and lose queued input.
 - Draft only: explore a bounded native TextField ownership hold using GPUI
   `TextSession` while a focus intent is pending. This is not wired into the
   Settings runner; host cutoff proof and interrupted-hold recovery are open.

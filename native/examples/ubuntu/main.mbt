@@ -92,7 +92,20 @@ fn main {
   let capture : @common.NativeFrameCapture = fn(window) {
     @testing.capture_frame(host, window)
   }
-  let route = @ubuntu_host.TextHostRoute::new(host)
+  let legacy = @ubuntu_host.TextHostRoute::new(host)
+  let route = @ubuntu_host.OrderedTextHostRoute::new(host)
+  let legacy_text_port = @common.NativeTextInputPort::new(
+    fn(window, root) { legacy.begin_text_input(window, root) },
+    fn(epoch, state) {
+      match ubuntu_text_state(state) {
+        Ok(value) => legacy.update_text_input(epoch, value)
+        Err(error) => Err(error)
+      }
+    },
+    fn(epoch) { legacy.cancel_text_input(epoch) },
+    fn(epoch) { legacy.end_text_input(epoch) },
+    fn(timeout) { legacy.next_text_input(timeout_ms=timeout) },
+  )
   let text_begin : @common.NativeTextBegin = fn(window, root) {
     route.begin_text_input(window, root)
   }
@@ -109,15 +122,24 @@ fn main {
   let text_end : @common.NativeTextEnd = fn(epoch) {
     route.end_text_input(epoch)
   }
-  let text_next : @common.NativeTextNext = fn(timeout) {
-    route.next_text_input(timeout_ms=timeout)
-  }
+  let text_next : @common.NativeTextNext = fn(_) { Ok(None) }
   let text_port = @common.NativeTextInputPort::new(
     text_begin, text_update, text_cancel, text_end, text_next,
   )
-  let next_platform : @common.NativePlatformNext = fn(timeout) {
-    route.next_platform_event(timeout_ms=timeout)
+  let ordered_next = fn(timeout) {
+    match route.next_ordered_event(timeout_ms=timeout) {
+      Ok(Some(@ubuntu_host.Text(value))) => Ok(Some(@common.OrderedText(value)))
+      Ok(Some(@ubuntu_host.Platform(value))) =>
+        Ok(Some(@common.OrderedPlatform(value)))
+      Ok(None) => Ok(None)
+      Err(error) => Err(error)
+    }
   }
+  let ordered_text = @common.NativeOrderedTextPort::new(ordered_next, fn(
+    epoch,
+  ) {
+    route.try_end_when_drained(epoch)
+  })
   // Weston installs no text-input-v1 manager, so the settings lane falls
   // back to the compositor key path armed through the host's direct
   // keyboard-text mode.
@@ -129,8 +151,9 @@ fn main {
     @common.Linux,
     ubuntu_measure,
     capture,
-    text_port=Some(text_port),
-    settings_platform_next=Some(next_platform),
+    text_port=Some(legacy_text_port),
+    settings_text_port=Some(text_port),
+    settings_ordered_text=Some(ordered_text),
     settings_direct_text=Some(direct_text),
   )
   let stopped = host.stop()

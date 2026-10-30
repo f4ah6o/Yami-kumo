@@ -144,3 +144,636 @@ test "Settings held Tab applies the old-owner direct commit before focus moves" 
   assert_eq(settings.name(), "日本")
   mounted.dispose()
 }
+
+///|
+test "ordered Settings holds Tab until the old-owner commit and cutoff" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let delivered = Ref(0)
+  let cutoff_calls = Ref(0)
+  let events : Ref[Array[NativeOrderedEvent]] = Ref([
+    OrderedPlatform(
+      @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 3L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(
+        window,
+        4L,
+        1.0,
+        @platform.Input(
+          @primitives.KeyPressed(
+            key=@primitives.Tab,
+            repeat=false,
+            modifiers=@primitives.Modifiers::none(),
+          ),
+        ),
+      ),
+    ),
+    OrderedText(
+      @text_host.TextInputEvent::new(
+        window,
+        1L,
+        7UL,
+        @text_host.Commit(text="日本"),
+      ),
+    ),
+    OrderedText(
+      @text_host.TextInputEvent::new(
+        window,
+        1L,
+        7UL,
+        @text_host.Commit(text="日本"),
+      ),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(
+        window,
+        5L,
+        1.0,
+        @platform.Input(
+          @primitives.KeyReleased(
+            key=@primitives.Tab,
+            modifiers=@primitives.Modifiers::none(),
+          ),
+        ),
+      ),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 6L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 7L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(@platform.Event::new(window, 8L, 1.0, @platform.Destroyed)),
+  ])
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) {
+      if events.val.is_empty() {
+        return Ok(None)
+      }
+      let next = events.val.remove(0)
+      if next is OrderedText(_) {
+        delivered.val += 1
+      }
+      Ok(Some(next))
+    },
+    fn(epoch) {
+      if epoch != 7UL {
+        return Err(runner_error("test-cutoff", "wrong epoch"))
+      }
+      cutoff_calls.val += 1
+      if delivered.val == 2 {
+        Ok(())
+      } else {
+        Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "test-cutoff"))
+      }
+    },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) },
+    fn(epoch, _) { Ok(epoch) },
+    fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) },
+    fn(_) { Ok(None) },
+  )
+  run_native_settings_sample(
+    host,
+    Linux,
+    text_runner_measure,
+    text_port=Some(port),
+    ordered_text=Some(ordered),
+  ).unwrap()
+  assert_eq(delivered.val, 2)
+  assert_true(cutoff_calls.val >= 3)
+  let mut seen = false
+  for item in host.last_present().unwrap().items() {
+    match item {
+      @scene.TextItem(text~, ..) | @scene.TextRunItem(text~, ..) if text ==
+        "日本" => seen = true
+      _ => ()
+    }
+  }
+  assert_true(seen)
+}
+
+///|
+test "ordered Settings keeps post-Tab preedit pending until observed commit" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let stage = Ref(0)
+  let cutoff_calls = Ref(0)
+  let events : Ref[Array[NativeOrderedEvent]] = Ref([
+    OrderedPlatform(
+      @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 3L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(
+        window,
+        4L,
+        1.0,
+        @platform.Input(
+          @primitives.KeyPressed(
+            key=@primitives.Tab,
+            repeat=false,
+            modifiers=@primitives.Modifiers::none(),
+          ),
+        ),
+      ),
+    ),
+    OrderedText(
+      @text_host.TextInputEvent::new(
+        window,
+        1L,
+        7UL,
+        @text_host.Preedit(text="にほん", cursor=3),
+      ),
+    ),
+    OrderedText(
+      @text_host.TextInputEvent::new(
+        window,
+        2L,
+        7UL,
+        @text_host.Commit(text="日本"),
+      ),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 5L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(@platform.Event::new(window, 6L, 1.0, @platform.Destroyed)),
+  ])
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) {
+      if events.val.is_empty() {
+        return Ok(None)
+      }
+      let next = events.val.remove(0)
+      match next {
+        OrderedText(event) =>
+          match event.kind() {
+            @text_host.Preedit(..) => stage.val = 1
+            @text_host.Commit(..) => stage.val = 2
+            _ => ()
+          }
+        _ => ()
+      }
+      Ok(Some(next))
+    },
+    fn(_) {
+      cutoff_calls.val += 1
+      if stage.val == 2 {
+        Ok(())
+      } else {
+        Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "test-cutoff"))
+      }
+    },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) },
+    fn(epoch, _) { Ok(epoch) },
+    fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) },
+    fn(_) { Ok(None) },
+  )
+  run_native_settings_sample(
+    host,
+    Linux,
+    text_runner_measure,
+    text_port=Some(port),
+    ordered_text=Some(ordered),
+  ).unwrap()
+  // One Busy before preedit, then success after its actual commit. Calling
+  // cutoff while composing would add a third attempt and violate the fence.
+  assert_eq(cutoff_calls.val, 2)
+  assert_eq(stage.val, 2)
+}
+
+///|
+test "ordered Settings rejects Tab during existing preedit without cancel" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let cancels = Ref(0)
+  let events : Ref[Array[NativeOrderedEvent]] = Ref([
+    OrderedPlatform(
+      @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 3L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedText(
+      @text_host.TextInputEvent::new(
+        window,
+        1L,
+        7UL,
+        @text_host.Preedit(text="に", cursor=1),
+      ),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(
+        window,
+        4L,
+        1.0,
+        @platform.Input(
+          @primitives.KeyPressed(
+            key=@primitives.Tab,
+            repeat=false,
+            modifiers=@primitives.Modifiers::none(),
+          ),
+        ),
+      ),
+    ),
+  ])
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) {
+      if events.val.is_empty() {
+        Ok(None)
+      } else {
+        Ok(Some(events.val.remove(0)))
+      }
+    },
+    fn(_) { Err(runner_error("test-cutoff", "must not cut active preedit")) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) },
+    fn(epoch, _) { Ok(epoch) },
+    fn(epoch) {
+      cancels.val += 1
+      Ok(epoch)
+    },
+    fn(_) { Ok(()) },
+    fn(_) { Ok(None) },
+  )
+  assert_true(
+    run_native_settings_sample(
+      host,
+      Linux,
+      text_runner_measure,
+      text_port=Some(port),
+      ordered_text=Some(ordered),
+    )
+    is Err(_),
+  )
+  assert_eq(cancels.val, 0)
+}
+
+///|
+test "ordered Settings fails closed on resize while Tab is held" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let cancels = Ref(0)
+  let events : Ref[Array[NativeOrderedEvent]] = Ref([
+    OrderedPlatform(
+      @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 3L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(
+        window,
+        4L,
+        1.0,
+        @platform.Input(
+          @primitives.KeyPressed(
+            key=@primitives.Tab,
+            repeat=false,
+            modifiers=@primitives.Modifiers::none(),
+          ),
+        ),
+      ),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(
+        window,
+        5L,
+        1.0,
+        @platform.Resized(width=800.0, height=600.0),
+      ),
+    ),
+    OrderedText(
+      @text_host.TextInputEvent::new(
+        window,
+        1L,
+        7UL,
+        @text_host.Commit(text="日本"),
+      ),
+    ),
+  ])
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) {
+      if events.val.is_empty() {
+        Ok(None)
+      } else {
+        Ok(Some(events.val.remove(0)))
+      }
+    },
+    fn(_) {
+      Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "test-cutoff"))
+    },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) },
+    fn(epoch, _) { Ok(epoch) },
+    fn(epoch) {
+      cancels.val += 1
+      Ok(epoch)
+    },
+    fn(_) { Ok(()) },
+    fn(_) { Ok(None) },
+  )
+  assert_true(
+    run_native_settings_sample(
+      host,
+      Linux,
+      text_runner_measure,
+      text_port=Some(port),
+      ordered_text=Some(ordered),
+    )
+    is Err(_),
+  )
+  assert_eq(cancels.val, 0)
+  assert_eq(events.val.length(), 1)
+  assert_true(events.val[0] is OrderedText(_))
+}
+
+///|
+test "ordered Settings reports bounded-buffer overflow during a held Tab" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let cancels = Ref(0)
+  let queue : Array[NativeOrderedEvent] = [
+    OrderedPlatform(
+      @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 3L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(
+        window,
+        4L,
+        1.0,
+        @platform.Input(
+          @primitives.KeyPressed(
+            key=@primitives.Tab,
+            repeat=false,
+            modifiers=@primitives.Modifiers::none(),
+          ),
+        ),
+      ),
+    ),
+  ]
+  for index in 0..<65 {
+    queue.push(
+      OrderedPlatform(
+        @platform.Event::new(
+          window,
+          (index + 5).to_int64(),
+          1.0,
+          @platform.Input(
+            @primitives.KeyReleased(
+              key=@primitives.Character("x"),
+              modifiers=@primitives.Modifiers::none(),
+            ),
+          ),
+        ),
+      ),
+    )
+  }
+  queue.push(
+    OrderedText(
+      @text_host.TextInputEvent::new(
+        window,
+        1L,
+        7UL,
+        @text_host.Commit(text="日本"),
+      ),
+    ),
+  )
+  let events = Ref(queue)
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) {
+      if events.val.is_empty() {
+        Ok(None)
+      } else {
+        Ok(Some(events.val.remove(0)))
+      }
+    },
+    fn(_) {
+      Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "test-cutoff"))
+    },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) },
+    fn(epoch, _) { Ok(epoch) },
+    fn(epoch) {
+      cancels.val += 1
+      Ok(epoch)
+    },
+    fn(_) { Ok(()) },
+    fn(_) { Ok(None) },
+  )
+  assert_true(
+    run_native_settings_sample(
+      host,
+      Linux,
+      text_runner_measure,
+      text_port=Some(port),
+      ordered_text=Some(ordered),
+    )
+    is Err(_),
+  )
+  assert_eq(cancels.val, 0)
+  assert_eq(events.val.length(), 1)
+  assert_true(events.val[0] is OrderedText(_))
+}
+
+///|
+test "ordered Settings timeout cannot resolve a held owner by cleanup" {
+  for preview in [false, true] {
+    let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+    let window = @platform.WindowId::new(1L)
+    let cancel_count = Ref(0)
+    let end_count = Ref(0)
+    let cutoff_count = Ref(0)
+    let events : Array[NativeOrderedEvent] = [
+      OrderedPlatform(
+        @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted),
+      ),
+      OrderedPlatform(
+        @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted),
+      ),
+      OrderedPlatform(
+        @platform.Event::new(window, 3L, 1.0, @platform.FrameCompleted),
+      ),
+      OrderedPlatform(
+        @platform.Event::new(
+          window,
+          4L,
+          1.0,
+          @platform.Input(
+            @primitives.KeyPressed(
+              key=@primitives.Tab,
+              repeat=false,
+              modifiers=@primitives.Modifiers::none(),
+            ),
+          ),
+        ),
+      ),
+    ]
+    if preview {
+      events.push(
+        OrderedText(
+          @text_host.TextInputEvent::new(
+            window,
+            1L,
+            7UL,
+            @text_host.Preedit(text="に", cursor=1),
+          ),
+        ),
+      )
+    }
+    let ordered = NativeOrderedTextPort::new(
+      fn(_) {
+        if events.is_empty() {
+          Ok(None)
+        } else {
+          Ok(Some(events.remove(0)))
+        }
+      },
+      fn(_) {
+        cutoff_count.val += 1
+        Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "test-cutoff"))
+      },
+    )
+    let port = NativeTextInputPort::new(
+      fn(_, _) { Ok(7UL) },
+      fn(epoch, _) { Ok(epoch) },
+      fn(epoch) {
+        cancel_count.val += 1
+        Ok(epoch)
+      },
+      fn(_) {
+        end_count.val += 1
+        Ok(())
+      },
+      fn(_) { Ok(None) },
+    )
+    let result = run_native_settings_sample(
+      host,
+      Linux,
+      text_runner_measure,
+      text_port=Some(port),
+      ordered_text=Some(ordered),
+    )
+    assert_true(result is Err(_))
+    assert_eq(cancel_count.val, 0)
+    assert_eq(end_count.val, 0)
+    assert_true(cutoff_count.val > 0)
+    if preview {
+      assert_eq(cutoff_count.val, 1)
+    }
+  }
+}
+
+///|
+test "ordered Settings exposes lost local buffer on close after resize" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let delivered = Ref(0)
+  let events : Array[NativeOrderedEvent] = [
+    OrderedPlatform(
+      @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(
+        window,
+        3L,
+        1.0,
+        @platform.Resized(width=800.0, height=600.0),
+      ),
+    ),
+    OrderedText(
+      @text_host.TextInputEvent::new(
+        window,
+        1L,
+        7UL,
+        @text_host.Commit(text="日本"),
+      ),
+    ),
+    OrderedPlatform(@platform.Event::new(window, 4L, 1.0, @platform.Destroyed)),
+  ]
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) {
+      if events.is_empty() {
+        return Ok(None)
+      }
+      let event = events.remove(0)
+      if event is OrderedText(_) {
+        delivered.val += 1
+      }
+      Ok(Some(event))
+    },
+    fn(_) {
+      Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "test-cutoff"))
+    },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) },
+    fn(epoch, _) { Ok(epoch) },
+    fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) },
+    fn(_) { Ok(None) },
+  )
+  let result = run_native_settings_sample(
+    host,
+    Linux,
+    text_runner_measure,
+    text_port=Some(port),
+    ordered_text=Some(ordered),
+  )
+  match result {
+    Err(error) =>
+      assert_eq(
+        error.message(),
+        Some("structural event behind deferred input requires recovery"),
+      )
+    Ok(_) => fail("structural event must expose unresolved buffered input")
+  }
+  assert_eq(delivered.val, 1)
+  assert_true(events.is_empty())
+  let mut rendered_commit = false
+  for item in host.last_present().unwrap().items() {
+    match item {
+      @scene.TextItem(text~, ..) | @scene.TextRunItem(text~, ..) if text ==
+        "日本" => rendered_commit = true
+      _ => ()
+    }
+  }
+  assert_false(rendered_commit)
+  // The caller gets no returned buffer or owner. This is a known P1, not a
+  // preservation or replay test: the outer entry next stops the real host.
+}

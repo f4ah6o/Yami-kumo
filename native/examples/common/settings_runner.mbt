@@ -2,33 +2,56 @@
 /// Optional platform-record source while a host text route owns the queue.
 /// Route-backed hosts park ordinary records in their own ordered queue, so the
 /// runner must not read `Host::next_event` directly.
-pub type NativePlatformNext = (
-  Int32
-) -> Result[@platform.Event?, @diagnostics.FrameworkError]
+pub type NativePlatformNext = (Int32) -> Result[
+  @platform.Event?,
+  @diagnostics.FrameworkError,
+]
+
+///|
+/// One ordered observation from a host route. This keeps the common runner
+/// independent of any particular native backend.
+pub(all) enum NativeOrderedEvent {
+  OrderedText(@text_host.TextInputEvent)
+  OrderedPlatform(@platform.Event)
+}
+
+///|
+pub struct NativeOrderedTextPort {
+  next : (Int32) -> Result[NativeOrderedEvent?, @diagnostics.FrameworkError]
+  end_when_drained : (UInt64) -> Result[Unit, @diagnostics.FrameworkError]
+}
+
+///|
+pub fn NativeOrderedTextPort::new(
+  next : (Int32) -> Result[NativeOrderedEvent?, @diagnostics.FrameworkError],
+  end_when_drained : (UInt64) -> Result[Unit, @diagnostics.FrameworkError],
+) -> NativeOrderedTextPort {
+  { next, end_when_drained, }
+}
 
 ///|
 /// Optional direct-keyboard text transport used when the host has no portable
 /// text-input session (for example Weston without text-input-v1). Arming it
 /// keeps typed characters on the compositor key path as committed text input;
 /// disarming it on focus loss keeps stale epochs from being delivered.
-pub type NativeDirectText = (
-  @platform.WindowId,
-  Bool,
-) -> Result[Unit, @diagnostics.FrameworkError]
+pub type NativeDirectText = (@platform.WindowId, Bool) -> Result[
+  Unit,
+  @diagnostics.FrameworkError,
+]
 
 ///|
 pub type NativeDialogAXPublish = (
   @platform.WindowId,
   Int64,
   String,
-  @primitives.Rect
+  @primitives.Rect,
 ) -> Result[Int64, @diagnostics.FrameworkError]
 
 ///|
-pub type NativeDialogAXRevoke = (
-  @platform.WindowId,
-  Int64
-) -> Result[Unit, @diagnostics.FrameworkError]
+pub type NativeDialogAXRevoke = (@platform.WindowId, Int64) -> Result[
+  Unit,
+  @diagnostics.FrameworkError,
+]
 
 ///|
 /// Optional Dialog accessibility transport for the Settings sample. The runner
@@ -98,14 +121,14 @@ fn settings_key_path_fallback(
 ) -> SettingsTextRoute {
   match direct_text {
     Some(arm) =>
-      match (arm)(window, true) {
+      match arm(window, true) {
         Ok(_) => {
           if !route.key_path_armed {
             emit_native_marker(
               "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"key-path\",\"route\":\"direct-keyboard\"}",
             )
           }
-          { ..route, key_path_armed: true }
+          { ..route, key_path_armed: true, }
         }
         Err(_) => {
           if !route.key_path_armed && !route.transport_failed {
@@ -113,7 +136,7 @@ fn settings_key_path_fallback(
               "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\",\"route\":\"none\"}",
             )
           }
-          { key_path_armed: route.key_path_armed, transport_failed: true }
+          { key_path_armed: route.key_path_armed, transport_failed: true, }
         }
       }
     None => {
@@ -122,7 +145,7 @@ fn settings_key_path_fallback(
           "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\",\"route\":\"none\"}",
         )
       }
-      { key_path_armed: route.key_path_armed, transport_failed: true }
+      { key_path_armed: route.key_path_armed, transport_failed: true, }
     }
   }
 }
@@ -140,19 +163,20 @@ pub fn run_native_settings_sample(
   dialog_port~ : NativeDialogAXPort? = None,
   next_platform_event~ : NativePlatformNext? = None,
   direct_text~ : NativeDirectText? = None,
+  ordered_text~ : NativeOrderedTextPort? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let port = match text_port {
     Some(value) => value
     None =>
       return Err(
         runner_error(
-          "run_native_settings_sample",
-          "the selected host does not implement portable text input",
+          "run_native_settings_sample", "the selected host does not implement portable text input",
         ),
       )
   }
   let (width, height) = settings_window_size()
-  let window = match host.create_window("Yami-kumo Shared Settings", width, height) {
+  let window = match
+    host.create_window("Yami-kumo Shared Settings", width, height) {
     Err(error) => return Err(error)
     Ok(value) => value
   }
@@ -174,6 +198,9 @@ pub fn run_native_settings_sample(
   let mut ticks = 0
   let mut destroyed = false
   let mut last_sequence : Int64 = 0
+  let mut held_tab : @platform.Event? = None
+  let buffered : Array[NativeOrderedEvent] = []
+  let held_platform : Array[@platform.Event] = []
   // Windows keeps the lane alive longer than any driver wait so a failed
   // assertion is reported by the driver, not by a truncated sample loop.
   let tick_limit = if platform is Macos {
@@ -186,7 +213,7 @@ pub fn run_native_settings_sample(
   while !destroyed && ticks < tick_limit {
     ticks += 1
     let mut drained = 0
-    while drained < 32 && gate.input_ready() {
+    while ordered_text is None && drained < 32 && gate.input_ready() {
       let current = match session {
         Some(value) => value
         None => break
@@ -246,32 +273,187 @@ pub fn run_native_settings_sample(
         _ => ()
       }
     }
-    let event = match next_platform_event {
-      Some(next) =>
-        match next(16) {
-          Err(error) => return Err(error)
-          Ok(value) => value
-        }
+    let mut event : @platform.Event? = None
+    let mut released_tab = false
+    let mut reordered_frame = false
+    match ordered_text {
       None =>
-        match host.next_event(timeout_ms=16) {
-          Err(error) => return Err(error)
-          Ok(value) => value
+        event = match next_platform_event {
+          Some(next) =>
+            match next(16) {
+              Err(error) => return Err(error)
+              Ok(value) => value
+            }
+          None =>
+            match host.next_event(timeout_ms=16) {
+              Err(error) => return Err(error)
+              Ok(value) => value
+            }
         }
+      Some(ordered) => {
+        match (held_tab, session) {
+          (Some(tab), Some(current)) => {
+            let composing = match mounted.focused_text() {
+              Some(value) => value.composing()
+              None =>
+                return Err(
+                  runner_error("ordered_text", "held text owner is unavailable"),
+                )
+            }
+            if !composing && buffered.is_empty() {
+              match (ordered.end_when_drained)(current.epoch) {
+                Ok(_) => {
+                  match mounted.finish_held_text(current.epoch) {
+                    Err(error) => return Err(error)
+                    Ok(_) => ()
+                  }
+                  held_tab = None
+                  session = None
+                  last_document = ""
+                  event = Some(tab)
+                  released_tab = true
+                }
+                Err(error) if error.code() is @diagnostics.Busy => ()
+                Err(error) => return Err(error)
+              }
+            }
+          }
+          (Some(_), None) =>
+            return Err(runner_error("ordered_text", "held session disappeared"))
+          _ => ()
+        }
+        if event is None {
+          let ingress = if held_tab is None &&
+            gate.input_ready() &&
+            !held_platform.is_empty() {
+            Some(OrderedPlatform(held_platform.remove(0)))
+          } else if gate.input_ready() && !buffered.is_empty() {
+            Some(buffered.remove(0))
+          } else {
+            match (ordered.next)(16) {
+              Err(error) => return Err(error)
+              Ok(value) => value
+            }
+          }
+          match ingress {
+            Some(OrderedText(observation)) =>
+              if held_tab is None && !gate.input_ready() {
+                if buffered.length() + held_platform.length() >= 64 {
+                  return Err(
+                    runner_error(
+                      "ordered_text", "deferred input buffer is full",
+                    ),
+                  )
+                }
+                buffered.push(OrderedText(observation))
+              } else {
+                match session {
+                  Some(current) if observation.epoch() == current.epoch => {
+                    let handled = if held_tab is Some(_) {
+                      mounted.held_text_input(current.epoch, observation)
+                    } else {
+                      deliver_text_observation(mounted, current, observation)
+                    }
+                    match handled {
+                      Err(error) => return Err(error)
+                      Ok(true) => {
+                        emit_native_marker(
+                          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"\{text_event_phase(observation.kind())}\",\{text_event_json(observation.kind())},\"epoch\":\{current.epoch}}",
+                        )
+                        dirty = true
+                        while mounted.next_action() is Some(action) {
+                          settings = settings.update(
+                            @shared_settings.Ui(action),
+                          )
+                        }
+                      }
+                      Ok(false) => ()
+                    }
+                  }
+                  _ => ()
+                }
+              }
+            Some(OrderedPlatform(value)) =>
+              if held_tab is Some(_) {
+                match value.kind() {
+                  @platform.Resized(..)
+                  | @platform.ScaleChanged
+                  | @platform.Destroyed
+                  | @platform.CloseRequested
+                  | @platform.ExitRequested =>
+                    return Err(
+                      runner_error(
+                        "ordered_text", "structural event during deferred input requires recovery",
+                      ),
+                    )
+                  _ => ()
+                }
+                if held_platform.length() + buffered.length() >= 64 {
+                  return Err(
+                    runner_error(
+                      "ordered_text", "deferred input buffer is full",
+                    ),
+                  )
+                }
+                held_platform.push(value)
+              } else if !gate.input_ready() &&
+                !(value.kind() is @platform.FrameCompleted) {
+                match value.kind() {
+                  @platform.Resized(..)
+                  | @platform.ScaleChanged
+                  | @platform.Destroyed
+                  | @platform.CloseRequested
+                  | @platform.ExitRequested =>
+                    if buffered.is_empty() {
+                      event = Some(value)
+                    } else {
+                      return Err(
+                        runner_error(
+                          "ordered_text", "structural event behind deferred input requires recovery",
+                        ),
+                      )
+                    }
+                  _ => {
+                    if held_platform.length() + buffered.length() >= 64 {
+                      return Err(
+                        runner_error(
+                          "ordered_text", "deferred input buffer is full",
+                        ),
+                      )
+                    }
+                    buffered.push(OrderedPlatform(value))
+                  }
+                }
+              } else {
+                event = Some(value)
+                reordered_frame = !gate.input_ready() &&
+                  !buffered.is_empty() &&
+                  value.kind() is @platform.FrameCompleted
+              }
+            None => ()
+          }
+        }
+      }
     }
     match event {
       None => ()
       Some(value) if value.window() == window => {
-        if value.sequence() <= last_sequence {
+        if !released_tab &&
+          !reordered_frame &&
+          value.sequence() <= last_sequence {
           return Err(
             runner_error(
-              "run_native_settings_sample",
-              "host event sequence did not advance",
+              "run_native_settings_sample", "host event sequence did not advance",
             ),
           )
         }
-        last_sequence = value.sequence()
+        if !released_tab && !reordered_frame {
+          last_sequence = value.sequence()
+        }
         match value.kind() {
-          @platform.Destroyed | @platform.CloseRequested | @platform.ExitRequested => {
+          @platform.Destroyed
+          | @platform.CloseRequested
+          | @platform.ExitRequested => {
             destroyed = true
             dirty = false
           }
@@ -283,7 +465,7 @@ pub fn run_native_settings_sample(
             mounted.invalidate_layout()
             dirty = true
           }
-          @platform.FrameCompleted => {
+          @platform.FrameCompleted =>
             match pending_frame {
               Some(marker) => {
                 pending_frame = None
@@ -293,7 +475,6 @@ pub fn run_native_settings_sample(
               }
               None => ()
             }
-          }
           @platform.FocusChanged(focused) => {
             ignore(mounted.handle_event(value))
             text_suspended = !focused
@@ -321,6 +502,36 @@ pub fn run_native_settings_sample(
             dirty = true
           }
           @platform.Input(input) => {
+            let hold = match (ordered_text, session, input) {
+              (
+                Some(_),
+                Some(current),
+                @primitives.KeyPressed(
+                  key=@primitives.Tab,
+                  repeat=false,
+                  modifiers~
+                ),
+              ) if !modifiers.control() && !modifiers.meta() && !modifiers.alt() =>
+                match mounted.focused_text() {
+                  Some(state) if state.composing() =>
+                    return Err(
+                      runner_error(
+                        "ordered_text", "Tab during active preedit requires observed resolution",
+                      ),
+                    )
+                  Some(_) =>
+                    match mounted.begin_held_text(current.epoch) {
+                      Err(error) => return Err(error)
+                      Ok(value) => value
+                    }
+                  None => false
+                }
+              _ => false
+            }
+            if hold {
+              held_tab = Some(value)
+              continue
+            }
             match input {
               @primitives.KeyPressed(key~, ..) => {
                 let name = match key {
@@ -350,7 +561,7 @@ pub fn run_native_settings_sample(
       }
       Some(_) => ()
     }
-    if dirty && pending_frame is None && !destroyed {
+    if dirty && pending_frame is None && !destroyed && held_tab is None {
       // Drain queued actions before rendering: a TextChanged enqueued by the
       // previous dispatch must update the model first, or the committed view
       // rebuilds the field with a stale value and resets its caret.
@@ -390,18 +601,25 @@ pub fn run_native_settings_sample(
       // the lane a permanently unfocused field.
       match session {
         None =>
-          if focused && !text_suspended && !text_transport_failed && !key_path_armed {
+          if focused &&
+            !text_suspended &&
+            !text_transport_failed &&
+            !key_path_armed {
             match mounted.focused_text() {
-              Some(state) => {
+              Some(state) =>
                 match (port.begin)(window, state.binding_id()) {
                   Err(error) => {
                     emit_native_marker(
                       "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\",\"operation\":\"begin_text_input\",\"error\":\"\{json_escape(format_framework_error(error))}\"}",
                     )
-                    let route = settings_key_path_fallback(direct_text, window, {
-                      key_path_armed,
-                      transport_failed: text_transport_failed,
-                    })
+                    let route = settings_key_path_fallback(
+                      direct_text,
+                      window,
+                      {
+                        key_path_armed,
+                        transport_failed: text_transport_failed,
+                      },
+                    )
                     key_path_armed = route.key_path_armed
                     text_transport_failed = route.transport_failed
                   }
@@ -445,7 +663,6 @@ pub fn run_native_settings_sample(
                       }
                     }
                 }
-              }
               None => ()
             }
           }
@@ -459,7 +676,7 @@ pub fn run_native_settings_sample(
             last_document = ""
           } else {
             match mounted.focused_text() {
-              Some(state) => {
+              Some(state) =>
                 if state.document().text() != last_document ||
                   settings_caret(state.caret()) != last_caret {
                   let epoch = match
@@ -477,7 +694,6 @@ pub fn run_native_settings_sample(
                   last_document = state.document().text()
                   last_caret = settings_caret(state.caret())
                 }
-              }
               None => ()
             }
           }
@@ -485,8 +701,10 @@ pub fn run_native_settings_sample(
       match accessibility_port {
         Some(ax) =>
           match
-            (frame.bounds(@shared_settings.settings_name()),
-             mounted.focused_text()) {
+            (
+              frame.bounds(@shared_settings.settings_name()),
+              mounted.focused_text(),
+            ) {
             (Some(bounds), Some(state)) => {
               let snapshot : NativeTextAXSnapshot = {
                 value: state.document().text(),
@@ -578,6 +796,25 @@ pub fn run_native_settings_sample(
       }
     }
   }
+  // An ordered lease is not resolved by the sample timeout. In particular,
+  // cancellation/end here would silently abandon a live preview or an
+  // admitted prefix while cutoff remains Busy. The outer entrypoint still
+  // stops its host on error: this guard prevents false success but does not
+  // provide event retention or safe production shutdown.
+  if ordered_text is Some(_) &&
+    (
+      !destroyed ||
+      held_tab is Some(_) ||
+      !buffered.is_empty() ||
+      !held_platform.is_empty() ||
+      session is Some(_)
+    ) {
+    return Err(
+      runner_error(
+        "ordered_text", "ordered shutdown requires a resolved owner and drained ingress",
+      ),
+    )
+  }
   match session {
     Some(current) =>
       match end_text_session(port, current) {
@@ -621,7 +858,9 @@ pub fn run_native_settings_sample(
     Ok(())
   } else {
     Err(
-      runner_error("run_native_settings_sample", "settings sample loop ended early"),
+      runner_error(
+        "run_native_settings_sample", "settings sample loop ended early",
+      ),
     )
   }
 }

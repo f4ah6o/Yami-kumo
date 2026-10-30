@@ -66,7 +66,10 @@ pub struct NativeTextAXPort {
     Int64,
     @diagnostics.FrameworkError,
   ]
-  revoke : (@platform.WindowId, Int64) -> Result[Unit, @diagnostics.FrameworkError]
+  revoke : (@platform.WindowId, Int64) -> Result[
+    Unit,
+    @diagnostics.FrameworkError,
+  ]
 }
 
 ///|
@@ -75,7 +78,10 @@ pub fn NativeTextAXPort::new(
     Int64,
     @diagnostics.FrameworkError,
   ],
-  revoke : (@platform.WindowId, Int64) -> Result[Unit, @diagnostics.FrameworkError],
+  revoke : (@platform.WindowId, Int64) -> Result[
+    Unit,
+    @diagnostics.FrameworkError,
+  ],
 ) -> NativeTextAXPort {
   { publish, revoke, }
 }
@@ -98,8 +104,10 @@ pub fn run_native_entry(
   text_port~ : NativeTextInputPort? = None,
   text_accessibility_port~ : NativeTextAXPort? = None,
   settings_dialog_port~ : NativeDialogAXPort? = None,
+  settings_text_port~ : NativeTextInputPort? = None,
   settings_platform_next~ : NativePlatformNext? = None,
   settings_direct_text~ : NativeDirectText? = None,
+  settings_ordered_text~ : NativeOrderedTextPort? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   let args = @env.args()
   if args.contains("--settings-e2e") ||
@@ -108,11 +116,15 @@ pub fn run_native_entry(
       host,
       platform,
       measure,
-      text_port~,
+      text_port=match settings_text_port {
+        Some(value) => Some(value)
+        None => text_port
+      },
       accessibility_port=text_accessibility_port,
       dialog_port=settings_dialog_port,
       next_platform_event=settings_platform_next,
       direct_text=settings_direct_text,
+      ordered_text=settings_ordered_text,
     )
   }
   if args.contains("--text-e2e") ||
@@ -409,7 +421,7 @@ pub fn run_native_text_sample(
             last_document = ""
           } else {
             match mounted.focused_text() {
-              Some(state) => {
+              Some(state) =>
                 if state.document().text() != last_document ||
                   state.caret() != last_caret {
                   let epoch = match
@@ -427,7 +439,6 @@ pub fn run_native_text_sample(
                   last_document = state.document().text()
                   last_caret = state.caret()
                 }
-              }
               None => ()
             }
           }
@@ -435,8 +446,10 @@ pub fn run_native_text_sample(
       match accessibility_port {
         Some(ax) =>
           match
-            (frame.bounds(@text_sample.text_sample_field()),
-             mounted.focused_text()) {
+            (
+              frame.bounds(@text_sample.text_sample_field()),
+              mounted.focused_text(),
+            ) {
             (Some(bounds), Some(state)) => {
               let snapshot : NativeTextAXSnapshot = {
                 value: state.document().text(),

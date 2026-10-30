@@ -141,3 +141,53 @@ test "held owner does not publish a commit after reentrant layout invalidation" 
   assert_true(mounted.held_text_input(7UL, observed) is Err(_))
   mounted.dispose()
 }
+
+///|
+test "exploratory held composition prepare cannot publish the session" {
+  let mounted = Mounted::new(@platform.WindowId::new(1L))
+  let measure : @components.TextMeasure = fn(value, size) {
+    let document = @text.TextDocument::new(value).unwrap()
+    let bounds = @primitives.Rect::new(
+      0.0, 0.0, (value.length() + 1).to_double() * size, size,
+    ).unwrap()
+    let carets = []
+    let mut offset = 0
+    let caret = @primitives.Rect::new(0.0, 0.0, 1.0, size).unwrap()
+    carets.push(@text_layout.CaretGeometry::new(0, true, caret, caret).unwrap())
+    for scalar in value.iter() {
+      offset += if scalar.to_int() > 0xFFFF { 2 } else { 1 }
+      let caret = @primitives.Rect::new(offset.to_double() * size, 0.0, 1.0, size).unwrap()
+      carets.push(@text_layout.CaretGeometry::new(offset, true, caret, caret).unwrap())
+    }
+    Ok(@text_layout.TextMeasurement::new(document, bounds, bounds, size * 0.8, 1, 0, carets).unwrap())
+  }
+  let key = @view.NodeKey::new("name")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(key, @view.TextFieldProps::new("", "Name")),
+  ])
+  ignore(mounted.commit(view, 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(mounted.focus(key))
+  assert_true(mounted.begin_held_text(7UL).unwrap())
+  assert_true(mounted.held_text_input(7UL, @text_host.TextInputEvent::new(
+    @platform.WindowId::new(1L), 1L, 7UL, @text_host.Preedit(text="に", cursor=1),
+  )).unwrap())
+  let before = mounted.held_text.unwrap().session.snapshot()
+  mounted.invalidate_layout()
+  // Private-only probe: public stage intentionally rejects held owners. This
+  // prepares a scene without authorizing publication or changing the session.
+  assert_true(mounted.stage(view, 800.0, 480.0, 1.0, measure) is Err(_))
+  let shifted = @view.column(@view.NodeKey::new("root"), [
+    @view.button(@view.NodeKey::new("preceding"), "Before"),
+    @view.text_field(key, @view.TextFieldProps::new("", "Name")),
+  ])
+  let candidate = mounted.prepare(shifted, 800.0, 480.0, 1.0, measure).unwrap()
+  let staged = binding_for(candidate.bindings, key).unwrap().field.unwrap()
+  let after = mounted.held_text.unwrap().session.snapshot()
+  assert_true(staged.is_composing())
+  assert_true(staged.bounds() != before.field().bounds())
+  assert_eq(staged.document().text(), before.field().document().text())
+  assert_eq(after.published_revision(), before.published_revision())
+  assert_true(after.field().bounds() == before.field().bounds())
+  assert_true(after.field().is_composing())
+  mounted.dispose()
+}
