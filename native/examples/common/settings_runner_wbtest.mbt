@@ -1195,6 +1195,14 @@ test "terminal cutoff needs an empty prefix and retains terminal ownership" {
   assert_eq(calls.val, 2)
   assert_true(owner.cutoff_completed())
   assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  pending.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 4L, 7UL, @text_host.Commit(text="古"))))
+  assert_true(owner.terminal_step(PollOnce) is Err(_))
+  assert_eq(pending.length(), 1)
+  owner.buffered.push(pending[0])
+  assert_true(owner.terminal_step(ApplyNext) is Err(_))
+  assert_true(owner.reconcile_terminal_observation() is Err(_))
+  assert_eq(owner.pending_records().length(), 1)
+  assert_eq(owner.model().name(), "日本")
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
   assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
@@ -1371,4 +1379,47 @@ test "entry controller stops a proved-complete fake host at most once" {
   assert_eq(host.stop_count(), 1)
   assert_true(entry.try_stop() is Err(_))
   assert_eq(host.stop_count(), 1)
+}
+
+///|
+test "terminal measurement cannot reenter owner polling" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let owner_ref : Ref[SettingsRunOwner?] = Ref(None)
+  let trigger = Ref(false)
+  let rejected = Ref(false)
+  let reads = Ref(0)
+  let measure : @components.TextMeasure = fn(value, size) {
+    if trigger.val {
+      match owner_ref.val {
+        Some(owner) => rejected.val = owner.terminal_step(PollOnce) is Err(_)
+        None => ()
+      }
+    }
+    text_runner_measure(value, size)
+  }
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) { reads.val += 1; Ok(None) }, fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let field = owner.mounted.focused_text().unwrap()
+  owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  owner.host_epoch = Some(7UL)
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.mounted.invalidate_layout()
+  owner.suspended = true
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))))
+  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 2L, 1.0, @platform.Destroyed)))
+  owner_ref.val = Some(owner)
+  trigger.val = true
+  assert_true(owner.terminal_step(ApplyNext).unwrap() is ModelApplied(1L, true))
+  assert_true(rejected.val)
+  assert_eq(reads.val, 0)
+  assert_eq(owner.model().name(), "日本")
+  assert_eq(host.stop_count(), 0)
 }

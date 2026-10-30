@@ -430,9 +430,19 @@ pub fn SettingsRunOwner::reconcile_terminal_commit(
 pub fn SettingsRunOwner::reconcile_terminal_observation(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.held_tab is Some(_) {
+  if !self.suspended || self.running || self.cutoff_done || self.held_tab is Some(_) {
     return Err(runner_error("terminal_recovery", "terminal owner is unavailable"))
   }
+  self.running = true
+  let result = self.reconcile_terminal_observation_inner()
+  self.running = false
+  result
+}
+
+///|
+fn SettingsRunOwner::reconcile_terminal_observation_inner(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
   match self.inflight {
     Some(OrderedPlatform(event)) if event.window() == self.window &&
       (event.kind() is @platform.Destroyed || event.kind() is @platform.CloseRequested ||
@@ -522,7 +532,7 @@ pub fn SettingsRunOwner::terminal_step(
   self : SettingsRunOwner,
   command : SettingsTerminalCommand,
 ) -> Result[SettingsTerminalProgress, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running {
+  if !self.suspended || self.running || self.cutoff_done {
     return Err(runner_error("terminal_step", "owner is not suspended or is busy"))
   }
   match command {

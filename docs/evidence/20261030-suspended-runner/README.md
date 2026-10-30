@@ -69,6 +69,9 @@ or attempt text cutoff. Each result reports whether the field or model advanced;
 no step publishes a scene or caret. Polling checks the 64-record local bound
 before calling the port. A full buffer, an unsupported nontext prefix, and a
 failed step remain owned; an empty poll is not a cutoff or quiescence proof.
+Reconciliation excludes nested owner operations during measurement. After text
+cutoff, the legacy controller rejects further polling and application; it
+cannot yet drain the generated lifecycle record through a retained receipt.
 This controller is a finite caller interface, not a persistent service or an
 entrypoint policy. The port may itself skip or lose native records; the
 controller cannot repair or acknowledge records the host did not expose.
@@ -89,10 +92,10 @@ Candidate source: gpui `74d182c6368ca382f697023c5d3690b6c0c2dfbf`, Yami base
 published dependencies lacking the candidate API. Tests use a local source
 workspace and do not establish published-package compatibility.
 
-Local combined native UI and common fixture suite: **129/129 PASS** using
+Local combined native UI and common fixture suite: **130/130 PASS** using
 `GPUI_SOURCE=/workspace/gpui-ordered-fence` and
 `scripts/native_ui_workspace.sh ... moon test <ui> <examples/common> --target
 native --deny-warn --no-parallelize`. This is scripted evidence only; no
 production main, live IME, or public-registry consumer was tested.
 Local raw log SHA-256:
-`fbe753ac983ace1d7ee33c5b5d9fcce1a9745072ee9f7a102de1d48d3502413a`.
+`11820f46192161067c4369514fff3eaba5b91a3177b17778bbc9c559d9134696`.
