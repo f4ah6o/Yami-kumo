@@ -78,10 +78,18 @@ try:
  subprocess.run(['import','-window','root',str(out/'dialog.png')],check=True)
  if os.environ.get('YAMI_IME_BACKGROUND_POINT'):
   x,y=os.environ['YAMI_IME_BACKGROUND_POINT'].split(',')
+  after=len(o.frames)
   d.xdotool('mousemove','--sync',x,y,'click','1')
+  result['observations']['background_click']=o.wait_frame(lambda f:f.get('dialog') is False and f.get('focus')=='name' and f.get('name')=='日本',12,after=after)
   time.sleep(.3)
+  while not o.lines.empty():
+   line=o.lines.get_nowait()
+   if line is not None: o._handle(line)
+  if any(f.get('dialog') is True or f.get('status') != 'editing' or f.get('name') != '日本' for f in o.frames[after:]):
+   raise RuntimeError('background click caused an unexpected model action')
   subprocess.run(['import','-window','root',str(out/'after-background-click.png')],check=True)
-  result['observations']['background_click']={'x':int(x),'y':int(y)}
+  result['observations']['background_click_point']={'x':int(x),'y':int(y)}
+  result['observations']['after_backdrop_reopen']=step('Return',True,'confirm')
  send('x')
  # A fresh later frame must retain the model after background key delivery.
  result['observations']['after_background_key']=step('shift+Tab',True,'cancel')
