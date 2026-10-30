@@ -2974,6 +2974,42 @@ pub fn Mounted::capture_terminal_text_owner(
 /// Advance the captured lease only after the regular focused-field path has
 /// accepted the exact next host observation. This preserves the same binding
 /// identity; it does not apply the record again.
+pub fn Mounted::validate_terminal_text_delivery(
+  self : Mounted,
+  owner : TerminalTextOwner,
+  event : @text_host.TextInputEvent,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.is_disposed() || self.busy || owner.busy || !self.ready ||
+    !self.identity.live || !owner.session_identity.live ||
+    !same_epoch(self.identity, owner.identity) ||
+    !(self.terminal_identity is Some(active) && same_epoch(active, owner.session_identity)) ||
+    event.window() != owner.window || event.window() != self.window ||
+    event.epoch() != owner.epoch || self.text_epoch != owner.epoch ||
+    owner.sequence == 9223372036854775807L ||
+    self.last_text_sequence != owner.sequence || event.sequence() != owner.sequence + 1L ||
+    !self.runtime.is_current(owner.token) {
+    return Err(adapter_error("terminal delivery owner or sequence is stale"))
+  }
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Err(adapter_error("terminal focus unavailable"))
+  }
+  if scope.focused() != Some(owner.binding) {
+    return Err(adapter_error("terminal focus changed"))
+  }
+  for binding in self.bindings {
+    if binding.id == owner.binding && binding.field_generation == owner.generation &&
+      binding.token == Some(owner.token) {
+      match binding.field {
+        Some(field) if field.revision() == owner.revision => return Ok(())
+        _ => ()
+      }
+    }
+  }
+  Err(adapter_error("terminal binding changed"))
+}
+
+///|
 pub fn Mounted::note_terminal_text_delivery(
   self : Mounted,
   owner : TerminalTextOwner,
@@ -3133,6 +3169,8 @@ pub fn Mounted::apply_terminal_observation(
     return Err(adapter_error("terminal action rejected"))
   }
   self.bindings[index] = { ..binding, field: Some(next), }
+  // Any staged scene based on the old field must become unpublishable.
+  self.change = fresh_epoch()
   owner.revision = next.revision()
   owner.sequence = event.sequence()
   self.last_text_sequence = event.sequence()
@@ -4028,6 +4066,11 @@ pub fn Mounted::text_input(
   }
   if event.sequence() <= 0L || event.sequence() <= self.last_text_sequence {
     return Ok(false)
+  }
+  if self.terminal_required &&
+    (self.last_text_sequence == 9223372036854775807L ||
+     event.sequence() != self.last_text_sequence + 1L) {
+    return Err(adapter_error("text observation has an unobserved prefix"))
   }
   let kind = event.kind()
   if kind is @text_host.Geometry(..) {

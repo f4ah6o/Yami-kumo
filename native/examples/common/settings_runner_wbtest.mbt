@@ -205,14 +205,6 @@ test "ordered Settings holds Tab until the old-owner commit and cutoff" {
         @text_host.Commit(text="日本"),
       ),
     ),
-    OrderedText(
-      @text_host.TextInputEvent::new(
-        window,
-        1L,
-        7UL,
-        @text_host.Commit(text="日本"),
-      ),
-    ),
     OrderedPlatform(
       @platform.Event::new(
         window,
@@ -250,7 +242,7 @@ test "ordered Settings holds Tab until the old-owner commit and cutoff" {
         return Err(runner_error("test-cutoff", "wrong epoch"))
       }
       cutoff_calls.val += 1
-      if delivered.val == 2 {
+      if delivered.val == 1 {
         Ok(())
       } else {
         Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "test-cutoff"))
@@ -272,8 +264,8 @@ test "ordered Settings holds Tab until the old-owner commit and cutoff" {
     text_port=Some(port),
     ordered_text=Some(ordered),
   ) is Err(_))
-  assert_eq(delivered.val, 2)
-  assert_true(cutoff_calls.val >= 3)
+  assert_eq(delivered.val, 1)
+  assert_true(cutoff_calls.val >= 2)
   let mut seen = false
   for item in host.last_present().unwrap().items() {
     match item {
@@ -1036,5 +1028,74 @@ test "terminal observed cancel rolls back preview without changing model" {
   assert_eq(owner.terminal_model_sequence(), 3L)
   assert_eq(owner.pending_records().length(), 0)
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "ordered foreign epoch remains owned instead of being silently dropped" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let events : Array[NativeOrderedEvent] = [
+    OrderedPlatform(@platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted)),
+    OrderedPlatform(@platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted)),
+    OrderedText(@text_host.TextInputEvent::new(window, 1L, 8UL, @text_host.Commit(text="日本"))),
+  ]
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) { Ok(if events.is_empty() { None } else { Some(events.remove(0)) }) },
+    fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = match run_native_settings_retained(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)) {
+    Suspended(value, _) => value
+    _ => fail("foreign epoch must remain suspended")
+  }
+  match owner.inflight_record() {
+    Some(OrderedText(event)) => {
+      assert_eq(event.epoch(), 8UL)
+      assert_true(event.kind() is @text_host.Commit(text="日本"))
+    }
+    _ => fail("the original foreign record must be retained")
+  }
+  assert_eq(owner.model().name(), "")
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "ordered sequence gap is rejected before field or action publication" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let events : Array[NativeOrderedEvent] = [
+    OrderedPlatform(@platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted)),
+    OrderedPlatform(@platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted)),
+    OrderedText(@text_host.TextInputEvent::new(window, 2L, 7UL, @text_host.Commit(text="日本"))),
+  ]
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) { Ok(if events.is_empty() { None } else { Some(events.remove(0)) }) },
+    fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = match run_native_settings_retained(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)) {
+    Suspended(value, _) => value
+    _ => fail("sequence gap must remain suspended")
+  }
+  match owner.inflight_record() {
+    Some(OrderedText(event)) => {
+      assert_eq(event.epoch(), 7UL)
+      assert_eq(event.sequence(), 2L)
+      assert_true(event.kind() is @text_host.Commit(text="日本"))
+    }
+    _ => fail("the original gap record must be retained")
+  }
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.mounted.next_action() is None)
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "")
+  assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
 }

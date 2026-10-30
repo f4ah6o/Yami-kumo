@@ -716,6 +716,16 @@ fn SettingsRunOwner::drive_inner(
               } else {
                 match self.session {
                   Some(current) if observation.epoch() == current.epoch => {
+                    if self.held_tab is None {
+                      match self.terminal_owner {
+                        Some(owner) =>
+                          match mounted.validate_terminal_text_delivery(owner, observation) {
+                            Err(error) => return Err(error)
+                            Ok(_) => ()
+                          }
+                        None => return Err(runner_error("ordered_text", "original owner unavailable"))
+                      }
+                    }
                     let handled = if self.held_tab is Some(_) {
                       mounted.held_text_input(current.epoch, observation)
                     } else {
@@ -744,10 +754,16 @@ fn SettingsRunOwner::drive_inner(
                           )
                         }
                       }
-                      Ok(false) => ()
+                      Ok(false) =>
+                        return Err(
+                          runner_error("ordered_text", "accepted observation was not applied to its owner"),
+                        )
                     }
                   }
-                  _ => ()
+                  _ =>
+                    return Err(
+                      runner_error("ordered_text", "accepted observation has no matching owner"),
+                    )
                 }
               }
             Some(OrderedPlatform(value)) =>
@@ -856,6 +872,13 @@ fn SettingsRunOwner::drive_inner(
               None => ()
             }
           @platform.FocusChanged(focused) => {
+            if !focused && ordered_text is Some(_) && self.session is Some(_) {
+              // An observed blur does not resolve an active preview or the
+              // accepted text prefix. Retain the event and original owner.
+              return Err(
+                runner_error("ordered_text", "focus loss requires ordered owner recovery"),
+              )
+            }
             ignore(mounted.handle_event(value))
             self.text_suspended = !focused
             if !focused {

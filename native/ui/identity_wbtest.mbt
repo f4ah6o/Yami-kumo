@@ -302,12 +302,17 @@ test "terminal commit uses original invalidated field and rejects gaps and repla
   assert_true(mounted.focus(key))
   let owner = mounted.capture_terminal_text_owner(7UL).unwrap()
   assert_true(mounted.capture_terminal_text_owner(7UL) is Err(_))
+  let early_gap = @text_host.TextInputEvent::new(@platform.WindowId::new(1L), 2L, 7UL, @text_host.Commit(text="誤"))
+  assert_true(mounted.text_input(7UL, early_gap) is Err(_))
+  assert_true(mounted.next_action() is None)
   mounted.invalidate_layout()
+  let staged_before_commit = mounted.stage(view, 640.0, 480.0, 1.0, measure).unwrap()
   let gap = @text_host.TextInputEvent::new(@platform.WindowId::new(1L), 2L, 7UL, @text_host.Commit(text="誤"))
   assert_true(mounted.apply_terminal_commit(owner, gap) is Err(_))
   assert_true(mounted.next_terminal_text_action(owner).unwrap() is None)
   let event = @text_host.TextInputEvent::new(@platform.WindowId::new(1L), 1L, 7UL, @text_host.Commit(text="日本"))
   assert_true(mounted.apply_terminal_commit(owner, event).unwrap())
+  assert_true(mounted.publish(staged_before_commit) is Err(_))
   match mounted.next_terminal_text_action(owner).unwrap() {
     Some(@view.TextChanged(action_key, value)) => {
       assert_eq(action_key, key)
