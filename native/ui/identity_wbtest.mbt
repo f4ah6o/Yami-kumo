@@ -367,9 +367,11 @@ test "terminal commit reentrant invalidation keeps original record retryable" {
   ignore(mounted.commit(view, 640.0, 480.0, 1.0, measure).unwrap())
   assert_true(mounted.focus(key))
   let owner = mounted.capture_terminal_text_owner(7UL).unwrap()
-  mounted.invalidate_layout()
   let event = @text_host.TextInputEvent::new(@platform.WindowId::new(1L), 1L, 7UL, @text_host.Commit(text="日本"))
   invalidate.val = true
+  assert_true(mounted.text_input(7UL, event) is Err(_))
+  assert_true(mounted.next_action() is None)
+  assert_eq(binding_for(mounted.bindings, key).unwrap().field.unwrap().committed_document().text(), "")
   assert_true(mounted.apply_terminal_commit(owner, event) is Err(_))
   assert_true(mounted.next_terminal_text_action(owner).unwrap() is None)
   assert_eq(binding_for(mounted.bindings, key).unwrap().field.unwrap().committed_document().text(), "")

@@ -33,6 +33,10 @@ Before normal delivery, the runner checks the original binding and the exact
 next sequence; a gap or foreign epoch stays inflight rather than being
 discarded. Terminal field publication invalidates old staged views. These two
 regressions were identified by independent review of `af16aa8`.
+Normal field delivery also checks the original binding again after measurement
+and checks action enqueue before publishing the field. Reentrant layout
+invalidation leaves the original record unapplied. With an armed owner,
+observed focus loss keeps an active preview until a later observed cancel.
 
 ## Unresolved P1
 
@@ -59,10 +63,10 @@ Candidate source: gpui `74d182c6368ca382f697023c5d3690b6c0c2dfbf`, Yami base
 published dependencies lacking the candidate API. Tests use a local source
 workspace and do not establish published-package compatibility.
 
-Local combined native UI and common fixture suite: **122/122 PASS** using
+Local combined native UI and common fixture suite: **123/123 PASS** using
 `GPUI_SOURCE=/workspace/gpui-ordered-fence` and
 `scripts/native_ui_workspace.sh ... moon test <ui> <examples/common> --target
 native --deny-warn --no-parallelize`. This is scripted evidence only; no
 production main, live IME, or public-registry consumer was tested.
 Local raw log SHA-256:
-`ea08333261d025b6ea24ff1f04d569f1ef5e07dcb9a211b9e4de02f757a9239d`.
+`6cd228f79187dc4e3d8801f3ee45d499d7a2fa5b09a1c0decbd3f4f948686077`.

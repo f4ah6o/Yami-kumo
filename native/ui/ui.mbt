@@ -4094,6 +4094,22 @@ pub fn Mounted::text_input(
       Some(value) => value
       None => return Ok(false)
     }
+    let change = self.change
+    let still_current = fn() {
+      if self.is_disposed() || !self.ready || !same_epoch(change, self.change) ||
+        index >= self.bindings.length() {
+        return false
+      }
+      let current = self.bindings[index]
+      if current.id != binding.id || current.field_generation != binding.field_generation ||
+        current.token != binding.token {
+        return false
+      }
+      match binding.token {
+        Some(token) => self.runtime.is_current(token)
+        None => !self.terminal_required
+      }
+    }
     match kind {
       @text_host.Preedit(text~, cursor~) => {
         if text.length() > 16_384 {
@@ -4124,6 +4140,9 @@ pub fn Mounted::text_input(
               ),
             )
           Ok(value) => value
+        }
+        if !still_current() {
+          return Err(adapter_error("native TextField changed during measurement"))
         }
         self.bindings[index] = { ..binding, field: Some(next), }
       }
@@ -4164,6 +4183,9 @@ pub fn Mounted::text_input(
             Ok(value) => value
           }
         }
+        if !still_current() {
+          return Err(adapter_error("native TextField changed during measurement"))
+        }
         // The preview already carries the final text in many IMEs. Compare the
         // committed value, not the visible document, or an equal preview/commit
         // pair would never reach the application's value model.
@@ -4171,8 +4193,13 @@ pub fn Mounted::text_input(
         if committed != field.committed_document().text() {
           match binding.token {
             Some(token) =>
-              ignore(self.runtime.enqueue_text_changed(token, committed))
-            None => ()
+              if !self.runtime.enqueue_text_changed(token, committed) {
+                return Err(adapter_error("native TextField action rejected"))
+              }
+            None =>
+              if self.terminal_required {
+                return Err(adapter_error("native TextField action owner unavailable"))
+              }
           }
         }
         self.bindings[index] = { ..binding, field: Some(next), }
@@ -4191,11 +4218,16 @@ pub fn Mounted::text_input(
                   field_error_reason(error),
                 ),
               )
-            Ok(next) => self.bindings[index] = { ..binding, field: Some(next), }
+            Ok(next) => {
+              if !still_current() {
+                return Err(adapter_error("native TextField changed during measurement"))
+              }
+              self.bindings[index] = { ..binding, field: Some(next), }
+            }
           }
         }
       @text_host.FocusLost =>
-        if field.is_composing() {
+        if field.is_composing() && !self.terminal_required {
           match
             field.cancel_composition(
               fn(document) { field_measure(measure, document) },
@@ -4208,7 +4240,12 @@ pub fn Mounted::text_input(
                   field_error_reason(error),
                 ),
               )
-            Ok(next) => self.bindings[index] = { ..binding, field: Some(next), }
+            Ok(next) => {
+              if !still_current() {
+                return Err(adapter_error("native TextField changed during measurement"))
+              }
+              self.bindings[index] = { ..binding, field: Some(next), }
+            }
           }
         }
       @text_host.Geometry(..) => ()

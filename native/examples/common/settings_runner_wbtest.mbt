@@ -1099,3 +1099,32 @@ test "ordered sequence gap is rejected before field or action publication" {
   assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
 }
+
+///|
+test "focus lost does not synthesize cancel for an armed preedit" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.mounted.validate_terminal_text_delivery(lease, preedit).unwrap()
+  assert_true(owner.mounted.text_input(7UL, preedit).unwrap())
+  owner.mounted.note_terminal_text_delivery(lease, preedit).unwrap()
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  let lost = @text_host.TextInputEvent::new(owner.window, 2L, 7UL, @text_host.FocusLost)
+  assert_true(owner.mounted.text_input(7UL, lost).unwrap())
+  owner.mounted.note_terminal_text_delivery(lease, lost).unwrap()
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  assert_true(owner.mounted.next_action() is None)
+  let cancelled = @text_host.TextInputEvent::new(owner.window, 3L, 7UL, @text_host.Cancel)
+  assert_true(owner.mounted.text_input(7UL, cancelled).unwrap())
+  owner.mounted.note_terminal_text_delivery(lease, cancelled).unwrap()
+  assert_false(owner.mounted.focused_text().unwrap().composing())
+  assert_true(owner.mounted.next_action() is None)
+  assert_eq(host.stop_count(), 0)
+}
