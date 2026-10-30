@@ -1,0 +1,92 @@
+import importlib.util, json, os, subprocess, sys, time
+from pathlib import Path
+path=str(Path(__file__).resolve().parents[1] / 'drive_settings.py')
+spec=importlib.util.spec_from_file_location('settings_driver',path); d=importlib.util.module_from_spec(spec); sys.modules[spec.name]=d; spec.loader.exec_module(d)
+out=Path(os.environ['YAMI_IME_OUT']).resolve()
+out.mkdir(parents=True, exist_ok=True)
+app=str(Path(os.environ['YAMI_IME_APP']).resolve())
+process=subprocess.Popen([app,'--settings-e2e'],stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding='utf-8',errors='replace',bufsize=1,env=dict(os.environ,WAYLAND_DEBUG='client'))
+o=d.Output(process,out/'app.log')
+def marker(pred, timeout=12, start=0):
+ end=time.monotonic()+timeout
+ while time.monotonic()<end:
+  for m in o.markers[start:]:
+   if pred(m): return m
+  try: o.next_line(min(1,max(.01,end-time.monotonic())))
+  except d.SettingsError as e:
+   if process.poll() is not None or 'timed out waiting' not in str(e): raise
+ raise RuntimeError('marker timeout: '+repr(o.markers[-15:]))
+def send(key):
+ if key in ('ctrl+z','ctrl+shift+z'):
+  d.xdotool('keydown','ctrl'); time.sleep(.15)
+  if 'shift' in key: d.xdotool('keydown','shift'); time.sleep(.15)
+  d.xdotool('key','z'); time.sleep(.15)
+  if 'shift' in key: d.xdotool('keyup','shift')
+  d.xdotool('keyup','ctrl')
+ else: d.xdotool('key','--clearmodifiers',key)
+ time.sleep(.1)
+result={'framework_sha':os.environ['YAMI_IME_FRAMEWORK_SHA'],'app_source_sha':os.environ['YAMI_IME_APP_SHA'],'app_binary_sha256':__import__('hashlib').sha256(Path(app).read_bytes()).hexdigest(),'status':'FAIL','stage':'startup','observations':{}}
+try:
+ window=d.wait_window(o,30); result['x11Focus']=d.focus_window(o,window)
+ o.wait_frame(lambda f:f.get('focus')=='name',20)
+ result['observations']['started']=marker(lambda m:m.get('phase')=='text' and m.get('status')=='started',20)
+ result['stage']='ime-readiness'
+ end=time.monotonic()+15
+ while time.monotonic()<end:
+  w=(out/'ibus-ui-wayland.log').read_text(errors='replace'); b=(out/'ibus-ui-dbus.log').read_text(errors='replace')
+  if '.grab_keyboard(' in w and "member -> 'RegisterProperties'" in b: break
+  time.sleep(.05)
+ else: raise RuntimeError('IME keyboard grab or properties not ready')
+ time.sleep(1)
+ result['stage']='preedit'
+ for k in 'nihonn': send(k)
+ result['observations']['preedit']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='にほん',12)
+ result['observations']['uncommitted_frame']=o.wait_frame(lambda f:f.get('name')=='',5)
+ result['stage']='cancel-preedit'
+ before=len(o.markers); send('Escape')
+ result['observations']['cancel_preedit']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='',12,before)
+ result['observations']['cancel_frame']=o.wait_frame(lambda f:f.get('name')=='',12)
+ before=len(o.markers)
+ for k in 'nihonn': send(k)
+ marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='にほん',12,before)
+ result['stage']='conversion'
+ for k in ['space','space','Up']: send(k)
+ result['observations']['conversion']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='日本',12)
+ result['stage']='commit'
+ start=len(o.markers); send('Return')
+ result['observations']['commit']=marker(lambda m:m.get('phase')=='commit' and m.get('text')=='日本',12,start)
+ result['observations']['committed_frame']=o.wait_frame(lambda f:f.get('name')=='日本',12)
+ if len([m for m in o.markers[start:] if m.get('phase')=='commit' and m.get('text')=='日本']) != 1: raise RuntimeError('duplicate commit observed')
+ result['stage']='undo'
+ after=len(o.frames); send('ctrl+z')
+ result['observations']['undo_frame']=o.wait_frame(lambda f:f.get('name')=='',12,after=after)
+ result['stage']='redo'
+ after=len(o.frames); send('ctrl+shift+z')
+ result['observations']['redo_frame']=o.wait_frame(lambda f:f.get('name')=='日本',12,after=after)
+ result['stage']='dialog'
+ def step(key,dialog,focus):
+  after=len(o.frames); send(key)
+  return o.wait_frame(lambda f:f.get('dialog') is dialog and f.get('focus')==focus and f.get('name')=='日本',12,after=after)
+ result['observations']['field_open']=step('Return',True,'confirm')
+ send('x')
+ # A fresh later frame must retain the model after background key delivery.
+ result['observations']['after_background_key']=step('shift+Tab',True,'cancel')
+ result['observations']['tab']=step('Tab',True,'confirm')
+ result['observations']['field_restore']=step('Escape',False,'name')
+ result['observations']['field_reopen']=step('Return',True,'confirm')
+ result['observations']['field_restore_again']=step('Escape',False,'name')
+ if len([m for m in o.markers if m.get('phase')=='commit' and m.get('text')=='日本']) != 1: raise RuntimeError('duplicate commit observed')
+ result['status']='PASS'; result['stage']='complete'
+except Exception as e:
+ result['error']=str(e)
+finally:
+ if process.poll() is None: process.terminate()
+ try: process.wait(timeout=5)
+ except subprocess.TimeoutExpired: process.kill(); process.wait()
+ while not o.lines.empty():
+  line=o.lines.get_nowait()
+  if line is not None: o._handle(line)
+ o.close()
+ (out/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
+ print(json.dumps(result,ensure_ascii=False))
+ sys.exit(0 if result['status']=='PASS' else 1)
