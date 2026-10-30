@@ -62,6 +62,47 @@ test "duplicate and empty keys reject whole commit without mutation" {
 }
 
 ///|
+test "prepared commit is inert until publication and preserves queued semantics" {
+  let runtime = @runtime.Runtime::new()
+  assert_eq(runtime.commit(tree([button("save"), button("old")])), Ok(()))
+  let save = token(runtime, "save")
+  let old = token(runtime, "old")
+  let candidate = tree([button("save", disabled=true), button("new")])
+  let proposal = runtime.prepare_commit(candidate).unwrap()
+  assert_true(runtime.is_current(old))
+  assert_true(runtime.is_current(save))
+  assert_true(runtime.enqueue_activate(save))
+  assert_true(runtime.view() != Some(candidate))
+  assert_true(runtime.publish_commit(proposal))
+  assert_true(runtime.view() == Some(candidate))
+  assert_true(!runtime.is_current(old))
+  assert_true(runtime.is_current(save))
+  // A pending click does not cross the enabled -> disabled gate.
+  assert_true(runtime.next_action() is None)
+  assert_false(runtime.publish_commit(proposal))
+}
+
+///|
+test "prepared commit rejects foreign, stale, competing and disposed owner" {
+  let first = @runtime.Runtime::new()
+  let second = @runtime.Runtime::new()
+  assert_eq(first.commit(tree([button("save")])), Ok(()))
+  assert_eq(second.commit(tree([button("save")])), Ok(()))
+  let proposal = first.prepare_commit(tree([button("next")])).unwrap()
+  assert_false(second.publish_commit(proposal))
+  let old = token(first, "save")
+  assert_true(first.is_current(old))
+  let competing = first.prepare_commit(tree([button("other")])).unwrap()
+  assert_true(first.publish_commit(competing))
+  assert_false(first.publish_commit(proposal))
+  assert_true(first.token(key("other")) is Some(_))
+  let disposed = first.prepare_commit(tree([button("gone")])).unwrap()
+  first.dispose()
+  assert_false(first.publish_commit(disposed))
+  assert_true(first.prepare_commit(tree([])) is Err(@runtime.Disposed))
+}
+
+///|
 test "keys are root-wide including the root and containers" {
   let runtime = @runtime.Runtime::new()
   assert_eq(

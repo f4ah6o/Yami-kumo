@@ -4,6 +4,9 @@
 
 ### Added
 
+- Draft only: prepare and publish a common Runtime structural commit against
+  one exact owner publication. This does not freeze queued actions or provide
+  an atomic transaction with focus, scene or native host state.
 - Draft only: explore a bounded native TextField ownership hold using GPUI
   `TextSession` while a focus intent is pending. This is not wired into the
   Settings runner; host cutoff proof and interrupted-hold recovery are open.
