@@ -42,6 +42,13 @@ try:
  for k in 'nihonn': send(k)
  result['observations']['preedit']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='にほん',12)
  result['observations']['uncommitted_frame']=o.wait_frame(lambda f:f.get('name')=='',5)
+ result['stage']='cancel-candidate'
+ for k in ['space','space']: send(k)
+ time.sleep(.3)
+ subprocess.run(['import','-window','root',str(out/'candidates-before-cancel.png')],check=True)
+ send('Escape')
+ time.sleep(.3)
+ subprocess.run(['import','-window','root',str(out/'after-candidate-cancel.png')],check=True)
  result['stage']='cancel-preedit'
  before=len(o.markers); cancel_frames=len(o.frames); send('Escape')
  result['observations']['cancel_preedit']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='',12,before)
