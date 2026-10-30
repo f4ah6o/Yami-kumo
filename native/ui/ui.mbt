@@ -298,6 +298,21 @@ pub struct Mounted {
   priv mut dialogs : Array[DialogState]
   priv mut text_epoch : UInt64
   priv mut last_text_sequence : Int64
+  priv mut held_text : HeldText?
+}
+
+///|
+/// During a bounded transition the session is the sole editing authority;
+/// the binding keeps only its last published immutable field snapshot.
+priv struct HeldText {
+  session : @text_session.TextSession
+  binding : UInt64
+  generation : UInt64
+  revision : Int32
+  epoch : UInt64
+  sequence : Int64
+  poisoned : Bool
+  retryable : Bool
 }
 
 ///|
@@ -328,6 +343,7 @@ pub fn Mounted::new(
     dialogs: [],
     text_epoch: 0UL,
     last_text_sequence: 0L,
+    held_text: None,
   }
 }
 
@@ -342,7 +358,7 @@ pub fn Mounted::theme(self : Mounted) -> @theme.Theme? {
 /// precedence; None restores legacy paint for Buttons without an override.
 /// Pending gestures and accepted geometry remain valid across paint changes.
 pub fn Mounted::set_theme(self : Mounted, theme : @theme.Theme?) -> Bool {
-  if self.is_disposed() || self.busy {
+  if self.is_disposed() || self.busy || self.held_text is Some(_) {
     return false
   }
   if self.theme != theme {
@@ -2273,7 +2289,7 @@ pub fn Mounted::stage(
   scale : Double,
   measure : @components.TextMeasure,
 ) -> Result[Prepared, @diagnostics.FrameworkError] {
-  if self.is_disposed() || self.busy {
+  if self.is_disposed() || self.busy || self.held_text is Some(_) {
     return Err(adapter_error("disposed or reentrant native staging"))
   }
   let change = self.change
@@ -2336,6 +2352,7 @@ pub fn Mounted::publish(
   prepared : Prepared,
 ) -> Result[Frame, @diagnostics.FrameworkError] {
   if self.is_disposed() ||
+    self.held_text is Some(_) ||
     self.busy ||
     !same_epoch(prepared.change, self.change) {
     return Err(adapter_error("stale, foreign or disposed native preparation"))
@@ -2495,6 +2512,15 @@ fn Mounted::sync_focus(self : Mounted) -> Unit {
 /// A resize/scale event makes old geometry unusable until a successful commit.
 pub fn Mounted::invalidate_layout(self : Mounted) -> Unit {
   self.change = fresh_epoch()
+  if self.held_text is Some(held) {
+    // Do not discard already published old-owner actions while the held
+    // transition is unresolved. The stale geometry blocks further delivery;
+    // the integrating runner must report/reconcile this interrupted lease.
+    self.ready = false
+    self.current_frame = None
+    self.held_text = Some({ ..held, poisoned: true, retryable: true, })
+    return
+  }
   self.cancel_pending()
   for index in 0..<self.bindings.length() {
     let binding = self.bindings[index]
@@ -2540,6 +2566,7 @@ pub fn Mounted::callback(self : Mounted, key : @view.NodeKey) -> Activation? {
 ///|
 pub fn Mounted::activate(self : Mounted, callback : Activation) -> Bool {
   if self.busy ||
+    self.held_text is Some(_) ||
     !self.ready ||
     !self.window_focused ||
     !callback.epoch.live ||
@@ -2595,7 +2622,10 @@ pub fn Mounted::next_action(self : Mounted) -> @view.SemanticAction? {
 
 ///|
 pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
-  if self.busy || !self.ready || !self.window_focused {
+  if self.busy ||
+    self.held_text is Some(_) ||
+    !self.ready ||
+    !self.window_focused {
     return false
   }
   let binding = match binding_for(self.bindings, key) {
@@ -2658,7 +2688,10 @@ pub fn Mounted::paste(
   request : PasteRequest,
   text : String,
 ) -> Bool {
-  if !self.ready || self.is_disposed() || text.length() == 0 {
+  if !self.ready ||
+    self.is_disposed() ||
+    self.held_text is Some(_) ||
+    text.length() == 0 {
     return false
   }
   let measure = match self.measure {
@@ -2818,6 +2851,368 @@ pub fn Mounted::focused_text(self : Mounted) -> FocusedText? {
     })
   }
   None
+}
+
+///|
+/// Transfer temporary editing authority for the currently focused,
+/// noncomposing field to a single TextSession. The caller holds a pending
+/// focus intent and must not release it until its host cutoff succeeds.
+pub fn Mounted::begin_held_text(
+  self : Mounted,
+  epoch : UInt64,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  if self.held_text is Some(_) {
+    return Err(adapter_error("a text transition is already held"))
+  }
+  if epoch == 0UL ||
+    self.busy ||
+    !self.ready ||
+    self.is_disposed() ||
+    !self.window_focused {
+    return Ok(false)
+  }
+  if self.runtime.has_pending_actions() {
+    return Err(adapter_error("drain pending actions before holding text"))
+  }
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Ok(false)
+  }
+  let focus = scope.focused()
+  for binding in self.bindings {
+    if focus != Some(binding.id) ||
+      !binding.visible ||
+      !field_editable(binding.view) ||
+      !self.admits_binding(binding) {
+      continue
+    }
+    match binding.token {
+      Some(token) if self.runtime.is_current(token) => ()
+      _ => return Ok(false)
+    }
+    let field = match binding.field {
+      Some(value) => value
+      None => return Ok(false)
+    }
+    if field.is_composing() {
+      return Ok(false)
+    }
+    let session = match
+      @text_session.TextSession::new(self.window, binding.id, field) {
+      Ok(value) => value
+      Err(_) => return Err(adapter_error("text transition owner rejected"))
+    }
+    let sequence = if self.text_epoch == epoch {
+      self.last_text_sequence
+    } else {
+      0L
+    }
+    self.text_epoch = epoch
+    self.last_text_sequence = sequence
+    self.held_text = Some({
+      session,
+      binding: binding.id,
+      generation: binding.field_generation,
+      revision: field.revision(),
+      epoch,
+      sequence,
+      poisoned: false,
+      retryable: false,
+    })
+    return Ok(true)
+  }
+  Ok(false)
+}
+
+///|
+fn Mounted::held_binding_index(self : Mounted, held : HeldText) -> Int32? {
+  if !self.ready || self.is_disposed() || !self.window_focused {
+    return None
+  }
+  let scope = match self.scope {
+    Some(value) => value
+    None => return None
+  }
+  if scope.focused() != Some(held.binding) {
+    return None
+  }
+  for index in 0..<self.bindings.length() {
+    let binding = self.bindings[index]
+    if binding.id == held.binding &&
+      binding.field_generation == held.generation &&
+      binding.visible &&
+      field_editable(binding.view) &&
+      self.admits_binding(binding) {
+      match binding.field {
+        Some(field) if field.revision() == held.revision => return Some(index)
+        _ => return None
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Apply an observation to the held original field exactly once. This does
+/// not complete the held focus intent or establish an operating-system cutoff.
+pub fn Mounted::held_text_input(
+  self : Mounted,
+  epoch : UInt64,
+  event : @text_host.TextInputEvent,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  let held = match self.held_text {
+    Some(value) => value
+    None => return Ok(false)
+  }
+  if held.poisoned {
+    return Err(adapter_error("held text requires explicit resynchronization"))
+  }
+  if epoch != held.epoch ||
+    event.epoch() != epoch ||
+    event.window() != self.window ||
+    event.sequence() <= held.sequence ||
+    event.sequence() <= 0L {
+    return Ok(false)
+  }
+  let index = match self.held_binding_index(held) {
+    Some(value) => value
+    None => return Err(adapter_error("held text owner is stale"))
+  }
+  if self.busy {
+    return Err(adapter_error("held text delivery is reentrant"))
+  }
+  let binding = self.bindings[index]
+  let token = match binding.token {
+    Some(value) if self.runtime.is_current(value) => value
+    _ => return Err(adapter_error("held text action token is stale"))
+  }
+  let measure = match self.measure {
+    Some(value) => value
+    None => return Err(adapter_error("held text measure is unavailable"))
+  }
+  let before = held.session.snapshot().field()
+  let operation = match event.kind() {
+    @text_host.Preedit(text~, cursor~) => {
+      if text.length() > 16_384 {
+        return Err(adapter_error("held preedit is too long"))
+      }
+      let offset = if cursor < 0 { text.length() } else { cursor }
+      let selection = match @text.TextSelection::new(offset, offset) {
+        Ok(value) => value
+        Err(_) => return Err(adapter_error("held preedit cursor is invalid"))
+      }
+      Some(@text_session.Preview(text, selection))
+    }
+    @text_host.Commit(text~) =>
+      Some(
+        if before.is_composing() {
+          @text_session.Commit(text)
+        } else {
+          @text_session.Insert(text)
+        },
+      )
+    @text_host.Cancel =>
+      if before.is_composing() {
+        Some(@text_session.Cancel)
+      } else {
+        None
+      }
+    @text_host.Geometry(..) => None
+    @text_host.FocusLost =>
+      return Err(adapter_error("focus loss requires ordered host handling"))
+  }
+  match operation {
+    Some(value) => {
+      let target = match held.session.target() {
+        Ok(value) => value
+        Err(_) => return Err(adapter_error("held text target is unavailable"))
+      }
+      let change = self.change
+      self.busy = true
+      let result = held.session.apply_batch(
+        target,
+        [value],
+        fn(document) {
+          let measured = field_measure(measure, document)
+          if self.is_disposed() || !same_epoch(change, self.change) {
+            Err(@text_field.MeasurementFailed)
+          } else {
+            measured
+          }
+        },
+        field_admit,
+      )
+      self.busy = false
+      if self.is_disposed() || !same_epoch(change, self.change) {
+        if !self.is_disposed() && self.held_text is Some(_) {
+          self.held_text = Some({
+            ..held,
+            poisoned: true,
+            retryable: result is Err(_),
+            sequence: event.sequence(),
+          })
+        }
+        return Err(adapter_error("held text owner changed during measurement"))
+      }
+      let receipt = match result {
+        Ok(value) => value
+        Err(_) => return Err(adapter_error("held text transaction rejected"))
+      }
+      let next = receipt.snapshot().field()
+      if next.committed_document().text() != before.committed_document().text() {
+        if !self.runtime.enqueue_text_changed(
+            token,
+            next.committed_document().text(),
+          ) {
+          self.held_text = Some({
+            ..held,
+            poisoned: true,
+            retryable: false,
+            sequence: event.sequence(),
+          })
+          return Err(
+            adapter_error(
+              "held text action rejected; resynchronization required",
+            ),
+          )
+        }
+      }
+      self.bindings[index] = { ..binding, field: Some(next), }
+      self.held_text = Some({
+        ..held,
+        revision: next.revision(),
+        sequence: event.sequence(),
+      })
+    }
+    None => self.held_text = Some({ ..held, sequence: event.sequence(), })
+  }
+  self.last_text_sequence = event.sequence()
+  self.change = fresh_epoch()
+  Ok(true)
+}
+
+///|
+/// Return authority after the caller has established its host cutoff. Active
+/// preedit remains held: this operation never invents a cancel or commit.
+pub fn Mounted::finish_held_text(
+  self : Mounted,
+  epoch : UInt64,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let held = match self.held_text {
+    Some(value) if value.epoch == epoch => value
+    _ => return Err(adapter_error("held text epoch is stale"))
+  }
+  if self.held_binding_index(held) is None {
+    return Err(adapter_error("held text owner is stale"))
+  }
+  if held.poisoned {
+    return Err(adapter_error("held text requires explicit resynchronization"))
+  }
+  if held.session.snapshot().field().is_composing() {
+    return Err(adapter_error("held preedit requires an observed resolution"))
+  }
+  match held.session.close() {
+    Ok(_) => ()
+    Err(_) => return Err(adapter_error("held text session close rejected"))
+  }
+  self.held_text = None
+  Ok(())
+}
+
+///|
+/// Release an invalidated hold only after its accepted model actions were
+/// delivered and no preedit remains. The caller retains any unacknowledged
+/// observation and focus intent and must keep the host session armed; this
+/// does not establish a host cutoff or process the retained event.
+pub fn Mounted::release_held_text_for_retry(
+  self : Mounted,
+  epoch : UInt64,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let held = match self.held_text {
+    Some(value) if value.epoch == epoch => value
+    _ => return Err(adapter_error("held text epoch is stale"))
+  }
+  if self.busy ||
+    self.is_disposed() ||
+    self.ready ||
+    !self.window_focused ||
+    !held.poisoned ||
+    !held.retryable ||
+    self.runtime.has_pending_actions() {
+    return Err(adapter_error("held text cannot be safely retried"))
+  }
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Err(adapter_error("held focus owner is unavailable"))
+  }
+  if scope.focused() != Some(held.binding) {
+    return Err(adapter_error("held focus owner changed"))
+  }
+  let mut matches = false
+  for binding in self.bindings {
+    if binding.id == held.binding &&
+      binding.field_generation == held.generation &&
+      binding.visible &&
+      field_editable(binding.view) {
+      match (binding.field, binding.token) {
+        (Some(field), Some(token)) if field.revision() == held.revision &&
+          !field.is_composing() &&
+          self.runtime.is_current(token) => matches = true
+        _ => ()
+      }
+    }
+  }
+  let snapshot = held.session.snapshot()
+  if !matches ||
+    snapshot.field().is_composing() ||
+    snapshot.field().revision() != held.revision {
+    return Err(adapter_error("held field changed before retry"))
+  }
+  match held.session.close() {
+    Ok(_) => ()
+    Err(_) => return Err(adapter_error("held text session close rejected"))
+  }
+  self.held_text = None
+  Ok(())
+}
+
+///|
+/// Drain the next still-live action for the held field after layout became
+/// invalid. The caller must apply it to its model before re-staging. A live
+/// action for a different owner remains queued and is reported as an error.
+pub fn Mounted::next_held_text_action(
+  self : Mounted,
+  epoch : UInt64,
+) -> Result[@view.SemanticAction?, @diagnostics.FrameworkError] {
+  let held = match self.held_text {
+    Some(value) if value.epoch == epoch && value.poisoned && value.retryable =>
+      value
+    _ => return Err(adapter_error("held text recovery is unavailable"))
+  }
+  if self.is_disposed() || self.busy || self.ready || !self.window_focused {
+    return Err(adapter_error("held text recovery is unavailable"))
+  }
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Err(adapter_error("held focus owner is unavailable"))
+  }
+  if scope.focused() != Some(held.binding) {
+    return Err(adapter_error("held focus owner changed"))
+  }
+  for binding in self.bindings {
+    if binding.id == held.binding && binding.field_generation == held.generation {
+      match binding.token {
+        Some(token) if self.runtime.is_current(token) =>
+          match self.runtime.next_text_changed_for(token) {
+            Ok(value) => return Ok(value)
+            Err(_) =>
+              return Err(adapter_error("another action precedes held text"))
+          }
+        _ => return Err(adapter_error("held text action token is stale"))
+      }
+    }
+  }
+  Err(adapter_error("held text binding is stale"))
 }
 
 ///|
@@ -3008,6 +3403,9 @@ pub fn Mounted::handle_event(
   self : Mounted,
   event : @platform.Event,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
+  if self.held_text is Some(_) {
+    return Err(adapter_error("input is held for text transition"))
+  }
   if self.is_disposed() ||
     self.busy ||
     event.window() != self.window ||
@@ -3233,6 +3631,9 @@ pub fn Mounted::text_input(
   epoch : UInt64,
   event : @text_host.TextInputEvent,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
+  if self.held_text is Some(_) {
+    return Err(adapter_error("text is held for text transition"))
+  }
   if !self.ready || self.is_disposed() || event.window() != self.window {
     return Ok(false)
   }
@@ -3577,6 +3978,11 @@ fn Mounted::dispatch(
 
 ///|
 pub fn Mounted::dispose(self : Mounted) -> Unit {
+  match self.held_text {
+    Some(held) => ignore(held.session.close())
+    None => ()
+  }
+  self.held_text = None
   self.change = fresh_epoch()
   self.epoch.live = false
   self.runtime.dispose()

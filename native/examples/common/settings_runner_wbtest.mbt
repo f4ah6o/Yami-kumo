@@ -95,3 +95,52 @@ test "Settings applies an observed commit before a later window blur" {
   assert_eq(settings.name(), "日本語")
   mounted.dispose()
 }
+///|
+test "Settings held Tab applies the old-owner direct commit before focus moves" {
+  let mounted = @ui.Mounted::new(@platform.WindowId::new(1L))
+  let mut settings = @shared_settings.Model::new()
+  ignore(
+    mounted
+    .commit(settings.view(), 640.0, 480.0, 1.0, text_runner_measure)
+    .unwrap(),
+  )
+  assert_true(mounted.focus(@shared_settings.settings_name()))
+  let epoch = 11UL
+  assert_true(mounted.begin_held_text(epoch).unwrap())
+  let commit = @text_host.TextInputEvent::new(
+    @platform.WindowId::new(1L),
+    1L,
+    epoch,
+    @text_host.Commit(text="日本"),
+  )
+  assert_true(mounted.held_text_input(epoch, commit).unwrap())
+  while mounted.next_action() is Some(action) {
+    settings = settings.update(@shared_settings.Ui(action))
+  }
+  assert_eq(settings.name(), "日本")
+  assert_false(mounted.held_text_input(epoch, commit).unwrap())
+  // Simulate a host cutoff only after all already-observed records were
+  // applied. The native host cutoff and its Busy cases have separate tests.
+  mounted.finish_held_text(epoch).unwrap()
+  assert_true(
+    mounted
+    .handle_event(
+      @platform.Event::new(
+        @platform.WindowId::new(1L),
+        1L,
+        1.0,
+        @platform.Input(
+          @primitives.KeyPressed(
+            key=@primitives.Tab,
+            repeat=false,
+            modifiers=@primitives.Modifiers::none(),
+          ),
+        ),
+      ),
+    )
+    .unwrap(),
+  )
+  assert_true(mounted.focused_text() is None)
+  assert_eq(settings.name(), "日本")
+  mounted.dispose()
+}

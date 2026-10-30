@@ -60,11 +60,13 @@ pub fn Runtime::enqueue_confirmed(Self, InstanceToken) -> Bool
 pub fn Runtime::enqueue_dismissed(Self, InstanceToken) -> Bool
 pub fn Runtime::enqueue_submitted(Self, InstanceToken) -> Bool
 pub fn Runtime::enqueue_text_changed(Self, InstanceToken, String) -> Bool
+pub fn Runtime::has_pending_actions(Self) -> Bool
 pub fn Runtime::is_current(Self, InstanceToken) -> Bool
 pub fn Runtime::is_disposed(Self) -> Bool
 pub fn Runtime::new() -> Self
 pub fn Runtime::next_action(Self) -> @core.SemanticAction?
 pub fn Runtime::next_focus_result(Self) -> FocusResult?
+pub fn Runtime::next_text_changed_for(Self, InstanceToken) -> Result[@core.SemanticAction?, RequestError]
 pub fn Runtime::request_focus(Self, InstanceToken) -> Result[FocusRequest, RequestError]
 pub fn Runtime::token(Self, @core.NodeKey) -> InstanceToken?
 pub fn Runtime::view(Self) -> @core.View?

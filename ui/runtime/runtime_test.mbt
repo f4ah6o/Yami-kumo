@@ -412,3 +412,43 @@ test "palette changes retain runtime identity pending focus and queued action" {
   assert_true(runtime.complete_focus(request, @core.Focused))
   assert_eq(runtime.next_action(), Some(@core.Activate(key("paint"))))
 }
+
+///|
+test "pending action query does not consume even a stale action" {
+  let runtime = @runtime.Runtime::new()
+  assert_false(runtime.has_pending_actions())
+  assert_eq(runtime.commit(tree([button("save")])), Ok(()))
+  assert_true(runtime.enqueue_activate(token(runtime, "save")))
+  assert_true(runtime.has_pending_actions())
+  assert_eq(runtime.commit(tree([])), Ok(()))
+  // Canceled actions remain queued until next_action drains them.
+  assert_true(runtime.has_pending_actions())
+  assert_true(runtime.next_action() is None)
+  assert_false(runtime.has_pending_actions())
+}
+
+///|
+test "owner-specific text drain preserves an earlier unrelated action" {
+  let runtime = @runtime.Runtime::new()
+  let name = key("name")
+  assert_eq(
+    runtime.commit(
+      tree([
+        @core.text_field(name, @core.TextFieldProps::new("", "Name")),
+        button("save"),
+      ]),
+    ),
+    Ok(()),
+  )
+  let field = token(runtime, "name")
+  let save = token(runtime, "save")
+  assert_true(runtime.enqueue_activate(save))
+  assert_true(runtime.enqueue_text_changed(field, "日本"))
+  assert_true(runtime.next_text_changed_for(field) is Err(@runtime.Unavailable))
+  assert_eq(runtime.next_action(), Some(@core.Activate(key("save"))))
+  assert_eq(
+    runtime.next_text_changed_for(field),
+    Ok(Some(@core.TextChanged(name, "日本"))),
+  )
+  assert_true(runtime.next_text_changed_for(field) is Ok(None))
+}
