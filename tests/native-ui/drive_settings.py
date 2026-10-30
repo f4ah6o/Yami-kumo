@@ -282,6 +282,32 @@ class Output:
         self.log.close()
 
 
+def drain_exited_output(output: Output) -> None:
+    """Consume the complete stdout of an exited sample before final assertions."""
+    if output.process.poll() is None:
+        raise SettingsError("cannot drain a running Settings sample")
+    output._reader.join(timeout=5)
+    if output._reader.is_alive():
+        raise SettingsError("Settings output reader did not finish")
+    while not output.lines.empty():
+        line = output.lines.get_nowait()
+        if line is not None:
+            output._handle(line)
+
+
+def require_single_commit(markers: list[dict[str, Any]], text: str) -> None:
+    commits = [m for m in markers if m.get("phase") == "commit"]
+    if len(commits) != 1 or commits[0].get("text") != text:
+        raise SettingsError(f"expected one commit of {text!r}, got {commits!r}")
+
+
+def wait_frame_after_observation(output: Output, observe, predicate, timeout: float):
+    """Fence buffered frames by consuming the triggering observation first."""
+    observation = observe()
+    after = len(output.frames)
+    return observation, output.wait_frame(predicate, timeout, after=after)
+
+
 def driver_log(output: Output, message: str) -> None:
     output.log.write(f"DRIVER {message}\n")
     output.log.flush()

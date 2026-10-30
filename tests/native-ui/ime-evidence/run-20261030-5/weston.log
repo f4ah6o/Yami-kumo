@@ -1,0 +1,37 @@
+Date: 2026-10-30 UTC
+[15:05:31.557] weston 14.0.2
+               https://wayland.freedesktop.org
+               Bug reports to: https://gitlab.freedesktop.org/wayland/weston/issues/
+               Build: 14.0.2
+[15:05:31.557] Command line: weston --backend=x11 --renderer=pixman --shell=/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/weston/desktop-shell.so --socket=yami-ime --width=960 --height=640 --idle-time=0 --config=/tmp/yami-ime-TPJPz8/weston.ini --log=/workspace/evidence/yami-linux-ime-attempt21/weston.log
+[15:05:31.557] OS: Linux, 6.18.57, #1 SMP Tue Oct 20 21:56:04 UTC 2026, x86_64
+[15:05:31.557] Flight recorder: enabled
+[15:05:31.557] Using config file '/tmp/yami-ime-TPJPz8/weston.ini'
+[15:05:31.557] Output repaint window is 7 ms maximum.
+[15:05:31.557] Loading module '/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libweston-14/x11-backend.so'
+[15:05:31.561] Using Pixman renderer
+[15:05:31.564] Registered plugin API 'weston_windowed_output_api_x11_v2' of size 16
+[15:05:31.564] Color manager: no-op
+                 protocol support: no
+[15:05:31.564] Output 'screen0' attempts EOTF mode SDR and colorimetry mode default.
+[15:05:31.564] Output 'screen0' using color profile: stock sRGB color profile
+[15:05:31.564] Found visual, bits per value: 8, red_mask: 00ff0000, green_mask: 0000ff00, blue_mask: 000000ff
+[15:05:31.564] Visual depth is 24
+[15:05:31.564] Found format for depth 24, bpp: 32
+[15:05:31.564] Will use x8r8g8b8 format for SHM surfaces
+[15:05:31.564] x11 output 960x640, window id 4194309
+[15:05:31.564] Output 'screen0' enabled with head(s) screen0
+[15:05:31.564] Compositor capabilities:
+               arbitrary surface rotation: yes
+               screen capture uses y-flip: no
+               cursor planes: no
+               arbitrary resolutions: no
+               view mask clipping: yes
+               explicit sync: no
+               color operations: no
+               presentation clock: CLOCK_MONOTONIC_RAW, id 4
+               presentation clock resolution: 0.000000001 s
+[15:05:31.565] Loading module '/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/weston/desktop-shell.so'
+[15:05:31.565] launching '/tmp/yami-ime-TPJPz8/ibus-wrapper.sh'
+[15:05:31.565] launching '/workspace/gpui-locked-profile/prefix/usr/libexec/weston-desktop-shell'
+[15:05:40.113] caught signal 15

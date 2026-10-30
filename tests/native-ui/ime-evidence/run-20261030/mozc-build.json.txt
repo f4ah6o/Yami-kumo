@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "source_version": "2.29.5160.102+dfsg-1.4",
+  "recipe_lock_sha256": "b2bca3690e00de7cc25c37528570c027fbd8a58c8d0e93f37e8ef2322e7cad6f",
+  "runtime_prefix": "/workspace/gpui-locked-profile/prefix",
+  "compiled_server_directory": "/workspace/gpui-locked-profile/prefix/usr/lib/mozc",
+  "completed_utc": "2026-10-30T14:46:50.780185+00:00",
+  "elapsed_seconds": 31.72,
+  "configure_build_seconds": 19.38,
+  "source_build_archive_bytes": 30590269,
+  "workspace_file_bytes": 695225735,
+  "engine": "/workspace/mozc-client-build/artifacts/ibus-engine-mozc",
+  "engine_sha256": "a600632241547d5e45afbbf23289fcd0b88bb101696df078aa32f1c74e1e5cda",
+  "registration_xml": "/workspace/mozc-client-build/artifacts/mozc.xml",
+  "registration_xml_sha256": "dc18f3a3885856f4a17d0f4fe18197ddd9887d6725ae8659398625d6e17d7186",
+  "stock_server": "/workspace/gpui-locked-profile/prefix/usr/lib/mozc/mozc_server",
+  "stock_server_sha256": "020f50a6cd53b3a0a5e6c66a30f698b05d5c68df4b5be73e663c1435bc8c432e",
+  "candidate_window": "ibus",
+  "renderer_built": false,
+  "security_source_verified": true,
+  "runtime_linkage_passed": true,
+  "native_conversion_tested": false,
+  "configure_command": [
+    "/usr/bin/python3",
+    "build_mozc.py",
+    "gyp",
+    "--gypdir=/workspace/mozc-client-build/build-prefix/usr/bin",
+    "--target_platform=Linux",
+    "--noqt",
+    "--server_dir=/workspace/gpui-locked-profile/prefix/usr/lib/mozc",
+    "--verbose"
+  ],
+  "build_command": [
+    "ninja",
+    "-C",
+    "out_linux/Release",
+    "-j4",
+    "ibus_mozc"
+  ]
+}

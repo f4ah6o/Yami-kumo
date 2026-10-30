@@ -10,7 +10,9 @@ from __future__ import annotations
 import importlib.util
 import os
 import pathlib
+import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -110,6 +112,59 @@ class FreshFrameTests(unittest.TestCase):
         output.frames = [{"dialog": True}]
         with self.assertRaises(driver.SettingsError):
             output.wait_frame(lambda f: f.get("dialog"), 0, after=1)
+
+
+class ObservationFenceTests(unittest.TestCase):
+    def test_buffered_pre_observation_frame_cannot_satisfy_fence(self):
+        output = driver.Output.__new__(driver.Output)
+        output.frames = []
+
+        def observe():
+            # A frame emitted before the marker may be parsed while waiting for it.
+            output.frames.append({"name": ""})
+            return {"phase": "preedit", "text": ""}
+
+        with self.assertRaises(driver.SettingsError):
+            driver.wait_frame_after_observation(output, observe, lambda f: f.get("name") == "", 0)
+
+    def test_post_observation_frame_can_satisfy_fence(self):
+        class Output:
+            frames = []
+
+            def wait_frame(self, predicate, timeout, after=0):
+                self.frames.append({"name": ""})
+                return next(frame for frame in self.frames[after:] if predicate(frame))
+
+        observation, frame = driver.wait_frame_after_observation(
+            Output(), lambda: {"phase": "preedit", "text": ""},
+            lambda f: f.get("name") == "", 1)
+        self.assertEqual(observation["phase"], "preedit")
+        self.assertEqual(frame["name"], "")
+
+
+class FinalOutputTests(unittest.TestCase):
+    def test_buffered_duplicate_is_rejected_after_process_exit(self):
+        line = 'YAMI_NATIVE_UI_SETTINGS {"phase":"commit","text":"日本"}'
+        with tempfile.TemporaryDirectory() as tmp:
+            process = subprocess.Popen(
+                [sys.executable, "-c", f"print({line!r}); print({line!r})"],
+                stdout=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+            )
+            output = driver.Output(process, pathlib.Path(tmp) / "output.log")
+            process.wait(timeout=5)
+            driver.drain_exited_output(output)
+            with self.assertRaises(driver.SettingsError):
+                driver.require_single_commit(output.markers, "日本")
+            output.close()
+            assert process.stdout is not None
+            process.stdout.close()
+
+    def test_single_commit_is_required(self):
+        driver.require_single_commit([{"phase": "commit", "text": "日本"}], "日本")
+        with self.assertRaises(driver.SettingsError):
+            driver.require_single_commit([], "日本")
 
 
 class ReportTests(unittest.TestCase):
