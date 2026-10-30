@@ -65,6 +65,21 @@ fn ubuntu_text_caret(
 }
 
 ///|
+fn ubuntu_text_state(
+  state : @text_host.TextInputState,
+) -> Result[@text_host.TextInputState, @diagnostics.FrameworkError] {
+  let caret = match ubuntu_text_caret(state.caret()) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  Ok(
+    @text_host.TextInputState::new(state.document(), caret).with_preedit(
+      state.preedit(),
+    ),
+  )
+}
+
+///|
 fn main {
   let host = match @ubuntu_host.Host::start() {
     Err(error) =>
@@ -82,13 +97,10 @@ fn main {
     route.begin_text_input(window, root)
   }
   let text_update : @common.NativeTextUpdate = fn(epoch, state) {
-    let caret = match ubuntu_text_caret(state.caret()) {
+    let normalized = match ubuntu_text_state(state) {
       Ok(value) => value
       Err(error) => return Err(error)
     }
-    let normalized = @text_host.TextInputState::new(state.document(), caret).with_preedit(
-      state.preedit(),
-    )
     route.update_text_input(epoch, normalized)
   }
   let text_cancel : @common.NativeTextCancel = fn(epoch) {
