@@ -2850,3 +2850,186 @@ test "native TextField emits TextChanged when the commit equals the preview" {
   }
   mounted.dispose()
 }
+///|
+test "held Tab delivers the observed direct commit before changing focus" {
+  let mounted = mount()
+  let name = @view.NodeKey::new("name")
+  let next = @view.NodeKey::new("next")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(name, @view.TextFieldProps::new("", "Name")),
+    @view.button(next, "Next"),
+  ])
+  ignore(render(mounted, view~))
+  assert_true(mounted.focus(name))
+  let prepared = mounted.stage(view, 640.0, 480.0, 1.0, measure).unwrap()
+  let epoch = 7UL
+  assert_true(mounted.begin_held_text(epoch).unwrap())
+  assert_false(mounted.focus(next))
+  assert_true(mounted.publish(prepared) is Err(_))
+  assert_true(
+    mounted.handle_event(event(1L, key_down(@primitives.Tab))) is Err(_),
+  )
+  assert_true(mounted.commit(view, 640.0, 480.0, 1.0, measure) is Err(_))
+  assert_true(
+    mounted.text_input(
+      epoch,
+      text_host_event(1L, epoch, @text_host.Commit(text="日本")),
+    )
+    is Err(_),
+  )
+  assert_true(
+    mounted
+    .held_text_input(
+      epoch,
+      text_host_event(1L, epoch, @text_host.Commit(text="日本")),
+    )
+    .unwrap(),
+  )
+  assert_false(
+    mounted
+    .held_text_input(
+      epoch,
+      text_host_event(1L, epoch, @text_host.Commit(text="日本")),
+    )
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, text)) => {
+      assert_eq(key, name)
+      assert_eq(text, "日本")
+    }
+    _ => fail("expected exactly one committed old-owner action")
+  }
+  assert_true(mounted.next_action() is None)
+  // The caller must first establish the host cutoff. This test exercises the
+  // owner transition after a simulated successful cutoff, not OS delivery.
+  mounted.finish_held_text(epoch).unwrap()
+  assert_true(
+    mounted.handle_event(event(1L, key_down(@primitives.Tab))).unwrap(),
+  )
+  assert_true(mounted.focused_text() is None)
+  assert_false(
+    mounted
+    .held_text_input(
+      epoch,
+      text_host_event(2L, epoch, @text_host.Commit(text="遅延")),
+    )
+    .unwrap(),
+  )
+  mounted.dispose()
+}
+
+///|
+test "held Tab keeps an active preedit pending until an observed commit" {
+  let mounted = mount()
+  let name = @view.NodeKey::new("name")
+  let next = @view.NodeKey::new("next")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(name, @view.TextFieldProps::new("", "Name")),
+    @view.button(next, "Next"),
+  ])
+  ignore(render(mounted, view~))
+  assert_true(mounted.focus(name))
+  let epoch = 8UL
+  assert_true(mounted.begin_held_text(epoch).unwrap())
+  assert_true(
+    mounted
+    .held_text_input(
+      epoch,
+      text_host_event(1L, epoch, @text_host.Preedit(text="にほん", cursor=3)),
+    )
+    .unwrap(),
+  )
+  assert_true(mounted.finish_held_text(epoch) is Err(_))
+  assert_true(mounted.focused_text().unwrap().composing())
+  assert_false(mounted.focus(next))
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted
+    .held_text_input(
+      epoch,
+      text_host_event(2L, epoch, @text_host.Commit(text="日本")),
+    )
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, text)) => {
+      assert_eq(key, name)
+      assert_eq(text, "日本")
+    }
+    _ => fail("expected the observed commit")
+  }
+  mounted.finish_held_text(epoch).unwrap()
+  assert_true(
+    mounted.handle_event(event(1L, key_down(@primitives.Tab))).unwrap(),
+  )
+  assert_true(mounted.focused_text() is None)
+  mounted.dispose()
+}
+
+///|
+test "held text rejects a preexisting composition and invalidated owner" {
+  let mounted = mount()
+  let name = @view.NodeKey::new("name")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(name, @view.TextFieldProps::new("", "Name")),
+    @view.button(@view.NodeKey::new("next"), "Next"),
+  ])
+  ignore(render(mounted, view~))
+  assert_true(mounted.focus(name))
+  let epoch = 9UL
+  assert_true(
+    mounted
+    .text_input(
+      epoch,
+      text_host_event(1L, epoch, @text_host.Preedit(text="に", cursor=1)),
+    )
+    .unwrap(),
+  )
+  assert_false(mounted.begin_held_text(epoch).unwrap())
+  assert_true(mounted.focused_text().unwrap().composing())
+  assert_true(
+    mounted
+    .text_input(epoch, text_host_event(2L, epoch, @text_host.Cancel))
+    .unwrap(),
+  )
+  assert_true(mounted.begin_held_text(epoch).unwrap())
+  mounted.invalidate_layout()
+  assert_true(
+    mounted.held_text_input(
+      epoch,
+      text_host_event(3L, epoch, @text_host.Commit(text="遅延")),
+    )
+    is Err(_),
+  )
+  assert_true(mounted.finish_held_text(epoch) is Err(_))
+  mounted.dispose()
+}
+
+///|
+test "held text measurement invalidation fails closed without replaying" {
+  let mounted = mount()
+  let invalidate = Ref(false)
+  let measured : @components.TextMeasure = fn(value, size) {
+    if invalidate.val {
+      mounted.invalidate_layout()
+    }
+    measure(value, size)
+  }
+  let name = @view.NodeKey::new("name")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(name, @view.TextFieldProps::new("", "Name")),
+    @view.button(@view.NodeKey::new("next"), "Next"),
+  ])
+  ignore(mounted.commit(view, 640.0, 480.0, 1.0, measured).unwrap())
+  assert_true(mounted.focus(name))
+  assert_true(mounted.begin_held_text(12UL).unwrap())
+  invalidate.val = true
+  let observed = text_host_event(1L, 12UL, @text_host.Commit(text="日本"))
+  assert_true(mounted.held_text_input(12UL, observed) is Err(_))
+  invalidate.val = false
+  // The owner must not reapply the same OS fact after an uncertain commit.
+  assert_true(mounted.held_text_input(12UL, observed) is Err(_))
+  assert_true(mounted.finish_held_text(12UL) is Err(_))
+  mounted.dispose()
+}

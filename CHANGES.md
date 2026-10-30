@@ -4,6 +4,9 @@
 
 ### Added
 
+- Draft only: explore a bounded native TextField ownership hold using GPUI
+  `TextSession` while a focus intent is pending. This is not wired into the
+  Settings runner; host cutoff proof and interrupted-hold recovery are open.
 - Windows Settings lane: run the shared model through `windows.TextHostRoute`
   with `--settings-e2e`, and record the text transport (`imm32` commit or the
   WM_CHAR key path), host environment and exit reason in
