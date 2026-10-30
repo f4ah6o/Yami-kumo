@@ -11,8 +11,8 @@ OS/arch and toolchain, and command are the same as the preceding record. The
 extra environment variable is `YAMI_IME_BACKGROUND_POINT=150,285`. `session.sh`
 uses local absolute paths; adapt them to reproduce. `run_url`: none (local).
 
-`result.json` is PASS for the marker assertions: a fresh frame after preedit
-cancellation still has an empty name; later Japanese preedit converts and
+`result.json` is PASS for the marker assertions: an empty-name frame is observed after preedit
+cancellation, but the frame counter does not fence buffered earlier frames; later Japanese preedit converts and
 commits once, undo/redo restore empty/日本, and the Dialog focus and key path
 work. The click at (150,285) was visually over the background Save button
 (`dialog.png`); the dismissible backdrop closed the Dialog, returning focus to
@@ -29,7 +29,7 @@ positions 1 then 0, followed by `HideLookupTable`; app protocol/markers record
 `日本` as the actual commit. In the separate cancel sequence, first Escape
 returns from the conversion table to the prediction list
 (`after-candidate-cancel.png`); second Escape clears preedit and removes that
-list (`after-preedit-cancel.png`), with an empty-name fresh frame. See the raw
+list (`after-preedit-cancel.png`), with an empty-name frame whose freshness is not independently fenced. See the raw
 logs for event order.
 
 Screenshots are taken after a 300ms delay and correlated by the driver's ordered

@@ -2,7 +2,7 @@
 
 This is a repeat of [the preceding diagnostic](../run-20261030-2/README.md)
 with the additional final operation: field Enter opens the Dialog, Enter on
-Confirm saves `日本`, and a fresh frame reports `status=saved`, `focus=name`.
+Confirm saves `日本`, and a frame reports `status=saved`, `focus=name`.
 `result.json` records those fields as `field_open_to_confirm` and `saved`.
 
 - `framework_sha`: `8a171e72d5c7f0f84a48a4d4d5f74e2858b9fea4`.
@@ -16,7 +16,7 @@ Confirm saves `日本`, and a fresh frame reports `status=saved`, `focus=name`.
 - `result`: PASS for this fixed-profile live-IME sequence. Candidate images,
   background Save click and log semantics have the same manual-observation
   limits described in the preceding record. They are not #155's automated
-  candidate gate. The post-cancel empty-name frame is required to be fresh.
+  candidate gate. The post-cancel frame counter can include buffered earlier frames, so the driver does not independently fence frame freshness. Raw app logs place an empty-name frame after the empty preedit marker.
 - `run_url`: none (local). `artifact_digest`: see `SHA256SUMS` for every
   retained raw log, screenshot, result and script.
 

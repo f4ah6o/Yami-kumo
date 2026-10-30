@@ -50,8 +50,10 @@ try:
  time.sleep(.3)
  subprocess.run(['import','-window','root',str(out/'after-candidate-cancel.png')],check=True)
  result['stage']='cancel-preedit'
- before=len(o.markers); cancel_frames=len(o.frames); send('Escape')
+ before=len(o.markers); send('Escape')
  result['observations']['cancel_preedit']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='',12,before)
+ # The empty preedit marker fences the output stream before counting frames.
+ cancel_frames=len(o.frames)
  result['observations']['cancel_frame']=o.wait_frame(lambda f:f.get('name')=='',12,after=cancel_frames)
  time.sleep(.3)
  subprocess.run(['import','-window','root',str(out/'after-preedit-cancel.png')],check=True)
