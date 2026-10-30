@@ -4047,6 +4047,21 @@ pub fn Mounted::text_input(
   epoch : UInt64,
   event : @text_host.TextInputEvent,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
+  if self.busy {
+    return Err(adapter_error("reentrant native TextField input"))
+  }
+  self.busy = true
+  let result = self.text_input_inner(epoch, event)
+  self.busy = false
+  result
+}
+
+///|
+fn Mounted::text_input_inner(
+  self : Mounted,
+  epoch : UInt64,
+  event : @text_host.TextInputEvent,
+) -> Result[Bool, @diagnostics.FrameworkError] {
   if self.terminal_required &&
     (self.terminal_identity is None || self.text_epoch != epoch) {
     return Ok(false)

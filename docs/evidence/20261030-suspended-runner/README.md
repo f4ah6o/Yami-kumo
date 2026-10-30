@@ -34,8 +34,9 @@ next sequence; a gap or foreign epoch stays inflight rather than being
 discarded. Terminal field publication invalidates old staged views. These two
 regressions were identified by independent review of `af16aa8`.
 Normal field delivery also checks the original binding again after measurement
-and checks action enqueue before publishing the field. Reentrant layout
-invalidation leaves the original record unapplied. With an armed owner,
+and checks action enqueue before publishing the field. Nested input is
+rejected while measurement is in progress. Reentrant layout invalidation
+leaves the original record unapplied. With an armed owner,
 observed focus loss keeps an active preview until a later observed cancel.
 
 ## Unresolved P1

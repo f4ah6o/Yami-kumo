@@ -345,8 +345,11 @@ test "terminal commit uses original invalidated field and rejects gaps and repla
 test "terminal commit reentrant invalidation keeps original record retryable" {
   let mounted = Mounted::new(@platform.WindowId::new(1L))
   let invalidate = Ref(false)
+  let reentry_rejected = Ref(false)
   let measure : @components.TextMeasure = fn(value, size) {
     if invalidate.val {
+      let same = @text_host.TextInputEvent::new(@platform.WindowId::new(1L), 1L, 7UL, @text_host.Commit(text="日本"))
+      reentry_rejected.val = mounted.text_input(7UL, same) is Err(_)
       mounted.invalidate_layout()
     }
     let document = @text.TextDocument::new(value).unwrap()
@@ -370,6 +373,7 @@ test "terminal commit reentrant invalidation keeps original record retryable" {
   let event = @text_host.TextInputEvent::new(@platform.WindowId::new(1L), 1L, 7UL, @text_host.Commit(text="日本"))
   invalidate.val = true
   assert_true(mounted.text_input(7UL, event) is Err(_))
+  assert_true(reentry_rejected.val)
   assert_true(mounted.next_action() is None)
   assert_eq(binding_for(mounted.bindings, key).unwrap().field.unwrap().committed_document().text(), "")
   assert_true(mounted.apply_terminal_commit(owner, event) is Err(_))
