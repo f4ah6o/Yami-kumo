@@ -437,7 +437,12 @@ pub fn SettingsRunOwner::try_terminal_text_cutoff(
     Some(value) => value
     None => return Err(runner_error("terminal_cutoff", "ordered host is unavailable"))
   }
-  match (ordered.end_when_drained)(session.epoch) {
+  // A port is caller-provided code: it may try to reenter this owner. Hold the
+  // same mutation guard used by drive and reconciliation during the callback.
+  self.running = true
+  let result = (ordered.end_when_drained)(session.epoch)
+  self.running = false
+  match result {
     Err(error) => Err(error)
     Ok(_) => {
       self.cutoff_done = true

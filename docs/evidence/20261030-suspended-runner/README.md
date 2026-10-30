@@ -49,6 +49,9 @@ fixture later admitted text is applied before retry. A successful fake cutoff
 still leaves `can_stop` false. This does not prove the real native host can cut
 off a destroyed window, retain records freed by native destroy/close, or
 account for stale records skipped by its reader.
+The host cutoff callback is guarded against nested runner mutation. An
+independent review found that a reentrant call could otherwise publish success
+inside a callback whose outer result was Busy; a regression covers that case.
 
 ## Unresolved P1
 
@@ -75,10 +78,10 @@ Candidate source: gpui `74d182c6368ca382f697023c5d3690b6c0c2dfbf`, Yami base
 published dependencies lacking the candidate API. Tests use a local source
 workspace and do not establish published-package compatibility.
 
-Local combined native UI and common fixture suite: **126/126 PASS** using
+Local combined native UI and common fixture suite: **127/127 PASS** using
 `GPUI_SOURCE=/workspace/gpui-ordered-fence` and
 `scripts/native_ui_workspace.sh ... moon test <ui> <examples/common> --target
 native --deny-warn --no-parallelize`. This is scripted evidence only; no
 production main, live IME, or public-registry consumer was tested.
 Local raw log SHA-256:
-`adee331b1a57bca52e091191a88332017b2479db0f6c953560852f99d3f598f8`.
+`dcc2b1c168ec56ba320ab8f5010188b7ca055f6137bd649a0d0da6c7d241b2cb`.

@@ -1284,3 +1284,46 @@ test "later update epoch replacement retains original owner and admitted record"
   assert_eq(ends.val, 0)
   assert_eq(host.stop_count(), 0)
 }
+
+///|
+test "terminal cutoff rejects reentry before a Busy result" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let calls = Ref(0)
+  let rejected = Ref(false)
+  let captured : Ref[SettingsRunOwner?] = Ref(None)
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) { Ok(None) },
+    fn(_) {
+      calls.val += 1
+      if calls.val == 1 {
+        match captured.val {
+          Some(owner) => rejected.val = owner.try_terminal_text_cutoff() is Err(_)
+          None => ()
+        }
+        return Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "terminal-cutoff"))
+      }
+      Ok(())
+    },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let field = owner.mounted.focused_text().unwrap()
+  owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  owner.host_epoch = Some(7UL)
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.suspended = true
+  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 1L, 1.0, @platform.Destroyed)))
+  captured.val = Some(owner)
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_true(rejected.val)
+  assert_eq(calls.val, 1)
+  assert_false(owner.cutoff_completed())
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
