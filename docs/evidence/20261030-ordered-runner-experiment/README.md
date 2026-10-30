@@ -73,3 +73,25 @@ unbounded stream of later events. A complete solution needs an owner/host
 protocol that specifies retention and overload handling, and covers lifecycle
 termination without asserting that undispatched OS callbacks have arrived.
 The present tests do not establish that such a protocol exists or is live-safe.
+
+A white-box exploratory fixture uses private `prepare` after invalidation,
+with the field shifted by adding a preceding view. The prepared candidate
+retains the composing value and has new bounds, while the single live
+TextSession still has its old bounds and revision; ordinary public `stage`
+rejects the hold. Native UI 96/96 PASS; output digest
+`b5a7605ea91bd68f9052895f4fa35cbad1f93ee96f65f2c3d0a2d63f80f93e8d`.
+This demonstrates a staging primitive, not an authorized publish, resize
+recovery, native rendering, or scale change.
+
+One candidate protocol would prepare a bounds-only change on the existing
+TextSession without publishing, prepare the scene using that exact field, then
+validate one owner/epoch/binding/focus/revision and commit both under the UI
+thread's single mutation guard. Reentrant callbacks and failures at *either*
+publication must leave both old states unchanged. The retained host observation
+must not be treated as a newly accepted text event; only after the atomic
+publication may it be retried with a freshly captured session target, and its
+host sequence must still be checked exactly once. Existing `publish` includes
+runtime and focus-scope mutations that can fail, so a Session-only setter
+cannot supply this atomicity. Bounds-only does not solve a font/scale change
+requiring new measurement of both current preview and original rollback
+snapshot. The contract and fixture do not yet implement this proposal.
