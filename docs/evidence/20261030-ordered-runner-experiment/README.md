@@ -95,3 +95,22 @@ runtime and focus-scope mutations that can fail, so a Session-only setter
 cannot supply this atomicity. Bounds-only does not solve a font/scale change
 requiring new measurement of both current preview and original rollback
 snapshot. The contract and fixture do not yet implement this proposal.
+
+## Ordered timeout is not a successful resolution
+
+Independent review of `36ec0200336a07e96431318094f093687d8ead3d` found that
+sample tick-limit cleanup called cancel/end and returned success even when a
+held preedit had no observed resolution or cutoff was still Busy. The ordered
+path now returns an error before cleanup on timeout, a held Tab, buffered
+records, or a still-active session. A fake-host fixture exercises both a
+permanently Busy cutoff and an observed preedit with no later resolution;
+both return an error without calling the fake cancel or end functions. The
+14/14 native common test log has SHA-256
+`e7172c858f0bd1146311b24c2a683e9923ca2faa99b479d3c5dff3c204d3af23`.
+
+This removes that false success and synthetic cleanup in the runner. It does
+**not** solve the P1: the outer Ubuntu entry still calls `host.stop()` after
+an error and may discard admitted, undelivered records. Even a window-destroy
+path that happens to have no local held session has not been proven to have
+drained every host record. The ordered path remains unsuitable for production
+and the draft remains DO NOT MERGE.

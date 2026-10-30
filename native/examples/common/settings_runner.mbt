@@ -796,6 +796,25 @@ pub fn run_native_settings_sample(
       }
     }
   }
+  // An ordered lease is not resolved by the sample timeout. In particular,
+  // cancellation/end here would silently abandon a live preview or an
+  // admitted prefix while cutoff remains Busy. The outer entrypoint still
+  // stops its host on error: this guard prevents false success but does not
+  // provide event retention or safe production shutdown.
+  if ordered_text is Some(_) &&
+    (
+      !destroyed ||
+      held_tab is Some(_) ||
+      !buffered.is_empty() ||
+      !held_platform.is_empty() ||
+      session is Some(_)
+    ) {
+    return Err(
+      runner_error(
+        "ordered_text", "ordered shutdown requires a resolved owner and drained ingress",
+      ),
+    )
+  }
   match session {
     Some(current) =>
       match end_text_session(port, current) {

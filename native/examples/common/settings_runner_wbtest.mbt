@@ -607,3 +607,91 @@ test "ordered Settings reports bounded-buffer overflow during a held Tab" {
   assert_eq(events.val.length(), 1)
   assert_true(events.val[0] is OrderedText(_))
 }
+
+///|
+test "ordered Settings timeout cannot resolve a held owner by cleanup" {
+  for preview in [false, true] {
+    let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+    let window = @platform.WindowId::new(1L)
+    let cancel_count = Ref(0)
+    let end_count = Ref(0)
+    let cutoff_count = Ref(0)
+    let events : Array[NativeOrderedEvent] = [
+      OrderedPlatform(
+        @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted),
+      ),
+      OrderedPlatform(
+        @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted),
+      ),
+      OrderedPlatform(
+        @platform.Event::new(window, 3L, 1.0, @platform.FrameCompleted),
+      ),
+      OrderedPlatform(
+        @platform.Event::new(
+          window,
+          4L,
+          1.0,
+          @platform.Input(
+            @primitives.KeyPressed(
+              key=@primitives.Tab,
+              repeat=false,
+              modifiers=@primitives.Modifiers::none(),
+            ),
+          ),
+        ),
+      ),
+    ]
+    if preview {
+      events.push(
+        OrderedText(
+          @text_host.TextInputEvent::new(
+            window,
+            1L,
+            7UL,
+            @text_host.Preedit(text="に", cursor=1),
+          ),
+        ),
+      )
+    }
+    let ordered = NativeOrderedTextPort::new(
+      fn(_) {
+        if events.is_empty() {
+          Ok(None)
+        } else {
+          Ok(Some(events.remove(0)))
+        }
+      },
+      fn(_) {
+        cutoff_count.val += 1
+        Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "test-cutoff"))
+      },
+    )
+    let port = NativeTextInputPort::new(
+      fn(_, _) { Ok(7UL) },
+      fn(epoch, _) { Ok(epoch) },
+      fn(epoch) {
+        cancel_count.val += 1
+        Ok(epoch)
+      },
+      fn(_) {
+        end_count.val += 1
+        Ok(())
+      },
+      fn(_) { Ok(None) },
+    )
+    let result = run_native_settings_sample(
+      host,
+      Linux,
+      text_runner_measure,
+      text_port=Some(port),
+      ordered_text=Some(ordered),
+    )
+    assert_true(result is Err(_))
+    assert_eq(cancel_count.val, 0)
+    assert_eq(end_count.val, 0)
+    assert_true(cutoff_count.val > 0)
+    if preview {
+      assert_eq(cutoff_count.val, 1)
+    }
+  }
+}
