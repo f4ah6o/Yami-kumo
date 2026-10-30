@@ -1,0 +1,95 @@
+{
+  "profile": "local nested Xvfb/Weston x11 + IBus/Mozc; exploratory callback only",
+  "framework_sha": "5cd2f231c6cbf529396cae633f6e5a0d6c9bea41",
+  "consumer_sha": "e4b80e72440e90250c518e5edef4ea97b32b1f71",
+  "app_source_sha": "e4b80e72440e90250c518e5edef4ea97b32b1f71",
+  "app_binary_sha256": "b314bd1195fec595bf1b9d669c62c07620ff262318f446cb23f764e0a733ae9b",
+  "entered_peek_ack": "PASS",
+  "full_live_acceptance": "NOT_RUN",
+  "forced_process_termination": true,
+  "x11_window_id": "4194309",
+  "x11_window_focus_id": "4194309",
+  "x11_window_focus_rc": 0,
+  "ime_keyboard_grab": true,
+  "entered_peek_records": [
+    {
+      "stage": "entered_peek",
+      "native_sequence": 6,
+      "portable_epoch": 1,
+      "native_epoch": 1,
+      "seat": 14,
+      "proxy": 1
+    }
+  ],
+  "entered_ack_records": [
+    {
+      "stage": "entered_ack",
+      "native_sequence": 6
+    }
+  ],
+  "preedit_markers": [
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"\",\"cursor\":-1,\"epoch\":1}",
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"ｎ\",\"cursor\":1,\"epoch\":1}"
+  ],
+  "commit_markers": [],
+  "control_active": true,
+  "app_exited_before_cleanup": false,
+  "process_wchan": "do_sys_poll",
+  "process_syscall": "7 0x7ffd6ff33c88 0x1 0x7530 0x0 0x0 0x0 0x7ffd6ff33c08 0x7f5f69a3272e",
+  "process_status": "State:\tS (sleeping)\nVmRSS:\t   84960 kB\nThreads:\t12",
+  "thread_snapshot": "    PID     TID STAT WCHAN                            COMMAND\n 167383  167383 Sl   do_sys_poll                      ubuntu.exe\n 167383  167385 Sl   futex_wait                       llvmpipe-0\n 167383  167386 Sl   futex_wait                       llvmpipe-1\n 167383  167387 Sl   futex_wait                       llvmpipe-2\n 167383  167388 Sl   futex_wait                       llvmpipe-3\n 167383  167389 Sl   futex_wait                       llvmpipe-4\n 167383  167390 Sl   futex_wait                       ubuntu.exe\n 167383  167391 Sl   futex_wait                       ubuntu.exe\n 167383  167392 Sl   futex_wait                       ubuntu.exe\n 167383  167393 Sl   futex_wait                       ubuntu.exe\n 167383  167394 Sl   futex_wait                       ubuntu.exe\n 167383  167395 SNl  futex_wait                       ubuntu.:disk$0\n",
+  "control_status": {
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+    "stderr": ""
+  },
+  "control_receipt": {
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nnative receipt sequence: 11\n",
+    "stderr": ""
+  },
+  "control_generation": {
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\ncontinuation generation: none or non-text prefix\n",
+    "stderr": ""
+  },
+  "control_pending_stage": {
+    "sequence": 11,
+    "rc": 2,
+    "stdout": "step refused or failed; owner and host remain retained\n",
+    "stderr": ""
+  },
+  "control_last_ack_stage": {
+    "sequence": 10,
+    "rc": 0,
+    "stdout": "text session applied; model and geometry are not implied\n",
+    "stderr": ""
+  },
+  "receipt_trace": [
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"resize\",\"native_sequence\":1,\"portable_epoch\":0}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"resize\",\"native_sequence\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"platform\",\"native_sequence\":2,\"portable_epoch\":0}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"platform\",\"native_sequence\":2}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"resize\",\"native_sequence\":3,\"portable_epoch\":0}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"resize\",\"native_sequence\":3}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"platform\",\"native_sequence\":4,\"portable_epoch\":0}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"platform\",\"native_sequence\":4}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"platform\",\"native_sequence\":5,\"portable_epoch\":0}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"platform\",\"native_sequence\":5}",
+    "YAMI_SETTINGS_IME {\"stage\":\"entered_peek\",\"native_sequence\":6,\"portable_epoch\":1,\"native_epoch\":1,\"seat\":14,\"proxy\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"entered_ack\",\"native_sequence\":6}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"preedit\",\"native_sequence\":7,\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"preedit\",\"native_sequence\":7}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"platform\",\"native_sequence\":8,\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"platform\",\"native_sequence\":8}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"platform\",\"native_sequence\":9,\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"platform\",\"native_sequence\":9}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"preedit\",\"native_sequence\":10,\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"preedit\",\"native_sequence\":10}",
+    "YAMI_SETTINGS_IME {\"stage\":\"geometry_update_begin\",\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"geometry_update_ok\",\"portable_epoch\":1}",
+    "YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"unhandled\",\"native_sequence\":11,\"portable_epoch\":1}"
+  ],
+  "app_exit_code": -15,
+  "test_socket_cleanup": "removed after process exit"
+}
