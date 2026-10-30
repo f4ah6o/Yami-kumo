@@ -328,6 +328,22 @@ fn main {
           Err(error) => Err(error)
           Ok(None) => Ok(None)
           Ok(Some(receipt)) => {
+            // Read-only evidence, never an authorization to ACK.
+            if receipt.printable_release_candidate() is Some(_) {
+              match receipt.physical_release_evidence() {
+                Err(error) => println("YAMI_SETTINGS_IME physical evidence error: " + @common.format_framework_error(error))
+                Ok(None) => println("YAMI_SETTINGS_IME {\"stage\":\"physical_evidence\",\"available\":false}")
+                Ok(Some(evidence)) => {
+                  let prior = match evidence.prior() {
+                    @ubuntu_host.Unknown => "unknown"
+                    @ubuntu_host.NoPressObservedSinceFocus => "no_press_since_focus"
+                    @ubuntu_host.PressAdmitted(_, _) => "press_admitted"
+                  }
+                  let target = evidence.target()
+                  println("YAMI_SETTINGS_IME {\"stage\":\"physical_evidence\",\"available\":true,\"native_sequence\":\{receipt.native_sequence()},\"physical_key\":\{evidence.physical_key()},\"focus_generation\":\{evidence.focus_generation()},\"window_generation\":\{evidence.host_window_generation().unwrap_or(0)},\"claimed_before_window\":\{evidence.claim_before_any_window()},\"prior\":\"\{prior}\",\"native_epoch\":\{target.epoch},\"seat\":\{target.seat},\"proxy\":\{target.proxy_generation}}")
+                }
+              }
+            }
             match receipt.event() {
               @ubuntu_host.Lifecycle(target, @ubuntu_host.Entered) if
                 target.window == receipt.native_window() &&
@@ -366,8 +382,29 @@ fn main {
                 @text_host.FocusLost => "focus_lost"
               }
               @ubuntu_host.Platform(value) => match value.kind() {
+                @platform.Created => "created"
                 @platform.Resized(..) => "resize"
-                _ => "platform"
+                @platform.Moved(..) => "moved"
+                @platform.ScaleChanged => "scale"
+                @platform.FocusChanged(true) => "focus_gained"
+                @platform.FocusChanged(false) => "focus_lost"
+                @platform.VisibilityChanged(true) => "visible"
+                @platform.VisibilityChanged(false) => "hidden"
+                @platform.Input(input) => match input {
+                  @primitives.KeyPressed(..) => "key_pressed"
+                  @primitives.KeyReleased(..) => "key_released"
+                  @primitives.TextInput(..) => "direct_text"
+                  @primitives.PointerMoved(..) => "pointer_moved"
+                  @primitives.PointerButtonPressed(..) => "pointer_pressed"
+                  @primitives.PointerButtonReleased(..) => "pointer_released"
+                  @primitives.Scroll(..) => "scroll"
+                }
+                @platform.Composition(_) => "composition"
+                @platform.CloseRequested => "close_requested"
+                @platform.Destroyed => "destroyed"
+                @platform.FrameCompleted => "frame_completed"
+                @platform.Wake => "wake"
+                @platform.ExitRequested => "exit_requested"
               }
               @ubuntu_host.Lifecycle(_, _) => "lifecycle"
               @ubuntu_host.Unhandled(raw) => match raw {
