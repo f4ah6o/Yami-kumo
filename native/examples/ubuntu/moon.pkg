@@ -1,5 +1,6 @@
 import {
   "f4ah6o/gpui/diagnostics",
+  "f4ah6o/gpui/platform",
   "f4ah6o/gpui/platform/testing",
   "f4ah6o/gpui/platform/linux_text",
   "f4ah6o/gpui/primitives",
@@ -8,6 +9,7 @@ import {
   "f4ah6o/gpui/text_layout",
   "f4ah6o/gpui/ubuntu" @ubuntu_host,
   "f4ah6o/yami_kumo_native/examples/common",
+  "moonbitlang/core/env",
 }
 
 supported_targets = "native"
@@ -15,6 +17,7 @@ supported_targets = "native"
 pkgtype(kind: "executable")
 
 options(
+  "native-stub": [ "control_socket.c" ],
   link: {
     "native": {
       "cc": "script/linux_text_cc.sh",

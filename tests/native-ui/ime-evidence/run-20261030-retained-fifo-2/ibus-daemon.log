@@ -1,0 +1,3 @@
+
+(ibus-daemon:170664): IBUS-WARNING **: 23:24:52.035: 23:24:52. 35597: Failed to unlink /tmp/yami-retained-fixture-Dl8BPi/ibus-address: No such file or directory
+portal is not running: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.portal.IBus was not provided by any .service files

@@ -31,6 +31,7 @@ pub type NativeTextNext = (Int32) -> Result[
 /// field; the port only translates the host's trait methods.
 pub struct NativeTextInputPort {
   begin : NativeTextBegin
+  begin_with_state : ((@platform.WindowId, UInt64, @text_host.TextInputState) -> Result[UInt64, @diagnostics.FrameworkError])?
   update : NativeTextUpdate
   cancel : NativeTextCancel
   end : NativeTextEnd
@@ -45,7 +46,20 @@ pub fn NativeTextInputPort::new(
   end : NativeTextEnd,
   next : NativeTextNext,
 ) -> NativeTextInputPort {
-  { begin, update, cancel, end, next, }
+  { begin, begin_with_state: None, update, cancel, end, next, }
+}
+
+///|
+/// A route whose native begin must receive the current document and geometry.
+pub fn NativeTextInputPort::with_initial_state(
+  begin : (@platform.WindowId, UInt64, @text_host.TextInputState) -> Result[UInt64, @diagnostics.FrameworkError],
+  update : NativeTextUpdate,
+  cancel : NativeTextCancel,
+  end : NativeTextEnd,
+  next : NativeTextNext,
+) -> NativeTextInputPort {
+  { begin: fn(_, _) { Err(@diagnostics.FrameworkError::new(@diagnostics.InvalidInput, "stateful_begin_required")) },
+    begin_with_state: Some(begin), update, cancel, end, next }
 }
 
 ///|

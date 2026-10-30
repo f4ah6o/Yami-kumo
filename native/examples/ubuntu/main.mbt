@@ -80,17 +80,335 @@ fn ubuntu_text_state(
 }
 
 ///|
+extern "C" fn control_open() -> Int = "gpui_settings_control_open"
+
+///|
+extern "C" fn control_next(timeout_ms : Int) -> Int = "gpui_settings_control_next"
+
+///|
+extern "C" fn control_reply(code : Int) = "gpui_settings_control_reply"
+
+///|
+extern "C" fn control_sequence() -> Int64 = "gpui_settings_control_sequence"
+
+///|
+extern "C" fn control_reply_sequence(code : Int, sequence : Int64) = "gpui_settings_control_reply_sequence"
+
+///|
+extern "C" fn control_close() = "gpui_settings_control_close"
+
+///|
+extern "C" fn control_backoff() = "gpui_settings_control_backoff"
+
+///|
+fn control_step_error(error : @diagnostics.FrameworkError, code : Int) -> Unit {
+  println("YAMI_SETTINGS_CONTROL step: " + @common.format_framework_error(error))
+  control_reply(code)
+}
+
+///|
+fn control_pending_sequence(entry : @common.SettingsEntryController) -> Int64 {
+  match entry.owner() {
+    Some(owner) => {
+      let records = owner.pending_records()
+      if !records.is_empty() {
+        match records[0] {
+          @common.OrderedText(event) => return event.sequence()
+          _ => ()
+        }
+      }
+      0L
+    }
+    None => 0L
+  }
+}
+
+///|
+fn control_receipt_sequence(entry : @common.SettingsEntryController) -> Int64 {
+  match entry.owner() {
+    Some(owner) => match owner.pending_receipt_identity() {
+      Some((_, sequence, _, _)) => sequence.to_int64()
+      None => match owner.resumable_receipt_identity() {
+        Some((_, sequence, _, _)) => sequence.to_int64()
+        None => 0L
+      }
+    }
+    None => 0L
+  }
+}
+
+///|
+/// Each request is bounded. Idle or a disconnected client never releases an
+/// unresolved owner; this experimental service does not claim completion.
+fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
+  println("YAMI_SETTINGS_CONTROL {\"state\":\"active\",\"scene_published\":false}")
+  match entry.error() {
+    Some(error) => println("YAMI_SETTINGS_CONTROL reason: " + @common.format_framework_error(error))
+    None => ()
+  }
+  let mut listener_error_reported = false
+  while true {
+    let command = control_next(30000)
+    if command < 0 {
+      if !listener_error_reported {
+        println("YAMI_SETTINGS_CONTROL {\"state\":\"listener_error_owner_retained\"}")
+        listener_error_reported = true
+      }
+      control_backoff()
+      continue
+    }
+    listener_error_reported = false
+    match command {
+      0 => ()
+      // s: status; report suspended separately from other unresolved states.
+      115 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, control_pending_sequence(entry))
+      // t: inspect the exact native receipt sequence, without ACK.
+      116 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, control_receipt_sequence(entry))
+      // r: retry ACK only for the inspected native sequence.
+      114 => match entry.retry_receipt_sequence(control_sequence()) {
+        Ok(@common.ReceiptAcknowledged) => control_reply(65)
+        Err(error) => control_step_error(error, 69)
+        Ok(_) => control_reply(69)
+      }
+      // u: dispatch only the named ACKed record; do not publish a scene.
+      117 => match entry.resume_receipt_sequence(control_sequence()) {
+        Ok(@common.ReceiptDispatched) => control_reply(85)
+        Err(error) => control_step_error(error, 69)
+        Ok(_) => control_reply(69)
+      }
+      // n/g: inspect and consume a single continuation generation.
+      110 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, entry.advance_generation().unwrap_or(0L))
+      // o/d: inspect and reconcile one original applied text receipt.
+      111 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, entry.owned_delivery_sequence().unwrap_or(0L))
+      100 => match entry.reconcile_owned_sequence(control_sequence()) {
+        Ok(_) => control_reply(87)
+        Err(error) => control_step_error(error, 69)
+      }
+      103 => match entry.advance_once(control_sequence()) {
+        Ok(@common.ContinuationStepped) => control_reply(86)
+        Err(error) => control_step_error(error, 69)
+        Ok(_) => control_reply(69)
+      }
+      // j: report only a unique, positively observed receipt stage.
+      106 => {
+        let stage = match entry.owner() {
+          Some(owner) => owner.receipt_stage_for_sequence(control_sequence())
+          None => None
+        }
+        match stage {
+          Some(@common.ReceiptAcknowledgedOnly) => control_reply(75)
+          Some(@common.ReceiptSessionApplied) => control_reply(74)
+          Some(@common.ReceiptActionRequired) => control_reply(76)
+          Some(@common.ReceiptModelApplied) => control_reply(77)
+          Some(@common.ReceiptTerminalResolved) => control_reply(84)
+          None => control_reply(69)
+        }
+      }
+      // p: one nonblocking host poll; a blank poll proves no cutoff.
+      112 =>
+        match entry.terminal_step(@common.PollOnce) {
+          Ok(@common.RecordBuffered) => control_reply(66)
+          Ok(@common.NoRecord) => control_reply(73)
+          Err(error) => control_step_error(error, 69)
+          Ok(_) => control_reply(69)
+        }
+      // a: apply one retained record; model and scene are distinct stages.
+      97 =>
+        match entry.apply_sequence(control_sequence()) {
+          Ok(@common.ModelApplied(sequence, changed)) => {
+            println("YAMI_SETTINGS_CONTROL {\"state\":\"model_applied\",\"sequence\":\{sequence},\"changed\":\{changed},\"scene_published\":false}")
+            control_reply(77)
+          }
+          Ok(@common.FieldApplied(sequence)) => {
+            println("YAMI_SETTINGS_CONTROL {\"state\":\"field_applied\",\"sequence\":\{sequence},\"scene_published\":false}")
+            control_reply(70)
+          }
+          Err(error) => control_step_error(error, 69)
+          Ok(_) => control_reply(69)
+        }
+      // c: attempt the native text cutoff only; it does not allow shutdown.
+      99 =>
+        match entry.terminal_step(@common.TryTextCutoff) {
+          Ok(@common.TextCutoffCompleted) => control_reply(67)
+          Err(error) => control_step_error(error, 69)
+          Ok(_) => control_reply(69)
+        }
+      // q: explicit stop request; rejected until controller proves completion.
+      113 =>
+        match entry.try_stop() {
+          Ok(_) => {
+            control_reply(68)
+            control_close()
+            return
+          }
+          Err(error) => control_step_error(error, 82)
+        }
+      _ => control_reply(69)
+    }
+  }
+}
+
+///|
 fn main {
+  let controlled = @env.args().contains("--settings-retained-control")
+  if controlled && control_open() != 0 {
+    abort("could not open private Settings control socket")
+  }
   let host = match @ubuntu_host.Host::start() {
-    Err(error) =>
+    Err(error) => {
+      if controlled { control_close() }
       abort(
         "Ubuntu native Host startup failed: " +
         @common.format_framework_error(error),
       )
+    }
     Ok(value) => value
   }
   let capture : @common.NativeFrameCapture = fn(window) {
     @testing.capture_frame(host, window)
+  }
+  if controlled {
+    let retained = match @ubuntu_host.RetainedOrderedRoute::new(host) {
+      Ok(value) => value
+      Err(error) => abort(@common.format_framework_error(error))
+    }
+    let first_update = Ref(false)
+    let retained_port = @common.NativeTextInputPort::with_initial_state(
+      fn(window, root, state) {
+        let normalized = match ubuntu_text_state(state) {
+          Ok(value) => value
+          Err(error) => return Err(error)
+        }
+        match retained.begin(window, root, normalized) {
+          Err(error) => Err(error)
+          Ok(epoch) => { first_update.val = true; Ok(epoch) }
+        }
+      },
+      fn(epoch, state) {
+        if first_update.val {
+          first_update.val = false
+          return Ok(epoch)
+        }
+        let normalized = match ubuntu_text_state(state) {
+          Ok(value) => value
+          Err(error) => return Err(error)
+        }
+        println("YAMI_SETTINGS_IME {\"stage\":\"geometry_update_begin\",\"portable_epoch\":\{epoch}}")
+        match retained.update(epoch, normalized) {
+          Ok(_) => {
+            println("YAMI_SETTINGS_IME {\"stage\":\"geometry_update_ok\",\"portable_epoch\":\{epoch}}")
+            Ok(epoch)
+          }
+          Err(error) => {
+            println("YAMI_SETTINGS_IME geometry update failed: " + @common.format_framework_error(error))
+            Err(error)
+          }
+        }
+      },
+      fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.InvalidInput, "retained_cancel_policy")) },
+      fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.InvalidInput, "retained_end_policy")) },
+      fn(_) { Ok(None) },
+    )
+    let retained_ordered = @common.NativeOrderedTextPort::with_retained_receipts(
+      fn(timeout) {
+        let observed = match retained.peek() {
+          Ok(None) => match host.dispatch_retained(timeout) {
+            Ok(_) => retained.peek()
+            Err(error) => {
+              println("YAMI_SETTINGS_IME dispatch failed: " + @common.format_framework_error(error))
+              Err(error)
+            }
+          }
+          result => result
+        }
+        match observed {
+          Err(error) => Err(error)
+          Ok(None) => Ok(None)
+          Ok(Some(receipt)) => {
+            match receipt.event() {
+              @ubuntu_host.Lifecycle(target, @ubuntu_host.Entered) if
+                target.window == receipt.native_window() &&
+                target.sequence == receipt.native_sequence().to_int64() &&
+                retained.native_epoch() == Some(target.epoch) => {
+                println("YAMI_SETTINGS_IME {\"stage\":\"entered_peek\",\"native_sequence\":\{receipt.native_sequence()},\"portable_epoch\":\{receipt.epoch()},\"native_epoch\":\{target.epoch},\"seat\":\{target.seat},\"proxy\":\{target.proxy_generation}}")
+                return Ok(Some(@common.NativeRetainedReceipt::entered(
+                  receipt.native_window(), receipt.native_sequence(), receipt.root(),
+                  receipt.epoch(), target.epoch, target.seat, target.proxy_generation,
+                  fn() {
+                    match receipt.ack() {
+                      Ok(_) => {
+                        println("YAMI_SETTINGS_IME {\"stage\":\"entered_ack\",\"native_sequence\":\{receipt.native_sequence()}}")
+                        Ok(())
+                      }
+                      Err(error) => Err(error)
+                    }
+                  },
+                )))
+              }
+              _ => ()
+            }
+            let event = match receipt.event() {
+              @ubuntu_host.Text(value) => Some(@common.OrderedText(value))
+              @ubuntu_host.Platform(value) => Some(@common.OrderedPlatform(value))
+              // Preserve other lifecycle and unsupported records without ACK;
+              // neither is an observed cancel.
+              _ => None
+            }
+            let record_kind = match receipt.event() {
+              @ubuntu_host.Text(value) => match value.kind() {
+                @text_host.Preedit(..) => "preedit"
+                @text_host.Commit(..) => "commit"
+                @text_host.Cancel => "cancel"
+                @text_host.Geometry(..) => "geometry"
+                @text_host.FocusLost => "focus_lost"
+              }
+              @ubuntu_host.Platform(value) => match value.kind() {
+                @platform.Resized(..) => "resize"
+                _ => "platform"
+              }
+              @ubuntu_host.Lifecycle(_, _) => "lifecycle"
+              @ubuntu_host.Unhandled(raw) => match raw {
+                Some(@ubuntu_host.TextSession(target, @ubuntu_host.ForwardedReleased(keysym~, key~, ..))) => {
+                  println("YAMI_SETTINGS_IME {\"stage\":\"unhandled_native\",\"kind\":\"forwarded_release\",\"native_sequence\":\{receipt.native_sequence()},\"native_epoch\":\{target.epoch},\"seat\":\{target.seat},\"proxy\":\{target.proxy_generation},\"keysym\":\{keysym},\"known_key\":\{key is Some(_)},\"stale\":\{receipt.is_native_stale()}}")
+                  "unhandled_forwarded_release"
+                }
+                Some(@ubuntu_host.TextSession(_, @ubuntu_host.ForwardedPressed(..))) => "unhandled_forwarded_press"
+                Some(@ubuntu_host.TextSession(_, @ubuntu_host.Commit(..))) => "unhandled_commit"
+                Some(@ubuntu_host.TextSession(_, @ubuntu_host.Preedit(..))) => "unhandled_preedit"
+                Some(@ubuntu_host.TextSession(_, @ubuntu_host.Entered)) => "unhandled_entered"
+                Some(@ubuntu_host.TextSession(_, @ubuntu_host.Left)) => "unhandled_left"
+                Some(@ubuntu_host.Platform(_)) => "unhandled_platform"
+                None => "unhandled_raw"
+              }
+            }
+            println("YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"\{record_kind}\",\"native_sequence\":\{receipt.native_sequence()},\"portable_epoch\":\{receipt.epoch()}}")
+            Ok(Some(@common.NativeRetainedReceipt::new(
+              event, receipt.native_window(), receipt.native_sequence(),
+              receipt.root(), receipt.epoch(), fn() {
+                match receipt.ack() {
+                  Ok(_) => {
+                    println("YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"\{record_kind}\",\"native_sequence\":\{receipt.native_sequence()}}")
+                    Ok(())
+                  }
+                  Err(error) => {
+                    println("YAMI_SETTINGS_IME record ACK failed: " + @common.format_framework_error(error))
+                    Err(error)
+                  }
+                }
+              },
+            )))
+          }
+        }
+      },
+      fn(epoch) { retained.try_end_when_drained(epoch) },
+    )
+    let entry = @common.SettingsEntryController::start(
+      host, @common.Linux, ubuntu_measure, text_port=Some(retained_port),
+      direct_text=Some(fn(window, enabled) { host.set_direct_keyboard_text(window, enabled) }),
+      ordered_text=Some(retained_ordered),
+    )
+    run_settings_control(entry)
+    return
   }
   let legacy = @ubuntu_host.TextHostRoute::new(host)
   let route = @ubuntu_host.OrderedTextHostRoute::new(host)
