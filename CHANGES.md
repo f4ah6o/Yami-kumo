@@ -7,6 +7,10 @@
 - Draft only: explore a bounded native TextField ownership hold using GPUI
   `TextSession` while a focus intent is pending. This is not wired into the
   Settings runner; host cutoff proof and interrupted-hold recovery are open.
+  The GPUI candidate APIs are not in the currently declared published version.
+- Draft only: expose pending-action observation and an owner-specific FIFO text
+  drain for the held-transition recovery experiment. Both preserve unrelated
+  live actions; the caller must apply drained actions to its model.
 - Windows Settings lane: run the shared model through `windows.TextHostRoute`
   with `--settings-e2e`, and record the text transport (`imm32` commit or the
   WM_CHAR key path), host environment and exit reason in

@@ -3033,3 +3033,166 @@ test "held text measurement invalidation fails closed without replaying" {
   assert_true(mounted.finish_held_text(12UL) is Err(_))
   mounted.dispose()
 }
+
+///|
+test "held text retries an unacknowledged commit after reentrant resize" {
+  let mounted = mount()
+  let invalidate = Ref(false)
+  let measured : @components.TextMeasure = fn(value, size) {
+    if invalidate.val {
+      mounted.invalidate_layout()
+    }
+    measure(value, size)
+  }
+  let name = @view.NodeKey::new("name")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(name, @view.TextFieldProps::new("", "Name")),
+    @view.button(@view.NodeKey::new("next"), "Next"),
+  ])
+  ignore(mounted.commit(view, 640.0, 480.0, 1.0, measured).unwrap())
+  assert_true(mounted.focus(name))
+  assert_true(mounted.begin_held_text(13UL).unwrap())
+  let observed = text_host_event(1L, 13UL, @text_host.Commit(text="日本"))
+  invalidate.val = true
+  assert_true(mounted.held_text_input(13UL, observed) is Err(_))
+  invalidate.val = false
+  // Caller retains both the unacknowledged observation and the pending Tab.
+  mounted.release_held_text_for_retry(13UL).unwrap()
+  ignore(mounted.commit(view, 640.0, 480.0, 1.0, measured).unwrap())
+  assert_true(mounted.begin_held_text(13UL).unwrap())
+  assert_true(mounted.held_text_input(13UL, observed).unwrap())
+  assert_false(mounted.held_text_input(13UL, observed).unwrap())
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, text)) => {
+      assert_eq(key, name)
+      assert_eq(text, "日本")
+    }
+    _ => fail("unacknowledged commit must be applied once after re-stage")
+  }
+  assert_true(mounted.next_action() is None)
+  mounted.finish_held_text(13UL).unwrap()
+  assert_true(
+    mounted.handle_event(event(1L, key_down(@primitives.Tab))).unwrap(),
+  )
+  mounted.dispose()
+}
+
+///|
+test "held text requires the existing action queue to be drained" {
+  let mounted = mount()
+  let name = @view.NodeKey::new("name")
+  let button = @view.NodeKey::new("next")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(name, @view.TextFieldProps::new("", "Name")),
+    @view.button(button, "Next"),
+  ])
+  ignore(render(mounted, view~))
+  assert_true(mounted.activate(mounted.callback(button).unwrap()))
+  assert_true(mounted.focus(name))
+  assert_true(mounted.begin_held_text(14UL) is Err(_))
+  assert_eq(mounted.next_action(), Some(@view.Activate(button)))
+  assert_true(mounted.begin_held_text(14UL).unwrap())
+  mounted.dispose()
+}
+
+///|
+test "held text recovery drains an accepted commit before retrying after resize" {
+  let mounted = mount()
+  let invalidate = Ref(false)
+  let measured : @components.TextMeasure = fn(value, size) {
+    if invalidate.val {
+      mounted.invalidate_layout()
+    }
+    measure(value, size)
+  }
+  let name = @view.NodeKey::new("name")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(name, @view.TextFieldProps::new("", "Name")),
+    @view.button(@view.NodeKey::new("next"), "Next"),
+  ])
+  ignore(mounted.commit(view, 640.0, 480.0, 1.0, measured).unwrap())
+  assert_true(mounted.focus(name))
+  assert_true(mounted.begin_held_text(15UL).unwrap())
+  assert_true(
+    mounted
+    .held_text_input(
+      15UL,
+      text_host_event(1L, 15UL, @text_host.Commit(text="前")),
+    )
+    .unwrap(),
+  )
+  invalidate.val = true
+  assert_true(
+    mounted.held_text_input(
+      15UL,
+      text_host_event(2L, 15UL, @text_host.Commit(text="後")),
+    )
+    is Err(_),
+  )
+  invalidate.val = false
+  assert_true(mounted.release_held_text_for_retry(15UL) is Err(_))
+  match mounted.next_held_text_action(15UL).unwrap() {
+    Some(@view.TextChanged(key, value)) => {
+      assert_eq(key, name)
+      assert_eq(value, "前")
+    }
+    _ => fail("accepted old-owner action must remain available")
+  }
+  assert_true(mounted.next_held_text_action(15UL).unwrap() is None)
+  mounted.release_held_text_for_retry(15UL).unwrap()
+  let updated = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(name, @view.TextFieldProps::new("前", "Name")),
+    @view.button(@view.NodeKey::new("next"), "Next"),
+  ])
+  ignore(mounted.commit(updated, 640.0, 480.0, 1.0, measured).unwrap())
+  assert_true(mounted.begin_held_text(15UL).unwrap())
+  let unacknowledged = text_host_event(2L, 15UL, @text_host.Commit(text="後"))
+  assert_true(mounted.held_text_input(15UL, unacknowledged).unwrap())
+  assert_false(mounted.held_text_input(15UL, unacknowledged).unwrap())
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, value)) => {
+      assert_eq(key, name)
+      assert_eq(value, "前後")
+    }
+    _ => fail("the retained observation must be applied once")
+  }
+  mounted.finish_held_text(15UL).unwrap()
+  assert_true(
+    mounted
+    .handle_event(event(1L, shortcut(@primitives.Character("z"), control=true)))
+    .unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, value)) => {
+      assert_eq(key, name)
+      assert_eq(value, "前")
+    }
+    _ => fail("retry must retain the previous undo boundary")
+  }
+  mounted.dispose()
+}
+
+///|
+test "invalidated held preedit cannot be released as an idle retry" {
+  let mounted = mount()
+  let name = @view.NodeKey::new("name")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(name, @view.TextFieldProps::new("", "Name")),
+    @view.button(@view.NodeKey::new("next"), "Next"),
+  ])
+  ignore(render(mounted, view~))
+  assert_true(mounted.focus(name))
+  assert_true(mounted.begin_held_text(16UL).unwrap())
+  assert_true(
+    mounted
+    .held_text_input(
+      16UL,
+      text_host_event(1L, 16UL, @text_host.Preedit(text="に", cursor=1)),
+    )
+    .unwrap(),
+  )
+  mounted.invalidate_layout()
+  assert_true(mounted.next_held_text_action(16UL).unwrap() is None)
+  assert_true(mounted.release_held_text_for_retry(16UL) is Err(_))
+  mounted.dispose()
+}

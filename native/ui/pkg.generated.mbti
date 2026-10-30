@@ -77,8 +77,10 @@ pub fn Mounted::new(@platform.WindowId, theme? : @theme.Theme?) -> Self
 pub fn Mounted::next_action(Self) -> @core.SemanticAction?
 pub fn Mounted::next_clipboard(Self) -> ClipboardRequest?
 pub fn Mounted::next_focus_result(Self) -> @runtime.FocusResult?
+pub fn Mounted::next_held_text_action(Self, UInt64) -> Result[@core.SemanticAction?, @diagnostics.FrameworkError]
 pub fn Mounted::paste(Self, PasteRequest, String) -> Bool
 pub fn Mounted::publish(Self, Prepared) -> Result[Frame, @diagnostics.FrameworkError]
+pub fn Mounted::release_held_text_for_retry(Self, UInt64) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::set_theme(Self, @theme.Theme?) -> Bool
 pub fn Mounted::stage(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Prepared, @diagnostics.FrameworkError]
 pub fn Mounted::text_caret(Self, @core.NodeKey) -> @primitives.Rect?

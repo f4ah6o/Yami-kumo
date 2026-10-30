@@ -148,6 +148,13 @@ pub fn Runtime::view(self : Runtime) -> @core.View? {
 }
 
 ///|
+/// True while any action record is queued, including one that a later
+/// `next_action` call will discard as stale. Does not consume the queue.
+pub fn Runtime::has_pending_actions(self : Runtime) -> Bool {
+  !self.actions.is_empty()
+}
+
+///|
 fn find_entry(entries : Array[Entry], key : @core.NodeKey) -> Entry? {
   for entry in entries {
     if entry.view.key() == key {
@@ -407,6 +414,38 @@ pub fn Runtime::next_action(self : Runtime) -> @core.SemanticAction? {
     }
   }
   None
+}
+
+///|
+/// Drain only the next live TextChanged for this exact owner. Stale records
+/// are discarded as in `next_action`; a different live action is left in
+/// place and reported as unavailable, preserving FIFO ordering.
+pub fn Runtime::next_text_changed_for(
+  self : Runtime,
+  token : InstanceToken,
+) -> Result[@core.SemanticAction?, RequestError] {
+  if self.is_disposed() {
+    return Err(Disposed)
+  }
+  if !self.is_current(token) {
+    return Err(StaleToken)
+  }
+  while !self.actions.is_empty() {
+    let pending = self.actions[0]
+    match self.active_entry(pending.token) {
+      Some(entry) if available_action(entry, pending.action) &&
+        same_identity(entry.gate, pending.gate) => {
+        if pending.token != token ||
+          !(pending.action is @core.TextChanged(_, _)) {
+          return Err(Unavailable)
+        }
+        ignore(self.actions.remove(0))
+        return Ok(Some(pending.action))
+      }
+      _ => ignore(self.actions.remove(0))
+    }
+  }
+  Ok(None)
 }
 
 ///|
