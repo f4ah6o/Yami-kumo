@@ -1,4 +1,27 @@
 ///|
+/// Tests retain the owner for the duration of each scripted run.
+fn run_test_settings(
+  host : &@platform.Backend,
+  platform : NativeSamplePlatform,
+  measure : @components.TextMeasure,
+  text_port~ : NativeTextInputPort? = None,
+  accessibility_port~ : NativeTextAXPort? = None,
+  dialog_port~ : NativeDialogAXPort? = None,
+  next_platform_event~ : NativePlatformNext? = None,
+  direct_text~ : NativeDirectText? = None,
+  ordered_text~ : NativeOrderedTextPort? = None,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let owner = match SettingsRunOwner::new(
+    host, platform, measure, text_port~, accessibility_port~, dialog_port~,
+    next_platform_event~, direct_text~, ordered_text~,
+  ) {
+    Err(error) => return Err(error)
+    Ok(value) => value
+  }
+  owner.drive()
+}
+
+///|
 test "settings presents frames and releases a failed portable session before fallback" {
   let host = @testing.ScriptedBackend::new(800.0, 600.0, 1.5).unwrap()
   for _ in 0..<6 {
@@ -25,7 +48,7 @@ test "settings presents frames and releases a failed portable session before fal
     armed.val = enabled
     Ok(())
   }
-  run_native_settings_sample(
+  run_test_settings(
     host,
     Linux,
     text_runner_measure,
@@ -241,13 +264,14 @@ test "ordered Settings holds Tab until the old-owner commit and cutoff" {
     fn(_) { Ok(()) },
     fn(_) { Ok(None) },
   )
-  run_native_settings_sample(
+  // No terminal queue receipt is available, so the run cannot claim success.
+  assert_true(run_test_settings(
     host,
     Linux,
     text_runner_measure,
     text_port=Some(port),
     ordered_text=Some(ordered),
-  ).unwrap()
+  ) is Err(_))
   assert_eq(delivered.val, 2)
   assert_true(cutoff_calls.val >= 3)
   let mut seen = false
@@ -345,13 +369,13 @@ test "ordered Settings keeps post-Tab preedit pending until observed commit" {
     fn(_) { Ok(()) },
     fn(_) { Ok(None) },
   )
-  run_native_settings_sample(
+  assert_true(run_test_settings(
     host,
     Linux,
     text_runner_measure,
     text_port=Some(port),
     ordered_text=Some(ordered),
-  ).unwrap()
+  ) is Err(_))
   // One Busy before preedit, then success after its actual commit. Calling
   // cutoff while composing would add a third attempt and violate the fence.
   assert_eq(cutoff_calls.val, 2)
@@ -417,7 +441,7 @@ test "ordered Settings rejects Tab during existing preedit without cancel" {
     fn(_) { Ok(None) },
   )
   assert_true(
-    run_native_settings_sample(
+    run_test_settings(
       host,
       Linux,
       text_runner_measure,
@@ -498,7 +522,7 @@ test "ordered Settings fails closed on resize while Tab is held" {
     fn(_) { Ok(None) },
   )
   assert_true(
-    run_native_settings_sample(
+    run_test_settings(
       host,
       Linux,
       text_runner_measure,
@@ -593,7 +617,7 @@ test "ordered Settings reports bounded-buffer overflow during a held Tab" {
     fn(_) { Ok(None) },
   )
   assert_true(
-    run_native_settings_sample(
+    run_test_settings(
       host,
       Linux,
       text_runner_measure,
@@ -681,7 +705,7 @@ test "ordered Settings timeout cannot resolve a held owner by cleanup" {
       },
       fn(_) { Ok(None) },
     )
-    let result = run_native_settings_sample(
+    let result = run_test_settings(
       host,
       Linux,
       text_runner_measure,
@@ -750,7 +774,7 @@ test "ordered Settings exposes lost local buffer on close after resize" {
     fn(_) { Ok(()) },
     fn(_) { Ok(None) },
   )
-  let result = run_native_settings_sample(
+  let result = run_test_settings(
     host,
     Linux,
     text_runner_measure,
@@ -822,14 +846,16 @@ test "retained Settings owner keeps buffered commit and terminal record on error
     fn(_) { Ok(()) },
     fn(_) { Ok(None) },
   )
-  let owner = SettingsRunOwner::new(
+  let owner = match run_native_settings_retained(
     host,
     Linux,
     text_runner_measure,
     text_port=Some(port),
     ordered_text=Some(ordered),
-  ).unwrap()
-  assert_true(owner.drive() is Err(_))
+  ) {
+    Suspended(value, _) => value
+    _ => fail("the retained owner must be returned to the caller")
+  }
   assert_eq(host.stop_count(), 0)
   assert_false(owner.can_stop())
   assert_true(owner.window() == window)
@@ -851,5 +877,63 @@ test "retained Settings owner keeps buffered commit and terminal record on error
   assert_true(owner.drive() is Err(_))
   assert_eq(owner.pending_records().length(), 1)
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "one-shot entry refuses ordered input before fetching any records" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let calls = Ref(0)
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) {
+      calls.val += 1
+      Ok(None)
+    },
+    fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  assert_true(run_native_settings_sample(
+    host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered),
+  ) is Err(_))
+  assert_eq(calls.val, 0)
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "retained owner distinguishes session receipt from model publication" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding, })
+  assert_true(owner.mounted.begin_held_text(7UL).unwrap())
+  let event = @text_host.TextInputEvent::new(
+    owner.window, 1L, 7UL, @text_host.Commit(text="日本"),
+  )
+  owner.inflight = Some(OrderedText(event))
+  assert_true(owner.mounted.held_text_input(7UL, event).unwrap())
+  let receipt = owner.inflight_receipt().unwrap()
+  assert_eq(receipt.sequence(), 1L)
+  assert_true(receipt.action_required())
+  assert_true(receipt.action_enqueued())
+  assert_eq(receipt.transaction().snapshot().field().committed_document().text(), "日本")
+  // Merely publishing a TextSession receipt has not updated the shared model.
+  assert_eq(owner.model().name(), "")
+  match owner.mounted.next_action() {
+    Some(action) => owner.settings = owner.settings.update(@shared_settings.Ui(action))
+    None => fail("model action must remain available")
+  }
+  assert_eq(owner.model().name(), "日本")
+  assert_false(owner.mounted.held_text_input(7UL, event).unwrap())
+  assert_true(owner.mounted.next_action() is None)
+  assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
 }

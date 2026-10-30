@@ -20,8 +20,17 @@ retention, **not** successful application to the model or final recovery.
 
 ## Unresolved P1
 
-The legacy one-shot wrapper and Ubuntu main still discard the owner on an error
-and stop the host. The owner does not yet expose a validated same-owner resume,
+The new `run_native_settings_retained` returns `Suspended(owner, error)` when a
+run fails. The owner retains the backend reference and port closures, but the
+caller must keep the underlying host alive. A failed drive cannot be restarted
+implicitly, even with no inflight record. The legacy one-shot wrapper refuses
+an ordered route before opening a window or polling input because it cannot
+transfer ownership on failure.
+
+Ubuntu main has not been adapted to retain this outcome. Since main is the
+final process caller, simply returning without `host.stop()` would still lose
+the owner on process exit. A live control/recovery policy is needed before
+enabling this path. The owner does not yet expose a validated same-owner resume,
 atomic geometry/scene republish, a caller acknowledgement for accepted actions,
 or a terminal policy when the real window or field is destroyed. A successful
 ordered exit does not establish a complete native-queue terminal receipt; the
@@ -33,3 +42,9 @@ Candidate source: gpui `74d182c6368ca382f697023c5d3690b6c0c2dfbf`, Yami base
 `064a2e6f6c654347ad2d2efeb59bef15fe31005d`. The native manifest still points to
 published dependencies lacking the candidate API. Tests use a local source
 workspace and do not establish published-package compatibility.
+
+Local native common test after the retained outcome and one-shot refusal:
+**18/18 PASS**, log SHA-256
+`697abc2b94bf0496291b58921f385791677278be88e76dce435bc38dab7c2e7f`.
+This validates a caller receiving the retained owner and seeing no fake-host
+stop; no production main or live IME test was performed.

@@ -164,6 +164,13 @@ pub fn run_native_settings_sample(
   direct_text~ : NativeDirectText? = None,
   ordered_text~ : NativeOrderedTextPort? = None,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
+  if ordered_text is Some(_) {
+    // A one-shot Result cannot transfer the owner to the caller on failure.
+    // Refuse before creating a window or fetching any ordered input.
+    return Err(
+      runner_error("ordered_text", "ordered input requires a retained owner"),
+    )
+  }
   let owner = match
     SettingsRunOwner::new(
       host,
@@ -180,6 +187,52 @@ pub fn run_native_settings_sample(
     Ok(value) => value
   }
   owner.drive()
+}
+
+///|
+/// A caller must retain the owner and its host after `Suspended`; this outcome
+/// is neither a model acknowledgement nor permission to stop the backend.
+pub(all) enum SettingsRunOutcome {
+  Completed
+  NotStarted(@diagnostics.FrameworkError)
+  Suspended(SettingsRunOwner, @diagnostics.FrameworkError)
+}
+
+///|
+/// Start a run while transferring the original owner back on interruption.
+/// A successful drive without an established terminal receipt remains
+/// suspended: the owner must not be discarded or the host stopped.
+pub fn run_native_settings_retained(
+  host : &@platform.Backend,
+  platform : NativeSamplePlatform,
+  measure : @components.TextMeasure,
+  text_port~ : NativeTextInputPort? = None,
+  accessibility_port~ : NativeTextAXPort? = None,
+  dialog_port~ : NativeDialogAXPort? = None,
+  next_platform_event~ : NativePlatformNext? = None,
+  direct_text~ : NativeDirectText? = None,
+  ordered_text~ : NativeOrderedTextPort? = None,
+) -> SettingsRunOutcome {
+  if ordered_text is None {
+    return NotStarted(
+      runner_error("ordered_text", "retained entry currently requires ordered input"),
+    )
+  }
+  let owner = match SettingsRunOwner::new(
+    host, platform, measure, text_port~, accessibility_port~, dialog_port~,
+    next_platform_event~, direct_text~, ordered_text~,
+  ) {
+    Err(error) => return NotStarted(error)
+    Ok(value) => value
+  }
+  match owner.drive() {
+    Err(error) => Suspended(owner, error)
+    Ok(_) if owner.can_stop() => Completed
+    Ok(_) => Suspended(
+      owner,
+      runner_error("ordered_text", "terminal queue receipt is unavailable"),
+    )
+  }
 }
 
 ///|
@@ -222,6 +275,7 @@ pub struct SettingsRunOwner {
   priv mut cutoff_done : Bool
   priv mut completed : Bool
   priv mut running : Bool
+  priv mut suspended : Bool
 }
 
 ///|
@@ -238,6 +292,30 @@ pub fn SettingsRunOwner::pending_records(
   self : SettingsRunOwner,
 ) -> Array[NativeOrderedEvent] {
   self.buffered.copy()
+}
+
+///|
+pub fn SettingsRunOwner::held_platform_records(
+  self : SettingsRunOwner,
+) -> Array[@platform.Event] {
+  self.held_platform.copy()
+}
+
+///|
+pub fn SettingsRunOwner::held_tab(self : SettingsRunOwner) -> @platform.Event? {
+  self.held_tab
+}
+
+///|
+/// True means the host cutoff returned successfully, even if completing the
+/// held TextSession subsequently failed. It is not an IME quiescence proof.
+pub fn SettingsRunOwner::cutoff_completed(self : SettingsRunOwner) -> Bool {
+  self.cutoff_done
+}
+
+///|
+pub fn SettingsRunOwner::last_platform_sequence(self : SettingsRunOwner) -> Int64 {
+  self.last_sequence
 }
 
 ///|
@@ -276,10 +354,10 @@ pub fn SettingsRunOwner::inflight_receipt(
 /// Only successful, fully resolved cleanup permits the host to stop. This is
 /// not evidence of IME quiescence or an ACK for callbacks not yet delivered.
 pub fn SettingsRunOwner::can_stop(self : SettingsRunOwner) -> Bool {
-  // The legacy two-poll route has its own existing cleanup contract. The
-  // ordered route still needs an explicit host-queue terminal receipt; simply
-  // observing a destroyed window does not establish that receipt.
-  self.completed && self.ordered_text is None
+  // Neither route currently supplies an explicit host-queue terminal receipt.
+  // Simply observing a destroyed window does not establish that receipt.
+  ignore(self)
+  false
 }
 
 ///|
@@ -346,6 +424,7 @@ pub fn SettingsRunOwner::new(
     cutoff_done: false,
     completed: false,
     running: false,
+    suspended: false,
   })
 }
 
@@ -356,6 +435,7 @@ pub fn SettingsRunOwner::drive(
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   if self.running ||
     self.completed ||
+    self.suspended ||
     self.inflight is Some(_) ||
     self.cutoff_done {
     return Err(
@@ -365,6 +445,11 @@ pub fn SettingsRunOwner::drive(
   self.running = true
   let result = self.drive_inner()
   self.running = false
+  if result is Err(_) {
+    // A failure can occur after an effect even with no inflight event.
+    // Never silently restart at a different program point.
+    self.suspended = true
+  }
   result
 }
 
@@ -1022,6 +1107,13 @@ fn SettingsRunOwner::drive_inner(
       runner_error(
         "ordered_text", "ordered shutdown requires a resolved owner and drained ingress",
       ),
+    )
+  }
+  if ordered_text is Some(_) {
+    // No API currently proves that terminal ingress was fully drained. Keep
+    // the original owner live rather than dispose it on an unproven success.
+    return Err(
+      runner_error("ordered_text", "terminal queue receipt is unavailable"),
     )
   }
   match self.session {
