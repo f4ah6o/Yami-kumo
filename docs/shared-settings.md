@@ -94,6 +94,10 @@ rendering, preventing stale props from resetting the caret. Initial focus is
 retried only until observed, so Tab and modal focus are preserved afterward.
 The text session marker identifies IMM32 on Windows and text-input-v1 on Linux;
 direct keyboard fallback is recorded separately and does not qualify IME.
+The native sample checks the focused binding before draining each text
+observation and ends the old host session if that binding has changed. Its
+scripted regression exercises a queued old-epoch commit after a field switch;
+it does not qualify OS IME delivery.
 
 Both native drivers require name `abc`, an observed Save focus, Dialog cancel
 with focus restoration, reopening and confirmation, and saved name `abc`.

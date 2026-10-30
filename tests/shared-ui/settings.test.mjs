@@ -101,6 +101,36 @@ test('Shared Settings drives validation, composition, dialog and completion in r
     });
     await page.waitForFunction(() => window.api.settingsName('settings-root') === '日本語');
 
+    // Submitting from the field makes the field, rather than the Save button,
+    // the opener. Exercise keyboard navigation and restore that exact target.
+    await page.locator('#settings-root input').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.api.settingsDialogOpen('settings-root') === true);
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.getAttribute('data-yk-key')),
+      'settings-confirm',
+    );
+    await page.keyboard.press('Tab');
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.getAttribute('data-yk-key')),
+      'settings-cancel',
+    );
+    await page.keyboard.press('Shift+Tab');
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.getAttribute('data-yk-key')),
+      'settings-confirm',
+    );
+    await page.keyboard.type('x');
+    assert.equal(await page.evaluate(() => window.api.settingsName('settings-root')), '日本語');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => window.api.settingsDialogOpen('settings-root') === false);
+    assert.equal(
+      await page.evaluate(
+        () => document.activeElement === document.querySelector('#settings-root input'),
+      ),
+      true,
+    );
+
     // The confirmation dialog owns focus, dismissal keeps the draft and
     // restores the opener.
     await page.click('[data-yk-key="settings-save"]');

@@ -162,6 +162,29 @@ fn end_text_session(
 }
 
 ///|
+/// A session belongs to the exact field that was focused when it began. Focus
+/// can change before the next frame closes the host session; never deliver an
+/// observation from the old owner to the newly focused field.
+fn text_session_has_focus(mounted : @ui.Mounted, session : TextSession) -> Bool {
+  match mounted.focused_text() {
+    Some(state) => state.binding_id() == session.binding
+    None => false
+  }
+}
+
+///|
+fn deliver_text_observation(
+  mounted : @ui.Mounted,
+  session : TextSession,
+  event : @text_host.TextInputEvent,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  if event.epoch() != session.epoch || !text_session_has_focus(mounted, session) {
+    return Ok(false)
+  }
+  mounted.text_input(session.epoch, event)
+}
+
+///|
 fn text_window_size() -> (Double, Double) {
   (640.0, 360.0)
 }
@@ -216,6 +239,16 @@ pub fn run_native_text_sample(
         Some(value) => value
         None => break
       }
+      if !text_session_has_focus(mounted, current) {
+        match end_text_session(port, current) {
+          Err(error) => return Err(error)
+          Ok(_) => ()
+        }
+        session = None
+        last_document = ""
+        dirty = true
+        break
+      }
       let event = match (port.next)(0) {
         Err(error) => return Err(error)
         Ok(value) => value
@@ -228,7 +261,7 @@ pub fn run_native_text_sample(
       if event.epoch() != current.epoch {
         continue
       }
-      let handled = match mounted.text_input(current.epoch, event) {
+      let handled = match deliver_text_observation(mounted, current, event) {
         Err(error) => return Err(error)
         Ok(value) => value
       }
