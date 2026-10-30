@@ -286,9 +286,16 @@ fn main {
           Ok(value) => value
           Err(error) => return Err(error)
         }
+        println("YAMI_SETTINGS_IME {\"stage\":\"geometry_update_begin\",\"portable_epoch\":\{epoch}}")
         match retained.update(epoch, normalized) {
-          Ok(_) => Ok(epoch)
-          Err(error) => Err(error)
+          Ok(_) => {
+            println("YAMI_SETTINGS_IME {\"stage\":\"geometry_update_ok\",\"portable_epoch\":\{epoch}}")
+            Ok(epoch)
+          }
+          Err(error) => {
+            println("YAMI_SETTINGS_IME geometry update failed: " + @common.format_framework_error(error))
+            Err(error)
+          }
         }
       },
       fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.InvalidInput, "retained_cancel_policy")) },
@@ -300,7 +307,10 @@ fn main {
         let observed = match retained.peek() {
           Ok(None) => match host.dispatch_retained(timeout) {
             Ok(_) => retained.peek()
-            Err(error) => Err(error)
+            Err(error) => {
+              println("YAMI_SETTINGS_IME dispatch failed: " + @common.format_framework_error(error))
+              Err(error)
+            }
           }
           result => result
         }
@@ -337,9 +347,36 @@ fn main {
               // neither is an observed cancel.
               _ => None
             }
+            let record_kind = match receipt.event() {
+              @ubuntu_host.Text(value) => match value.kind() {
+                @text_host.Preedit(..) => "preedit"
+                @text_host.Commit(..) => "commit"
+                @text_host.Cancel => "cancel"
+                @text_host.Geometry(..) => "geometry"
+                @text_host.FocusLost => "focus_lost"
+              }
+              @ubuntu_host.Platform(value) => match value.kind() {
+                @platform.Resized(..) => "resize"
+                _ => "platform"
+              }
+              @ubuntu_host.Lifecycle(_, _) => "lifecycle"
+              @ubuntu_host.Unhandled(_) => "unhandled"
+            }
+            println("YAMI_SETTINGS_IME {\"stage\":\"record_peek\",\"kind\":\"\{record_kind}\",\"native_sequence\":\{receipt.native_sequence()},\"portable_epoch\":\{receipt.epoch()}}")
             Ok(Some(@common.NativeRetainedReceipt::new(
               event, receipt.native_window(), receipt.native_sequence(),
-              receipt.root(), receipt.epoch(), fn() { receipt.ack() },
+              receipt.root(), receipt.epoch(), fn() {
+                match receipt.ack() {
+                  Ok(_) => {
+                    println("YAMI_SETTINGS_IME {\"stage\":\"record_ack\",\"kind\":\"\{record_kind}\",\"native_sequence\":\{receipt.native_sequence()}}")
+                    Ok(())
+                  }
+                  Err(error) => {
+                    println("YAMI_SETTINGS_IME record ACK failed: " + @common.format_framework_error(error))
+                    Err(error)
+                  }
+                }
+              },
             )))
           }
         }
