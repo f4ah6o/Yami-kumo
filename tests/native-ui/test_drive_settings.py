@@ -10,7 +10,9 @@ from __future__ import annotations
 import importlib.util
 import os
 import pathlib
+import subprocess
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -138,6 +140,31 @@ class ObservationFenceTests(unittest.TestCase):
             lambda f: f.get("name") == "", 1)
         self.assertEqual(observation["phase"], "preedit")
         self.assertEqual(frame["name"], "")
+
+
+class FinalOutputTests(unittest.TestCase):
+    def test_buffered_duplicate_is_rejected_after_process_exit(self):
+        line = 'YAMI_NATIVE_UI_SETTINGS {"phase":"commit","text":"日本"}'
+        with tempfile.TemporaryDirectory() as tmp:
+            process = subprocess.Popen(
+                [sys.executable, "-c", f"print({line!r}); print({line!r})"],
+                stdout=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+            )
+            output = driver.Output(process, pathlib.Path(tmp) / "output.log")
+            process.wait(timeout=5)
+            driver.drain_exited_output(output)
+            with self.assertRaises(driver.SettingsError):
+                driver.require_single_commit(output.markers, "日本")
+            output.close()
+            assert process.stdout is not None
+            process.stdout.close()
+
+    def test_single_commit_is_required(self):
+        driver.require_single_commit([{"phase": "commit", "text": "日本"}], "日本")
+        with self.assertRaises(driver.SettingsError):
+            driver.require_single_commit([], "日本")
 
 
 class ReportTests(unittest.TestCase):

@@ -120,7 +120,6 @@ try:
  result['observations']['field_open_to_confirm']=step('Return',True,'confirm')
  after=len(o.frames); send('Return')
  result['observations']['saved']=o.wait_frame(lambda f:f.get('dialog') is False and f.get('status')=='saved' and f.get('name')=='日本',12,after=after)
- if len([m for m in o.markers if m.get('phase')=='commit' and m.get('text')=='日本']) != 1: raise RuntimeError('duplicate commit observed')
  result['status']='PASS'; result['stage']='complete'
 except Exception as e:
  result['error']=str(e)
@@ -128,9 +127,11 @@ finally:
  if process.poll() is None: process.terminate()
  try: process.wait(timeout=5)
  except subprocess.TimeoutExpired: process.kill(); process.wait()
- while not o.lines.empty():
-  line=o.lines.get_nowait()
-  if line is not None: o._handle(line)
+ try:
+  d.drain_exited_output(o)
+  if result['status']=='PASS': d.require_single_commit(o.markers, '日本')
+ except Exception as e:
+  result['status']='FAIL'; result['stage']='final-output'; result['error']=str(e)
  o.close()
  (out/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n')
  print(json.dumps(result,ensure_ascii=False))
