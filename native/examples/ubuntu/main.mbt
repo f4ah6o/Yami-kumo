@@ -24,6 +24,47 @@ fn ubuntu_error(message : String) -> @diagnostics.FrameworkError {
 }
 
 ///|
+fn ubuntu_text_caret(
+  caret : @primitives.Rect,
+) -> Result[@primitives.Rect, @diagnostics.FrameworkError] {
+  // text-input-v1 takes signed integral surface-logical endpoints, while
+  // Pango may return fractional logical geometry. Preserve the entire caret;
+  // do not multiply by output scale or truncate a negative coordinate.
+  let left = caret.left().floor()
+  let top = caret.top().floor()
+  let right = caret.right().ceil()
+  let bottom = caret.bottom().ceil()
+  let error = @diagnostics.FrameworkError::new(
+    @diagnostics.InvalidInput,
+    "ubuntu_text_caret",
+    subsystem="native-sample-ubuntu",
+    message="caret is outside the integral Wayland rectangle range",
+  )
+  for value in [left, top, right, bottom] {
+    if value.is_nan() ||
+      value.is_inf() ||
+      value < -2147483648.0 ||
+      value > 2147483647.0 {
+      return Err(error)
+    }
+  }
+  let width = right - left
+  let height = bottom - top
+  if caret.size().width() <= 0.0 ||
+    caret.size().height() <= 0.0 ||
+    width < 1.0 ||
+    height < 1.0 ||
+    width > 2147483647.0 ||
+    height > 2147483647.0 {
+    return Err(error)
+  }
+  match @primitives.Rect::new(left, top, width, height) {
+    Ok(value) => Ok(value)
+    Err(_) => Err(error)
+  }
+}
+
+///|
 fn main {
   let host = match @ubuntu_host.Host::start() {
     Err(error) =>
@@ -41,7 +82,14 @@ fn main {
     route.begin_text_input(window, root)
   }
   let text_update : @common.NativeTextUpdate = fn(epoch, state) {
-    route.update_text_input(epoch, state)
+    let caret = match ubuntu_text_caret(state.caret()) {
+      Ok(value) => value
+      Err(error) => return Err(error)
+    }
+    let normalized = @text_host.TextInputState::new(state.document(), caret).with_preedit(
+      state.preedit(),
+    )
+    route.update_text_input(epoch, normalized)
   }
   let text_cancel : @common.NativeTextCancel = fn(epoch) {
     route.cancel_text_input(epoch)
