@@ -269,6 +269,17 @@ pub fn SettingsEntryController::suspended(self : SettingsEntryController) -> Boo
 }
 
 ///|
+/// The original stop reason stays available to the caller during recovery.
+pub fn SettingsEntryController::error(
+  self : SettingsEntryController,
+) -> @diagnostics.FrameworkError? {
+  match self.outcome {
+    Suspended(_, error) | NotStarted(error) => Some(error)
+    Completed => None
+  }
+}
+
+///|
 /// Observe the retained owner without transferring or recreating its host.
 pub fn SettingsEntryController::owner(self : SettingsEntryController) -> SettingsRunOwner? {
   match self.outcome {

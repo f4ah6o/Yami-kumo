@@ -846,6 +846,7 @@ test "retained Settings owner keeps buffered commit and terminal record on error
     ordered_text=Some(ordered),
   )
   assert_true(entry.suspended())
+  assert_true(entry.error() is Some(_))
   let owner = entry.owner().unwrap()
   assert_true(entry.try_stop() is Err(_))
   assert_eq(host.stop_count(), 0)
