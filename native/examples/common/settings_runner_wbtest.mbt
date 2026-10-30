@@ -695,3 +695,85 @@ test "ordered Settings timeout cannot resolve a held owner by cleanup" {
     }
   }
 }
+
+///|
+test "ordered Settings exposes lost local buffer on close after resize" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let delivered = Ref(0)
+  let events : Array[NativeOrderedEvent] = [
+    OrderedPlatform(
+      @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted),
+    ),
+    OrderedPlatform(
+      @platform.Event::new(
+        window,
+        3L,
+        1.0,
+        @platform.Resized(width=800.0, height=600.0),
+      ),
+    ),
+    OrderedText(
+      @text_host.TextInputEvent::new(
+        window,
+        1L,
+        7UL,
+        @text_host.Commit(text="日本"),
+      ),
+    ),
+    OrderedPlatform(@platform.Event::new(window, 4L, 1.0, @platform.Destroyed)),
+  ]
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) {
+      if events.is_empty() {
+        return Ok(None)
+      }
+      let event = events.remove(0)
+      if event is OrderedText(_) {
+        delivered.val += 1
+      }
+      Ok(Some(event))
+    },
+    fn(_) {
+      Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "test-cutoff"))
+    },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) },
+    fn(epoch, _) { Ok(epoch) },
+    fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) },
+    fn(_) { Ok(None) },
+  )
+  let result = run_native_settings_sample(
+    host,
+    Linux,
+    text_runner_measure,
+    text_port=Some(port),
+    ordered_text=Some(ordered),
+  )
+  match result {
+    Err(error) =>
+      assert_eq(
+        error.message(),
+        Some("structural event behind deferred input requires recovery"),
+      )
+    Ok(_) => fail("structural event must expose unresolved buffered input")
+  }
+  assert_eq(delivered.val, 1)
+  assert_true(events.is_empty())
+  let mut rendered_commit = false
+  for item in host.last_present().unwrap().items() {
+    match item {
+      @scene.TextItem(text~, ..) | @scene.TextRunItem(text~, ..) if text ==
+        "日本" => rendered_commit = true
+      _ => ()
+    }
+  }
+  assert_false(rendered_commit)
+  // The caller gets no returned buffer or owner. This is a known P1, not a
+  // preservation or replay test: the outer entry next stops the real host.
+}

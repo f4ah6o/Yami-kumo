@@ -114,3 +114,27 @@ an error and may discard admitted, undelivered records. Even a window-destroy
 path that happens to have no local held session has not been proven to have
 drained every host record. The ordered path remains unsuitable for production
 and the draft remains DO NOT MERGE.
+
+## P1: a locally buffered accepted observation is lost on return
+
+The independent review of `ad77e3d` identified a distinct failure from the
+fake-host queue still containing an event. The new regression fixture delivers
+frame completions, a resize while a frame is pending, `Commit("日本")`, and
+then Destroyed. It verifies that the source queue is empty, the runner returns
+`structural event behind deferred input requires recovery`, and the commit is
+not in the last presented scene. The event was moved into the runner's local
+buffer, which is not returned to the caller. This is a negative fixture; the
+scene check alone is not proof about model state. Native common tests 15/15
+PASS; log SHA-256
+`3f1c0e21dc7e3f51716e8396b9277a16679ba29a578809ec0a23de68386f9547`.
+
+Merely returning the text as a string or saving the local array does not make
+replay safe: the caller would also need the still-live original owner, binding,
+epoch and sequence, accepted model actions, structural ordering, host lifetime,
+and an explicit terminal policy if the target is destroyed. Existing runner
+returns only a `FrameworkError`, while the outer entry stops the host. A safe
+bounded solution therefore needs an owned suspended-runner result or host
+peek/ack protocol with bounded backpressure and explicit lifetime/overflow
+semantics, plus atomic same-owner geometry recovery. None is currently
+implemented; callback admission after a cutoff cannot be assumed. The draft
+remains DO NOT MERGE and live execution is not authorized by this fixture.
