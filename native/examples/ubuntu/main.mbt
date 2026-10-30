@@ -178,6 +178,12 @@ fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
       }
       // n/g: inspect and consume a single continuation generation.
       110 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, entry.advance_generation().unwrap_or(0L))
+      // o/d: inspect and reconcile one original applied text receipt.
+      111 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, entry.owned_delivery_sequence().unwrap_or(0L))
+      100 => match entry.reconcile_owned_sequence(control_sequence()) {
+        Ok(_) => control_reply(87)
+        Err(error) => control_step_error(error, 69)
+      }
       103 => match entry.advance_once(control_sequence()) {
         Ok(@common.ContinuationStepped) => control_reply(86)
         Err(error) => control_step_error(error, 69)

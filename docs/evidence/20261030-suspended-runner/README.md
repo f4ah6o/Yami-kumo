@@ -87,6 +87,8 @@ the process retains the owner and accepts one bounded control request at a time:
 python3 scripts/settings_retained_control.py SOCKET status
 python3 scripts/settings_retained_control.py SOCKET receipt
 python3 scripts/settings_retained_control.py SOCKET stage --sequence NATIVE_SEQUENCE
+python3 scripts/settings_retained_control.py SOCKET owned
+python3 scripts/settings_retained_control.py SOCKET reconcile --sequence NATIVE_SEQUENCE
 python3 scripts/settings_retained_control.py SOCKET poll
 python3 scripts/settings_retained_control.py SOCKET apply --sequence SEQUENCE
 python3 scripts/settings_retained_control.py SOCKET retry-ack --sequence NATIVE_SEQUENCE
@@ -235,10 +237,11 @@ establish a successful exit. The ledger records only positively observed
 stages: native ACK, session application, a required terminal action, and a
 terminal action's model reflection. It associates a text stage only with a
 unique matching window, root, epoch, sequence, payload and original lease;
-duplicates are reported as ambiguous. Normal-path model reflection, geometry
-publication, terminal resolution and retirement remain unproven.
+duplicates are reported as ambiguous. The non-held owned-delivery path now
+also records model reflection for its exact action; geometry publication and
+normal-running retirement remain unproven.
 
-The receipt-stage candidate passed the common fixtures **40/40** with each of
+The earlier receipt-stage candidate passed the common fixtures **40/40** with each of
 gpui `5cd2f231c6cbf529396cae633f6e5a0d6c9bea41` and
 `55427b622fa0d7425556cc44c79317dd90c119ea` as a source override; both raw
 fixture logs hash to
@@ -249,6 +252,33 @@ binding receipt. The socket fixtures passed **9/9**, log SHA-256
 The Ubuntu example built with gpui `5cd2f23`; binary SHA-256
 `a33b6ad951b375fa5f3354fc020d94bba389cf06d1c0440ac0b0aaa40d8bfa79`.
 These are synthetic and build results, not an integrated native IME run.
+
+The non-held ordered path now reserves an `OwnedTextDelivery` against the
+original field lease before applying a text observation. Reservation fails
+while an older action is queued. After application the receipt records whether
+an action is required; it retains the exact extracted `TextChanged` until the
+shared model transition is recorded. A changed focus or owner rejects retry
+without reapplying the commit. Only a uniquely matched native receipt gains
+the model-applied stage. An applied receipt and its extracted action can be
+reconciled once by native sequence, while an unavailable or changed owner
+remains suspended. This does not cover held-Tab action recovery, publish a
+scene or host geometry, or provide general replay after every interruption.
+The action is moved from the runtime queue into the receipt synchronously
+after field application, before returning to the caller; a later focus loss
+therefore cannot erase it by clearing the runtime queue. The UI and common
+native fixtures passed **146/146** with gpui `5cd2f23` and independently with
+gpui `ea5acbbbfda2dd5dcd6596bc200c3376a7d8c70a` as source overrides. Each
+raw fixture log has SHA-256
+`71553c2d000afa2dc67c42649fc453dfd5a27b80979adf51b3fce5d938b32001`.
+This compatibility test does not exercise the latter candidate's new native
+provenance API. The socket unit suite passed **9/9**, raw log SHA-256
+`5e4fe0c0a743f5e5c570ed8a4737c4060e59cf89ab3702fa9b639f557bb75609`.
+The Ubuntu example built against gpui `5cd2f23`; binary SHA-256
+`9e79f0ca7a8d030c9b4afa969311dcf4859100ac7b95ddae24da69b0d4e63e9e`.
+The fixture named `characterization pending unrelated action precedes applied
+commit` deliberately demonstrates the earlier unsafe ordering: its PASS means
+reproduction, not a fix. Separate fixtures test the reservation guard and
+applied/action ownership.
 
 As a separate lower-layer check, the gpui
 candidate's `tests/ubuntu/ime_transport_test.c` compiled with `-Wall -Wextra

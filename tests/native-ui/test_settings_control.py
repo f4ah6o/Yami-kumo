@@ -179,6 +179,25 @@ class ControlSocketTests(unittest.TestCase):
         stdout, stderr = stage.communicate(timeout=3)
         self.assertEqual(stage.returncode, 0, stderr)
         self.assertIn("model and geometry are not implied", stdout)
+        owned = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "owned"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("o"))
+        self.lib.gpui_settings_control_reply_sequence(ord("S"), 42)
+        stdout, stderr = owned.communicate(timeout=3)
+        self.assertEqual(owned.returncode, 0, stderr)
+        self.assertIn("owned delivery sequence: 42", stdout)
+        reconcile = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "reconcile", "--sequence", "42"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("d"))
+        self.assertEqual(self.lib.gpui_settings_control_sequence(), 42)
+        self.lib.gpui_settings_control_reply(ord("W"))
+        stdout, stderr = reconcile.communicate(timeout=3)
+        self.assertEqual(reconcile.returncode, 0, stderr)
+        self.assertIn("scene and shutdown are not implied", stdout)
 
     def test_new_process_uses_fresh_socket_and_does_not_reuse_owner(self) -> None:
         code = (

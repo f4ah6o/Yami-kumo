@@ -457,6 +457,27 @@ pub fn SettingsEntryController::advance_once(
 }
 
 ///|
+pub fn SettingsEntryController::owned_delivery_sequence(
+  self : SettingsEntryController,
+) -> Int64? {
+  match self.outcome {
+    Suspended(owner, _) => owner.owned_delivery_native_sequence()
+    _ => None
+  }
+}
+
+///|
+pub fn SettingsEntryController::reconcile_owned_sequence(
+  self : SettingsEntryController, sequence : Int64,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  match self.outcome {
+    Suspended(owner, _) if sequence > 0L && owner.owned_delivery_native_sequence() == Some(sequence) =>
+      owner.reconcile_owned_delivery()
+    _ => Err(runner_error("settings_entry", "owned delivery sequence is unavailable"))
+  }
+}
+
+///|
 /// Stop only after an outcome that already proved complete owner cleanup.
 /// NotStarted and Suspended are conservative failures, leaving the host alive.
 pub fn SettingsEntryController::try_stop(
@@ -522,6 +543,7 @@ pub struct SettingsRunOwner {
   priv buffered : Array[NativeOrderedEvent]
   priv held_platform : Array[@platform.Event]
   priv mut inflight : NativeOrderedEvent?
+  priv mut owned_delivery : @ui.OwnedTextDelivery?
   // The receipt is installed before ACK, alongside its locally owned event.
   priv mut pending_host_receipt : NativeRetainedReceipt?
   // Retain native identities even after host ACK until an explicit per-stage
@@ -608,7 +630,7 @@ pub fn SettingsRunOwner::reconcile_terminal_observation(
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   if !self.suspended || self.running || self.cutoff_done || self.held_tab is Some(_) ||
     !self.held_platform.is_empty() ||
-    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) {
+    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) || self.owned_delivery is Some(_) {
     return Err(runner_error("terminal_recovery", "terminal owner is unavailable"))
   }
   self.running = true
@@ -789,7 +811,7 @@ pub fn SettingsRunOwner::resolve_destroyed_receipt(
   self : SettingsRunOwner, sequence : Int64,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   if !self.suspended || self.running || self.cutoff_done || sequence <= 0L ||
-    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) ||
+    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) || self.owned_delivery is Some(_) ||
     self.terminal_destroyed_sequence is Some(_) || self.terminal_applied is Some(_) ||
     !self.held_platform.is_empty() || self.held_tab is Some(_) ||
     !(self.retained_destroyed_prefix is Some(0)) {
@@ -840,7 +862,7 @@ pub fn SettingsRunOwner::retire_destroyed_model_receipt(
   self : SettingsRunOwner, sequence : Int64,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   if !self.suspended || self.running || self.cutoff_done || sequence <= 0L ||
-    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) ||
+    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) || self.owned_delivery is Some(_) ||
     self.terminal_applied is Some(_) || !self.held_platform.is_empty() ||
     self.held_tab is Some(_) || !(self.retained_destroyed_prefix is Some(0)) {
     return Err(runner_error("terminal_retire", "terminal stages are unresolved"))
@@ -917,7 +939,7 @@ fn SettingsRunOwner::note_text_receipt_stage(
 pub fn SettingsRunOwner::resume_after_receipt_ack(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.receipt_pre_dispatch is None ||
+  if !self.suspended || self.running || self.owned_delivery is Some(_) || self.receipt_pre_dispatch is None ||
     self.pending_host_receipt is Some(_) || self.cutoff_done {
     return Err(runner_error("ordered_text", "no acknowledged pre-dispatch interruption"))
   }
@@ -938,7 +960,7 @@ pub fn SettingsRunOwner::resume_after_receipt_ack(
 /// A generation changes before every admitted step, including an empty poll.
 pub fn SettingsRunOwner::advance_generation(self : SettingsRunOwner) -> Int64? {
   if self.suspended && !self.running && self.live_step_ready &&
-    self.pending_host_receipt is None && self.inflight is None &&
+    self.pending_host_receipt is None && self.inflight is None && self.owned_delivery is None &&
     self.held_tab is None && self.receipt_pre_dispatch is None && !self.cutoff_done {
     Some(self.live_step_generation)
   } else {
@@ -1072,6 +1094,9 @@ pub fn SettingsRunOwner::terminal_step(
   if self.pending_host_receipt is Some(_) && !(command is RetryReceiptAck) {
     return Err(runner_error("terminal_step", "receipt acknowledgement is pending"))
   }
+  if self.owned_delivery is Some(_) {
+    return Err(runner_error("terminal_step", "owned text delivery requires resolution"))
+  }
   if self.receipt_pre_dispatch is Some(_) && !(command is RetryReceiptAck) {
     return Err(runner_error("terminal_step", "pre-dispatch receipt requires resolution"))
   }
@@ -1172,7 +1197,7 @@ pub fn SettingsRunOwner::try_terminal_text_cutoff(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   if !self.suspended || self.running || self.cutoff_done ||
-    self.held_tab is Some(_) || self.pending_host_receipt is Some(_) ||
+    self.held_tab is Some(_) || self.owned_delivery is Some(_) || self.pending_host_receipt is Some(_) ||
     self.receipt_pre_dispatch is Some(_) || !self.buffered.is_empty() ||
     !self.held_platform.is_empty() || self.terminal_applied is Some(_) {
     return Err(runner_error("terminal_cutoff", "local records or actions remain unresolved"))
@@ -1262,6 +1287,47 @@ pub fn SettingsRunOwner::inflight_receipt(
 }
 
 ///|
+/// The original applied delivery and any extracted action remain inspectable
+/// after an interruption; this is not a model or geometry completion proof.
+pub fn SettingsRunOwner::owned_text_delivery(
+  self : SettingsRunOwner,
+) -> @ui.OwnedTextDelivery? {
+  self.owned_delivery
+}
+
+///|
+/// Find the unique native receipt for this exact applied delivery. Missing or
+/// ambiguous associations cannot authorize a sequence-bound recovery step.
+pub fn SettingsRunOwner::owned_delivery_native_sequence(
+  self : SettingsRunOwner,
+) -> Int64? {
+  let receipt = match self.owned_delivery { Some(value) => value; None => return None }
+  let event = receipt.event()
+  let (window, epoch, binding, _, sequence) = receipt.identity()
+  match self.inflight {
+    Some(OrderedText(value)) if value.window() == window && value.epoch() == epoch &&
+      value.sequence() == sequence && same_text_observation_kind(value.kind(), event.kind()) => ()
+    _ => return None
+  }
+  let mut found = -1
+  for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
+    let native = self.acknowledged_receipts[i].receipt
+    match native.event {
+      Some(OrderedText(value)) if native.window == window && native.root == binding &&
+        native.epoch == epoch && value.window() == window && value.epoch() == epoch &&
+        value.sequence() == sequence && same_text_observation_kind(value.kind(), event.kind()) => {
+          if found >= 0 { return None }
+          found = i
+        }
+      _ => ()
+    }
+  }
+  if found < 0 || self.acknowledged_receipt_stage(found) is None { return None }
+  let native_sequence = self.acknowledged_receipts[found].receipt.sequence.to_int64()
+  if self.receipt_stage_for_sequence(native_sequence) is None { None } else { Some(native_sequence) }
+}
+
+///|
 /// Only successful, fully resolved cleanup permits the host to stop. This is
 /// not evidence of IME quiescence or an ACK for callbacks not yet delivered.
 pub fn SettingsRunOwner::can_stop(self : SettingsRunOwner) -> Bool {
@@ -1337,6 +1403,7 @@ pub fn SettingsRunOwner::new(
     buffered: [],
     held_platform: [],
     inflight: None,
+    owned_delivery: None,
     pending_host_receipt: None,
     acknowledged_receipts: [],
     entered_target: None,
@@ -1362,7 +1429,7 @@ pub fn SettingsRunOwner::drive(
   if self.running ||
     self.completed ||
     self.suspended ||
-    (self.inflight is Some(_) && !self.resume_pre_dispatch) || self.pending_host_receipt is Some(_) ||
+    (self.inflight is Some(_) && !self.resume_pre_dispatch) || self.owned_delivery is Some(_) || self.pending_host_receipt is Some(_) ||
     self.cutoff_done {
     return Err(
       runner_error("ordered_text", "retained state requires explicit recovery"),
@@ -1377,6 +1444,118 @@ pub fn SettingsRunOwner::drive(
     self.suspended = true
   }
   result
+}
+
+///|
+/// Apply a text record only after reserving its original action ownership.
+/// Every fallible step leaves either the untouched inflight record or its
+/// applied delivery and extracted action on this owner.
+fn SettingsRunOwner::deliver_owned_observation(
+  self : SettingsRunOwner, event : @text_host.TextInputEvent,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.owned_delivery is Some(_) {
+    return Err(runner_error("ordered_text", "another owned delivery is unresolved"))
+  }
+  let owner = match self.terminal_owner {
+    Some(value) => value
+    None => return Err(runner_error("ordered_text", "original owner unavailable"))
+  }
+  let receipt = match self.mounted.reserve_owned_text(owner, event) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  self.owned_delivery = Some(receipt)
+  match self.mounted.apply_owned_text(receipt) {
+    Err(error) => {
+      if receipt.applied() {
+        self.note_text_receipt_stage(event, ReceiptSessionApplied)
+        if receipt.action_required() is Some(true) {
+          self.note_text_receipt_stage(event, ReceiptActionRequired)
+        }
+      }
+      return Err(error)
+    }
+    Ok(_) => ()
+  }
+  self.complete_owned_delivery(receipt, event)
+}
+
+///|
+fn SettingsRunOwner::complete_owned_delivery(
+  self : SettingsRunOwner, receipt : @ui.OwnedTextDelivery, event : @text_host.TextInputEvent,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !receipt.applied() {
+    return Err(runner_error("ordered_text", "unapplied delivery needs separate policy"))
+  }
+  if receipt.action_required() is None {
+    match self.mounted.complete_owned_text_evidence(receipt) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+  }
+  self.note_text_receipt_stage(event, ReceiptSessionApplied)
+  if receipt.action_required() is Some(true) {
+    self.note_text_receipt_stage(event, ReceiptActionRequired)
+  }
+  if !receipt.owner_noted() {
+    match self.mounted.note_owned_text(receipt) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+  }
+  if receipt.action_required() is Some(true) && !receipt.model_applied() {
+    let action = match self.mounted.owned_text_action(receipt) {
+      Ok(Some(value)) => value
+      Ok(None) => return Err(runner_error("ordered_text", "owned model action unavailable"))
+      Err(error) => return Err(error)
+    }
+    let next = self.settings.update(@shared_settings.Ui(action))
+    match self.mounted.mark_owned_text_model_applied(receipt) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+    self.settings = next
+    self.note_text_receipt_stage(event, ReceiptModelApplied)
+  }
+  self.owned_delivery = None
+  Ok(())
+}
+
+///|
+/// Complete an already-applied owned record at most once. This bounded step
+/// publishes no scene or host geometry and never stops the host.
+pub fn SettingsRunOwner::reconcile_owned_delivery(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.cutoff_done ||
+    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) {
+    return Err(runner_error("ordered_text", "owned delivery is unavailable"))
+  }
+  let receipt = match self.owned_delivery {
+    Some(value) => value
+    None => return Err(runner_error("ordered_text", "no owned delivery"))
+  }
+  let event = match self.inflight {
+    Some(OrderedText(value)) => value
+    _ => return Err(runner_error("ordered_text", "original inflight text is unavailable"))
+  }
+  let (window, epoch, binding, _, sequence) = receipt.identity()
+  let session = match self.session { Some(value) => value; None => return Err(runner_error("ordered_text", "original session is unavailable")) }
+  if window != self.window || epoch != session.epoch || binding != session.binding ||
+    event.window() != window || event.epoch() != epoch || event.sequence() != sequence {
+    return Err(runner_error("ordered_text", "owned delivery identity changed"))
+  }
+  self.running = true
+  let result = self.complete_owned_delivery(receipt, event)
+  self.running = false
+  match result {
+    Err(error) => Err(error)
+    Ok(_) => {
+      self.inflight = None
+      self.dirty = true
+      Ok(())
+    }
+  }
 }
 
 ///|
@@ -1598,50 +1777,25 @@ fn SettingsRunOwner::drive_inner(
               } else {
                 match self.session {
                   Some(current) if observation.epoch() == current.epoch => {
-                    if self.held_tab is None {
-                      match self.terminal_owner {
-                        Some(owner) =>
-                          match mounted.validate_terminal_text_delivery(owner, observation) {
-                            Err(error) => return Err(error)
-                            Ok(_) => ()
-                          }
-                        None => return Err(runner_error("ordered_text", "original owner unavailable"))
+                    if self.held_tab is Some(_) {
+                      match mounted.held_text_input(current.epoch, observation) {
+                        Err(error) => return Err(error)
+                        Ok(false) => return Err(runner_error("ordered_text", "held observation was not applied"))
+                        Ok(true) => self.note_text_receipt_stage(observation, ReceiptSessionApplied)
                       }
-                    }
-                    let handled = if self.held_tab is Some(_) {
-                      mounted.held_text_input(current.epoch, observation)
+                      while mounted.next_action() is Some(action) {
+                        self.settings = self.settings.update(@shared_settings.Ui(action))
+                      }
                     } else {
-                      deliver_text_observation(mounted, current, observation)
-                    }
-                    match handled {
-                      Err(error) => return Err(error)
-                      Ok(true) => {
-                        self.note_text_receipt_stage(observation, ReceiptSessionApplied)
-                        if self.held_tab is None {
-                          match self.terminal_owner {
-                            Some(owner) =>
-                              match mounted.note_terminal_text_delivery(owner, observation) {
-                                Err(error) => return Err(error)
-                                Ok(_) => ()
-                              }
-                            None => ()
-                          }
-                        }
-                        emit_native_marker(
-                          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"\{text_event_phase(observation.kind())}\",\{text_event_json(observation.kind())},\"epoch\":\{current.epoch}}",
-                        )
-                        self.dirty = true
-                        while mounted.next_action() is Some(action) {
-                          self.settings = self.settings.update(
-                            @shared_settings.Ui(action),
-                          )
-                        }
+                      match self.deliver_owned_observation(observation) {
+                        Err(error) => return Err(error)
+                        Ok(_) => ()
                       }
-                      Ok(false) =>
-                        return Err(
-                          runner_error("ordered_text", "accepted observation was not applied to its owner"),
-                        )
                     }
+                    emit_native_marker(
+                      "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"\{text_event_phase(observation.kind())}\",\{text_event_json(observation.kind())},\"epoch\":\{current.epoch}}",
+                    )
+                    self.dirty = true
                   }
                   _ =>
                     return Err(

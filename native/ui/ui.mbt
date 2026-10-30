@@ -2933,6 +2933,259 @@ pub fn TerminalTextOwner::matches_session(
 }
 
 ///|
+/// A single text delivery reserved for its original mounted owner. The
+/// receipt survives failures after field publication and owns any extracted
+/// action until the caller records model application.
+pub struct OwnedTextDelivery {
+  priv identity : Epoch
+  priv owner : TerminalTextOwner
+  priv event : @text_host.TextInputEvent
+  priv before : String
+  priv mut applied : Bool
+  priv mut after_change : Epoch?
+  priv mut expected : String?
+  priv mut action_required : Bool?
+  priv mut owner_noted : Bool
+  priv mut action : @view.SemanticAction?
+  priv mut action_claimed : Bool
+  priv mut model_applied : Bool
+  priv mut busy : Bool
+}
+
+///|
+pub fn OwnedTextDelivery::applied(self : OwnedTextDelivery) -> Bool {
+  self.applied
+}
+
+///|
+/// Original window, epoch, binding generation and portable event sequence.
+pub fn OwnedTextDelivery::identity(
+  self : OwnedTextDelivery,
+) -> (@platform.WindowId, UInt64, UInt64, UInt64, Int64) {
+  (self.owner.window, self.owner.epoch, self.owner.binding, self.owner.generation, self.event.sequence())
+}
+
+///|
+pub fn OwnedTextDelivery::event(self : OwnedTextDelivery) -> @text_host.TextInputEvent {
+  self.event
+}
+
+///|
+pub fn OwnedTextDelivery::owner_noted(self : OwnedTextDelivery) -> Bool {
+  self.owner_noted
+}
+
+///|
+pub fn OwnedTextDelivery::model_applied(self : OwnedTextDelivery) -> Bool {
+  self.model_applied
+}
+
+///|
+pub fn OwnedTextDelivery::action_required(self : OwnedTextDelivery) -> Bool? {
+  self.action_required
+}
+
+///|
+pub fn OwnedTextDelivery::pending_action(self : OwnedTextDelivery) -> @view.SemanticAction? {
+  if self.model_applied { None } else { self.action }
+}
+
+///|
+fn Mounted::owned_text_document(
+  self : Mounted, owner : TerminalTextOwner,
+) -> String? {
+  for binding in self.bindings {
+    if binding.id == owner.binding && binding.field_generation == owner.generation &&
+      binding.token == Some(owner.token) && self.runtime.is_current(owner.token) {
+      match binding.field {
+        Some(field) => return Some(field.committed_document().text())
+        None => return None
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Reserve before mutating the field. A pre-existing action remains queued
+/// and blocks reservation, so it cannot be mistaken for this delivery.
+pub fn Mounted::reserve_owned_text(
+  self : Mounted, owner : TerminalTextOwner, event : @text_host.TextInputEvent,
+) -> Result[OwnedTextDelivery, @diagnostics.FrameworkError] {
+  if !self.window_focused {
+    return Err(adapter_error("owned text window is unfocused"))
+  }
+  match self.validate_terminal_text_delivery(owner, event) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
+  if self.runtime.has_pending_actions() {
+    return Err(adapter_error("owned text requires an empty action queue"))
+  }
+  let before = match self.owned_text_document(owner) {
+    Some(value) => value
+    None => return Err(adapter_error("owned text field is unavailable"))
+  }
+  Ok({
+    identity: self.identity, owner, event, before, applied: false, after_change: None,
+    expected: None, action_required: None, owner_noted: false,
+    action: None, action_claimed: false, model_applied: false, busy: false,
+  })
+}
+
+///|
+/// Apply at most once. If a later owner validation fails, `applied()` stays
+/// true and the receipt and queued action must remain with the original owner.
+pub fn Mounted::apply_owned_text(
+  self : Mounted, receipt : OwnedTextDelivery,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if receipt.busy || receipt.applied || !same_epoch(self.identity, receipt.identity) ||
+    self.runtime.has_pending_actions() {
+    return Err(adapter_error("owned text receipt is busy, applied or blocked"))
+  }
+  match self.validate_terminal_text_delivery(receipt.owner, receipt.event) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
+  receipt.busy = true
+  let outcome = self.text_input(receipt.owner.epoch, receipt.event)
+  receipt.busy = false
+  match outcome {
+    Err(error) => return Err(error)
+    Ok(false) => return Err(adapter_error("owned text was not applied"))
+    Ok(true) => {
+      receipt.applied = true
+      receipt.after_change = Some(self.change)
+    }
+  }
+  match self.complete_owned_text_evidence(receipt) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
+  // Move the freshly generated action into the receipt before returning to
+  // the caller: a later blur may clear the runtime's ordinary action queue.
+  if receipt.action_required is Some(true) {
+    match self.next_terminal_text_action(receipt.owner) {
+      Err(error) => return Err(error)
+      Ok(None) => return Err(adapter_error("owned text action is missing"))
+      Ok(Some(action)) => receipt.action = Some(action)
+    }
+    match (receipt.action, receipt.expected) {
+      (Some(@view.TextChanged(key, value)), Some(expected)) if
+        key == receipt.owner.token.key() && value == expected => ()
+      _ => return Err(adapter_error("owned text action does not match its receipt"))
+    }
+  }
+  Ok(())
+}
+
+///|
+/// Finish inspecting an already-applied field without applying the event
+/// again. A replaced or unavailable owner keeps the receipt unresolved.
+pub fn Mounted::complete_owned_text_evidence(
+  self : Mounted, receipt : OwnedTextDelivery,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if receipt.busy || !receipt.applied || receipt.expected is Some(_) ||
+    self.is_disposed() || !self.identity.live || !receipt.owner.identity.live ||
+    !same_epoch(self.identity, receipt.identity) || !receipt.owner.session_identity.live ||
+    self.text_epoch != receipt.owner.epoch || self.last_text_sequence != receipt.event.sequence() ||
+    !(receipt.after_change is Some(change) && same_epoch(change, self.change)) {
+    return Err(adapter_error("applied owned text evidence is unavailable"))
+  }
+  let after = match self.owned_text_document(receipt.owner) {
+    Some(value) => value
+    None => return Err(adapter_error("applied owned text field is unavailable"))
+  }
+  receipt.expected = Some(after)
+  receipt.action_required = Some(after != receipt.before)
+  Ok(())
+}
+
+///|
+/// Advance the captured owner's sequence after the already-applied record;
+/// retrying this step never reapplies the text.
+pub fn Mounted::note_owned_text(
+  self : Mounted, receipt : OwnedTextDelivery,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if receipt.busy || !receipt.applied || receipt.owner_noted ||
+    receipt.action_required is None || !same_epoch(self.identity, receipt.identity) ||
+    !(receipt.after_change is Some(change) && same_epoch(change, self.change)) {
+    return Err(adapter_error("owned text sequence is unavailable"))
+  }
+  match self.note_terminal_text_delivery(receipt.owner, receipt.event) {
+    Err(error) => Err(error)
+    Ok(_) => { receipt.owner_noted = true; Ok(()) }
+  }
+}
+
+///|
+/// Transfer only this receipt's TextChanged action into the receipt itself.
+/// An unexpected action is also kept there and reported as an error.
+pub fn Mounted::owned_text_action(
+  self : Mounted, receipt : OwnedTextDelivery,
+) -> Result[@view.SemanticAction?, @diagnostics.FrameworkError] {
+  if receipt.busy || !receipt.applied || !receipt.owner_noted || receipt.model_applied ||
+    self.is_disposed() || !self.identity.live || !receipt.owner.identity.live ||
+    !receipt.owner.session_identity.live || !self.runtime.is_current(receipt.owner.token) ||
+    !same_epoch(self.identity, receipt.identity) ||
+    !(receipt.after_change is Some(change) && same_epoch(change, self.change)) {
+    return Err(adapter_error("owned text action is unavailable"))
+  }
+  if receipt.action_required is Some(false) { return Ok(None) }
+  if !(receipt.action_required is Some(true)) {
+    return Err(adapter_error("owned text action requirement is unknown"))
+  }
+  if receipt.action is None {
+    match self.next_terminal_text_action(receipt.owner) {
+      Err(error) => return Err(error)
+      Ok(None) => return Err(adapter_error("owned text action is missing"))
+      Ok(Some(action)) => receipt.action = Some(action)
+    }
+  }
+  match (receipt.action, receipt.expected) {
+    (Some(@view.TextChanged(key, value) as action), Some(expected)) if
+      key == receipt.owner.token.key() && value == expected => {
+        receipt.action_claimed = true
+        Ok(Some(action))
+      }
+    _ => Err(adapter_error("owned text action does not match its receipt"))
+  }
+}
+
+///|
+/// Record the caller's completed model update exactly once.
+fn OwnedTextDelivery::mark_model_applied(
+  self : OwnedTextDelivery,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.applied || !self.owner_noted || !self.action_claimed || self.model_applied ||
+    !(self.action_required is Some(true)) || self.action is None {
+    return Err(adapter_error("owned text model action is unavailable"))
+  }
+  match (self.action, self.expected) {
+    (Some(@view.TextChanged(key, value)), Some(expected)) if
+      key == self.owner.token.key() && value == expected => ()
+    _ => return Err(adapter_error("owned text model action does not match receipt"))
+  }
+  self.model_applied = true
+  Ok(())
+}
+
+///|
+/// Record the caller's model transition only while the original field and
+/// delivery revision remain current. The caller performs the model update.
+pub fn Mounted::mark_owned_text_model_applied(
+  self : Mounted, receipt : OwnedTextDelivery,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.is_disposed() || !self.identity.live || !receipt.owner.identity.live ||
+    !receipt.owner.session_identity.live || !self.runtime.is_current(receipt.owner.token) ||
+    !same_epoch(self.identity, receipt.identity) ||
+    !(receipt.after_change is Some(change) && same_epoch(change, self.change)) {
+    return Err(adapter_error("owned text model owner is stale"))
+  }
+  receipt.mark_model_applied()
+}
+
+///|
 /// Capture the existing focused field before its host session receives input.
 /// The caller must use the epoch returned for this binding by the host.
 pub fn Mounted::capture_terminal_text_owner(

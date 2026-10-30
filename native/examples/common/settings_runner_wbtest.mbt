@@ -950,6 +950,222 @@ test "retained owner distinguishes session receipt from model publication" {
 }
 
 ///|
+test "characterization pending unrelated action precedes applied commit" {
+  // This characterizes the pre-existing ambiguity. PASS here means that the
+  // hazardous ordering was reproduced, not that action ownership is fixed.
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  let save = owner.mounted.callback(@shared_settings.settings_save()).unwrap()
+  assert_true(owner.mounted.activate(save))
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  owner.mounted.validate_terminal_text_delivery(lease, event).unwrap()
+  assert_true(owner.mounted.text_input(7UL, event).unwrap())
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "日本")
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.mounted.next_terminal_text_action(lease) is Err(_))
+  assert_true(owner.mounted.next_action() is Some(@view.Activate(_)))
+  assert_true(owner.mounted.next_action() is Some(@view.TextChanged(_, "日本")))
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "owned delivery refuses an earlier action before applying commit" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding, })
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  let save = owner.mounted.callback(@shared_settings.settings_save()).unwrap()
+  assert_true(owner.mounted.activate(save))
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  owner.inflight = Some(OrderedText(event))
+  assert_true(owner.deliver_owned_observation(event) is Err(_))
+  assert_true(owner.owned_text_delivery() is None)
+  assert_true(owner.inflight_record() is Some(OrderedText(_)))
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "")
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.mounted.next_action() is Some(@view.Activate(_)))
+  assert_true(owner.mounted.next_action() is None)
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "owned delivery retains extracted action until model application" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  let receipt = owner.mounted.reserve_owned_text(lease, event).unwrap()
+  owner.owned_delivery = Some(receipt)
+  assert_true(receipt.identity() is (_, 7UL, _, _, 1L))
+  assert_false(receipt.owner_noted())
+  assert_false(receipt.model_applied())
+  owner.mounted.apply_owned_text(receipt).unwrap()
+  assert_true(receipt.applied())
+  assert_true(receipt.action_required() is Some(true))
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日本")))
+  assert_true(owner.mounted.mark_owned_text_model_applied(receipt) is Err(_))
+  assert_true(owner.mounted.apply_owned_text(receipt) is Err(_))
+  assert_true(owner.mounted.complete_owned_text_evidence(receipt) is Err(_))
+  owner.mounted.note_owned_text(receipt).unwrap()
+  assert_true(receipt.owner_noted())
+  assert_true(owner.mounted.note_owned_text(receipt) is Err(_))
+  assert_true(owner.mounted.mark_owned_text_model_applied(receipt) is Err(_))
+  let action = owner.mounted.owned_text_action(receipt).unwrap().unwrap()
+  assert_true(action is @view.TextChanged(_, "日本"))
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日本")))
+  assert_eq(owner.model().name(), "")
+  let next = owner.settings.update(@shared_settings.Ui(action))
+  owner.mounted.mark_owned_text_model_applied(receipt).unwrap()
+  owner.settings = next
+  assert_true(receipt.model_applied())
+  assert_eq(owner.model().name(), "日本")
+  assert_true(receipt.pending_action() is None)
+  assert_true(owner.mounted.mark_owned_text_model_applied(receipt) is Err(_))
+  assert_true(owner.mounted.owned_text_action(receipt) is Err(_))
+  assert_eq(owner.model().name(), "日本")
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "applied owned commit survives focus change without reapplication" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  let receipt = owner.mounted.reserve_owned_text(lease, event).unwrap()
+  owner.owned_delivery = Some(receipt)
+  owner.mounted.apply_owned_text(receipt).unwrap()
+  assert_true(receipt.applied())
+  assert_true(receipt.action_required() is Some(true))
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日本")))
+  assert_true(owner.mounted.focus(@shared_settings.settings_save()))
+  assert_true(owner.mounted.note_owned_text(receipt) is Err(_))
+  assert_true(owner.mounted.apply_owned_text(receipt) is Err(_))
+  assert_true(owner.mounted.mark_owned_text_model_applied(receipt) is Err(_))
+  assert_true(owner.owned_text_delivery() is Some(_))
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日本")))
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  assert_true(owner.mounted.note_owned_text(receipt) is Err(_))
+  assert_true(owner.mounted.owned_text_action(receipt) is Err(_))
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "日本")
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "suspended applied delivery reconciles retained action once" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding, })
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  owner.terminal_owner = Some(lease)
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  owner.inflight = Some(OrderedText(event))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedText(event)), owner.window, 42, binding, 7UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  let receipt = owner.mounted.reserve_owned_text(lease, event).unwrap()
+  owner.owned_delivery = Some(receipt)
+  owner.mounted.apply_owned_text(receipt).unwrap()
+  owner.mounted.note_owned_text(receipt).unwrap()
+  assert_true(owner.mounted.owned_text_action(receipt).unwrap() is Some(@view.TextChanged(_, "日本")))
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日本")))
+  owner.suspended = true
+  let entry : SettingsEntryController = {
+    host, outcome: Suspended(owner, runner_error("test", "interrupted")),
+    stop_attempted: false, stopped: false,
+  }
+  assert_true(entry.owned_delivery_sequence() is Some(42L))
+  assert_true(entry.reconcile_owned_sequence(43L) is Err(_))
+  owner.session = Some({ epoch: 7UL, binding: binding + 1UL, })
+  assert_true(entry.reconcile_owned_sequence(42L) is Err(_))
+  assert_eq(owner.model().name(), "")
+  owner.session = Some({ epoch: 7UL, binding, })
+  owner.inflight = Some(OrderedText(@text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="偽"))))
+  assert_true(entry.owned_delivery_sequence() is None)
+  assert_true(entry.reconcile_owned_sequence(42L) is Err(_))
+  owner.inflight = Some(OrderedText(event))
+  assert_eq(owner.model().name(), "")
+  entry.reconcile_owned_sequence(42L).unwrap()
+  assert_eq(owner.model().name(), "日本")
+  assert_true(owner.receipt_stage_for_sequence(42L) is Some(ReceiptModelApplied))
+  assert_true(owner.owned_text_delivery() is None)
+  assert_true(owner.inflight_record() is None)
+  assert_true(entry.reconcile_owned_sequence(42L) is Err(_))
+  assert_eq(owner.model().name(), "日本")
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "focus change after action extraction retains the original action" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding, })
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  owner.terminal_owner = Some(lease)
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  owner.inflight = Some(OrderedText(event))
+  let receipt = owner.mounted.reserve_owned_text(lease, event).unwrap()
+  owner.owned_delivery = Some(receipt)
+  owner.mounted.apply_owned_text(receipt).unwrap()
+  owner.mounted.note_owned_text(receipt).unwrap()
+  assert_true(owner.mounted.owned_text_action(receipt).unwrap() is Some(@view.TextChanged(_, "日本")))
+  assert_true(owner.mounted.focus(@shared_settings.settings_save()))
+  owner.suspended = true
+  assert_true(owner.mounted.mark_owned_text_model_applied(receipt) is Err(_))
+  assert_true(owner.reconcile_owned_delivery() is Err(_))
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日本")))
+  assert_true(owner.owned_text_delivery() is Some(_))
+  assert_true(owner.inflight_record() is Some(OrderedText(_)))
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.mounted.apply_owned_text(receipt) is Err(_))
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
 test "terminal recovery never skips a buffered preedit prefix" {
   let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
   let port = NativeTextInputPort::new(
@@ -1649,7 +1865,7 @@ test "ack retry resumes the exact not-yet-dispatched text only once" {
   assert_true(entry.resume_receipt_sequence(3L).unwrap() is ReceiptDispatched)
   assert_true(owner.resumable_receipt_identity() is None)
   assert_eq(owner.model().name(), "日本")
-  assert_true(owner.acknowledged_receipt_stage(2) is Some(ReceiptSessionApplied))
+  assert_true(owner.acknowledged_receipt_stage(2) is Some(ReceiptModelApplied))
   assert_true(entry.resume_receipt_sequence(3L) is Err(_))
   assert_eq(owner.model().name(), "日本")
   assert_eq(records.length(), 1)
