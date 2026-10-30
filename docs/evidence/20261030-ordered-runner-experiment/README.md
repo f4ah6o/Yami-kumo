@@ -43,3 +43,33 @@ The test inputs explicitly include duplicate commit, delayed observed commit,
 existing composition, resize and bounded-buffer exhaustion. The failure tests
 establish the current error and retained fake-host queue before the outer
 entrypoint stops; they do not establish production recovery.
+
+## Active preedit and structural recovery boundary
+
+The native UI regression fixture `invalidated held preedit cannot be released
+as an idle retry` now checks both an observed Commit and Cancel after layout
+invalidation: neither is accepted, and finish, retry release, and a new hold all
+fail. With the candidate source the native UI suite passed 95/95; the captured
+output digest is
+`e8c3491f657c3d7c3fa738e0f3121a22e50009707e32bf6612941f17191d89a2`.
+This is a demonstration of the blocker, not successful recovery.
+
+The existing `TextSession::new` and `rebind` reject a composing field. A held
+session also blocks ordinary stage/publish. Therefore recreating a session or
+restaging the view as currently implemented cannot safely retain the same
+composition and its owner. A recovery design must retain the original session
+and any observation not acknowledged by it, drain already accepted model
+actions in FIFO order, and revalidate window, binding generation, revision and
+focus while obtaining new geometry without replacing the editing authority.
+The renderer and host geometry update must succeed before retrying the retained
+observation exactly once. Target disappearance, close, and reentrant invalidation
+still need explicitly tested terminal or retry behavior; treating them as OS
+cancel or silently discarding input is not supported.
+
+The outer entrypoint calls `host.stop()` on every runner result. Returning an
+error before that call does not preserve a queued native event. Equally, simply
+waiting with a bounded in-memory queue cannot guarantee progress under an
+unbounded stream of later events. A complete solution needs an owner/host
+protocol that specifies retention and overload handling, and covers lifecycle
+termination without asserting that undispatched OS callbacks have arrived.
+The present tests do not establish that such a protocol exists or is live-safe.

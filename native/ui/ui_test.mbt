@@ -3193,6 +3193,14 @@ test "invalidated held preedit cannot be released as an idle retry" {
   )
   mounted.invalidate_layout()
   assert_true(mounted.next_held_text_action(16UL).unwrap() is None)
+  // Neither observed resolution may be acknowledged after invalidation. The
+  // caller must retain the observation; stopping the host can lose it.
+  let commit = text_host_event(2L, 16UL, @text_host.Commit(text="日本"))
+  let cancel = text_host_event(2L, 16UL, @text_host.Cancel)
+  assert_true(mounted.held_text_input(16UL, commit) is Err(_))
+  assert_true(mounted.held_text_input(16UL, cancel) is Err(_))
+  assert_true(mounted.finish_held_text(16UL) is Err(_))
   assert_true(mounted.release_held_text_for_retry(16UL) is Err(_))
+  assert_true(mounted.begin_held_text(16UL) is Err(_))
   mounted.dispose()
 }
