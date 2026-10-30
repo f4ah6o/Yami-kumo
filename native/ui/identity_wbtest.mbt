@@ -65,3 +65,79 @@ test "same-key Column Card transitions retain native binding and runtime token" 
     }
   }
 }
+
+///|
+test "held owner does not publish a commit after reentrant layout invalidation" {
+  let mounted = Mounted::new(@platform.WindowId::new(1L))
+  let invalidate = Ref(false)
+  let measure : @components.TextMeasure = fn(value, size) {
+    if invalidate.val {
+      mounted.invalidate_layout()
+    }
+    let document = @text.TextDocument::new(value).unwrap()
+    let bounds = @primitives.Rect::new(
+      0.0,
+      0.0,
+      (value.length() + 1).to_double() * size,
+      size,
+    ).unwrap()
+    let carets = []
+    let mut offset = 0
+    carets.push(
+      @text_layout.CaretGeometry::new(
+        0,
+        true,
+        @primitives.Rect::new(0.0, 0.0, 1.0, size).unwrap(),
+        @primitives.Rect::new(0.0, 0.0, 1.0, size).unwrap(),
+      ).unwrap(),
+    )
+    for scalar in value.iter() {
+      offset += if scalar.to_int() > 0xFFFF { 2 } else { 1 }
+      let caret = @primitives.Rect::new(
+        offset.to_double() * size,
+        0.0,
+        1.0,
+        size,
+      ).unwrap()
+      carets.push(
+        @text_layout.CaretGeometry::new(offset, true, caret, caret).unwrap(),
+      )
+    }
+    Ok(
+      @text_layout.TextMeasurement::new(
+        document,
+        bounds,
+        bounds,
+        size * 0.8,
+        1,
+        0,
+        carets,
+      ).unwrap(),
+    )
+  }
+  let key = @view.NodeKey::new("name")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(key, @view.TextFieldProps::new("", "Name")),
+  ])
+  ignore(mounted.commit(view, 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(mounted.focus(key))
+  assert_true(mounted.begin_held_text(7UL).unwrap())
+  let before = mounted.held_text.unwrap().session.snapshot()
+  invalidate.val = true
+  let observed = @text_host.TextInputEvent::new(
+    @platform.WindowId::new(1L),
+    1L,
+    7UL,
+    @text_host.Commit(text="日本"),
+  )
+  assert_true(mounted.held_text_input(7UL, observed) is Err(_))
+  let after = mounted.held_text.unwrap().session.snapshot()
+  assert_eq(after.delivery_watermark(), before.delivery_watermark())
+  assert_eq(
+    after.field().committed_document().text(),
+    before.field().committed_document().text(),
+  )
+  assert_true(mounted.held_text.unwrap().poisoned)
+  assert_true(mounted.held_text_input(7UL, observed) is Err(_))
+  mounted.dispose()
+}

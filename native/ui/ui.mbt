@@ -3026,7 +3026,14 @@ pub fn Mounted::held_text_input(
       let result = held.session.apply_batch(
         target,
         [value],
-        fn(document) { field_measure(measure, document) },
+        fn(document) {
+          let measured = field_measure(measure, document)
+          if self.is_disposed() || !same_epoch(change, self.change) {
+            Err(@text_field.MeasurementFailed)
+          } else {
+            measured
+          }
+        },
         field_admit,
       )
       self.busy = false

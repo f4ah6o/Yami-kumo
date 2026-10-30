@@ -21,9 +21,17 @@ The noncomposing fixture is not a live host or IME acceptance.
 - The ordered input buffer and `FrameCompleted` handling needed to survive
   resize while retaining event order have not been implemented. Layout
   invalidation during a hold fails closed and has no recovery operation.
-- A reentrant measurement that changes the owner poisons the hold to prevent
-  replay, but recovery/publication of an already accepted OS fact is not yet
-  implemented. Test failure is not converted to successful delivery.
+- A reentrant measurement that changes the owner now causes the TextSession
+  transaction to reject before publication. A white-box fixture checks the
+  committed document and delivery watermark remain unchanged; removing the
+  guard makes that fixture fail. The hold remains poisoned, and recovery of
+  the caller-retained observation is not implemented. Error is not converted
+  to successful delivery.
+- Safe resize recovery also needs a bounded owner-side event buffer and a way
+  to preserve or drain previously queued model actions before re-staging. The
+  current layout invalidation blocks `next_action`, the lease blocks stage and
+  publish, and an active preedit cannot be rebound as an idle session. Do not
+  release the lease and rebuild a stale model merely to unblock the UI.
 - The operation is not wired into native Settings; OS lifecycle, Dialog,
   callbacks arriving after cutoff and actual IME behavior remain unqualified.
   No unconditional Tab/preedit discard policy is introduced.
@@ -39,3 +47,9 @@ Local candidate-source checks, Debian 13 x86_64 with moonc
 `9bc6a76b7d7d5e0f14a0d2b351fa7dfb060b446838cbe2b3b49380ccde1f090f`)
 and `common.log` (SHA-256
 `5e37471f47803b1ee42a119a3a0d161e5a472217b58e9cd5042ac1ac20a21571`).
+
+After the reentrancy guard, the same candidate-source UI suite passed 91/91
+and the common suite passed 8/8. The guard-removal negative control failed as
+expected: without the guard the delivery watermark changed from 0 to 1 while
+the owner was being invalidated. Local logs are under
+`/workspace/evidence/yami-held-tab/`; this is not an OS or runner acceptance.
