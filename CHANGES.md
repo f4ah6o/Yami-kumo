@@ -11,6 +11,11 @@
 
 ### Fixed
 
+- Native TextField and Settings sample runners stop a text session when its
+  original field loses focus, before routing another portable text observation.
+  This prevents a queued commit for an old field from reaching a new field.
+  An already-observed commit may still be dropped during focus loss; see the
+  unresolved regression in the Shared Settings evidence record before merging.
 - The Windows Settings driver builds Win32 `INPUT`/`KEYBDINPUT` records for
   `SendInput` and reuses the native UI driver's foreground guard, so `abc`,
   Tab and Enter reach the sample window.

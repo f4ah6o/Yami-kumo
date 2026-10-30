@@ -191,6 +191,16 @@ pub fn run_native_settings_sample(
         Some(value) => value
         None => break
       }
+      if !text_session_has_focus(mounted, current) {
+        match end_text_session(port, current) {
+          Err(error) => return Err(error)
+          Ok(_) => ()
+        }
+        session = None
+        last_document = ""
+        dirty = true
+        break
+      }
       let event = match (port.next)(0) {
         Err(error) => return Err(error)
         Ok(value) => value
@@ -203,7 +213,7 @@ pub fn run_native_settings_sample(
       if event.epoch() != current.epoch {
         continue
       }
-      let handled = match mounted.text_input(current.epoch, event) {
+      let handled = match deliver_text_observation(mounted, current, event) {
         Err(error) => return Err(error)
         Ok(value) => value
       }

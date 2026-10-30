@@ -78,6 +78,10 @@ The matrix fails when a required flow row is missing or not passing, when a
 declared `NOT_RUN` row has no reason, when a lane is undeclared, or when a
 candidate SHA differs. `NOT_RUN` rows never satisfy a required row.
 
+A separate [2026-10-30 local text-owner record](evidence/20261030-shared-settings-text-owner/README.md)
+retains the commands, source revision, output and limits of the scripted and
+synthetic Web checks; it is not a live IME qualification.
+
 ## Not claimed
 
 Ubuntu/Windows real IME and accessibility providers, macOS key-driven dialog,
@@ -94,6 +98,12 @@ rendering, preventing stale props from resetting the caret. Initial focus is
 retried only until observed, so Tab and modal focus are preserved afterward.
 The text session marker identifies IMM32 on Windows and text-input-v1 on Linux;
 direct keyboard fallback is recorded separately and does not qualify IME.
+The native sample checks the focused binding before draining each text
+observation and ends the old host session if that binding has changed. Its
+scripted regression exercises a queued old-epoch commit after a field switch;
+it does not qualify OS IME delivery. The same focus-loss path can drop an
+already-observed commit; this remains an open correctness blocker described in
+the [local text-owner record](evidence/20261030-shared-settings-text-owner/README.md).
 
 Both native drivers require name `abc`, an observed Save focus, Dialog cancel
 with focus restoration, reopening and confirmation, and saved name `abc`.

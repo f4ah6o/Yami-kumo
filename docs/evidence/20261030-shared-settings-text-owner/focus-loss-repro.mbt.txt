@@ -1,0 +1,56 @@
+///|
+test "queued commit survives an observed window focus loss" {
+  let host = @testing.ScriptedBackend::new(800.0, 600.0, 1.0).unwrap()
+  for _ in 0..<6 {
+    ignore(host.enqueue(@platform.FrameCompleted, 1.0))
+  }
+  ignore(host.enqueue(@platform.FocusChanged(false), 1.0))
+  for _ in 0..<2 {
+    ignore(host.enqueue(@platform.FrameCompleted, 1.0))
+  }
+  ignore(host.enqueue(@platform.Destroyed, 1.0))
+  let begun = Ref(false)
+  let taken = Ref(0)
+  let dropped = Ref(0)
+  let queue : Ref[Array[@text_host.TextInputEvent]] = Ref([])
+  let port = NativeTextInputPort::new(
+    fn(_, _) { begun.val = true; Ok(7UL) },
+    fn(epoch, _) { Ok(epoch) },
+    fn(epoch) {
+      dropped.val += queue.val.length()
+      queue.val = []
+      Ok(epoch + 1UL)
+    },
+    fn(_) { Ok(()) },
+    fn(_) {
+      if queue.val.length() == 0 { Ok(None) } else {
+        taken.val += 1
+        Ok(Some(queue.val.remove(0)))
+      }
+    },
+  )
+  run_native_settings_sample(
+    host,
+    Linux,
+    text_runner_measure,
+    text_port=Some(port),
+    next_platform_event=Some(fn(timeout) {
+      let event = host.next_event(timeout_ms=timeout)
+      match event {
+        Ok(Some(value)) =>
+          if value.kind() is @platform.FocusChanged(false) && begun.val {
+            queue.val.push(
+              @text_host.TextInputEvent::new(
+                host.window(), 1L, 7UL, @text_host.Commit(text="日本語"),
+              ),
+            )
+          }
+        _ => ()
+      }
+      event
+    }),
+  ).unwrap()
+  assert_true(begun.val)
+  assert_eq(dropped.val, 0)
+  assert_eq(taken.val, 1)
+}

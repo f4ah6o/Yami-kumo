@@ -36,6 +36,55 @@ fn text_runner_measure(
 }
 
 ///|
+test "a text session cannot follow focus to a different field" {
+  let mounted = @ui.Mounted::new(@platform.WindowId::new(1L))
+  let first = @view.NodeKey::new("first")
+  let second = @view.NodeKey::new("second")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(first, @view.TextFieldProps::new("", "First")),
+    @view.text_field(second, @view.TextFieldProps::new("", "Second")),
+  ])
+  ignore(mounted.commit(view, 640.0, 360.0, 1.0, text_runner_measure).unwrap())
+  assert_true(mounted.focus(first))
+  let session = {
+    epoch: 7UL,
+    binding: mounted.focused_text().unwrap().binding_id(),
+  }
+  assert_true(text_session_has_focus(mounted, session))
+  assert_true(mounted.focus(second))
+  assert_false(text_session_has_focus(mounted, session))
+  let stale = @text_host.TextInputEvent::new(
+    @platform.WindowId::new(1L),
+    1L,
+    7UL,
+    @text_host.Commit(text="古い"),
+  )
+  assert_false(deliver_text_observation(mounted, session, stale).unwrap())
+  assert_true(mounted.next_action() is None)
+  let replacement = {
+    epoch: 8UL,
+    binding: mounted.focused_text().unwrap().binding_id(),
+  }
+  assert_true(text_session_has_focus(mounted, replacement))
+  assert_false(deliver_text_observation(mounted, replacement, stale).unwrap())
+  let current = @text_host.TextInputEvent::new(
+    @platform.WindowId::new(1L),
+    2L,
+    8UL,
+    @text_host.Commit(text="新しい"),
+  )
+  assert_true(deliver_text_observation(mounted, replacement, current).unwrap())
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, value)) => {
+      assert_eq(key, second)
+      assert_eq(value, "新しい")
+    }
+    _ => fail("expected only the current field's text")
+  }
+  mounted.dispose()
+}
+
+///|
 test "text runner begins, updates and ends a session around a commit" {
   let host = @testing.ScriptedBackend::new(640.0, 360.0, 1.0).unwrap()
   // The first input arrives before the initial frame is ready and is ignored.
