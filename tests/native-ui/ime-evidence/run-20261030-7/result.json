@@ -1,0 +1,177 @@
+{
+  "framework_sha": "a645aa3acfda4420c9558a12795187d71bb96003",
+  "app_source_sha": "7d9b920a7e435e0e9fcd3dfcc24013782ca1e16d",
+  "app_binary_sha256": "f47c2274288150c10e1e808134849b8d177e082c3945c5b2e3723c8a4ebd42d7",
+  "status": "PASS",
+  "stage": "complete",
+  "observations": {
+    "started": {
+      "phase": "text",
+      "status": "started",
+      "transport": "text-input-v1",
+      "epoch": 1
+    },
+    "validation": {
+      "phase": "frame",
+      "name": "",
+      "status": "editing",
+      "dialog": false,
+      "focus": "name",
+      "error": "Enter a name before saving."
+    },
+    "preedit": {
+      "phase": "preedit",
+      "text": "にほん",
+      "cursor": 3,
+      "epoch": 1
+    },
+    "uncommitted_frame": {
+      "phase": "frame",
+      "name": "",
+      "status": "editing",
+      "dialog": false,
+      "focus": "name",
+      "error": "Enter a name before saving."
+    },
+    "cancel_preedit": {
+      "phase": "preedit",
+      "text": "",
+      "cursor": -1,
+      "epoch": 1
+    },
+    "cancel_frame": {
+      "phase": "frame",
+      "name": "",
+      "status": "editing",
+      "dialog": false,
+      "focus": "name",
+      "error": "Enter a name before saving."
+    },
+    "conversion": {
+      "phase": "preedit",
+      "text": "日本",
+      "cursor": 0,
+      "epoch": 1
+    },
+    "commit": {
+      "phase": "commit",
+      "text": "日本",
+      "epoch": 1
+    },
+    "committed_frame": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "editing",
+      "dialog": false,
+      "focus": "name",
+      "error": ""
+    },
+    "undo_frame": {
+      "phase": "frame",
+      "name": "",
+      "status": "editing",
+      "dialog": false,
+      "focus": "name",
+      "error": ""
+    },
+    "redo_frame": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "editing",
+      "dialog": false,
+      "focus": "name",
+      "error": ""
+    },
+    "field_open": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "editing",
+      "dialog": true,
+      "focus": "confirm",
+      "error": ""
+    },
+    "background_click": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "editing",
+      "dialog": false,
+      "focus": "name",
+      "error": ""
+    },
+    "background_click_point": {
+      "x": 150,
+      "y": 285
+    },
+    "after_backdrop_reopen": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "editing",
+      "dialog": true,
+      "focus": "confirm",
+      "error": ""
+    },
+    "after_background_key": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "editing",
+      "dialog": true,
+      "focus": "cancel",
+      "error": ""
+    },
+    "tab": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "editing",
+      "dialog": true,
+      "focus": "confirm",
+      "error": ""
+    },
+    "field_restore": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "editing",
+      "dialog": false,
+      "focus": "name",
+      "error": ""
+    },
+    "field_reopen": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "editing",
+      "dialog": true,
+      "focus": "confirm",
+      "error": ""
+    },
+    "field_restore_again": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "editing",
+      "dialog": false,
+      "focus": "name",
+      "error": ""
+    },
+    "field_open_to_confirm": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "editing",
+      "dialog": true,
+      "focus": "confirm",
+      "error": ""
+    },
+    "saved": {
+      "phase": "frame",
+      "name": "日本",
+      "status": "saved",
+      "dialog": false,
+      "focus": "name",
+      "error": ""
+    }
+  },
+  "x11Focus": {
+    "window": 4194309,
+    "focusBefore": "1",
+    "focusAfter": "4194309",
+    "windowfocusRc": 0,
+    "windowactivateRc": 1
+  }
+}
