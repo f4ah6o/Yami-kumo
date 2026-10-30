@@ -81,11 +81,12 @@ try:
   after=len(o.frames)
   d.xdotool('mousemove','--sync',x,y,'click','1')
   result['observations']['background_click']=o.wait_frame(lambda f:f.get('dialog') is False and f.get('focus')=='name' and f.get('name')=='日本',12,after=after)
+  dismissed_index=len(o.frames)-1
   time.sleep(.3)
   while not o.lines.empty():
    line=o.lines.get_nowait()
    if line is not None: o._handle(line)
-  if any(f.get('dialog') is True or f.get('status') != 'editing' or f.get('name') != '日本' for f in o.frames[after:]):
+  if any(f.get('dialog') is True or f.get('status') != 'editing' or f.get('name') != '日本' for f in o.frames[dismissed_index+1:]):
    raise RuntimeError('background click caused an unexpected model action')
   subprocess.run(['import','-window','root',str(out/'after-background-click.png')],check=True)
   result['observations']['background_click_point']={'x':int(x),'y':int(y)}
