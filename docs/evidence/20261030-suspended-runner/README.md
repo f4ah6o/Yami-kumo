@@ -62,6 +62,17 @@ implicitly, even with no inflight record. The legacy one-shot wrapper refuses
 an ordered route before opening a window or polling input because it cannot
 transfer ownership on failure.
 
+`SettingsEntryController` retains the outcome and host reference and rejects
+`try_stop` while suspended. A terminal command performs one explicit operation:
+apply one original buffered observation, poll at most one exposed host record,
+or attempt text cutoff. Each result reports whether the field or model advanced;
+no step publishes a scene or caret. Polling checks the 64-record local bound
+before calling the port. A full buffer, an unsupported nontext prefix, and a
+failed step remain owned; an empty poll is not a cutoff or quiescence proof.
+This controller is a finite caller interface, not a persistent service or an
+entrypoint policy. The port may itself skip or lose native records; the
+controller cannot repair or acknowledge records the host did not expose.
+
 Ubuntu main has not been adapted to retain this outcome. Since main is the
 final process caller, simply returning without `host.stop()` would still lose
 the owner on process exit. A live control/recovery policy is needed before
@@ -78,10 +89,10 @@ Candidate source: gpui `74d182c6368ca382f697023c5d3690b6c0c2dfbf`, Yami base
 published dependencies lacking the candidate API. Tests use a local source
 workspace and do not establish published-package compatibility.
 
-Local combined native UI and common fixture suite: **127/127 PASS** using
+Local combined native UI and common fixture suite: **129/129 PASS** using
 `GPUI_SOURCE=/workspace/gpui-ordered-fence` and
 `scripts/native_ui_workspace.sh ... moon test <ui> <examples/common> --target
 native --deny-warn --no-parallelize`. This is scripted evidence only; no
 production main, live IME, or public-registry consumer was tested.
 Local raw log SHA-256:
-`dcc2b1c168ec56ba320ab8f5010188b7ca055f6137bd649a0d0da6c7d241b2cb`.
+`fbe753ac983ace1d7ee33c5b5d9fcce1a9745072ee9f7a102de1d48d3502413a`.

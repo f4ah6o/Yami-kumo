@@ -838,16 +838,16 @@ test "retained Settings owner keeps buffered commit and terminal record on error
     fn(_) { Ok(()) },
     fn(_) { Ok(None) },
   )
-  let owner = match run_native_settings_retained(
+  let entry = SettingsEntryController::start(
     host,
     Linux,
     text_runner_measure,
     text_port=Some(port),
     ordered_text=Some(ordered),
-  ) {
-    Suspended(value, _) => value
-    _ => fail("the retained owner must be returned to the caller")
-  }
+  )
+  assert_true(entry.suspended())
+  let owner = entry.owner().unwrap()
+  assert_true(entry.try_stop() is Err(_))
   assert_eq(host.stop_count(), 0)
   assert_false(owner.can_stop())
   assert_true(owner.window() == window)
@@ -866,7 +866,9 @@ test "retained Settings owner keeps buffered commit and terminal record on error
   assert_true(owner.inflight_receipt() is None)
   // Reconcile the original commit into its still-owned model without trying
   // to publish a scene for the destroyed window or stop the backend.
-  owner.reconcile_terminal_commit().unwrap()
+  let progress = entry.terminal_step(ApplyNext).unwrap()
+  assert_true(progress is ModelApplied(1L, true))
+  assert_false(progress.scene_published())
   assert_eq(owner.model().name(), "日本")
   assert_eq(owner.terminal_model_sequence(), 1L)
   assert_eq(owner.pending_records().length(), 0)
@@ -878,6 +880,7 @@ test "retained Settings owner keeps buffered commit and terminal record on error
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
   assert_eq(owner.model().name(), "日本")
   assert_false(owner.can_stop())
+  assert_true(entry.try_stop() is Err(_))
   assert_eq(host.stop_count(), 0)
   // Automatic replay is deliberately unavailable until owner-preserving
   // geometry/terminal recovery is implemented.
@@ -1184,10 +1187,10 @@ test "terminal cutoff needs an empty prefix and retains terminal ownership" {
   assert_true(owner.try_terminal_text_cutoff() is Err(_))
   assert_false(owner.cutoff_completed())
   assert_eq(pending.length(), 1)
-  owner.buffered.push((ordered.next)(0).unwrap().unwrap())
-  owner.reconcile_terminal_observation().unwrap()
+  assert_true(owner.terminal_step(PollOnce).unwrap() is RecordBuffered)
+  assert_true(owner.terminal_step(ApplyNext).unwrap() is ModelApplied(3L, true))
   assert_eq(owner.model().name(), "日本")
-  owner.try_terminal_text_cutoff().unwrap()
+  assert_true(owner.terminal_step(TryTextCutoff).unwrap() is TextCutoffCompleted)
   assert_eq(calls.val, 2)
   assert_true(owner.cutoff_completed())
   assert_true(owner.try_terminal_text_cutoff() is Err(_))
@@ -1326,4 +1329,45 @@ test "terminal cutoff rejects reentry before a Busy result" {
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
   assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "terminal control enforces backpressure before polling host" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let reads = Ref(0)
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) { reads.val += 1; Ok(None) }, fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  owner.suspended = true
+  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 1L, 1.0, @platform.Destroyed)))
+  for _ in 0..<64 {
+    owner.buffered.push(OrderedPlatform(@platform.Event::new(owner.window, 2L, 1.0, @platform.FrameCompleted)))
+  }
+  assert_true(owner.terminal_step(PollOnce) is Err(_))
+  assert_eq(reads.val, 0)
+  assert_eq(owner.pending_records().length(), 64)
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "entry controller stops a proved-complete fake host at most once" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  // A synthetic Completed outcome exercises only the caller's stop guard.
+  let entry : SettingsEntryController = {
+    host,
+    outcome: Completed,
+    stop_attempted: false,
+    stopped: false,
+  }
+  entry.try_stop().unwrap()
+  assert_eq(host.stop_count(), 1)
+  assert_true(entry.try_stop() is Err(_))
+  assert_eq(host.stop_count(), 1)
 }

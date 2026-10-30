@@ -236,6 +236,81 @@ pub fn run_native_settings_retained(
 }
 
 ///|
+/// Entry-level owner for a retained Settings run. The entrypoint must keep this
+/// controller and its host alive whenever `suspended()` is true.
+pub struct SettingsEntryController {
+  priv host : &@platform.Backend
+  priv outcome : SettingsRunOutcome
+  priv mut stop_attempted : Bool
+  priv mut stopped : Bool
+}
+
+///|
+/// Start once and retain the outcome. This does not stop the host.
+pub fn SettingsEntryController::start(
+  host : &@platform.Backend,
+  platform : NativeSamplePlatform,
+  measure : @components.TextMeasure,
+  text_port~ : NativeTextInputPort? = None,
+  direct_text~ : NativeDirectText? = None,
+  ordered_text~ : NativeOrderedTextPort? = None,
+) -> SettingsEntryController {
+  {
+    host,
+    outcome: run_native_settings_retained(host, platform, measure, text_port~, direct_text~, ordered_text~),
+    stop_attempted: false,
+    stopped: false,
+  }
+}
+
+///|
+pub fn SettingsEntryController::suspended(self : SettingsEntryController) -> Bool {
+  self.outcome is Suspended(_, _)
+}
+
+///|
+/// Observe the retained owner without transferring or recreating its host.
+pub fn SettingsEntryController::owner(self : SettingsEntryController) -> SettingsRunOwner? {
+  match self.outcome {
+    Suspended(owner, _) => Some(owner)
+    _ => None
+  }
+}
+
+///|
+/// Run one bounded explicit operation; no error permits implicit host stop.
+pub fn SettingsEntryController::terminal_step(
+  self : SettingsEntryController,
+  command : SettingsTerminalCommand,
+) -> Result[SettingsTerminalProgress, @diagnostics.FrameworkError] {
+  match self.outcome {
+    Suspended(owner, _) => owner.terminal_step(command)
+    _ => Err(runner_error("settings_entry", "no suspended owner"))
+  }
+}
+
+///|
+/// Stop only after an outcome that already proved complete owner cleanup.
+/// NotStarted and Suspended are conservative failures, leaving the host alive.
+pub fn SettingsEntryController::try_stop(
+  self : SettingsEntryController,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.stop_attempted || self.stopped || !(self.outcome is Completed) {
+    return Err(runner_error("settings_entry", "host ownership is unresolved"))
+  }
+  // A host error need not mean that stop had no side effects. Do not retry it
+  // implicitly, including from a reentrant host callback.
+  self.stop_attempted = true
+  match self.host.stop() {
+    Err(error) => Err(error)
+    Ok(_) => {
+      self.stopped = true
+      Ok(())
+    }
+  }
+}
+
+///|
 /// Retains one Settings run and its owner state when drive returns an error.
 /// The caller must retain the host and owner; an error is not permission to
 /// stop it or to replay an observation already applied by the TextSession.
@@ -398,6 +473,99 @@ pub fn SettingsRunOwner::reconcile_terminal_observation(
 /// geometry publication is implied.
 pub fn SettingsRunOwner::terminal_model_sequence(self : SettingsRunOwner) -> Int64 {
   self.terminal_model_sequence
+}
+
+///|
+/// One explicitly requested, bounded terminal-control operation.
+pub(all) enum SettingsTerminalCommand {
+  ApplyNext
+  PollOnce
+  TryTextCutoff
+}
+
+///|
+/// A step is an observation, never permission to stop the host. No result
+/// publishes a scene or caret geometry.
+pub(all) enum SettingsTerminalProgress {
+  FieldApplied(Int64)
+  ModelApplied(Int64, Bool)
+  RecordBuffered
+  NoRecord
+  TextCutoffCompleted
+}
+
+///|
+/// Terminal steps never publish a scene, even after a model action is applied.
+pub fn SettingsTerminalProgress::scene_published(
+  self : SettingsTerminalProgress,
+) -> Bool {
+  ignore(self)
+  false
+}
+
+///|
+/// Perform at most one terminal operation while retaining this owner. A failed
+/// step leaves the caller responsible for the owner and host. Polling consumes
+/// at most one record exposed by the port; it is not a host quiescence proof.
+pub fn SettingsRunOwner::terminal_step(
+  self : SettingsRunOwner,
+  command : SettingsTerminalCommand,
+) -> Result[SettingsTerminalProgress, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running {
+    return Err(runner_error("terminal_step", "owner is not suspended or is busy"))
+  }
+  match command {
+    ApplyNext => {
+      if self.buffered.is_empty() {
+        return Err(runner_error("terminal_step", "no buffered record"))
+      }
+      let event = match self.buffered[0] {
+        OrderedText(value) => value
+        _ => return Err(runner_error("terminal_step", "non-text prefix requires a terminal policy"))
+      }
+      let before = self.settings.name()
+      match self.reconcile_terminal_observation() {
+        Err(error) => Err(error)
+        Ok(_) =>
+          if event.kind() is @text_host.Commit(_) {
+            Ok(ModelApplied(event.sequence(), self.settings.name() != before))
+          } else {
+            Ok(FieldApplied(event.sequence()))
+          }
+      }
+    }
+    PollOnce => {
+      if self.buffered.length() + self.held_platform.length() >= 64 {
+        return Err(runner_error("terminal_step", "local buffer is full"))
+      }
+      match self.inflight {
+        Some(OrderedPlatform(event)) if event.window() == self.window &&
+          (event.kind() is @platform.Destroyed || event.kind() is @platform.CloseRequested ||
+           event.kind() is @platform.ExitRequested) => ()
+        _ => return Err(runner_error("terminal_step", "terminal event is not retained"))
+      }
+      let ordered = match self.ordered_text {
+        Some(value) => value
+        None => return Err(runner_error("terminal_step", "ordered host is unavailable"))
+      }
+      self.running = true
+      let result = (ordered.next)(0)
+      self.running = false
+      match result {
+        Err(error) => Err(error)
+        Ok(None) => Ok(NoRecord)
+        Ok(Some(record)) => {
+          self.buffered.push(record)
+          Ok(RecordBuffered)
+        }
+      }
+    }
+    TryTextCutoff =>
+      match self.try_terminal_text_cutoff() {
+        Err(error) => Err(error)
+        Ok(_) => Ok(TextCutoffCompleted)
+      }
+  }
 }
 
 ///|
