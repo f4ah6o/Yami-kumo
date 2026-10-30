@@ -1,0 +1,149 @@
+{
+  "backend": "gpui-native",
+  "candidateSha": "34bd5287482087668dc7a38affbd56d09757604e",
+  "claims": {
+    "settings.ax": "NOT_RUN",
+    "settings.flow": "PASS",
+    "settings.ime": "NOT_RUN",
+    "settings.text": "PASS (direct-keyboard, no IME engine)"
+  },
+  "command": [
+    "/workspace/evidence/yami-linux-e4bb9ac-attempt2/app.exe",
+    "--settings-e2e"
+  ],
+  "environment": {
+    "moon": [
+      "moon 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moon",
+      "moonc v0.10.15+943464bfa (2026-10-12) /workspace/yami-tools/bin/moonc",
+      "moonrun 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moonrun"
+    ],
+    "platform": "Linux-6.18.57-x86_64-with-glibc2.41",
+    "python": "3.12.14"
+  },
+  "finishedAt": "2026-10-30T14:32:49.383628+00:00",
+  "fixtureId": "settings-flow",
+  "frames": {
+    "cancelled": {
+      "dialog": false,
+      "error": "",
+      "focus": "save",
+      "name": "abc",
+      "phase": "frame",
+      "status": "editing"
+    },
+    "dialog": {
+      "dialog": true,
+      "error": "",
+      "focus": "confirm",
+      "name": "abc",
+      "phase": "frame",
+      "status": "editing"
+    },
+    "fieldForwardTab": {
+      "dialog": true,
+      "error": "",
+      "focus": "confirm",
+      "name": "abc",
+      "phase": "frame",
+      "status": "editing"
+    },
+    "fieldOpened": {
+      "dialog": true,
+      "error": "",
+      "focus": "confirm",
+      "name": "abc",
+      "phase": "frame",
+      "status": "editing"
+    },
+    "fieldReopened": {
+      "dialog": true,
+      "error": "",
+      "focus": "confirm",
+      "name": "abc",
+      "phase": "frame",
+      "status": "editing"
+    },
+    "fieldRestored": {
+      "dialog": false,
+      "error": "",
+      "focus": "name",
+      "name": "abc",
+      "phase": "frame",
+      "status": "editing"
+    },
+    "fieldRestoredAgain": {
+      "dialog": false,
+      "error": "",
+      "focus": "name",
+      "name": "abc",
+      "phase": "frame",
+      "status": "editing"
+    },
+    "fieldReverseTab": {
+      "dialog": true,
+      "error": "",
+      "focus": "cancel",
+      "name": "abc",
+      "phase": "frame",
+      "status": "editing"
+    },
+    "saveFocus": {
+      "dialog": false,
+      "error": "",
+      "focus": "save",
+      "name": "abc",
+      "phase": "frame",
+      "status": "editing"
+    },
+    "saved": {
+      "dialog": false,
+      "error": "",
+      "focus": "save",
+      "name": "abc",
+      "phase": "frame",
+      "status": "saved"
+    },
+    "typed": {
+      "dialog": false,
+      "error": "",
+      "focus": "name",
+      "name": "abc",
+      "phase": "frame",
+      "status": "editing"
+    },
+    "x11Focus": {
+      "focusAfter": "2097157",
+      "focusBefore": "1",
+      "window": 2097157,
+      "windowactivateRc": 1,
+      "windowfocusRc": 0
+    }
+  },
+  "input": "xdotool XTest -> Weston X11 backend -> Wayland client",
+  "layer": "runtime",
+  "platform": "linux",
+  "result": {
+    "dialog": true,
+    "name": "abc",
+    "status": "saved"
+  },
+  "schemaVersion": "settings-lane/v1",
+  "startedAt": "2026-10-30T14:32:48.229243+00:00",
+  "status": "pass",
+  "target": "native",
+  "textMarkers": [
+    {
+      "error": "begin_text_session: invalid_input",
+      "operation": "update_text_input",
+      "phase": "text",
+      "status": "unavailable"
+    },
+    {
+      "phase": "text",
+      "route": "direct-keyboard",
+      "status": "key-path"
+    }
+  ],
+  "textTransport": "direct-keyboard",
+  "windowTitle": "Yami-kumo Shared Settings"
+}

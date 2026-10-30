@@ -1,0 +1,52 @@
+# settings-lane environment
+# platform: Linux-6.18.57-x86_64-with-glibc2.41
+# python: 3.12.14
+# moon: moon 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moon | moonc v0.10.15+943464bfa (2026-10-12) /workspace/yami-tools/bin/moonc | moonrun 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moonrun
+DRIVER X window 543: ''
+DRIVER X window 2097157: 'Weston Compositor - screen0'
+DRIVER using compositor window 2097157: 'Weston Compositor - screen0'
+DRIVER getwindowfocus before: 1
+DRIVER windowfocus 2097157: rc=0 
+DRIVER windowactivate 2097157: rc=1 Your windowmanager claims not to support _NET_ACTIVE_WINDOW, so the attempt to activate the window was aborted.
+xdo_activate_window on window:2097157 reported an error
+DRIVER getwindowfocus after: 2097157
+YAMI_NATIVE_UI_SETTINGS {"phase":"text","status":"unavailable","operation":"update_text_input","error":"begin_text_session: invalid_input"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"text","status":"key-path","route":"direct-keyboard"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"","status":"editing","dialog":false,"focus":"name","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"character"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"","status":"editing","dialog":false,"focus":"name","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"character"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"a","status":"editing","dialog":false,"focus":"name","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"character"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"ab","status":"editing","dialog":false,"focus":"name","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":false,"focus":"name","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"enter"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":true,"focus":"confirm","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"tab"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":true,"focus":"confirm","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":true,"focus":"cancel","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"tab"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":true,"focus":"confirm","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"escape"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":true,"focus":"confirm","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":false,"focus":"name","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"enter"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":true,"focus":"confirm","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"escape"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":true,"focus":"confirm","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":false,"focus":"name","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"tab"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":false,"focus":"save","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"enter"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":false,"focus":"save","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":true,"focus":"confirm","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"escape"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":false,"focus":"save","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"enter"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":false,"focus":"save","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"editing","dialog":true,"focus":"confirm","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"key","key":"enter"}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"saving","dialog":false,"focus":"save","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"saving","dialog":false,"focus":"save","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"saving","dialog":false,"focus":"save","error":""}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"abc","status":"saved","dialog":false,"focus":"save","error":""}

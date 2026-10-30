@@ -111,6 +111,31 @@ class FreshFrameTests(unittest.TestCase):
         with self.assertRaises(driver.SettingsError):
             output.wait_frame(lambda f: f.get("dialog"), 0, after=1)
 
+    def test_field_dialog_requires_new_focus_frames_in_both_directions(self):
+        class FakeOutput:
+            def __init__(self):
+                self.frames = [{"name": "abc", "dialog": False, "focus": "name"}]
+
+            def wait_frame(self, predicate, timeout, after=0):
+                for frame in self.frames[after:]:
+                    if predicate(frame):
+                        return frame
+                raise driver.SettingsError("no matching new frame")
+
+        output = FakeOutput()
+        keys = []
+        expected = iter([(True, "confirm"), (True, "cancel"), (True, "confirm"),
+                         (False, "name"), (True, "confirm"), (False, "name")])
+
+        def key(value):
+            keys.append(value)
+            dialog, focus = next(expected)
+            output.frames.append({"name": "abc", "dialog": dialog, "focus": focus})
+
+        result = driver.drive_field_dialog(output, key, "Enter", "Shift-Tab", "Tab", "Escape")
+        self.assertEqual(keys, ["Enter", "Shift-Tab", "Tab", "Escape", "Enter", "Escape"])
+        self.assertEqual(result["fieldRestoredAgain"]["focus"], "name")
+
 
 class ReportTests(unittest.TestCase):
     def frames(self):

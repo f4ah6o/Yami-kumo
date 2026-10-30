@@ -408,8 +408,30 @@ def drive_linux(output: Output, timeout: float) -> dict[str, Any]:
     def key(name: str) -> None:
         xdotool("key", "--clearmodifiers", name)
 
+    field_flow = drive_field_dialog(output, key, "Return", "shift+Tab", "Tab", "Escape")
     flow = drive_dialog(output, key, "Tab", "Return", "Escape")
-    return {"typed": typed, **flow, "x11Focus": focus}
+    return {"typed": typed, **field_flow, **flow, "x11Focus": focus}
+
+
+def drive_field_dialog(output: Output, key, enter, shift_tab, tab, escape) -> dict[str, Any]:
+    """Open from the field, traverse both ways, and restore the same field."""
+    def step(value, predicate):
+        after = len(output.frames)
+        key(value)
+        return output.wait_frame(predicate, 10.0, after=after)
+
+    def frame(dialog, focus):
+        return lambda f: f.get("dialog") is dialog and f.get("focus") == focus and f.get("name") == "abc"
+
+    opened = step(enter, frame(True, "confirm"))
+    reverse = step(shift_tab, frame(True, "cancel"))
+    forward = step(tab, frame(True, "confirm"))
+    restored = step(escape, frame(False, "name"))
+    reopened = step(enter, frame(True, "confirm"))
+    restored_again = step(escape, frame(False, "name"))
+    return {"fieldOpened": opened, "fieldReverseTab": reverse,
+            "fieldForwardTab": forward, "fieldRestored": restored,
+            "fieldReopened": reopened, "fieldRestoredAgain": restored_again}
 
 
 def drive_dialog(output: Output, key, tab, enter, escape) -> dict[str, Any]:
