@@ -1671,6 +1671,7 @@ fn Mounted::prepare(
   height : Double,
   scale : Double,
   measure : @components.TextMeasure,
+  remeasure_fields~ : Bool = false,
 ) -> Result[Candidate, @diagnostics.FrameworkError] {
   let dialog_views : Array[@view.View] = []
   collect_open_dialogs(view, dialog_views)
@@ -2142,7 +2143,23 @@ fn Mounted::prepare(
         let focused = focus == Some(binding.id)
         let model = match binding.field {
           Some(old) if old.is_composing() ||
-            old.document().text() == props.value() => old.with_bounds(content)
+            old.document().text() == props.value() => {
+            if remeasure_fields && old.is_composing() && !focused {
+              return Err(
+                adapter_error("remeasure cannot discard an active composition"),
+              )
+            }
+            if remeasure_fields {
+              old.remeasure(
+                content,
+                FIELD_FONT_SIZE,
+                fn(document) { field_measure(measure, document) },
+                field_admit,
+              )
+            } else {
+              old.with_bounds(content)
+            }
+          }
           _ => {
             let generation = next_field_generation
             next_field_generation += 1UL
@@ -2918,6 +2935,143 @@ pub struct TerminalTextOwner {
   priv token : @runtime.InstanceToken
   priv mut sequence : Int64
   priv mut busy : Bool
+}
+
+///|
+/// Diagnostic scene and caret prepared for an existing text owner. This value
+/// cannot publish the field, runtime, focus or host state and is not a frame
+/// submission or a host geometry receipt.
+pub struct TerminalGeometryPreview {
+  priv frame : Frame
+  priv caret : @primitives.Rect
+}
+
+///|
+pub fn TerminalGeometryPreview::frame(self : TerminalGeometryPreview) -> Frame {
+  self.frame
+}
+
+///|
+pub fn TerminalGeometryPreview::caret(
+  self : TerminalGeometryPreview,
+) -> @primitives.Rect {
+  self.caret
+}
+
+///|
+/// Prepare a diagnostic scene after layout invalidation with fresh preview
+/// and rollback measurements.
+/// No state or native host geometry is published. The caller must retain the
+/// original owner and all records; this is not resize recovery or authority
+/// to present the returned scene.
+pub fn Mounted::preview_terminal_geometry(
+  self : Mounted,
+  owner : TerminalTextOwner,
+  view : @view.View,
+  width : Double,
+  height : Double,
+  scale : Double,
+  measure : @components.TextMeasure,
+) -> Result[TerminalGeometryPreview, @diagnostics.FrameworkError] {
+  if self.is_disposed() || self.ready || !self.window_focused ||
+    self.busy ||
+    owner.busy ||
+    self.held_text is Some(_) ||
+    !self.identity.live ||
+    !owner.session_identity.live ||
+    !same_epoch(self.identity, owner.identity) ||
+    !(self.terminal_identity is Some(active) &&
+    same_epoch(active, owner.session_identity)) ||
+    self.window != owner.window ||
+    self.text_epoch != owner.epoch ||
+    self.last_text_sequence != owner.sequence ||
+    self.runtime.has_pending_actions() ||
+    !self.runtime.is_current(owner.token) {
+    return Err(adapter_error("terminal geometry owner is stale"))
+  }
+  let scope = match self.scope {
+    Some(value) => value
+    None => return Err(adapter_error("terminal focus unavailable"))
+  }
+  if scope.focused() != Some(owner.binding) {
+    return Err(adapter_error("terminal focus changed"))
+  }
+  let mut original : @text_field.TextField? = None
+  for binding in self.bindings {
+    if binding.id == owner.binding &&
+      binding.field_generation == owner.generation &&
+      binding.token == Some(owner.token) {
+      match binding.field {
+        Some(field) if field.revision() == owner.revision =>
+          original = Some(field)
+        _ => ()
+      }
+    }
+  }
+  let original = match original {
+    Some(value) => value
+    None => return Err(adapter_error("terminal field changed"))
+  }
+  let change = self.change
+  let owner_revision = owner.revision
+  let owner_sequence = owner.sequence
+  self.busy = true
+  let prepared = self.prepare(
+    view,
+    width,
+    height,
+    scale,
+    measure,
+    remeasure_fields=true,
+  )
+  self.busy = false
+  let candidate = match prepared {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  if self.is_disposed() || self.ready || !self.window_focused || owner.busy ||
+    !same_epoch(change, self.change) ||
+    !self.identity.live || !owner.session_identity.live ||
+    !same_epoch(self.identity, owner.identity) ||
+    !(self.terminal_identity is Some(active) && same_epoch(active, owner.session_identity)) ||
+    self.window != owner.window || self.text_epoch != owner.epoch ||
+    owner.revision != owner_revision || owner.sequence != owner_sequence ||
+    self.last_text_sequence != owner_sequence || self.runtime.has_pending_actions() ||
+    !self.runtime.is_current(owner.token) || scope.focused() != Some(owner.binding) ||
+    candidate.focused != Some(owner.binding) {
+    return Err(adapter_error("terminal geometry changed during measurement"))
+  }
+  let mut live_matches = false
+  for binding in self.bindings {
+    if binding.id == owner.binding && binding.field_generation == owner.generation &&
+      binding.token == Some(owner.token) {
+      match binding.field {
+        Some(field) if field.revision() == owner_revision => live_matches = true
+        _ => ()
+      }
+    }
+  }
+  if !live_matches {
+    return Err(adapter_error("terminal field changed during measurement"))
+  }
+  for binding in candidate.bindings {
+    if binding.id == owner.binding &&
+      binding.field_generation == owner.generation {
+      match binding.field {
+        Some(field) if field.document() == original.document() &&
+          field.committed_document() == original.committed_document() &&
+          field.is_composing() == original.is_composing() &&
+          field.marked_range() == original.marked_range() =>
+          match field.caret_rect() {
+            Ok(caret) => return Ok({ frame: candidate.frame, caret, })
+            Err(_) =>
+              return Err(adapter_error("terminal candidate caret rejected"))
+          }
+        _ => ()
+      }
+    }
+  }
+  Err(adapter_error("terminal candidate changed owner or composition"))
 }
 
 ///|
