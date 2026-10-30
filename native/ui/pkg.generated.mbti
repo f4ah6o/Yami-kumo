@@ -98,6 +98,7 @@ pub fn Mounted::next_held_text_action(Self, UInt64) -> Result[@core.SemanticActi
 pub fn Mounted::next_terminal_text_action(Self, TerminalTextOwner) -> Result[@core.SemanticAction?, @diagnostics.FrameworkError]
 pub fn Mounted::note_terminal_text_delivery(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::paste(Self, PasteRequest, String) -> Bool
+pub fn Mounted::preview_terminal_geometry(Self, TerminalTextOwner, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[TerminalGeometryPreview, @diagnostics.FrameworkError]
 pub fn Mounted::publish(Self, Prepared) -> Result[Frame, @diagnostics.FrameworkError]
 pub fn Mounted::release_held_text_for_retry(Self, UInt64) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::set_theme(Self, @theme.Theme?) -> Bool
@@ -116,6 +117,12 @@ pub struct PasteRequest {
 pub struct Prepared {
   // private fields
 }
+
+pub struct TerminalGeometryPreview {
+  // private fields
+}
+pub fn TerminalGeometryPreview::caret(Self) -> @primitives.Rect
+pub fn TerminalGeometryPreview::frame(Self) -> Frame
 
 pub struct TerminalTextOwner {
   // private fields

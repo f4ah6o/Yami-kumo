@@ -255,6 +255,15 @@ clipboard I/O and must drain `Mounted::next_clipboard`, then call
 candidate-window placement and accessibility transport are not qualified; the
 native Button click/frame proof does not qualify text input or IME support.
 
+The experimental `Mounted::preview_terminal_geometry` prepares a diagnostic
+scene and caret for a captured terminal text owner using freshly measured
+preview and rollback documents. It keeps the live owner and its field intact;
+it does not publish the candidate or update the host. The result must not be
+presented as recovered geometry: runtime/focus/scene and native host updates
+still need a coordinated failure and recovery contract. This draft requires the
+unreleased gpui TextField remeasurement API and does not establish a clean
+registry consumer or live IME acceptance.
+
 ## Maintainer checks
 
 These checks use scripts in the Yami source repository and are for maintainers;
