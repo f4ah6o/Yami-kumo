@@ -185,6 +185,22 @@ The corresponding source-override Ubuntu example build passed; binary SHA-256
 The finite steps do not establish scene publication, retirement, cutoff,
 safe host shutdown, real native callback handling or live IME acceptance.
 
+An independent review identified that taking the resume identity from the
+ledger tail could let a later receipt change the token for an earlier
+undispatched terminal event. The pre-dispatch stage now retains its exact
+opaque receipt; poll, apply and cutoff are blocked until that stage resolves.
+For a retained Destroyed record the runner fixes the already-buffered prefix:
+only records in that prefix may be applied to the original terminal owner.
+Records fetched after Destroyed are retained without delivery until their
+admission to that owner is established. A synthetic regression exercises an
+ACK failure on Destroyed, retry, rejection of an intervening poll and wrong
+resume sequence, and rejection of a post-Destroyed commit. This does not prove
+real host admission order or implement a policy for that unresolved commit.
+The source-override common suite passed **40/40** for this change; raw log
+SHA-256 `be4c27ccca8205e4d56157aa14957c652ff1002cf75e9774f3d39685c386daba`.
+The Ubuntu example built with the same gpui candidate; binary SHA-256
+`e7fb60e3d75aa3d3a3efced5e1d562538061bb79d760f159f6f7a17f15c03bbf`.
+
 The control transport has **9/9 PASS** local Linux socket fixture tests,
 including same-UID requests, bounded idle clients, sequence-bound apply, fresh
 sockets in the same and a new process, and cleanup. Cross-UID peer rejection is

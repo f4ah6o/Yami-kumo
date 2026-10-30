@@ -385,8 +385,7 @@ pub fn SettingsEntryController::resume_receipt_sequence(
     Suspended(value, _) => value
     _ => return Err(runner_error("settings_entry", "no suspended owner"))
   }
-  let last = owner.acknowledged_receipts.length() - 1
-  match owner.acknowledged_receipt_identity(last) {
+  match owner.resumable_receipt_identity() {
     Some((_, current, _, _)) if sequence > 0L && sequence == current.to_int64() =>
       match owner.resume_after_receipt_ack() {
         Ok(_) => Ok(ReceiptDispatched)
@@ -489,8 +488,12 @@ pub struct SettingsRunOwner {
   // retirement policy exists. This ledger is bounded and fails closed.
   priv acknowledged_receipts : Array[NativeRetainedReceipt]
   priv mut entered_target : (Int32, Int64, Int32)?
-  // True only when drive failed in ACK before dispatching this observation.
-  priv mut receipt_pre_dispatch : Bool
+  // Number of locally buffered observations admitted before a retained
+  // Destroyed record. Later observations remain owned but are not delivered
+  // to a destroyed target without separate host admission proof.
+  priv mut retained_destroyed_prefix : Int?
+  // The exact receipt paired with an observation not yet dispatched.
+  priv mut receipt_pre_dispatch : NativeRetainedReceipt?
   priv mut resume_pre_dispatch : Bool
   priv mut bounded_resume : Bool
   priv mut live_step_ready : Bool
@@ -562,7 +565,8 @@ pub fn SettingsRunOwner::reconcile_terminal_observation(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   if !self.suspended || self.running || self.cutoff_done || self.held_tab is Some(_) ||
-    self.pending_host_receipt is Some(_) {
+    !self.held_platform.is_empty() ||
+    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) {
     return Err(runner_error("terminal_recovery", "terminal owner is unavailable"))
   }
   self.running = true
@@ -587,6 +591,9 @@ fn SettingsRunOwner::reconcile_terminal_observation_inner(
   }
   if self.buffered.is_empty() {
     return Err(runner_error("terminal_recovery", "no retained record"))
+  }
+  if self.retained_destroyed_prefix is Some(0) {
+    return Err(runner_error("terminal_recovery", "post-destroy record requires admission proof"))
   }
   let event = match self.buffered[0] {
     OrderedText(value) if value.kind() is @text_host.Commit(_) ||
@@ -618,6 +625,10 @@ fn SettingsRunOwner::reconcile_terminal_observation_inner(
   }
   self.terminal_applied = None
   ignore(self.buffered.remove(0))
+  match self.retained_destroyed_prefix {
+    Some(count) if count > 0 => self.retained_destroyed_prefix = Some(count - 1)
+    _ => ()
+  }
   Ok(())
 }
 
@@ -667,10 +678,13 @@ pub fn SettingsRunOwner::pending_receipt_identity(
 pub fn SettingsRunOwner::resumable_receipt_identity(
   self : SettingsRunOwner,
 ) -> (@platform.WindowId, Int32, UInt64, UInt64)? {
-  if !self.suspended || !self.receipt_pre_dispatch || self.pending_host_receipt is Some(_) {
+  if !self.suspended || self.pending_host_receipt is Some(_) {
     return None
   }
-  self.acknowledged_receipt_identity(self.acknowledged_receipts.length() - 1)
+  match self.receipt_pre_dispatch {
+    Some(receipt) => Some((receipt.window, receipt.sequence, receipt.root, receipt.epoch))
+    None => None
+  }
 }
 
 ///|
@@ -693,7 +707,7 @@ pub fn SettingsRunOwner::acknowledged_receipt_identity(
 pub fn SettingsRunOwner::resume_after_receipt_ack(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || !self.receipt_pre_dispatch ||
+  if !self.suspended || self.running || self.receipt_pre_dispatch is None ||
     self.pending_host_receipt is Some(_) || self.cutoff_done {
     return Err(runner_error("ordered_text", "no acknowledged pre-dispatch interruption"))
   }
@@ -715,7 +729,7 @@ pub fn SettingsRunOwner::resume_after_receipt_ack(
 pub fn SettingsRunOwner::advance_generation(self : SettingsRunOwner) -> Int64? {
   if self.suspended && !self.running && self.live_step_ready &&
     self.pending_host_receipt is None && self.inflight is None &&
-    self.held_tab is None && !self.receipt_pre_dispatch && !self.cutoff_done {
+    self.held_tab is None && self.receipt_pre_dispatch is None && !self.cutoff_done {
     Some(self.live_step_generation)
   } else {
     None
@@ -848,6 +862,9 @@ pub fn SettingsRunOwner::terminal_step(
   if self.pending_host_receipt is Some(_) && !(command is RetryReceiptAck) {
     return Err(runner_error("terminal_step", "receipt acknowledgement is pending"))
   }
+  if self.receipt_pre_dispatch is Some(_) && !(command is RetryReceiptAck) {
+    return Err(runner_error("terminal_step", "pre-dispatch receipt requires resolution"))
+  }
   match command {
     RetryReceiptAck => {
       self.running = true
@@ -945,7 +962,8 @@ pub fn SettingsRunOwner::try_terminal_text_cutoff(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   if !self.suspended || self.running || self.cutoff_done ||
-    self.held_tab is Some(_) || self.pending_host_receipt is Some(_) || !self.buffered.is_empty() ||
+    self.held_tab is Some(_) || self.pending_host_receipt is Some(_) ||
+    self.receipt_pre_dispatch is Some(_) || !self.buffered.is_empty() ||
     !self.held_platform.is_empty() || self.terminal_applied is Some(_) {
     return Err(runner_error("terminal_cutoff", "local records or actions remain unresolved"))
   }
@@ -1112,7 +1130,8 @@ pub fn SettingsRunOwner::new(
     pending_host_receipt: None,
     acknowledged_receipts: [],
     entered_target: None,
-    receipt_pre_dispatch: false,
+    retained_destroyed_prefix: None,
+    receipt_pre_dispatch: None,
     resume_pre_dispatch: false,
     bounded_resume: false,
     live_step_ready: false,
@@ -1301,7 +1320,7 @@ fn SettingsRunOwner::drive_inner(
         if event is None {
           let ingress = if self.resume_pre_dispatch {
             self.resume_pre_dispatch = false
-            self.receipt_pre_dispatch = false
+            self.receipt_pre_dispatch = None
             self.inflight
           } else if self.held_tab is None &&
             gate.input_ready() &&
@@ -1328,7 +1347,11 @@ fn SettingsRunOwner::drive_inner(
                 Ok(Some(receipt)) => {
                   self.pending_host_receipt = Some(receipt)
                   self.inflight = receipt.event
-                  self.receipt_pre_dispatch = true
+                  self.receipt_pre_dispatch = Some(receipt)
+                  if self.retained_destroyed_prefix is None &&
+                    receipt.event is Some(OrderedPlatform(value)) && value.kind() is @platform.Destroyed {
+                    self.retained_destroyed_prefix = Some(self.buffered.length())
+                  }
                   match receipt.event {
                     None if receipt.entered is Some(_) =>
                       match self.own_entered(receipt) {
@@ -1341,7 +1364,7 @@ fn SettingsRunOwner::drive_inner(
                   match self.ack_owned_receipt() {
                     Err(error) => return Err(error)
                     Ok(_) => {
-                      self.receipt_pre_dispatch = false
+                      self.receipt_pre_dispatch = None
                       receipt.event
                     }
                   }
@@ -1500,6 +1523,10 @@ fn SettingsRunOwner::drive_inner(
           | @platform.ExitRequested => {
             self.destroyed = true
             self.dirty = false
+            if ordered_text is Some(_) {
+              gate.invalidate_layout(self.pending_frame is Some(_))
+              mounted.invalidate_layout()
+            }
           }
           @platform.Resized(..) | @platform.ScaleChanged => {
             // Invalidation clears the commit-ready state; without a new frame
@@ -1613,6 +1640,9 @@ fn SettingsRunOwner::drive_inner(
         }
       }
       Some(_) => ()
+    }
+    if ordered_text is Some(_) && self.destroyed {
+      return Err(runner_error("ordered_text", "terminal event requires retained cleanup"))
     }
     self.inflight = None
     if self.bounded_resume { return Ok(()) }

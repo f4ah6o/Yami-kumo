@@ -1772,6 +1772,63 @@ test "resize then failed ack retains commit across destroyed window" {
 }
 
 ///|
+test "terminal receipt identity cannot be replaced by later poll" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let records : Array[NativeOrderedEvent] = [
+    OrderedPlatform(@platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted)),
+    OrderedPlatform(@platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted)),
+    OrderedPlatform(@platform.Event::new(window, 3L, 1.0, @platform.Destroyed)),
+    OrderedText(@text_host.TextInputEvent::new(window, 1L, 7UL, @text_host.Commit(text="日本"))),
+  ]
+  let sequence = Ref(1)
+  let reads = Ref(0)
+  let fail_once = Ref(true)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      reads.val += 1
+      if records.is_empty() { return Ok(None) }
+      let record = records[0]
+      let current = sequence.val
+      Ok(Some(NativeRetainedReceipt::new(Some(record), window, current, 0UL, 0UL, fn() {
+        if current == 3 && fail_once.val {
+          fail_once.val = false
+          return Err(runner_error("test_ack", "injected terminal ACK failure"))
+        }
+        ignore(records.remove(0))
+        sequence.val += 1
+        Ok(())
+      })))
+    },
+    fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "cutoff")) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let entry = SettingsEntryController::start(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered))
+  let owner = entry.owner().unwrap()
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_true(entry.retry_receipt_sequence(3L).unwrap() is ReceiptAcknowledged)
+  assert_true(owner.resumable_receipt_identity() is Some((_, 3, _, _)))
+  assert_true(entry.terminal_step(PollOnce) is Err(_))
+  assert_eq(reads.val, 3)
+  assert_eq(records.length(), 1)
+  // Even an independently retained later identity cannot alter the original
+  // dispatch token or make a stale request act on this event.
+  owner.acknowledged_receipts.push(NativeRetainedReceipt::new(None, window, 4, 0UL, 0UL, fn() { Ok(()) }))
+  assert_true(owner.resumable_receipt_identity() is Some((_, 3, _, _)))
+  assert_true(entry.resume_receipt_sequence(4L) is Err(_))
+  assert_true(entry.resume_receipt_sequence(3L) is Err(_))
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_true(entry.terminal_step(PollOnce).unwrap() is RecordBuffered)
+  assert_true(entry.terminal_step(ApplyNext) is Err(_))
+  assert_eq(owner.pending_records().length(), 1)
+  assert_eq(owner.model().name(), "")
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
 test "entry sequence retry does not apply the next record" {
   let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
   let port = NativeTextInputPort::new(
