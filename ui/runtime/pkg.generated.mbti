@@ -20,6 +20,10 @@ pub fn CommitError::equal(Self, Self) -> Bool
 pub fn CommitError::not_equal(Self, Self) -> Bool
 pub fn CommitError::to_repr(Self) -> @debug.Repr
 
+pub struct CommitProposal {
+  // private fields
+}
+
 pub struct FocusRequest {
   // private fields
 }
@@ -67,6 +71,8 @@ pub fn Runtime::new() -> Self
 pub fn Runtime::next_action(Self) -> @core.SemanticAction?
 pub fn Runtime::next_focus_result(Self) -> FocusResult?
 pub fn Runtime::next_text_changed_for(Self, InstanceToken) -> Result[@core.SemanticAction?, RequestError]
+pub fn Runtime::prepare_commit(Self, @core.View) -> Result[CommitProposal, CommitError]
+pub fn Runtime::publish_commit(Self, CommitProposal) -> Bool
 pub fn Runtime::request_focus(Self, InstanceToken) -> Result[FocusRequest, RequestError]
 pub fn Runtime::token(Self, @core.NodeKey) -> InstanceToken?
 pub fn Runtime::view(Self) -> @core.View?

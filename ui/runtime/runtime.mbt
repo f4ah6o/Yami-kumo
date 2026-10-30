@@ -118,6 +118,7 @@ priv struct PendingFocusResult {
 /// All access and token comparisons are confined to the owning UI thread.
 pub struct Runtime {
   priv root : Identity
+  priv mut publication : Identity
   priv mut tree : @core.View?
   priv mut entries : Array[Entry]
   priv actions : Array[PendingAction]
@@ -129,6 +130,7 @@ pub struct Runtime {
 pub fn Runtime::new() -> Runtime {
   {
     root: fresh_identity(),
+    publication: fresh_identity(),
     tree: None,
     entries: [],
     actions: [],
@@ -189,14 +191,26 @@ fn validate_tree(
 }
 
 ///|
-/// Validate the whole tree first, then atomically publish a new snapshot.
-/// Every key is root-wide, including nested containers. Same key and kind keep
-/// their instance across reorder/reparent/prop edits. Type replacement and
-/// removal invalidate the old token permanently, even after reinsertion.
-pub fn Runtime::commit(
+/// An opaque structural commit proposal for one exact Runtime publication.
+/// A proposal is not a snapshot of queued actions or external host state.
+pub struct CommitProposal {
+  priv root : Identity
+  priv publication : Identity
+  priv view : @core.View
+  priv entries : Array[Entry]
+  priv revoked : Array[InstanceToken]
+}
+
+///|
+/// Validate and stage a keyed tree without changing current tokens, gates or
+/// actions. This operation has no callbacks. Publication must still validate
+/// that this Runtime's structural publication has not changed. It does not
+/// freeze the action or focus queues: the owner must drain or retain accepted
+/// actions before a publication that would invalidate their existing gates.
+pub fn Runtime::prepare_commit(
   self : Runtime,
   view : @core.View,
-) -> Result[Unit, CommitError] {
+) -> Result[CommitProposal, CommitError] {
   if self.is_disposed() {
     return Err(CommitError::Disposed)
   }
@@ -237,14 +251,62 @@ pub fn Runtime::commit(
         })
     }
   }
+  let revoked = []
   for previous in self.entries {
     match find_entry(next, previous.view.key()) {
       Some(current) if current.token == previous.token => ()
-      _ => previous.token.instance.live = false
+      _ => revoked.push(previous.token)
     }
   }
-  self.entries = next
-  self.tree = Some(view)
+  Ok({
+    root: self.root,
+    publication: self.publication,
+    view,
+    entries: next,
+    revoked,
+  })
+}
+
+///|
+/// Publish a still-current proposal without callbacks or further tree
+/// validation. Returns false for disposed, foreign, reused or stale proposals.
+/// This only publishes Runtime state; it does not atomically publish focus,
+/// scene or native-host state. Callers must serialize those owners explicitly.
+pub fn Runtime::publish_commit(
+  self : Runtime,
+  proposal : CommitProposal,
+) -> Bool {
+  if self.is_disposed() ||
+    !same_identity(self.root, proposal.root) ||
+    !same_identity(self.publication, proposal.publication) {
+    return false
+  }
+  for token in proposal.revoked {
+    token.instance.live = false
+  }
+  self.entries = proposal.entries
+  self.tree = Some(proposal.view)
+  self.publication = fresh_identity()
+  true
+}
+
+///|
+/// Validate the whole tree first, then atomically publish a new snapshot.
+/// Every key is root-wide, including nested containers. Same key and kind keep
+/// their instance across reorder/reparent/prop edits. Type replacement and
+/// removal invalidate the old token permanently, even after reinsertion.
+pub fn Runtime::commit(
+  self : Runtime,
+  view : @core.View,
+) -> Result[Unit, CommitError] {
+  let proposal = match self.prepare_commit(view) {
+    Err(error) => return Err(error)
+    Ok(value) => value
+  }
+  // No callback or suspension occurs between the two owner-thread operations.
+  if !self.publish_commit(proposal) {
+    return Err(CommitError::Disposed)
+  }
   Ok(())
 }
 
@@ -369,7 +431,10 @@ pub fn Runtime::enqueue_submitted(
 ///|
 /// Queue a dismiss request for the current open Dialog. The application still
 /// owns the next `open` value.
-pub fn Runtime::enqueue_dismissed(self : Runtime, token : InstanceToken) -> Bool {
+pub fn Runtime::enqueue_dismissed(
+  self : Runtime,
+  token : InstanceToken,
+) -> Bool {
   match self.active_entry(token) {
     Some(entry) if available_dialog(entry) => {
       self.actions.push({
@@ -385,7 +450,10 @@ pub fn Runtime::enqueue_dismissed(self : Runtime, token : InstanceToken) -> Bool
 
 ///|
 /// Queue a confirm request for the current open Dialog.
-pub fn Runtime::enqueue_confirmed(self : Runtime, token : InstanceToken) -> Bool {
+pub fn Runtime::enqueue_confirmed(
+  self : Runtime,
+  token : InstanceToken,
+) -> Bool {
   match self.active_entry(token) {
     Some(entry) if available_dialog(entry) => {
       self.actions.push({

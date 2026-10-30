@@ -62,6 +62,23 @@ and Row/Column behavior remain unchanged.
 
 ## Identity and thread confinement
 
+For an owner coordinating a bounds-only native update, `Runtime::prepare_commit`
+validates the view and stages tokens/gates without changing the live runtime.
+`publish_commit` accepts the proposal only on the exact same live structural
+publication and performs no callback or further tree validation. Foreign,
+stale, reused and disposed proposals return false. Ordinary `commit` retains
+its synchronous behavior and now uses these steps internally.
+
+This is a Runtime-only preparation, not a cross-owner transaction. In
+particular, it does not freeze action/focus queues. Before publishing a view
+whose gate changes, the owner must apply or retain previously accepted actions;
+otherwise existing gate rules may discard them. It also does not prepare or
+commit a GPUI focus scope, TextSession, scene, native caret, or IME cutoff.
+Other owners can reject after this runtime has published, so a coordinator
+still needs a validated, callback-free critical section and host failure
+semantics before claiming atomic publication. This source candidate does not
+establish that integration or any GUI/IME acceptance.
+
 All common runtime, DOM mount and native mount access, including token and
 capability comparisons, must stay on the owning UI thread. These APIs do not
 provide cross-thread synchronization.
