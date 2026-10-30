@@ -2708,6 +2708,12 @@ pub fn Mounted::next_action(self : Mounted) -> @view.SemanticAction? {
 }
 
 ///|
+/// Whether any runtime action still needs an explicit owner decision.
+pub fn Mounted::has_pending_actions(self : Mounted) -> Bool {
+  self.runtime.has_pending_actions()
+}
+
+///|
 pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
   if self.busy ||
     self.held_text is Some(_) ||

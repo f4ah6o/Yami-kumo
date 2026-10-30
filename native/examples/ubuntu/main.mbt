@@ -197,7 +197,10 @@ fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
         }
         match stage {
           Some(@common.ReceiptAcknowledgedOnly) => control_reply(75)
+          Some(@common.ReceiptOwnerEntered) => control_reply(89)
+          Some(@common.ReceiptPlatformHandled) => control_reply(80)
           Some(@common.ReceiptSessionApplied) => control_reply(74)
+          Some(@common.ReceiptNoModelAction) => control_reply(90)
           Some(@common.ReceiptActionRequired) => control_reply(76)
           Some(@common.ReceiptModelApplied) => control_reply(77)
           Some(@common.ReceiptTerminalResolved) => control_reply(84)
