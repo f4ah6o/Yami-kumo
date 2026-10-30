@@ -342,6 +342,8 @@ pub struct SettingsRunOwner {
   // Host's most recently returned epoch, distinct from the original field
   // owner if an update unexpectedly replaces it.
   priv mut host_epoch : UInt64?
+  // An error from a host update does not prove the old native state survived.
+  priv mut host_epoch_verified : Bool
   priv mut terminal_owner : @ui.TerminalTextOwner?
   priv mut terminal_applied : (Int64, Bool)?
   priv mut terminal_model_sequence : Int64
@@ -618,7 +620,8 @@ pub fn SettingsRunOwner::try_terminal_text_cutoff(
     Some(value) => value
     None => return Err(runner_error("terminal_cutoff", "original session is unavailable"))
   }
-  if !owner.matches_session(self.window, session.epoch, session.binding) ||
+  if !self.host_epoch_verified ||
+    !owner.matches_session(self.window, session.epoch, session.binding) ||
     self.host_epoch != Some(session.epoch) {
     return Err(runner_error("terminal_cutoff", "host session differs from field owner"))
   }
@@ -663,6 +666,12 @@ pub fn SettingsRunOwner::text_owner(
 /// Most recent epoch returned by the host, including an unresolved replacement.
 pub fn SettingsRunOwner::host_epoch(self : SettingsRunOwner) -> UInt64? {
   self.host_epoch
+}
+
+///|
+/// False means a fallible host update did not return a current epoch.
+pub fn SettingsRunOwner::host_epoch_verified(self : SettingsRunOwner) -> Bool {
+  self.host_epoch_verified
 }
 
 ///|
@@ -731,6 +740,7 @@ pub fn SettingsRunOwner::new(
     settings: @shared_settings.Model::new(),
     session: None,
     host_epoch: None,
+    host_epoch_verified: false,
     terminal_owner: None,
     terminal_applied: None,
     terminal_model_sequence: 0L,
@@ -1287,10 +1297,12 @@ fn SettingsRunOwner::drive_inner(
                       // owner before any fallible update or host cleanup.
                       self.session = Some({ epoch, binding: state.binding_id(), })
                       self.host_epoch = Some(epoch)
+                      self.host_epoch_verified = true
                       self.terminal_owner = Some(match mounted.capture_terminal_text_owner(epoch) {
                         Err(error) => return Err(error)
                         Ok(value) => value
                       })
+                      self.host_epoch_verified = false
                     }
                     match
                       (port.update)(
@@ -1322,6 +1334,7 @@ fn SettingsRunOwner::drive_inner(
                       Ok(updated_epoch) => {
                         if ordered_text is Some(_) {
                           self.host_epoch = Some(updated_epoch)
+                          self.host_epoch_verified = true
                           if updated_epoch != epoch {
                             return Err(runner_error("ordered_text", "host replaced an unresolved owner epoch"))
                           }
@@ -1363,6 +1376,9 @@ fn SettingsRunOwner::drive_inner(
               Some(state) =>
                 if state.document().text() != self.last_document ||
                   settings_caret(state.caret()) != self.last_caret {
+                  if ordered_text is Some(_) {
+                    self.host_epoch_verified = false
+                  }
                   let epoch = match
                     (port.update)(
                       current.epoch,
@@ -1376,6 +1392,7 @@ fn SettingsRunOwner::drive_inner(
                   }
                   if ordered_text is Some(_) {
                     self.host_epoch = Some(epoch)
+                    self.host_epoch_verified = true
                     if epoch != current.epoch {
                       return Err(runner_error("ordered_text", "host replaced an unresolved owner epoch"))
                     }

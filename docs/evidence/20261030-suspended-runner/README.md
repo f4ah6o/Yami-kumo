@@ -34,6 +34,8 @@ If update fails, or returns a different epoch, it suspends without calling
 end; the original owner and last returned host epoch remain distinct. Fixtures
 cover a commit admitted inside that update and a later update replacement.
 They cannot prove an actual host did not fence a record inside update itself.
+An update error marks the host epoch unverified: the last returned value is
+retained for diagnosis but cannot authorize a later cutoff.
 Before normal delivery, the runner checks the original binding and the exact
 next sequence; a gap or foreign epoch stays inflight rather than being
 discarded. Terminal field publication invalidates old staged views. These two

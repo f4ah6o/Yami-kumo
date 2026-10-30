@@ -962,6 +962,7 @@ test "terminal recovery never skips a buffered preedit prefix" {
   let field = owner.mounted.focused_text().unwrap()
   owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
   owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
   owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
   owner.mounted.invalidate_layout()
   owner.suspended = true
@@ -1166,6 +1167,7 @@ test "terminal cutoff needs an empty prefix and retains terminal ownership" {
   let field = owner.mounted.focused_text().unwrap()
   owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
   owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
   owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
   owner.mounted.invalidate_layout()
   owner.suspended = true
@@ -1182,6 +1184,10 @@ test "terminal cutoff needs an empty prefix and retains terminal ownership" {
   assert_true(owner.try_terminal_text_cutoff() is Err(_))
   assert_eq(calls.val, 0)
   owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  owner.host_epoch_verified = false
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_eq(calls.val, 0)
+  owner.host_epoch_verified = true
   // A newly admitted commit keeps the native cutoff Busy. Moving it to the
   // local buffer and applying it to the original model precedes retry.
   pending.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 3L, 7UL, @text_host.Commit(text="日本"))))
@@ -1238,6 +1244,7 @@ test "begin update failure or replacement retains original admitted epoch" {
     }
     assert_true(owner.text_owner() is Some((7UL, _)))
     assert_eq(owner.host_epoch(), Some(if replaced { 8UL } else { 7UL }))
+    assert_eq(owner.host_epoch_verified(), replaced)
     let original = owner.session.unwrap()
     assert_true(owner.terminal_owner.unwrap().matches_session(window, original.epoch, original.binding))
     assert_eq(owner.model().name(), "")
@@ -1327,6 +1334,7 @@ test "terminal cutoff rejects reentry before a Busy result" {
   let field = owner.mounted.focused_text().unwrap()
   owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
   owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
   owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
   owner.suspended = true
   owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 1L, 1.0, @platform.Destroyed)))
@@ -1410,6 +1418,7 @@ test "terminal measurement cannot reenter owner polling" {
   let field = owner.mounted.focused_text().unwrap()
   owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
   owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
   owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
   owner.mounted.invalidate_layout()
   owner.suspended = true
