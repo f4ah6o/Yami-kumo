@@ -78,6 +78,10 @@ The matrix fails when a required flow row is missing or not passing, when a
 declared `NOT_RUN` row has no reason, when a lane is undeclared, or when a
 candidate SHA differs. `NOT_RUN` rows never satisfy a required row.
 
+A separate [2026-10-30 local text-owner record](evidence/20261030-shared-settings-text-owner/README.md)
+retains the commands, source revision, output and limits of the scripted and
+synthetic Web checks; it is not a live IME qualification.
+
 ## Not claimed
 
 Ubuntu/Windows real IME and accessibility providers, macOS key-driven dialog,

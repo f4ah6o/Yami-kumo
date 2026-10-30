@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "settings-lane/v1",
+  "fixtureId": "settings-flow",
+  "candidateSha": "e4bb9ac5fdcc1a5bde0c98d4953e6b3723d9e8b5",
+  "platform": "web",
+  "backend": "dom",
+  "target": "js",
+  "layer": "runtime",
+  "status": "pass",
+  "claims": {
+    "flow": "pass",
+    "composition": "synthetic",
+    "ime": "NOT_RUN"
+  },
+  "command": [
+    "node --test tests/shared-ui/settings.test.mjs"
+  ]
+}
