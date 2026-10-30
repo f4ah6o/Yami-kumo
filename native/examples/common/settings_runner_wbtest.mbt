@@ -1523,6 +1523,13 @@ test "full receipt ledger stops admission without dropping its owner" {
   assert_eq(reads.val, 0)
   assert_eq(owner.acknowledged_receipt_count(), 64)
   assert_true(owner.acknowledged_receipt_identity(63) is Some((_, 63, 9UL, 7UL)))
+  owner.inflight = None
+  owner.live_step_ready = true
+  owner.live_step_generation = 1L
+  assert_true(owner.advance_once(1L) is Err(_))
+  assert_eq(reads.val, 0)
+  assert_eq(owner.acknowledged_receipt_count(), 64)
+  assert_true(owner.advance_generation() is None)
   assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
 }
