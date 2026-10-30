@@ -1447,12 +1447,13 @@ test "retained host receipt is owned before ack and retry does not replay commit
       if !available.val { return Ok(None) }
       let owner = owner_ref.val.unwrap()
       let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+      let binding = owner.session.unwrap().binding
       Ok(Some(NativeRetainedReceipt::new(
-        Some(OrderedText(event)), owner.window, 42, 9UL, 7UL,
+        Some(OrderedText(event)), owner.window, 42, binding, 7UL,
         fn() {
           ack_calls.val += 1
           owned_at_ack.val = owner.pending_records().length() == 1 &&
-            owner.pending_receipt_identity() is Some((_, 42, 9UL, 7UL)) &&
+            owner.pending_receipt_identity() is Some((_, 42, value, 7UL)) && value == binding &&
             owner.terminal_step(ApplyNext) is Err(_)
           if ack_calls.val == 1 {
             return Err(runner_error("test_ack", "injected failure"))
@@ -1478,7 +1479,7 @@ test "retained host receipt is owned before ack and retry does not replay commit
   owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
   owner.mounted.invalidate_layout()
   owner.suspended = true
-  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 2L, 1.0, @platform.Destroyed)))
+  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 2L, 1.0, @platform.CloseRequested)))
   owner_ref.val = Some(owner)
   assert_true(owner.terminal_step(PollOnce) is Err(_))
   assert_true(owned_at_ack.val)
@@ -1489,11 +1490,29 @@ test "retained host receipt is owned before ack and retry does not replay commit
   assert_true(owner.terminal_step(RetryReceiptAck).unwrap() is ReceiptAcknowledged)
   assert_true(owner.pending_receipt_identity() is None)
   assert_eq(owner.acknowledged_receipt_count(), 1)
-  assert_true(owner.acknowledged_receipt_identity(0) is Some((_, 42, 9UL, 7UL)))
+  assert_true(owner.acknowledged_receipt_identity(0) is Some((_, 42, binding, 7UL)) && binding == field.binding_id())
+  assert_true(owner.acknowledged_receipt_stage(0) is Some(ReceiptAcknowledgedOnly))
+  assert_true(owner.receipt_stage_for_sequence(42L) is Some(ReceiptAcknowledgedOnly))
+  let wrong_payload = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="偽"))
+  let old_epoch = @text_host.TextInputEvent::new(owner.window, 1L, 6UL, @text_host.Commit(text="日本"))
+  owner.note_text_receipt_stage(wrong_payload, ReceiptModelApplied)
+  owner.note_text_receipt_stage(old_epoch, ReceiptModelApplied)
+  assert_true(owner.acknowledged_receipt_stage(0) is Some(ReceiptAcknowledgedOnly))
   assert_true(owner.terminal_step(RetryReceiptAck) is Err(_))
   assert_true(owner.terminal_step(ApplyNext).unwrap() is ModelApplied(1L, true))
   assert_eq(owner.model().name(), "日本")
-  assert_true(owner.acknowledged_receipt_identity(0) is Some((_, 42, 9UL, 7UL)))
+  assert_true(owner.acknowledged_receipt_identity(0) is Some((_, 42, binding, 7UL)) && binding == field.binding_id())
+  assert_true(owner.acknowledged_receipt_stage(0) is Some(ReceiptModelApplied))
+  assert_true(owner.receipt_stage_for_sequence(42L) is Some(ReceiptModelApplied))
+  let original = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedText(original)), owner.window, 43, field.binding_id(), 7UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  owner.note_text_receipt_stage(original, ReceiptModelApplied)
+  assert_true(owner.acknowledged_receipt_stage(0) is None)
+  assert_true(owner.acknowledged_receipt_stage(1) is None)
+  assert_true(owner.receipt_stage_for_sequence(42L) is None)
   assert_true(owner.terminal_step(ApplyNext) is Err(_))
   assert_eq(owner.model().name(), "日本")
   assert_eq(ack_calls.val, 2)
@@ -1515,9 +1534,10 @@ test "full receipt ledger stops admission without dropping its owner" {
   owner.suspended = true
   owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 2L, 1.0, @platform.Destroyed)))
   for i = 0; i < 64; i = i + 1 {
-    owner.acknowledged_receipts.push(NativeRetainedReceipt::new(
-      None, owner.window, i, 9UL, 7UL, fn() { Ok(()) },
-    ))
+    owner.acknowledged_receipts.push({
+      receipt: NativeRetainedReceipt::new(None, owner.window, i, 9UL, 7UL, fn() { Ok(()) }),
+      stage: ReceiptAcknowledgedOnly,
+    })
   }
   assert_true(owner.terminal_step(PollOnce) is Err(_))
   assert_eq(reads.val, 0)
@@ -1591,13 +1611,14 @@ test "ack retry resumes the exact not-yet-dispatched text only once" {
     OrderedPlatform(@platform.Event::new(window, 3L, 1.0, @platform.Destroyed)),
   ]
   let native_sequence = Ref(1)
+  let binding = Ref(0UL)
   let fail_once = Ref(true)
   let ordered = NativeOrderedTextPort::with_retained_receipts(
     fn(_) {
       if records.is_empty() { return Ok(None) }
       let record = records[0]
       let sequence = native_sequence.val
-      Ok(Some(NativeRetainedReceipt::new(Some(record), window, sequence, 0UL, 0UL, fn() {
+      Ok(Some(NativeRetainedReceipt::new(Some(record), window, sequence, binding.val, 7UL, fn() {
         if record is OrderedText(_) && fail_once.val {
           fail_once.val = false
           return Err(runner_error("test_ack", "injected failure"))
@@ -1610,7 +1631,7 @@ test "ack retry resumes the exact not-yet-dispatched text only once" {
     fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "cutoff")) },
   )
   let port = NativeTextInputPort::new(
-    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_, root) { binding.val = root; Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
     fn(_) { Ok(()) }, fn(_) { Ok(None) },
   )
   let entry = SettingsEntryController::start(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered))
@@ -1621,12 +1642,14 @@ test "ack retry resumes the exact not-yet-dispatched text only once" {
   assert_true(entry.resume_receipt_sequence(3L) is Err(_))
   assert_true(entry.retry_receipt_sequence(4L) is Err(_))
   assert_true(entry.retry_receipt_sequence(3L).unwrap() is ReceiptAcknowledged)
+  assert_true(owner.acknowledged_receipt_stage(2) is Some(ReceiptAcknowledgedOnly))
   assert_true(owner.resumable_receipt_identity() is Some((_, 3, _, _)))
   assert_true(entry.retry_receipt_sequence(3L) is Err(_))
   assert_true(entry.resume_receipt_sequence(4L) is Err(_))
   assert_true(entry.resume_receipt_sequence(3L).unwrap() is ReceiptDispatched)
   assert_true(owner.resumable_receipt_identity() is None)
   assert_eq(owner.model().name(), "日本")
+  assert_true(owner.acknowledged_receipt_stage(2) is Some(ReceiptSessionApplied))
   assert_true(entry.resume_receipt_sequence(3L) is Err(_))
   assert_eq(owner.model().name(), "日本")
   assert_eq(records.length(), 1)
@@ -1816,7 +1839,10 @@ test "terminal receipt identity cannot be replaced by later poll" {
   assert_eq(records.length(), 1)
   // Even an independently retained later identity cannot alter the original
   // dispatch token or make a stale request act on this event.
-  owner.acknowledged_receipts.push(NativeRetainedReceipt::new(None, window, 4, 0UL, 0UL, fn() { Ok(()) }))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(None, window, 4, 0UL, 0UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
   assert_true(owner.resumable_receipt_identity() is Some((_, 3, _, _)))
   assert_true(entry.resume_receipt_sequence(4L) is Err(_))
   assert_true(entry.resume_receipt_sequence(3L) is Err(_))

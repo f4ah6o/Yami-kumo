@@ -183,6 +183,20 @@ fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
         Err(error) => control_step_error(error, 69)
         Ok(_) => control_reply(69)
       }
+      // j: report only a unique, positively observed receipt stage.
+      106 => {
+        let stage = match entry.owner() {
+          Some(owner) => owner.receipt_stage_for_sequence(control_sequence())
+          None => None
+        }
+        match stage {
+          Some(@common.ReceiptAcknowledgedOnly) => control_reply(75)
+          Some(@common.ReceiptSessionApplied) => control_reply(74)
+          Some(@common.ReceiptActionRequired) => control_reply(76)
+          Some(@common.ReceiptModelApplied) => control_reply(77)
+          None => control_reply(69)
+        }
+      }
       // p: one nonblocking host poll; a blank poll proves no cutoff.
       112 =>
         match entry.terminal_step(@common.PollOnce) {

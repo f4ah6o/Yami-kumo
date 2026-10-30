@@ -44,6 +44,44 @@ pub struct NativeRetainedReceipt {
 }
 
 ///|
+/// Highest positively observed text stage for an ACKed native receipt. These
+/// stages do not certify geometry publication, terminal resolution or stop.
+pub(all) enum NativeReceiptStage {
+  ReceiptAcknowledgedOnly
+  ReceiptSessionApplied
+  ReceiptActionRequired
+  ReceiptModelApplied
+}
+
+///|
+struct NativeReceiptEntry {
+  receipt : NativeRetainedReceipt
+  mut stage : NativeReceiptStage
+}
+
+///|
+fn receipt_stage_rank(stage : NativeReceiptStage) -> Int {
+  match stage {
+    ReceiptAcknowledgedOnly => 0
+    ReceiptSessionApplied => 1
+    ReceiptActionRequired => 2
+    ReceiptModelApplied => 3
+  }
+}
+
+///|
+fn same_text_observation_kind(
+  left : @text_host.TextInputEventKind, right : @text_host.TextInputEventKind,
+) -> Bool {
+  match (left, right) {
+    (@text_host.Commit(text=a), @text_host.Commit(text=b)) => a == b
+    (@text_host.Preedit(text=a, cursor=x), @text_host.Preedit(text=b, cursor=y)) => a == b && x == y
+    (@text_host.Cancel, @text_host.Cancel) | (@text_host.FocusLost, @text_host.FocusLost) => true
+    _ => false
+  }
+}
+
+///|
 pub fn NativeRetainedReceipt::new(
   event : NativeOrderedEvent?, window : @platform.WindowId, sequence : Int32,
   root : UInt64, epoch : UInt64,
@@ -486,7 +524,7 @@ pub struct SettingsRunOwner {
   priv mut pending_host_receipt : NativeRetainedReceipt?
   // Retain native identities even after host ACK until an explicit per-stage
   // retirement policy exists. This ledger is bounded and fails closed.
-  priv acknowledged_receipts : Array[NativeRetainedReceipt]
+  priv acknowledged_receipts : Array[NativeReceiptEntry]
   priv mut entered_target : (Int32, Int64, Int32)?
   // Number of locally buffered observations admitted before a retained
   // Destroyed record. Later observations remain owned but are not delivered
@@ -609,6 +647,7 @@ fn SettingsRunOwner::reconcile_terminal_observation_inner(
         Err(error) => return Err(error)
       }
       self.terminal_applied = Some((event.sequence(), changed))
+      self.note_text_receipt_stage(event, if changed { ReceiptActionRequired } else { ReceiptSessionApplied })
       changed
     }
   }
@@ -619,6 +658,7 @@ fn SettingsRunOwner::reconcile_terminal_observation_inner(
       Err(error) => return Err(error)
     }
     self.settings = self.settings.update(@shared_settings.Ui(action))
+    self.note_text_receipt_stage(event, ReceiptModelApplied)
   }
   if event.kind() is @text_host.Commit(_) {
     self.terminal_model_sequence = event.sequence()
@@ -697,8 +737,79 @@ pub fn SettingsRunOwner::acknowledged_receipt_identity(
   self : SettingsRunOwner, index : Int,
 ) -> (@platform.WindowId, Int32, UInt64, UInt64)? {
   if index < 0 || index >= self.acknowledged_receipts.length() { return None }
-  let receipt = self.acknowledged_receipts[index]
+  let receipt = self.acknowledged_receipts[index].receipt
   Some((receipt.window, receipt.sequence, receipt.root, receipt.epoch))
+}
+
+///|
+pub fn SettingsRunOwner::acknowledged_receipt_stage(
+  self : SettingsRunOwner, index : Int,
+) -> NativeReceiptStage? {
+  if index < 0 || index >= self.acknowledged_receipts.length() { return None }
+  let entry = self.acknowledged_receipts[index]
+  match entry.receipt.event {
+    Some(OrderedText(event)) =>
+      for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
+        if i == index { continue }
+        match self.acknowledged_receipts[i].receipt.event {
+          Some(OrderedText(other)) if other.window() == event.window() &&
+            other.epoch() == event.epoch() && other.sequence() == event.sequence() => return None
+          _ => ()
+        }
+      }
+    _ => ()
+  }
+  Some(entry.stage)
+}
+
+///|
+/// Resolve a native sequence only when it identifies one retained receipt.
+pub fn SettingsRunOwner::receipt_stage_for_sequence(
+  self : SettingsRunOwner, sequence : Int64,
+) -> NativeReceiptStage? {
+  if sequence <= 0L { return None }
+  let mut found = -1
+  for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
+    if self.acknowledged_receipts[i].receipt.sequence.to_int64() == sequence {
+      if found >= 0 { return None }
+      found = i
+    }
+  }
+  if found < 0 { None } else { self.acknowledged_receipt_stage(found) }
+}
+
+///|
+/// Associate a text stage only when one retained native receipt uniquely owns
+/// the exact portable window, epoch and sequence. Missing/ambiguous evidence
+/// stays unclassified rather than attributing another record's effects.
+fn SettingsRunOwner::note_text_receipt_stage(
+  self : SettingsRunOwner, event : @text_host.TextInputEvent, stage : NativeReceiptStage,
+) -> Unit {
+  let session = match self.session { Some(value) => value; None => return }
+  let owner = match self.terminal_owner { Some(value) => value; None => return }
+  if !owner.matches_session(self.window, session.epoch, session.binding) { return }
+  let mut found = -1
+  for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
+    let receipt = self.acknowledged_receipts[i].receipt
+    match receipt.event {
+      Some(OrderedText(value)) if receipt.window == self.window &&
+        receipt.root == session.binding && receipt.epoch == session.epoch &&
+        value.window() == event.window() &&
+        value.epoch() == event.epoch() && value.sequence() == event.sequence() => {
+          if found >= 0 { return }
+          found = i
+        }
+      _ => ()
+    }
+  }
+  if found >= 0 {
+    let entry = self.acknowledged_receipts[found]
+    match entry.receipt.event {
+      Some(OrderedText(value)) if same_text_observation_kind(value.kind(), event.kind()) &&
+        receipt_stage_rank(stage) > receipt_stage_rank(entry.stage) => entry.stage = stage
+      _ => ()
+    }
+  }
 }
 
 ///|
@@ -782,7 +893,7 @@ fn SettingsRunOwner::ack_owned_receipt(
       match (receipt.ack)() {
         Err(error) => Err(error)
         Ok(_) => {
-          self.acknowledged_receipts.push(receipt)
+          self.acknowledged_receipts.push({ receipt, stage: ReceiptAcknowledgedOnly })
           self.pending_host_receipt = None
           Ok(())
         }
@@ -1405,6 +1516,7 @@ fn SettingsRunOwner::drive_inner(
                     match handled {
                       Err(error) => return Err(error)
                       Ok(true) => {
+                        self.note_text_receipt_stage(observation, ReceiptSessionApplied)
                         if self.held_tab is None {
                           match self.terminal_owner {
                             Some(owner) =>

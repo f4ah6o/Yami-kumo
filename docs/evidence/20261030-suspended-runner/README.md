@@ -86,6 +86,7 @@ the process retains the owner and accepts one bounded control request at a time:
 ```
 python3 scripts/settings_retained_control.py SOCKET status
 python3 scripts/settings_retained_control.py SOCKET receipt
+python3 scripts/settings_retained_control.py SOCKET stage --sequence NATIVE_SEQUENCE
 python3 scripts/settings_retained_control.py SOCKET poll
 python3 scripts/settings_retained_control.py SOCKET apply --sequence SEQUENCE
 python3 scripts/settings_retained_control.py SOCKET retry-ack --sequence NATIVE_SEQUENCE
@@ -200,6 +201,48 @@ The source-override common suite passed **40/40** for this change; raw log
 SHA-256 `be4c27ccca8205e4d56157aa14957c652ff1002cf75e9774f3d39685c386daba`.
 The Ubuntu example built with the same gpui candidate; binary SHA-256
 `e7fb60e3d75aa3d3a3efced5e1d562538061bb79d760f159f6f7a17f15c03bbf`.
+
+Receipt retirement remains deliberately unavailable. ACK proves only that the
+native FIFO removed its exact head; it does not prove that the original owner
+has applied the observation. Before retiring a receipt, the runner needs a
+receipt-specific proof for every applicable stage:
+
+| Record | Proof required before retirement | Present limitation |
+| --- | --- | --- |
+| Entered | Original window, root, native and portable epoch, seat, proxy and live field generation remain bound; the owner recorded Entered; its scene and caret geometry are coherently published. | The owner records the target, but lacks a durable receipt tying host geometry and scene publication to that exact binding. The separate binding-receipt candidate is under review. |
+| Text | The original field accepted the sequence exactly once; any generated action was delivered to the shared model; the matching scene and caret were published, or an explicit terminal policy resolved them. | The terminal model watermark and held-session receipt are useful observations, but the ledger has no complete per-native-receipt stage proof and general scene/geometry recovery is unavailable. |
+| Platform or unsupported | Its effect was applied to the original owner, or a specific documented terminal policy resolved it without changing its meaning. | Non-text and unsupported prefixes can remain unresolved; a blank poll is not a terminal receipt. |
+| Destroyed, cutoff and generated lifecycle | Earlier admissions, pending actions and any generated lifecycle records are resolved, and the host supplies an explicit terminal proof. | Native cutoff is not a seal and `can_stop()` remains false. Records received after Destroyed are retained pending admission proof. |
+
+Accordingly, the 64-entry limit is backpressure, not a retirement policy. Full
+capacity stops another admission and leaves the owner and host live; it does
+not establish a successful exit. The ledger records only positively observed
+stages: native ACK, session application, a required terminal action, and a
+terminal action's model reflection. It associates a text stage only with a
+unique matching window, root, epoch, sequence, payload and original lease;
+duplicates are reported as ambiguous. Normal-path model reflection, geometry
+publication, terminal resolution and retirement remain unproven.
+
+The receipt-stage candidate passed the common fixtures **40/40** with each of
+gpui `5cd2f231c6cbf529396cae633f6e5a0d6c9bea41` and
+`55427b622fa0d7425556cc44c79317dd90c119ea` as a source override; both raw
+fixture logs hash to
+`be4c27ccca8205e4d56157aa14957c652ff1002cf75e9774f3d39685c386daba`.
+The latter run uses the candidate dependency but does not exercise its new
+binding receipt. The socket fixtures passed **9/9**, log SHA-256
+`7e0f6dd9ed85429f39146f948a150104f160ed66c3e539110dcea6f1e7230e16`.
+The Ubuntu example built with gpui `5cd2f23`; binary SHA-256
+`a33b6ad951b375fa5f3354fc020d94bba389cf06d1c0440ac0b0aaa40d8bfa79`.
+These are synthetic and build results, not an integrated native IME run.
+
+As a separate lower-layer check, the gpui
+candidate's `tests/ubuntu/ime_transport_test.c` compiled with `-Wall -Wextra
+-Werror` and passed with DISPLAY and WAYLAND_DISPLAY unset. Its production
+callback/queue code is driven through mocked Wayland protocol functions,
+including Japanese commit, repeated retained peek and exact-head ACK checks.
+Its log SHA-256 is
+`9c6cbffc9e12dc034c66600c663b6a249330997e666c541a5ba4f4a083841b71`.
+That C fixture does not run the Yami adapter or an OS IME.
 
 The control transport has **9/9 PASS** local Linux socket fixture tests,
 including same-UID requests, bounded idle clients, sequence-bound apply, fresh

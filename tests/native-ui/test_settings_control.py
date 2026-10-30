@@ -169,6 +169,16 @@ class ControlSocketTests(unittest.TestCase):
         stdout, stderr = advance.communicate(timeout=3)
         self.assertEqual(advance.returncode, 0, stderr)
         self.assertIn("one bounded step completed", stdout)
+        stage = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "stage", "--sequence", "42"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("j"))
+        self.assertEqual(self.lib.gpui_settings_control_sequence(), 42)
+        self.lib.gpui_settings_control_reply(ord("J"))
+        stdout, stderr = stage.communicate(timeout=3)
+        self.assertEqual(stage.returncode, 0, stderr)
+        self.assertIn("model and geometry are not implied", stdout)
 
     def test_new_process_uses_fresh_socket_and_does_not_reuse_owner(self) -> None:
         code = (

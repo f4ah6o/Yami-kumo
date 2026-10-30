@@ -7,7 +7,7 @@ import socket
 import struct
 import sys
 
-COMMANDS = {"status": b"s", "receipt": b"t", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resume": b"u", "cutoff": b"c", "stop": b"q"}
+COMMANDS = {"status": b"s", "receipt": b"t", "stage": b"j", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resume": b"u", "cutoff": b"c", "stop": b"q"}
 REPLIES = {
     b"S": "suspended; owner and host retained",
     b"N": "no suspended owner; inspect the application's reason log",
@@ -18,6 +18,9 @@ REPLIES = {
     b"A": "receipt acknowledged; application and shutdown are not implied",
     b"U": "one receipt dispatched; scene and shutdown are not implied",
     b"V": "one bounded step completed; scene and shutdown are not implied",
+    b"K": "host acknowledged the receipt; owner application is not implied",
+    b"J": "text session applied; model and geometry are not implied",
+    b"L": "terminal field applied; its model action remains required",
     b"C": "text cutoff completed; host shutdown is not yet authorized",
     b"D": "proved-complete host stopped",
     b"R": "stop refused; owner and host remain retained",
@@ -31,16 +34,16 @@ def main() -> int:
     parser.add_argument("command", choices=COMMANDS)
     parser.add_argument("--sequence", type=int, help="positive record sequence or continuation generation")
     args = parser.parse_args()
-    if args.command in ("apply", "retry-ack", "resume", "advance") and (args.sequence is None or not 0 < args.sequence < 2**63):
-        parser.error("apply, retry-ack, resume and advance require the current positive --sequence")
-    if args.command not in ("apply", "retry-ack", "resume", "advance") and args.sequence is not None:
-        parser.error("--sequence is only valid with apply, retry-ack, resume or advance")
+    if args.command in ("apply", "retry-ack", "resume", "advance", "stage") and (args.sequence is None or not 0 < args.sequence < 2**63):
+        parser.error("apply, retry-ack, resume, advance and stage require a positive --sequence")
+    if args.command not in ("apply", "retry-ack", "resume", "advance", "stage") and args.sequence is not None:
+        parser.error("--sequence is only valid with apply, retry-ack, resume, advance or stage")
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as peer:
             peer.settimeout(3.0)
             peer.connect(args.path)
             payload = COMMANDS[args.command]
-            if args.command in ("apply", "retry-ack", "resume", "advance"):
+            if args.command in ("apply", "retry-ack", "resume", "advance", "stage"):
                 payload += struct.pack("!q", args.sequence)
             peer.sendall(payload)
             result = peer.recv(1)
