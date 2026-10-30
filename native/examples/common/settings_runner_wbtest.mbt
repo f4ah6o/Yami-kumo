@@ -47,3 +47,51 @@ test "settings presents frames and releases a failed portable session before fal
   assert_eq(snapshot.viewport().size().width(), 800.0)
   assert_eq(snapshot.viewport().size().height(), 600.0)
 }
+
+///|
+test "Settings applies an observed commit before a later window blur" {
+  let window = @platform.WindowId::new(1L)
+  let mounted = @ui.Mounted::new(window)
+  let mut settings = @shared_settings.Model::new()
+  ignore(
+    mounted
+    .commit(settings.view(), 640.0, 480.0, 1.0, text_runner_measure)
+    .unwrap(),
+  )
+  assert_true(mounted.focus(@shared_settings.settings_name()))
+  let session = {
+    epoch: 7UL,
+    binding: mounted.focused_text().unwrap().binding_id(),
+  }
+  let preedit = @text_host.TextInputEvent::new(
+    window,
+    1L,
+    7UL,
+    @text_host.Preedit(text="にほん", cursor=3),
+  )
+  let commit = @text_host.TextInputEvent::new(
+    window,
+    2L,
+    7UL,
+    @text_host.Commit(text="日本語"),
+  )
+  assert_true(deliver_text_observation(mounted, session, preedit).unwrap())
+  assert_true(mounted.next_action() is None)
+  assert_true(deliver_text_observation(mounted, session, commit).unwrap())
+  while mounted.next_action() is Some(action) {
+    settings = settings.update(@shared_settings.Ui(action))
+  }
+  assert_eq(settings.name(), "日本語")
+  assert_false(deliver_text_observation(mounted, session, commit).unwrap())
+  assert_true(mounted.next_action() is None)
+  assert_true(
+    mounted
+    .handle_event(
+      @platform.Event::new(window, 1L, 1.0, @platform.FocusChanged(false)),
+    )
+    .unwrap(),
+  )
+  assert_true(mounted.focused_text() is None)
+  assert_eq(settings.name(), "日本語")
+  mounted.dispose()
+}
