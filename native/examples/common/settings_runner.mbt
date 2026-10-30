@@ -377,6 +377,47 @@ pub fn SettingsEntryController::retry_receipt_sequence(
 }
 
 ///|
+/// Resume only the acknowledged pre-dispatch record named by native sequence.
+pub fn SettingsEntryController::resume_receipt_sequence(
+  self : SettingsEntryController, sequence : Int64,
+) -> Result[SettingsTerminalProgress, @diagnostics.FrameworkError] {
+  let owner = match self.outcome {
+    Suspended(value, _) => value
+    _ => return Err(runner_error("settings_entry", "no suspended owner"))
+  }
+  let last = owner.acknowledged_receipts.length() - 1
+  match owner.acknowledged_receipt_identity(last) {
+    Some((_, current, _, _)) if sequence > 0L && sequence == current.to_int64() =>
+      match owner.resume_after_receipt_ack() {
+        Ok(_) => Ok(ReceiptDispatched)
+        Err(error) => Err(error)
+      }
+    _ => Err(runner_error("settings_entry", "receipt sequence is no longer resumable"))
+  }
+}
+
+///|
+pub fn SettingsEntryController::advance_generation(
+  self : SettingsEntryController,
+) -> Int64? {
+  match self.outcome {
+    Suspended(owner, _) => owner.advance_generation()
+    _ => None
+  }
+}
+
+///|
+/// Exactly one bounded continuation per generation, even when no record arrives.
+pub fn SettingsEntryController::advance_once(
+  self : SettingsEntryController, generation : Int64,
+) -> Result[SettingsTerminalProgress, @diagnostics.FrameworkError] {
+  match self.outcome {
+    Suspended(owner, _) => owner.advance_once(generation)
+    _ => Err(runner_error("settings_entry", "no suspended owner"))
+  }
+}
+
+///|
 /// Stop only after an outcome that already proved complete owner cleanup.
 /// NotStarted and Suspended are conservative failures, leaving the host alive.
 pub fn SettingsEntryController::try_stop(
@@ -451,6 +492,9 @@ pub struct SettingsRunOwner {
   // True only when drive failed in ACK before dispatching this observation.
   priv mut receipt_pre_dispatch : Bool
   priv mut resume_pre_dispatch : Bool
+  priv mut bounded_resume : Bool
+  priv mut live_step_ready : Bool
+  priv mut live_step_generation : Int64
   priv mut cutoff_done : Bool
   priv mut completed : Bool
   priv mut running : Bool
@@ -603,6 +647,8 @@ pub(all) enum SettingsTerminalProgress {
   NoRecord
   TextCutoffCompleted
   ReceiptAcknowledged
+  ReceiptDispatched
+  ContinuationStepped
 }
 
 ///|
@@ -614,6 +660,17 @@ pub fn SettingsRunOwner::pending_receipt_identity(
     None => None
     Some(receipt) => Some((receipt.window, receipt.sequence, receipt.root, receipt.epoch))
   }
+}
+
+///|
+/// Exposes an ACKed receipt only while its exact pre-dispatch step remains.
+pub fn SettingsRunOwner::resumable_receipt_identity(
+  self : SettingsRunOwner,
+) -> (@platform.WindowId, Int32, UInt64, UInt64)? {
+  if !self.suspended || !self.receipt_pre_dispatch || self.pending_host_receipt is Some(_) {
+    return None
+  }
+  self.acknowledged_receipt_identity(self.acknowledged_receipts.length() - 1)
 }
 
 ///|
@@ -631,8 +688,8 @@ pub fn SettingsRunOwner::acknowledged_receipt_identity(
 }
 
 ///|
-/// Continue only the program point interrupted by a failed receipt ACK. Other
-/// failures, including application and scene failures, remain suspended.
+/// Dispatch only the record interrupted by a failed ACK, without publishing a
+/// scene or consuming a later record. Other failures remain suspended.
 pub fn SettingsRunOwner::resume_after_receipt_ack(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
@@ -642,7 +699,51 @@ pub fn SettingsRunOwner::resume_after_receipt_ack(
   }
   self.suspended = false
   self.resume_pre_dispatch = true
-  self.drive()
+  self.bounded_resume = true
+  let result = self.drive()
+  self.bounded_resume = false
+  self.suspended = true
+  if result is Ok(_) {
+    self.live_step_ready = true
+    if self.live_step_generation == 0L { self.live_step_generation = 1L }
+  }
+  result
+}
+
+///|
+/// A generation changes before every admitted step, including an empty poll.
+pub fn SettingsRunOwner::advance_generation(self : SettingsRunOwner) -> Int64? {
+  if self.suspended && !self.running && self.live_step_ready &&
+    self.pending_host_receipt is None && self.inflight is None &&
+    self.held_tab is None && !self.receipt_pre_dispatch && !self.cutoff_done {
+    Some(self.live_step_generation)
+  } else {
+    None
+  }
+}
+
+///|
+pub fn SettingsRunOwner::advance_once(
+  self : SettingsRunOwner, generation : Int64,
+) -> Result[SettingsTerminalProgress, @diagnostics.FrameworkError] {
+  if self.advance_generation() != Some(generation) || generation <= 0L ||
+    generation == 9223372036854775807L {
+    return Err(runner_error("ordered_text", "continuation generation is stale or unavailable"))
+  }
+  self.live_step_generation += 1L
+  self.live_step_ready = false
+  self.suspended = false
+  self.bounded_resume = true
+  let result = self.drive()
+  self.bounded_resume = false
+  self.suspended = true
+  match result {
+    Ok(_) => {
+      self.live_step_ready = true
+      Ok(ContinuationStepped)
+    }
+    Err(error) => Err(error)
+  }
 }
 
 ///|
@@ -1013,6 +1114,9 @@ pub fn SettingsRunOwner::new(
     entered_target: None,
     receipt_pre_dispatch: false,
     resume_pre_dispatch: false,
+    bounded_resume: false,
+    live_step_ready: false,
+    live_step_generation: 0L,
     cutoff_done: false,
     completed: false,
     running: false,
@@ -1478,6 +1582,7 @@ fn SettingsRunOwner::drive_inner(
             if hold {
               self.held_tab = Some(value)
               self.inflight = None
+              if self.bounded_resume { return Ok(()) }
               continue
             }
             match input {
@@ -1510,6 +1615,7 @@ fn SettingsRunOwner::drive_inner(
       Some(_) => ()
     }
     self.inflight = None
+    if self.bounded_resume { return Ok(()) }
     if self.dirty &&
       self.pending_frame is None &&
       !self.destroyed &&

@@ -1562,6 +1562,10 @@ test "entered acknowledgment requires the original session and native target" {
   assert_true(owner.ack_owned_receipt() is Err(_))
   owner.own_entered(entered).unwrap()
   assert_true(owner.entered_target is Some((5, 11L, 4)))
+  owner.host_epoch_verified = false
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(attempts.val, 0)
+  owner.host_epoch_verified = true
   owner.ack_owned_receipt().unwrap()
   assert_eq(attempts.val, 1)
   assert_true(owner.own_entered(entered) is Err(_))
@@ -1606,13 +1610,19 @@ test "ack retry resumes the exact not-yet-dispatched text only once" {
   let owner = entry.owner().unwrap()
   assert_true(owner.inflight_record() is Some(OrderedText(_)))
   assert_eq(owner.model().name(), "")
+  assert_true(owner.resumable_receipt_identity() is None)
+  assert_true(entry.resume_receipt_sequence(3L) is Err(_))
   assert_true(entry.retry_receipt_sequence(4L) is Err(_))
   assert_true(entry.retry_receipt_sequence(3L).unwrap() is ReceiptAcknowledged)
+  assert_true(owner.resumable_receipt_identity() is Some((_, 3, _, _)))
   assert_true(entry.retry_receipt_sequence(3L) is Err(_))
-  assert_true(owner.resume_after_receipt_ack() is Err(_))
+  assert_true(entry.resume_receipt_sequence(4L) is Err(_))
+  assert_true(entry.resume_receipt_sequence(3L).unwrap() is ReceiptDispatched)
+  assert_true(owner.resumable_receipt_identity() is None)
   assert_eq(owner.model().name(), "日本")
-  assert_true(owner.resume_after_receipt_ack() is Err(_))
+  assert_true(entry.resume_receipt_sequence(3L) is Err(_))
   assert_eq(owner.model().name(), "日本")
+  assert_eq(records.length(), 1)
   assert_eq(host.stop_count(), 0)
 }
 
@@ -1660,10 +1670,97 @@ test "entered ack retry continues original session without consuming text" {
   assert_eq(step.val, 2)
   assert_true(entry.retry_receipt_sequence(3L).unwrap() is ReceiptAcknowledged)
   assert_eq(step.val, 3)
-  assert_true(owner.resume_after_receipt_ack() is Err(_))
+  assert_true(entry.resume_receipt_sequence(4L) is Err(_))
+  assert_true(entry.resume_receipt_sequence(3L).unwrap() is ReceiptDispatched)
+  assert_eq(owner.model().name(), "")
+  assert_eq(step.val, 3)
+  assert_true(entry.resume_receipt_sequence(3L) is Err(_))
+  assert_true(entry.advance_generation() is Some(1L))
+  assert_true(entry.advance_once(2L) is Err(_))
+  assert_eq(step.val, 3)
+  assert_true(entry.advance_once(1L).unwrap() is ContinuationStepped)
   assert_eq(owner.model().name(), "日本")
-  assert_true(owner.resume_after_receipt_ack() is Err(_))
+  assert_eq(step.val, 4)
+  assert_true(entry.advance_once(1L) is Err(_))
+  assert_true(entry.advance_generation() is Some(2L))
   assert_eq(owner.model().name(), "日本")
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "empty continuation still consumes its generation" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let reads = Ref(0)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) { reads.val += 1; Ok(None) }, fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  owner.suspended = true
+  owner.live_step_ready = true
+  owner.live_step_generation = 1L
+  assert_true(owner.advance_once(1L).unwrap() is ContinuationStepped)
+  assert_eq(reads.val, 1)
+  assert_true(owner.advance_once(1L) is Err(_))
+  assert_eq(reads.val, 1)
+  assert_true(owner.advance_generation() is Some(2L))
+  assert_true(owner.advance_once(2L).unwrap() is ContinuationStepped)
+  assert_eq(reads.val, 2)
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "resize then failed ack retains commit across destroyed window" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let records : Array[NativeOrderedEvent] = [
+    OrderedPlatform(@platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted)),
+    OrderedPlatform(@platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted)),
+    OrderedPlatform(@platform.Event::new(window, 3L, 1.0, @platform.Resized(width=800.0, height=600.0))),
+    OrderedText(@text_host.TextInputEvent::new(window, 1L, 7UL, @text_host.Commit(text="日本"))),
+    OrderedPlatform(@platform.Event::new(window, 4L, 1.0, @platform.Destroyed)),
+  ]
+  let native_sequence = Ref(1)
+  let fail_once = Ref(true)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      if records.is_empty() { return Ok(None) }
+      let record = records[0]
+      let sequence = native_sequence.val
+      Ok(Some(NativeRetainedReceipt::new(Some(record), window, sequence, 0UL, 0UL, fn() {
+        if record is OrderedText(_) && fail_once.val {
+          fail_once.val = false
+          return Err(runner_error("test_ack", "injected failure"))
+        }
+        ignore(records.remove(0))
+        native_sequence.val += 1
+        Ok(())
+      })))
+    },
+    fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "cutoff")) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let entry = SettingsEntryController::start(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered))
+  let owner = entry.owner().unwrap()
+  assert_true(owner.inflight_record() is Some(OrderedText(_)))
+  assert_true(entry.retry_receipt_sequence(4L).unwrap() is ReceiptAcknowledged)
+  assert_true(entry.resume_receipt_sequence(4L).unwrap() is ReceiptDispatched)
+  assert_eq(owner.model().name(), "")
+  assert_eq(owner.pending_records().length(), 1)
+  assert_true(entry.advance_once(1L) is Err(_))
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_true(entry.terminal_step(ApplyNext).unwrap() is ModelApplied(1L, true))
+  assert_eq(owner.model().name(), "日本")
+  assert_true(entry.terminal_step(ApplyNext) is Err(_))
+  assert_eq(owner.model().name(), "日本")
+  assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
 }
 

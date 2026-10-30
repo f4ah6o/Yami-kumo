@@ -128,7 +128,10 @@ fn control_receipt_sequence(entry : @common.SettingsEntryController) -> Int64 {
   match entry.owner() {
     Some(owner) => match owner.pending_receipt_identity() {
       Some((_, sequence, _, _)) => sequence.to_int64()
-      None => 0L
+      None => match owner.resumable_receipt_identity() {
+        Some((_, sequence, _, _)) => sequence.to_int64()
+        None => 0L
+      }
     }
     None => 0L
   }
@@ -164,6 +167,19 @@ fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
       // r: retry ACK only for the inspected native sequence.
       114 => match entry.retry_receipt_sequence(control_sequence()) {
         Ok(@common.ReceiptAcknowledged) => control_reply(65)
+        Err(error) => control_step_error(error, 69)
+        Ok(_) => control_reply(69)
+      }
+      // u: dispatch only the named ACKed record; do not publish a scene.
+      117 => match entry.resume_receipt_sequence(control_sequence()) {
+        Ok(@common.ReceiptDispatched) => control_reply(85)
+        Err(error) => control_step_error(error, 69)
+        Ok(_) => control_reply(69)
+      }
+      // n/g: inspect and consume a single continuation generation.
+      110 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, entry.advance_generation().unwrap_or(0L))
+      103 => match entry.advance_once(control_sequence()) {
+        Ok(@common.ContinuationStepped) => control_reply(86)
         Err(error) => control_step_error(error, 69)
         Ok(_) => control_reply(69)
       }

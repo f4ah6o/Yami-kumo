@@ -140,6 +140,35 @@ class ControlSocketTests(unittest.TestCase):
         stdout, stderr = retry.communicate(timeout=3)
         self.assertEqual(retry.returncode, 0, stderr)
         self.assertIn("application and shutdown are not implied", stdout)
+        resume = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "resume", "--sequence", "42"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("u"))
+        self.assertEqual(self.lib.gpui_settings_control_sequence(), 42)
+        self.lib.gpui_settings_control_reply(ord("U"))
+        stdout, stderr = resume.communicate(timeout=3)
+        self.assertEqual(resume.returncode, 0, stderr)
+        self.assertIn("scene and shutdown are not implied", stdout)
+        query_generation = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "generation"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("n"))
+        self.lib.gpui_settings_control_reply_sequence(ord("S"), 7)
+        stdout, stderr = query_generation.communicate(timeout=3)
+        self.assertEqual(query_generation.returncode, 0, stderr)
+        self.assertIn("continuation generation: 7", stdout)
+        advance = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "advance", "--sequence", "7"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("g"))
+        self.assertEqual(self.lib.gpui_settings_control_sequence(), 7)
+        self.lib.gpui_settings_control_reply(ord("V"))
+        stdout, stderr = advance.communicate(timeout=3)
+        self.assertEqual(advance.returncode, 0, stderr)
+        self.assertIn("one bounded step completed", stdout)
 
     def test_new_process_uses_fresh_socket_and_does_not_reuse_owner(self) -> None:
         code = (

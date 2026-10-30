@@ -89,6 +89,9 @@ python3 scripts/settings_retained_control.py SOCKET receipt
 python3 scripts/settings_retained_control.py SOCKET poll
 python3 scripts/settings_retained_control.py SOCKET apply --sequence SEQUENCE
 python3 scripts/settings_retained_control.py SOCKET retry-ack --sequence NATIVE_SEQUENCE
+python3 scripts/settings_retained_control.py SOCKET resume --sequence NATIVE_SEQUENCE
+python3 scripts/settings_retained_control.py SOCKET generation
+python3 scripts/settings_retained_control.py SOCKET advance --sequence GENERATION
 python3 scripts/settings_retained_control.py SOCKET cutoff
 python3 scripts/settings_retained_control.py SOCKET stop
 ```
@@ -138,8 +141,13 @@ ACK, and retains both after an ACK error. Entered is accepted only after the
 original window, binding, portable and native epochs, seat and proxy are
 validated and stored; Left and unsupported records remain unacknowledged. An
 interruption in ACK before dispatch can be retried by native sequence, then
-explicitly resumed through the owner API. The socket exposes ACK retry but not
-resume. Other failure points cannot be resumed through this API. Callback fixtures cover ACK failure,
+explicitly dispatched once through the owner API or the control socket. This
+bounded step does not poll a later record or publish a scene. A separate
+generation-bound `advance` can handle at most one following observation;
+the generation advances even for an empty poll, so a lost response cannot
+make a repeated request consume another record. Both steps leave the owner
+suspended and do not publish a scene. Other failure
+points cannot be resumed through this API. Callback fixtures cover ACK failure,
 explicit retry, identity retention and one model application; it does not
 simulate the native queue. The receipt ledger retains ACKed native identities
 and is limited to 64 entries. It stops admission at capacity; retirement and
@@ -165,6 +173,17 @@ rebuilt Ubuntu example has SHA-256
 `9f26085369cb9b4ce56f7b8f76b32ec02fe9d3378569708ab601f89136035e9f`.
 These are synthetic and build results; the real native callback path and live
 IME remain unverified.
+
+With the bounded control continuation, the common fixtures passed **39/39**
+including resize, ACK failure, retry, buffered commit and Destroyed; the
+fixture applies that commit once to the original model. Raw log SHA-256:
+`6175d250c3e7ad35716c4019fa1446f2655a6df202ee6872a31889f11e42ecd9`.
+The control socket suite passed **9/9**, log SHA-256
+`99e6196e29f0090443bb9e8c2800fecd71e459b426770766f8f3a46012fc8359`.
+The corresponding source-override Ubuntu example build passed; binary SHA-256
+`c8767ae1a477a4315b3808239115238379b7fb006321efc81d86731015bc5291`.
+The finite steps do not establish scene publication, retirement, cutoff,
+safe host shutdown, real native callback handling or live IME acceptance.
 
 The control transport has **9/9 PASS** local Linux socket fixture tests,
 including same-UID requests, bounded idle clients, sequence-bound apply, fresh
