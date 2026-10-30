@@ -2921,6 +2921,18 @@ pub struct TerminalTextOwner {
 }
 
 ///|
+/// Compare the lease to the host session the caller retained at begin/update.
+pub fn TerminalTextOwner::matches_session(
+  self : TerminalTextOwner,
+  window : @platform.WindowId,
+  epoch : UInt64,
+  binding : UInt64,
+) -> Bool {
+  self.identity.live && self.session_identity.live && self.window == window &&
+  self.epoch == epoch && self.binding == binding
+}
+
+///|
 /// Capture the existing focused field before its host session receives input.
 /// The caller must use the epoch returned for this binding by the host.
 pub fn Mounted::capture_terminal_text_owner(
@@ -3045,6 +3057,41 @@ pub fn Mounted::note_terminal_text_delivery(
     }
   }
   Err(adapter_error("terminal binding changed"))
+}
+
+///|
+/// Check only this field's local end prerequisites. The caller must separately
+/// resolve every taken record and obtain a native queue cutoff from the host.
+pub fn Mounted::terminal_field_can_cutoff(
+  self : Mounted,
+  owner : TerminalTextOwner,
+) -> Bool {
+  if self.is_disposed() || self.busy || owner.busy || self.held_text is Some(_) ||
+    !self.identity.live || !owner.session_identity.live ||
+    !same_epoch(self.identity, owner.identity) ||
+    !(self.terminal_identity is Some(active) && same_epoch(active, owner.session_identity)) ||
+    self.window != owner.window || self.text_epoch != owner.epoch ||
+    self.last_text_sequence != owner.sequence || self.runtime.has_pending_actions() ||
+    !self.runtime.is_current(owner.token) {
+    return false
+  }
+  let scope = match self.scope {
+    Some(value) => value
+    None => return false
+  }
+  if scope.focused() != Some(owner.binding) {
+    return false
+  }
+  for binding in self.bindings {
+    if binding.id == owner.binding && binding.field_generation == owner.generation &&
+      binding.token == Some(owner.token) {
+      match binding.field {
+        Some(field) => return field.revision() == owner.revision && !field.is_composing()
+        None => return false
+      }
+    }
+  }
+  false
 }
 
 ///|

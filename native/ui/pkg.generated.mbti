@@ -102,6 +102,7 @@ pub fn Mounted::publish(Self, Prepared) -> Result[Frame, @diagnostics.FrameworkE
 pub fn Mounted::release_held_text_for_retry(Self, UInt64) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::set_theme(Self, @theme.Theme?) -> Bool
 pub fn Mounted::stage(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Prepared, @diagnostics.FrameworkError]
+pub fn Mounted::terminal_field_can_cutoff(Self, TerminalTextOwner) -> Bool
 pub fn Mounted::text_caret(Self, @core.NodeKey) -> @primitives.Rect?
 pub fn Mounted::text_input(Self, UInt64, @text_host.TextInputEvent) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn Mounted::theme(Self) -> @theme.Theme?
@@ -119,6 +120,7 @@ pub struct Prepared {
 pub struct TerminalTextOwner {
   // private fields
 }
+pub fn TerminalTextOwner::matches_session(Self, @platform.WindowId, UInt64, UInt64) -> Bool
 
 // Type aliases
 

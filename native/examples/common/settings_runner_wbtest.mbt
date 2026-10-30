@@ -872,6 +872,10 @@ test "retained Settings owner keeps buffered commit and terminal record on error
   assert_eq(owner.pending_records().length(), 0)
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
   assert_true(owner.reconcile_terminal_commit() is Err(_))
+  // The fake native cutoff is Busy; the terminal record and host remain owned.
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_false(owner.cutoff_completed())
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
   assert_eq(owner.model().name(), "日本")
   assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
@@ -1126,5 +1130,66 @@ test "focus lost does not synthesize cancel for an armed preedit" {
   owner.mounted.note_terminal_text_delivery(lease, cancelled).unwrap()
   assert_false(owner.mounted.focused_text().unwrap().composing())
   assert_true(owner.mounted.next_action() is None)
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "terminal cutoff needs an empty prefix and retains terminal ownership" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let calls = Ref(0)
+  let pending : Array[NativeOrderedEvent] = []
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) { Ok(if pending.is_empty() { None } else { Some(pending.remove(0)) }) },
+    fn(epoch) {
+      if epoch != 7UL {
+        return Err(runner_error("terminal_cutoff", "unexpected epoch"))
+      }
+      calls.val += 1
+      if !pending.is_empty() {
+        return Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "terminal-cutoff"))
+      }
+      Ok(())
+    },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let field = owner.mounted.focused_text().unwrap()
+  owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.mounted.invalidate_layout()
+  owner.suspended = true
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))))
+  owner.inflight = Some(OrderedPlatform(@platform.Event::new(owner.window, 2L, 1.0, @platform.Destroyed)))
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_eq(calls.val, 0)
+  owner.reconcile_terminal_observation().unwrap()
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_eq(calls.val, 0)
+  owner.buffered.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 2L, 7UL, @text_host.Cancel)))
+  owner.reconcile_terminal_observation().unwrap()
+  owner.session = Some({ epoch: 7UL, binding: field.binding_id() + 1UL, })
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_eq(calls.val, 0)
+  owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  // A newly admitted commit keeps the native cutoff Busy. Moving it to the
+  // local buffer and applying it to the original model precedes retry.
+  pending.push(OrderedText(@text_host.TextInputEvent::new(owner.window, 3L, 7UL, @text_host.Commit(text="日本"))))
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_false(owner.cutoff_completed())
+  assert_eq(pending.length(), 1)
+  owner.buffered.push((ordered.next)(0).unwrap().unwrap())
+  owner.reconcile_terminal_observation().unwrap()
+  assert_eq(owner.model().name(), "日本")
+  owner.try_terminal_text_cutoff().unwrap()
+  assert_eq(calls.val, 2)
+  assert_true(owner.cutoff_completed())
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
 }

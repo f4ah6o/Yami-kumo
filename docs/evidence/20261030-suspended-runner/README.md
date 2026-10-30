@@ -38,6 +38,12 @@ and checks action enqueue before publishing the field. Nested input is
 rejected while measurement is in progress. Reentrant layout invalidation
 leaves the original record unapplied. With an armed owner,
 observed focus loss keeps an active preview until a later observed cancel.
+The experimental terminal text cutoff requires empty local buffers, no pending
+action, and an uncomposed original field. Busy retains the owner; in a scripted
+fixture later admitted text is applied before retry. A successful fake cutoff
+still leaves `can_stop` false. This does not prove the real native host can cut
+off a destroyed window, retain records freed by native destroy/close, or
+account for stale records skipped by its reader.
 
 ## Unresolved P1
 
@@ -64,10 +70,10 @@ Candidate source: gpui `74d182c6368ca382f697023c5d3690b6c0c2dfbf`, Yami base
 published dependencies lacking the candidate API. Tests use a local source
 workspace and do not establish published-package compatibility.
 
-Local combined native UI and common fixture suite: **123/123 PASS** using
+Local combined native UI and common fixture suite: **124/124 PASS** using
 `GPUI_SOURCE=/workspace/gpui-ordered-fence` and
 `scripts/native_ui_workspace.sh ... moon test <ui> <examples/common> --target
 native --deny-warn --no-parallelize`. This is scripted evidence only; no
 production main, live IME, or public-registry consumer was tested.
 Local raw log SHA-256:
-`6cd228f79187dc4e3d8801f3ee45d499d7a2fa5b09a1c0decbd3f4f948686077`.
+`dd272ad6bcd0b45a80808518ea53e57cbd9fc9d1e0c89f8c2870e3776f4f0bdb`.

@@ -398,6 +398,51 @@ pub fn SettingsRunOwner::terminal_model_sequence(self : SettingsRunOwner) -> Int
 }
 
 ///|
+/// Attempt only the text-session native cutoff, without consuming the retained
+/// terminal event or stopping the host. Busy leaves the original owner intact.
+/// Success is not an ACK for other native events or permission to stop.
+pub fn SettingsRunOwner::try_terminal_text_cutoff(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.cutoff_done ||
+    self.held_tab is Some(_) || !self.buffered.is_empty() ||
+    !self.held_platform.is_empty() || self.terminal_applied is Some(_) {
+    return Err(runner_error("terminal_cutoff", "local records or actions remain unresolved"))
+  }
+  match self.inflight {
+    Some(OrderedPlatform(event)) if event.window() == self.window &&
+      (event.kind() is @platform.Destroyed || event.kind() is @platform.CloseRequested ||
+       event.kind() is @platform.ExitRequested) => ()
+    _ => return Err(runner_error("terminal_cutoff", "terminal event is not retained"))
+  }
+  let owner = match self.terminal_owner {
+    Some(value) => value
+    None => return Err(runner_error("terminal_cutoff", "original field owner is unavailable"))
+  }
+  if !self.mounted.terminal_field_can_cutoff(owner) {
+    return Err(runner_error("terminal_cutoff", "field or pending action is unresolved"))
+  }
+  let session = match self.session {
+    Some(value) => value
+    None => return Err(runner_error("terminal_cutoff", "original session is unavailable"))
+  }
+  if !owner.matches_session(self.window, session.epoch, session.binding) {
+    return Err(runner_error("terminal_cutoff", "host session differs from field owner"))
+  }
+  let ordered = match self.ordered_text {
+    Some(value) => value
+    None => return Err(runner_error("terminal_cutoff", "ordered host is unavailable"))
+  }
+  match (ordered.end_when_drained)(session.epoch) {
+    Err(error) => Err(error)
+    Ok(_) => {
+      self.cutoff_done = true
+      Ok(())
+    }
+  }
+}
+
+///|
 pub fn SettingsRunOwner::inflight_record(
   self : SettingsRunOwner,
 ) -> NativeOrderedEvent? {
