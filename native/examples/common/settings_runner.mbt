@@ -48,7 +48,10 @@ pub struct NativeRetainedReceipt {
 /// stages do not certify geometry publication, terminal resolution or stop.
 pub(all) enum NativeReceiptStage {
   ReceiptAcknowledgedOnly
+  ReceiptOwnerEntered
+  ReceiptPlatformHandled
   ReceiptSessionApplied
+  ReceiptNoModelAction
   ReceiptActionRequired
   ReceiptModelApplied
   ReceiptTerminalResolved
@@ -64,7 +67,9 @@ struct NativeReceiptEntry {
 fn receipt_stage_rank(stage : NativeReceiptStage) -> Int {
   match stage {
     ReceiptAcknowledgedOnly => 0
+    ReceiptOwnerEntered | ReceiptPlatformHandled => 1
     ReceiptSessionApplied => 1
+    ReceiptNoModelAction => 2
     ReceiptActionRequired => 2
     ReceiptModelApplied => 3
     ReceiptTerminalResolved => 4
@@ -79,6 +84,18 @@ fn same_text_observation_kind(
     (@text_host.Commit(text=a), @text_host.Commit(text=b)) => a == b
     (@text_host.Preedit(text=a, cursor=x), @text_host.Preedit(text=b, cursor=y)) => a == b && x == y
     (@text_host.Cancel, @text_host.Cancel) | (@text_host.FocusLost, @text_host.FocusLost) => true
+    _ => false
+  }
+}
+
+///|
+/// Only the non-input events whose local effects are explicitly handled by
+/// this runner qualify; this does not certify scene or host geometry.
+fn same_handled_platform_kind(left : @platform.EventKind, right : @platform.EventKind) -> Bool {
+  match (left, right) {
+    (@platform.Resized(width=a, height=b), @platform.Resized(width=x, height=y)) => a == x && b == y
+    (@platform.ScaleChanged, @platform.ScaleChanged) | (@platform.FrameCompleted, @platform.FrameCompleted) => true
+    (@platform.FocusChanged(true), @platform.FocusChanged(true)) => true
     _ => false
   }
 }
@@ -934,6 +951,29 @@ fn SettingsRunOwner::note_text_receipt_stage(
 }
 
 ///|
+fn SettingsRunOwner::note_handled_platform(
+  self : SettingsRunOwner, event : @platform.Event,
+) -> Unit {
+  let mut found = -1
+  for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
+    let receipt = self.acknowledged_receipts[i].receipt
+    if receipt.sequence.to_int64() == event.sequence() {
+      if found >= 0 { return }
+      found = i
+    }
+  }
+  if found < 0 { return }
+  let entry = self.acknowledged_receipts[found]
+  match entry.receipt.event {
+    Some(OrderedPlatform(value)) if entry.receipt.window == event.window() &&
+      value.window() == event.window() && value.sequence() == event.sequence() &&
+      same_handled_platform_kind(value.kind(), event.kind()) &&
+      entry.stage is ReceiptAcknowledgedOnly => entry.stage = ReceiptPlatformHandled
+    _ => ()
+  }
+}
+
+///|
 /// Dispatch only the record interrupted by a failed ACK, without publishing a
 /// scene or consuming a later record. Other failures remain suspended.
 pub fn SettingsRunOwner::resume_after_receipt_ack(
@@ -1014,7 +1054,10 @@ fn SettingsRunOwner::ack_owned_receipt(
       match (receipt.ack)() {
         Err(error) => Err(error)
         Ok(_) => {
-          self.acknowledged_receipts.push({ receipt, stage: ReceiptAcknowledgedOnly })
+          self.acknowledged_receipts.push({
+            receipt,
+            stage: if receipt.entered is Some(_) { ReceiptOwnerEntered } else { ReceiptAcknowledgedOnly },
+          })
           self.pending_host_receipt = None
           Ok(())
         }
@@ -1503,6 +1546,9 @@ fn SettingsRunOwner::complete_owned_delivery(
       Ok(_) => ()
     }
   }
+  if receipt.action_required() is Some(false) {
+    self.note_text_receipt_stage(event, ReceiptNoModelAction)
+  }
   if receipt.action_required() is Some(true) && !receipt.model_applied() {
     let action = match self.mounted.owned_text_action(receipt) {
       Ok(Some(value)) => value
@@ -1887,6 +1933,9 @@ fn SettingsRunOwner::drive_inner(
           @platform.Destroyed
           | @platform.CloseRequested
           | @platform.ExitRequested => {
+            if ordered_text is Some(_) && mounted.has_pending_actions() {
+              return Err(runner_error("ordered_text", "terminal event cannot discard a pending action"))
+            }
             self.destroyed = true
             self.dirty = false
             if ordered_text is Some(_) {
@@ -1895,6 +1944,9 @@ fn SettingsRunOwner::drive_inner(
             }
           }
           @platform.Resized(..) | @platform.ScaleChanged => {
+            if ordered_text is Some(_) && mounted.has_pending_actions() {
+              return Err(runner_error("ordered_text", "layout invalidation cannot discard a pending action"))
+            }
             // Invalidation clears the commit-ready state; without a new frame
             // the next text observation would be rejected before it reaches the
             // focused field.
@@ -1920,7 +1972,17 @@ fn SettingsRunOwner::drive_inner(
                 runner_error("ordered_text", "focus loss requires ordered owner recovery"),
               )
             }
-            ignore(mounted.handle_event(value))
+            if !focused && ordered_text is Some(_) && mounted.has_pending_actions() {
+              return Err(runner_error("ordered_text", "focus loss cannot discard a pending action"))
+            }
+            let handled = mounted.handle_event(value)
+            if ordered_text is Some(_) {
+              match handled {
+                Err(error) => return Err(error)
+                Ok(false) => return Err(runner_error("ordered_text", "focus event was not accepted"))
+                Ok(true) => ()
+              }
+            }
             self.text_suspended = !focused
             if !focused {
               self.focus_initialized = false
@@ -2006,6 +2068,10 @@ fn SettingsRunOwner::drive_inner(
         }
       }
       Some(_) => ()
+    }
+    match event {
+      Some(value) if value.window() == window => self.note_handled_platform(value)
+      _ => ()
     }
     if ordered_text is Some(_) && self.destroyed {
       return Err(runner_error("ordered_text", "terminal event requires retained cleanup"))

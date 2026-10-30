@@ -1853,6 +1853,8 @@ test "ack retry resumes the exact not-yet-dispatched text only once" {
   let entry = SettingsEntryController::start(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered))
   let owner = entry.owner().unwrap()
   assert_true(owner.inflight_record() is Some(OrderedText(_)))
+  assert_true(owner.receipt_stage_for_sequence(1L) is Some(ReceiptPlatformHandled))
+  assert_true(owner.receipt_stage_for_sequence(2L) is Some(ReceiptPlatformHandled))
   assert_eq(owner.model().name(), "")
   assert_true(owner.resumable_receipt_identity() is None)
   assert_true(entry.resume_receipt_sequence(3L) is Err(_))
@@ -1915,6 +1917,7 @@ test "entered ack retry continues original session without consuming text" {
   assert_true(owner.entered_target is Some((5, 11L, 4)))
   assert_eq(step.val, 2)
   assert_true(entry.retry_receipt_sequence(3L).unwrap() is ReceiptAcknowledged)
+  assert_true(owner.receipt_stage_for_sequence(3L) is Some(ReceiptOwnerEntered))
   assert_eq(step.val, 3)
   assert_true(entry.resume_receipt_sequence(4L) is Err(_))
   assert_true(entry.resume_receipt_sequence(3L).unwrap() is ReceiptDispatched)
@@ -1957,6 +1960,155 @@ test "empty continuation still consumes its generation" {
   assert_eq(reads.val, 2)
   assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "receipt stages distinguish no-action preedit from input ACK" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding, })
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedText(preedit)), owner.window, 1, binding, 7UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  owner.deliver_owned_observation(preedit).unwrap()
+  assert_true(owner.receipt_stage_for_sequence(1L) is Some(ReceiptNoModelAction))
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  let press = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.Character("n"), repeat=false, modifiers=@primitives.Modifiers::none())))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedPlatform(press)), owner.window, 2, binding, 7UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  owner.note_handled_platform(press)
+  assert_true(owner.receipt_stage_for_sequence(2L) is Some(ReceiptAcknowledgedOnly))
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "pending action blocks ordered resize before layout invalidation" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let owner_ref : Ref[SettingsRunOwner?] = Ref(None)
+  let activated = Ref(false)
+  let sequence = Ref(1)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      let index = sequence.val
+      let event = match index {
+        1 => @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted)
+        2 => @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted)
+        3 => {
+          let owner = owner_ref.val.unwrap()
+          let save = owner.mounted.callback(@shared_settings.settings_save()).unwrap()
+          activated.val = owner.mounted.activate(save)
+          @platform.Event::new(window, 3L, 1.0, @platform.Resized(width=800.0, height=600.0))
+        }
+        _ => return Ok(None)
+      }
+      Ok(Some(NativeRetainedReceipt::new(Some(OrderedPlatform(event)), window, index, 0UL, 0UL, fn() {
+        sequence.val += 1
+        Ok(())
+      })))
+    },
+    fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  owner_ref.val = Some(owner)
+  assert_true(owner.drive() is Err(_))
+  assert_true(activated.val)
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_true(owner.receipt_stage_for_sequence(3L) is Some(ReceiptAcknowledgedOnly))
+  assert_true(owner.mounted.has_pending_actions())
+  assert_true(owner.mounted.next_action() is Some(@view.Activate(_)))
+  assert_false(owner.mounted.has_pending_actions())
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "rejected focus handler retains its exact acknowledged event" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let owner_ref : Ref[SettingsRunOwner?] = Ref(None)
+  let advanced = Ref(false)
+  let sequence = Ref(1)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      let index = sequence.val
+      let event = match index {
+        1 => @platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted)
+        2 => @platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted)
+        3 => {
+          // Make the Mounted handler reject the subsequently delivered focus
+          // event after it was already acknowledged by the native queue.
+          let owner = owner_ref.val.unwrap()
+          let later = @platform.Event::new(window, 4L, 1.0, @platform.FocusChanged(true))
+          advanced.val = owner.mounted.handle_event(later).unwrap()
+          @platform.Event::new(window, 3L, 1.0, @platform.FocusChanged(true))
+        }
+        _ => return Ok(None)
+      }
+      Ok(Some(NativeRetainedReceipt::new(Some(OrderedPlatform(event)), window, index, 0UL, 0UL, fn() {
+        sequence.val += 1
+        Ok(())
+      })))
+    },
+    fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  owner_ref.val = Some(owner)
+  assert_true(owner.drive() is Err(_))
+  assert_true(advanced.val)
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(event)) && event.sequence() == 3L)
+  assert_true(owner.receipt_stage_for_sequence(3L) is Some(ReceiptAcknowledgedOnly))
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "platform stage refuses wrong payload and ambiguous receipt sequence" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  let frame = @platform.Event::new(owner.window, 1L, 1.0, @platform.FrameCompleted)
+  let resize = @platform.Event::new(owner.window, 1L, 1.0, @platform.Resized(width=800.0, height=600.0))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedPlatform(frame)), owner.window, 1, 0UL, 0UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  owner.note_handled_platform(resize)
+  assert_true(owner.receipt_stage_for_sequence(1L) is Some(ReceiptAcknowledgedOnly))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedPlatform(frame)), owner.window, 1, 0UL, 0UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  owner.note_handled_platform(frame)
+  assert_true(owner.receipt_stage_for_sequence(1L) is None)
+  assert_true(owner.acknowledged_receipts[0].stage is ReceiptAcknowledgedOnly)
+  assert_true(owner.acknowledged_receipts[1].stage is ReceiptAcknowledgedOnly)
+  assert_false(owner.can_stop())
 }
 
 ///|
@@ -2003,6 +2155,7 @@ test "resize then failed ack retains commit across destroyed window" {
   assert_eq(owner.pending_records().length(), 1)
   assert_true(entry.advance_once(1L) is Err(_))
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
+  assert_true(owner.receipt_stage_for_sequence(5L) is Some(ReceiptAcknowledgedOnly))
   assert_true(owner.resolve_destroyed_receipt(5L) is Err(_))
   assert_true(owner.retire_destroyed_model_receipt(4L) is Err(_))
   assert_true(entry.terminal_step(ApplyNext).unwrap() is ModelApplied(1L, true))
