@@ -4,6 +4,10 @@
 
 ### Added
 
+- Draft only: retain the most recent held TextSession transaction receipt
+  before enqueueing its model action, so a later enqueue failure can be
+  distinguished from rejection before the text transaction. This does not
+  retain the runner or complete recovery and requires candidate dependencies.
 - Draft only: connect the Ubuntu Settings experiment to ordered ingress and
   hold an uncomposed Tab until the admitted text prefix and cutoff complete.
   This runner is not production-ready: resize, close, buffer overflow and

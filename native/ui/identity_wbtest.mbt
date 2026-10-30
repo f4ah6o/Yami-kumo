@@ -191,3 +191,88 @@ test "exploratory held composition prepare cannot publish the session" {
   assert_true(after.field().is_composing())
   mounted.dispose()
 }
+
+///|
+test "held receipt survives failure after session commit and blocks replay" {
+  let mounted = Mounted::new(@platform.WindowId::new(1L))
+  let measure : @components.TextMeasure = fn(value, size) {
+    let document = @text.TextDocument::new(value).unwrap()
+    let bounds = @primitives.Rect::new(
+      0.0,
+      0.0,
+      (value.length() + 1).to_double() * size,
+      size,
+    ).unwrap()
+    let carets = []
+    let mut offset = 0
+    let caret = @primitives.Rect::new(0.0, 0.0, 1.0, size).unwrap()
+    carets.push(@text_layout.CaretGeometry::new(0, true, caret, caret).unwrap())
+    for scalar in value.iter() {
+      offset += if scalar.to_int() > 0xFFFF { 2 } else { 1 }
+      let caret = @primitives.Rect::new(offset.to_double(), 0.0, 1.0, size).unwrap()
+      carets.push(
+        @text_layout.CaretGeometry::new(offset, true, caret, caret).unwrap(),
+      )
+    }
+    Ok(
+      @text_layout.TextMeasurement::new(
+        document,
+        bounds,
+        bounds,
+        size * 0.8,
+        1,
+        0,
+        carets,
+      ).unwrap(),
+    )
+  }
+  let key = @view.NodeKey::new("name")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(key, @view.TextFieldProps::new("", "Name")),
+  ])
+  ignore(mounted.commit(view, 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(mounted.focus(key))
+  assert_true(mounted.begin_held_text(7UL).unwrap())
+  let binding = mounted.focused_text().unwrap().binding_id()
+  let observed = @text_host.TextInputEvent::new(
+    @platform.WindowId::new(1L),
+    1L,
+    7UL,
+    @text_host.Commit(text="日本"),
+  )
+  // Inject failure only after the real TextSession has published its receipt.
+  assert_true(
+    mounted.held_text_input_with(7UL, observed, fn(_, _, _) { false }) is Err(_),
+  )
+  let receipt = mounted.held_text_receipt(7UL, 1L).unwrap()
+  assert_eq(receipt.epoch(), 7UL)
+  assert_eq(receipt.sequence(), 1L)
+  assert_eq(receipt.binding(), binding)
+  assert_true(receipt.action_required())
+  assert_false(receipt.action_enqueued())
+  assert_eq(
+    receipt.transaction().snapshot().field().committed_document().text(),
+    "日本",
+  )
+  assert_true(mounted.held_text_receipt(7UL, 2L) is None)
+  assert_true(mounted.held_text_receipt(8UL, 1L) is None)
+  assert_true(mounted.held_text_input(7UL, observed) is Err(_))
+  assert_true(mounted.next_action() is None)
+  mounted.dispose()
+
+  let second = Mounted::new(@platform.WindowId::new(2L))
+  ignore(second.commit(view, 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(second.focus(key))
+  assert_true(second.begin_held_text(8UL).unwrap())
+  assert_false(second.held_text_input(8UL, observed).unwrap())
+  assert_true(second.held_text_receipt(8UL, 1L) is None)
+  let current = @text_host.TextInputEvent::new(
+    @platform.WindowId::new(2L), 1L, 8UL, @text_host.Commit(text="日本"),
+  )
+  assert_true(second.held_text_input(8UL, current).unwrap())
+  let accepted = second.held_text_receipt(8UL, 1L).unwrap()
+  assert_true(accepted.action_required())
+  assert_true(accepted.action_enqueued())
+  assert_false(second.held_text_input(8UL, current).unwrap())
+  second.dispose()
+}

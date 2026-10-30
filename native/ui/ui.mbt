@@ -313,6 +313,85 @@ priv struct HeldText {
   sequence : Int64
   poisoned : Bool
   retryable : Bool
+  receipt : HeldTextReceipt?
+}
+
+///|
+/// Evidence that a host observation was applied by the held TextSession.
+/// It does not acknowledge model delivery, geometry, or the host cutoff.
+pub struct HeldTextReceipt {
+  priv window : @platform.WindowId
+  priv epoch : UInt64
+  priv sequence : Int64
+  priv binding : UInt64
+  priv generation : UInt64
+  priv transaction : @text_session.BatchReceipt
+  priv action_required : Bool
+  priv action_enqueued : Bool
+}
+
+///|
+pub fn HeldTextReceipt::window(self : HeldTextReceipt) -> @platform.WindowId {
+  self.window
+}
+
+///|
+pub fn HeldTextReceipt::epoch(self : HeldTextReceipt) -> UInt64 {
+  self.epoch
+}
+
+///|
+pub fn HeldTextReceipt::sequence(self : HeldTextReceipt) -> Int64 {
+  self.sequence
+}
+
+///|
+pub fn HeldTextReceipt::binding(self : HeldTextReceipt) -> UInt64 {
+  self.binding
+}
+
+///|
+pub fn HeldTextReceipt::generation(self : HeldTextReceipt) -> UInt64 {
+  self.generation
+}
+
+///|
+pub fn HeldTextReceipt::transaction(
+  self : HeldTextReceipt,
+) -> @text_session.BatchReceipt {
+  self.transaction
+}
+
+///|
+pub fn HeldTextReceipt::action_required(self : HeldTextReceipt) -> Bool {
+  self.action_required
+}
+
+///|
+pub fn HeldTextReceipt::action_enqueued(self : HeldTextReceipt) -> Bool {
+  self.action_enqueued
+}
+
+///|
+/// Return the most recent transaction for this exact host observation,
+/// including when delivery failed after TextSession publication. A later
+/// transaction replaces it, and ending or disposing the held owner discards
+/// it; the caller must retain the returned value until it is reconciled. An
+/// unqueued action still needs model delivery; retrying the transaction would
+/// duplicate its edit. None is not an acknowledgement of any observation.
+pub fn Mounted::held_text_receipt(
+  self : Mounted,
+  epoch : UInt64,
+  sequence : Int64,
+) -> HeldTextReceipt? {
+  match self.held_text {
+    Some(held) if held.epoch == epoch =>
+      match held.receipt {
+        Some(receipt) if receipt.sequence == sequence => Some(receipt)
+        _ => None
+      }
+    _ => None
+  }
 }
 
 ///|
@@ -2918,6 +2997,7 @@ pub fn Mounted::begin_held_text(
       sequence,
       poisoned: false,
       retryable: false,
+      receipt: None,
     })
     return Ok(true)
   }
@@ -2959,6 +3039,18 @@ pub fn Mounted::held_text_input(
   self : Mounted,
   epoch : UInt64,
   event : @text_host.TextInputEvent,
+) -> Result[Bool, @diagnostics.FrameworkError] {
+  self.held_text_input_with(epoch, event, fn(runtime, token, value) {
+    runtime.enqueue_text_changed(token, value)
+  })
+}
+
+///|
+fn Mounted::held_text_input_with(
+  self : Mounted,
+  epoch : UInt64,
+  event : @text_host.TextInputEvent,
+  enqueue : (@runtime.Runtime, @runtime.InstanceToken, String) -> Bool,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
   let held = match self.held_text {
     Some(value) => value
@@ -3059,16 +3151,33 @@ pub fn Mounted::held_text_input(
         Err(_) => return Err(adapter_error("held text transaction rejected"))
       }
       let next = receipt.snapshot().field()
-      if next.committed_document().text() != before.committed_document().text() {
-        if !self.runtime.enqueue_text_changed(
-            token,
-            next.committed_document().text(),
-          ) {
+      let action_required = next.committed_document().text() !=
+        before.committed_document().text()
+      let delivery = {
+        window: self.window,
+        epoch,
+        sequence: event.sequence(),
+        binding: held.binding,
+        generation: held.generation,
+        transaction: receipt,
+        action_required,
+        action_enqueued: false,
+      }
+      // TextSession has published. Retain its receipt before any later
+      // operation can fail, so the caller can distinguish this from rejection.
+      self.held_text = Some({
+        ..held,
+        sequence: event.sequence(),
+        receipt: Some(delivery),
+      })
+      if action_required {
+        if !enqueue(self.runtime, token, next.committed_document().text()) {
           self.held_text = Some({
             ..held,
             poisoned: true,
             retryable: false,
             sequence: event.sequence(),
+            receipt: Some(delivery),
           })
           return Err(
             adapter_error(
@@ -3082,6 +3191,7 @@ pub fn Mounted::held_text_input(
         ..held,
         revision: next.revision(),
         sequence: event.sequence(),
+        receipt: Some({ ..delivery, action_enqueued: action_required, }),
       })
     }
     None => self.held_text = Some({ ..held, sequence: event.sequence(), })
@@ -3678,7 +3788,9 @@ pub fn Mounted::text_input(
         let selection = match @text.TextSelection::new(offset, offset) {
           Err(_) =>
             return Err(
-              adapter_error("native TextField preedit cursor is outside the text"),
+              adapter_error(
+                "native TextField preedit cursor is outside the text",
+              ),
             )
           Ok(value) => value
         }
