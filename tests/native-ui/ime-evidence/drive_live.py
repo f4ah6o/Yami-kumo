@@ -38,10 +38,16 @@ try:
   time.sleep(.05)
  else: raise RuntimeError('IME keyboard grab or properties not ready')
  time.sleep(1)
+ result['stage']='validation'
+ before=len(o.markers); send('Return')
+ marker(lambda m:m.get('phase')=='key' and m.get('key')=='enter',12,before)
+ after=len(o.frames)
+ result['observations']['validation']=o.wait_frame(lambda f:f.get('error')=='Enter a name before saving.' and f.get('name')=='' and f.get('dialog') is False,12,after=after)
  result['stage']='preedit'
  for k in 'nihonn': send(k)
  result['observations']['preedit']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='にほん',12)
- result['observations']['uncommitted_frame']=o.wait_frame(lambda f:f.get('name')=='',5)
+ after=len(o.frames)
+ result['observations']['uncommitted_frame']=o.wait_frame(lambda f:f.get('name')=='',5,after=after)
  result['stage']='cancel-candidate'
  for k in ['space','space']: send(k)
  time.sleep(.3)
@@ -82,7 +88,10 @@ try:
  result['observations']['redo_frame']=o.wait_frame(lambda f:f.get('name')=='日本',12,after=after)
  result['stage']='dialog'
  def step(key,dialog,focus):
-  after=len(o.frames); send(key)
+  before=len(o.markers); send(key)
+  key_name={'Return':'enter','Escape':'escape','Tab':'tab','shift+Tab':'tab'}[key]
+  marker(lambda m:m.get('phase')=='key' and m.get('key')==key_name,12,before)
+  after=len(o.frames)
   return o.wait_frame(lambda f:f.get('dialog') is dialog and f.get('focus')==focus and f.get('name')=='日本',12,after=after)
  result['observations']['field_open']=step('Return',True,'confirm')
  subprocess.run(['import','-window','root',str(out/'dialog.png')],check=True)
