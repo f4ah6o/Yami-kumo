@@ -107,6 +107,9 @@ try:
  result['observations']['field_restore']=step('Escape',False,'name')
  result['observations']['field_reopen']=step('Return',True,'confirm')
  result['observations']['field_restore_again']=step('Escape',False,'name')
+ result['observations']['field_open_to_confirm']=step('Return',True,'confirm')
+ after=len(o.frames); send('Return')
+ result['observations']['saved']=o.wait_frame(lambda f:f.get('dialog') is False and f.get('status')=='saved' and f.get('name')=='日本',12,after=after)
  if len([m for m in o.markers if m.get('phase')=='commit' and m.get('text')=='日本']) != 1: raise RuntimeError('duplicate commit observed')
  result['status']='PASS'; result['stage']='complete'
 except Exception as e:
