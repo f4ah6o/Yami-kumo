@@ -52,7 +52,9 @@ try:
  result['stage']='cancel-preedit'
  before=len(o.markers); cancel_frames=len(o.frames); send('Escape')
  result['observations']['cancel_preedit']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='',12,before)
- result['observations']['cancel_frame']=o.wait_frame(lambda f:f.get('name')=='',12)
+ result['observations']['cancel_frame']=o.wait_frame(lambda f:f.get('name')=='',12,after=cancel_frames)
+ time.sleep(.3)
+ subprocess.run(['import','-window','root',str(out/'after-preedit-cancel.png')],check=True)
  before=len(o.markers)
  for k in 'nihonn': send(k)
  marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='にほん',12,before)
