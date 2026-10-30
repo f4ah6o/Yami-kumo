@@ -957,6 +957,7 @@ test "terminal recovery never skips a buffered preedit prefix" {
   assert_true(owner.mounted.focus(@shared_settings.settings_name()))
   let field = owner.mounted.focused_text().unwrap()
   owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  owner.host_epoch = Some(7UL)
   owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
   owner.mounted.invalidate_layout()
   owner.suspended = true
@@ -1160,6 +1161,7 @@ test "terminal cutoff needs an empty prefix and retains terminal ownership" {
   assert_true(owner.mounted.focus(@shared_settings.settings_name()))
   let field = owner.mounted.focused_text().unwrap()
   owner.session = Some({ epoch: 7UL, binding: field.binding_id(), })
+  owner.host_epoch = Some(7UL)
   owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
   owner.mounted.invalidate_layout()
   owner.suspended = true
@@ -1191,5 +1193,94 @@ test "terminal cutoff needs an empty prefix and retains terminal ownership" {
   assert_true(owner.try_terminal_text_cutoff() is Err(_))
   assert_true(owner.inflight_record() is Some(OrderedPlatform(_)))
   assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "begin update failure or replacement retains original admitted epoch" {
+  for replaced in [false, true] {
+    let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+    let window = @platform.WindowId::new(1L)
+    let pending : Array[NativeOrderedEvent] = [
+      OrderedPlatform(@platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted)),
+      OrderedPlatform(@platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted)),
+    ]
+    let ends = Ref(0)
+    let ordered = NativeOrderedTextPort::new(
+      fn(_) { Ok(if pending.is_empty() { None } else { Some(pending.remove(0)) }) },
+      fn(_) { Ok(()) },
+    )
+    let port = NativeTextInputPort::new(
+      fn(_, _) { Ok(7UL) },
+      fn(_, _) {
+        pending.push(OrderedText(@text_host.TextInputEvent::new(window, 1L, 7UL, @text_host.Commit(text="日本"))))
+        if replaced { Ok(8UL) } else { Err(runner_error("test", "update failed")) }
+      },
+      fn(epoch) { Ok(epoch) },
+      fn(_) { ends.val += 1; Ok(()) },
+      fn(_) { Ok(None) },
+    )
+    let owner = match run_native_settings_retained(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)) {
+      Suspended(value, _) => value
+      _ => fail("update failure or replacement must suspend")
+    }
+    assert_true(owner.text_owner() is Some((7UL, _)))
+    assert_eq(owner.host_epoch(), Some(if replaced { 8UL } else { 7UL }))
+    let original = owner.session.unwrap()
+    assert_true(owner.terminal_owner.unwrap().matches_session(window, original.epoch, original.binding))
+    assert_eq(owner.model().name(), "")
+    assert_true(owner.mounted.next_action() is None)
+    assert_eq(pending.length(), 1)
+    match pending[0] {
+      OrderedText(event) => {
+        assert_eq(event.epoch(), 7UL)
+        assert_true(event.kind() is @text_host.Commit(text="日本"))
+      }
+      _ => fail("the original admitted commit must remain with the host")
+    }
+    assert_eq(ends.val, 0)
+    assert_eq(host.stop_count(), 0)
+    assert_false(owner.can_stop())
+  }
+}
+
+///|
+test "later update epoch replacement retains original owner and admitted record" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let pending : Array[NativeOrderedEvent] = [
+    OrderedPlatform(@platform.Event::new(window, 1L, 1.0, @platform.FrameCompleted)),
+    OrderedPlatform(@platform.Event::new(window, 2L, 1.0, @platform.FrameCompleted)),
+    OrderedText(@text_host.TextInputEvent::new(window, 1L, 7UL, @text_host.Commit(text="日"))),
+    OrderedPlatform(@platform.Event::new(window, 3L, 1.0, @platform.FrameCompleted)),
+  ]
+  let updates = Ref(0)
+  let ends = Ref(0)
+  let ordered = NativeOrderedTextPort::new(
+    fn(_) { Ok(if pending.is_empty() { None } else { Some(pending.remove(0)) }) },
+    fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) },
+    fn(_, _) {
+      updates.val += 1
+      if updates.val == 1 { return Ok(7UL) }
+      pending.push(OrderedText(@text_host.TextInputEvent::new(window, 2L, 7UL, @text_host.Commit(text="本"))))
+      Ok(8UL)
+    },
+    fn(epoch) { Ok(epoch) },
+    fn(_) { ends.val += 1; Ok(()) },
+    fn(_) { Ok(None) },
+  )
+  let owner = match run_native_settings_retained(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)) {
+    Suspended(value, _) => value
+    _ => fail("replacement must retain its original owner")
+  }
+  assert_eq(updates.val, 2)
+  assert_true(owner.text_owner() is Some((7UL, _)))
+  assert_eq(owner.host_epoch(), Some(8UL))
+  assert_eq(owner.model().name(), "日")
+  assert_eq(pending.length(), 1)
+  assert_eq(ends.val, 0)
   assert_eq(host.stop_count(), 0)
 }

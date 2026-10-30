@@ -29,6 +29,11 @@ the capture API relies on its caller to supply that host-issued epoch. A live
 lease cannot be replaced by another epoch because queue completion has not been
 proved. The terminal operation handles an ordered preedit, commit, or observed
 cancel at the buffer head; it does not authenticate forged host events.
+The runner now retains the begin epoch and field lease before calling update.
+If update fails, or returns a different epoch, it suspends without calling
+end; the original owner and last returned host epoch remain distinct. Fixtures
+cover a commit admitted inside that update and a later update replacement.
+They cannot prove an actual host did not fence a record inside update itself.
 Before normal delivery, the runner checks the original binding and the exact
 next sequence; a gap or foreign epoch stays inflight rather than being
 discarded. Terminal field publication invalidates old staged views. These two
@@ -70,10 +75,10 @@ Candidate source: gpui `74d182c6368ca382f697023c5d3690b6c0c2dfbf`, Yami base
 published dependencies lacking the candidate API. Tests use a local source
 workspace and do not establish published-package compatibility.
 
-Local combined native UI and common fixture suite: **124/124 PASS** using
+Local combined native UI and common fixture suite: **126/126 PASS** using
 `GPUI_SOURCE=/workspace/gpui-ordered-fence` and
 `scripts/native_ui_workspace.sh ... moon test <ui> <examples/common> --target
 native --deny-warn --no-parallelize`. This is scripted evidence only; no
 production main, live IME, or public-registry consumer was tested.
 Local raw log SHA-256:
-`dd272ad6bcd0b45a80808518ea53e57cbd9fc9d1e0c89f8c2870e3776f4f0bdb`.
+`adee331b1a57bca52e091191a88332017b2479db0f6c953560852f99d3f598f8`.

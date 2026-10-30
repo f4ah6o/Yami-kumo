@@ -253,6 +253,9 @@ pub struct SettingsRunOwner {
   priv mounted : @ui.Mounted
   priv mut settings : @shared_settings.Model
   priv mut session : TextSession?
+  // Host's most recently returned epoch, distinct from the original field
+  // owner if an update unexpectedly replaces it.
+  priv mut host_epoch : UInt64?
   priv mut terminal_owner : @ui.TerminalTextOwner?
   priv mut terminal_applied : (Int64, Bool)?
   priv mut terminal_model_sequence : Int64
@@ -426,7 +429,8 @@ pub fn SettingsRunOwner::try_terminal_text_cutoff(
     Some(value) => value
     None => return Err(runner_error("terminal_cutoff", "original session is unavailable"))
   }
-  if !owner.matches_session(self.window, session.epoch, session.binding) {
+  if !owner.matches_session(self.window, session.epoch, session.binding) ||
+    self.host_epoch != Some(session.epoch) {
     return Err(runner_error("terminal_cutoff", "host session differs from field owner"))
   }
   let ordered = match self.ordered_text {
@@ -459,6 +463,12 @@ pub fn SettingsRunOwner::text_owner(
   self : SettingsRunOwner,
 ) -> (UInt64, UInt64)? {
   self.session.map(value => (value.epoch, value.binding))
+}
+
+///|
+/// Most recent epoch returned by the host, including an unresolved replacement.
+pub fn SettingsRunOwner::host_epoch(self : SettingsRunOwner) -> UInt64? {
+  self.host_epoch
 }
 
 ///|
@@ -526,6 +536,7 @@ pub fn SettingsRunOwner::new(
     mounted: @ui.Mounted::new(window),
     settings: @shared_settings.Model::new(),
     session: None,
+    host_epoch: None,
     terminal_owner: None,
     terminal_applied: None,
     terminal_model_sequence: 0L,
@@ -1076,7 +1087,17 @@ fn SettingsRunOwner::drive_inner(
                     self.key_path_armed = route.key_path_armed
                     self.text_transport_failed = route.transport_failed
                   }
-                  Ok(epoch) =>
+                  Ok(epoch) => {
+                    if ordered_text is Some(_) {
+                      // Begin may already admit records. Capture its exact
+                      // owner before any fallible update or host cleanup.
+                      self.session = Some({ epoch, binding: state.binding_id(), })
+                      self.host_epoch = Some(epoch)
+                      self.terminal_owner = Some(match mounted.capture_terminal_text_owner(epoch) {
+                        Err(error) => return Err(error)
+                        Ok(value) => value
+                      })
+                    }
                     match
                       (port.update)(
                         epoch,
@@ -1086,6 +1107,9 @@ fn SettingsRunOwner::drive_inner(
                         ),
                       ) {
                       Err(error) => {
+                        if ordered_text is Some(_) {
+                          return Err(error)
+                        }
                         ignore((port.end)(epoch))
                         emit_native_marker(
                           "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"unavailable\",\"operation\":\"update_text_input\",\"error\":\"\{json_escape(format_framework_error(error))}\"}",
@@ -1101,17 +1125,17 @@ fn SettingsRunOwner::drive_inner(
                         self.key_path_armed = route.key_path_armed
                         self.text_transport_failed = route.transport_failed
                       }
-                      Ok(epoch) => {
+                      Ok(updated_epoch) => {
+                        if ordered_text is Some(_) {
+                          self.host_epoch = Some(updated_epoch)
+                          if updated_epoch != epoch {
+                            return Err(runner_error("ordered_text", "host replaced an unresolved owner epoch"))
+                          }
+                        }
                         self.session = Some({
-                          epoch,
+                          epoch: updated_epoch,
                           binding: state.binding_id(),
                         })
-                        if ordered_text is Some(_) {
-                          self.terminal_owner = Some(match mounted.capture_terminal_text_owner(epoch) {
-                            Err(error) => return Err(error)
-                            Ok(value) => value
-                          })
-                        }
                         self.last_document = state.document().text()
                         self.last_caret = settings_caret(state.caret())
                         let transport = match platform {
@@ -1120,16 +1144,20 @@ fn SettingsRunOwner::drive_inner(
                           Macos => "appkit"
                         }
                         emit_native_marker(
-                          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"started\",\"transport\":\"\{transport}\",\"epoch\":\{epoch}}",
+                          "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"started\",\"transport\":\"\{transport}\",\"epoch\":\{updated_epoch}}",
                         )
                       }
                     }
+                  }
                 }
               None => ()
             }
           }
         Some(current) =>
           if !focused {
+            if ordered_text is Some(_) {
+              return Err(runner_error("ordered_text", "field focus changed before ordered cutoff"))
+            }
             match end_text_session(port, current) {
               Err(error) => return Err(error)
               Ok(_) => ()
@@ -1151,6 +1179,12 @@ fn SettingsRunOwner::drive_inner(
                     ) {
                     Err(error) => return Err(error)
                     Ok(value) => value
+                  }
+                  if ordered_text is Some(_) {
+                    self.host_epoch = Some(epoch)
+                    if epoch != current.epoch {
+                      return Err(runner_error("ordered_text", "host replaced an unresolved owner epoch"))
+                    }
                   }
                   self.session = Some({ epoch, binding: current.binding, })
                   self.last_document = state.document().text()
