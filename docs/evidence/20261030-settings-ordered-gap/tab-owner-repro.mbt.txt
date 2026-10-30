@@ -1,0 +1,26 @@
+///|
+test "observed old-owner commit survives Tab focus transfer" {
+  let mounted = mount()
+  let field = @view.NodeKey::new("name")
+  let view = @view.column(@view.NodeKey::new("root"), [
+    @view.text_field(field, @view.TextFieldProps::new("", "Name")),
+    @view.button(@view.NodeKey::new("save"), "Save"),
+  ])
+  ignore(render(mounted, view=view))
+  assert_true(mounted.focus(field))
+  assert_true(
+    mounted.text_input(7UL, text_host_event(1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))).unwrap(),
+  )
+  assert_true(mounted.handle_event(event(1L, key_down(@primitives.Tab))).unwrap())
+  assert_true(
+    mounted.text_input(7UL, text_host_event(2L, 7UL, @text_host.Commit(text="日本語"))).unwrap(),
+  )
+  match mounted.next_action() {
+    Some(@view.TextChanged(key, text)) => {
+      assert_eq(key, field)
+      assert_eq(text, "日本語")
+    }
+    _ => fail("the observed commit must reach the original field")
+  }
+  mounted.dispose()
+}
