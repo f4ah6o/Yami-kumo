@@ -257,7 +257,8 @@ native Button click/frame proof does not qualify text input or IME support.
 
 The experimental `Mounted::preview_terminal_geometry` prepares a diagnostic
 scene and caret for a captured terminal text owner using freshly measured
-preview and rollback documents. It keeps the live owner and its field intact;
+preview and rollback documents after layout has been invalidated. It keeps the
+live owner and its field intact;
 it does not publish the candidate or update the host. The result must not be
 presented as recovered geometry: runtime/focus/scene and native host updates
 still need a coordinated failure and recovery contract. This draft requires the

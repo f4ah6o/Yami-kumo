@@ -48,6 +48,11 @@ test "terminal geometry preview preserves composing owner and pending commit" {
   )
   assert_true(mounted.focus(key))
   let owner = mounted.capture_terminal_text_owner(7UL).unwrap()
+  assert_true(
+    mounted.preview_terminal_geometry(
+      owner, view, 800.0, 600.0, 2.0, remeasure_native_test_measure,
+    ) is Err(_),
+  )
   mounted.invalidate_layout()
   let preedit = @text_host.TextInputEvent::new(
     @platform.WindowId::new(1L),

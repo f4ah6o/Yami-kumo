@@ -2959,7 +2959,8 @@ pub fn TerminalGeometryPreview::caret(
 }
 
 ///|
-/// Prepare a diagnostic scene with fresh preview and rollback measurements.
+/// Prepare a diagnostic scene after layout invalidation with fresh preview
+/// and rollback measurements.
 /// No state or native host geometry is published. The caller must retain the
 /// original owner and all records; this is not resize recovery or authority
 /// to present the returned scene.
@@ -2972,7 +2973,7 @@ pub fn Mounted::preview_terminal_geometry(
   scale : Double,
   measure : @components.TextMeasure,
 ) -> Result[TerminalGeometryPreview, @diagnostics.FrameworkError] {
-  if self.is_disposed() ||
+  if self.is_disposed() || self.ready || !self.window_focused ||
     self.busy ||
     owner.busy ||
     self.held_text is Some(_) ||
@@ -3012,6 +3013,8 @@ pub fn Mounted::preview_terminal_geometry(
     None => return Err(adapter_error("terminal field changed"))
   }
   let change = self.change
+  let owner_revision = owner.revision
+  let owner_sequence = owner.sequence
   self.busy = true
   let prepared = self.prepare(
     view,
@@ -3026,10 +3029,30 @@ pub fn Mounted::preview_terminal_geometry(
     Ok(value) => value
     Err(error) => return Err(error)
   }
-  if self.is_disposed() ||
+  if self.is_disposed() || self.ready || !self.window_focused || owner.busy ||
     !same_epoch(change, self.change) ||
+    !self.identity.live || !owner.session_identity.live ||
+    !same_epoch(self.identity, owner.identity) ||
+    !(self.terminal_identity is Some(active) && same_epoch(active, owner.session_identity)) ||
+    self.window != owner.window || self.text_epoch != owner.epoch ||
+    owner.revision != owner_revision || owner.sequence != owner_sequence ||
+    self.last_text_sequence != owner_sequence || self.runtime.has_pending_actions() ||
+    !self.runtime.is_current(owner.token) || scope.focused() != Some(owner.binding) ||
     candidate.focused != Some(owner.binding) {
     return Err(adapter_error("terminal geometry changed during measurement"))
+  }
+  let mut live_matches = false
+  for binding in self.bindings {
+    if binding.id == owner.binding && binding.field_generation == owner.generation &&
+      binding.token == Some(owner.token) {
+      match binding.field {
+        Some(field) if field.revision() == owner_revision => live_matches = true
+        _ => ()
+      }
+    }
+  }
+  if !live_matches {
+    return Err(adapter_error("terminal field changed during measurement"))
   }
   for binding in candidate.bindings {
     if binding.id == owner.binding &&
