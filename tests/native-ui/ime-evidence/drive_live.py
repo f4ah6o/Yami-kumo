@@ -43,20 +43,25 @@ try:
  result['observations']['preedit']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='にほん',12)
  result['observations']['uncommitted_frame']=o.wait_frame(lambda f:f.get('name')=='',5)
  result['stage']='cancel-preedit'
- before=len(o.markers); send('Escape')
+ before=len(o.markers); cancel_frames=len(o.frames); send('Escape')
  result['observations']['cancel_preedit']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='',12,before)
  result['observations']['cancel_frame']=o.wait_frame(lambda f:f.get('name')=='',12)
  before=len(o.markers)
  for k in 'nihonn': send(k)
  marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='にほん',12,before)
  result['stage']='conversion'
- for k in ['space','space','Up']: send(k)
+ for k in ['space','space']: send(k)
+ time.sleep(.3)
+ subprocess.run(['import','-window','root',str(out/'candidates.png')],check=True)
+ send('Up')
  result['observations']['conversion']=marker(lambda m:m.get('phase')=='preedit' and m.get('text')=='日本',12)
  result['stage']='commit'
  start=len(o.markers); send('Return')
  result['observations']['commit']=marker(lambda m:m.get('phase')=='commit' and m.get('text')=='日本',12,start)
  result['observations']['committed_frame']=o.wait_frame(lambda f:f.get('name')=='日本',12)
  if len([m for m in o.markers[start:] if m.get('phase')=='commit' and m.get('text')=='日本']) != 1: raise RuntimeError('duplicate commit observed')
+ time.sleep(.3)
+ subprocess.run(['import','-window','root',str(out/'after-commit.png')],check=True)
  result['stage']='undo'
  after=len(o.frames); send('ctrl+z')
  result['observations']['undo_frame']=o.wait_frame(lambda f:f.get('name')=='',12,after=after)
@@ -68,6 +73,7 @@ try:
   after=len(o.frames); send(key)
   return o.wait_frame(lambda f:f.get('dialog') is dialog and f.get('focus')==focus and f.get('name')=='日本',12,after=after)
  result['observations']['field_open']=step('Return',True,'confirm')
+ subprocess.run(['import','-window','root',str(out/'dialog.png')],check=True)
  send('x')
  # A fresh later frame must retain the model after background key delivery.
  result['observations']['after_background_key']=step('shift+Tab',True,'cancel')
