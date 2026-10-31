@@ -6,12 +6,14 @@ import time
 
 PREFIX = 'YAMI_NATIVE_UI_SETTINGS '
 
-def run_control_command(args, steps, command, sequence, runner=subprocess.run):
+def run_control_command(args, steps, command, sequence, runner=None):
     # Record the attempt before starting the bounded subprocess. A timeout
     # cannot establish whether the owner received or executed the command.
     event = {'command': command, 'sequence': sequence, 'status': 'STARTED',
              'rc': None, 'stdout': '', 'stderr': ''}
     steps.append(event)
+    if runner is None:
+        runner = subprocess.run
     try:
         reply = runner(args, capture_output=True, text=True, timeout=5)
     except subprocess.TimeoutExpired as exc:
