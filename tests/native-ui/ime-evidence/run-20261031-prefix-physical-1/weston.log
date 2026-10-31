@@ -1,0 +1,37 @@
+Date: 2026-10-31 UTC
+[00:05:58.079] weston 14.0.2
+               https://wayland.freedesktop.org
+               Bug reports to: https://gitlab.freedesktop.org/wayland/weston/issues/
+               Build: 14.0.2
+[00:05:58.079] Command line: weston --backend=x11 --renderer=pixman --shell=/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/weston/desktop-shell.so --socket=yami-retained-ime --width=960 --height=640 --idle-time=0 --config=/tmp/yami-retained-fixture-RTzmnA/weston.ini --log=/workspace/evidence/yami-prefix-physical-live-1/weston.log
+[00:05:58.079] OS: Linux, 6.18.57, #1 SMP Tue Oct 20 21:56:04 UTC 2026, x86_64
+[00:05:58.079] Flight recorder: enabled
+[00:05:58.079] Using config file '/tmp/yami-retained-fixture-RTzmnA/weston.ini'
+[00:05:58.079] Output repaint window is 7 ms maximum.
+[00:05:58.079] Loading module '/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libweston-14/x11-backend.so'
+[00:05:58.080] Using Pixman renderer
+[00:05:58.083] Registered plugin API 'weston_windowed_output_api_x11_v2' of size 16
+[00:05:58.083] Color manager: no-op
+                 protocol support: no
+[00:05:58.083] Output 'screen0' attempts EOTF mode SDR and colorimetry mode default.
+[00:05:58.083] Output 'screen0' using color profile: stock sRGB color profile
+[00:05:58.084] Found visual, bits per value: 8, red_mask: 00ff0000, green_mask: 0000ff00, blue_mask: 000000ff
+[00:05:58.084] Visual depth is 24
+[00:05:58.084] Found format for depth 24, bpp: 32
+[00:05:58.084] Will use x8r8g8b8 format for SHM surfaces
+[00:05:58.084] x11 output 960x640, window id 4194309
+[00:05:58.084] Output 'screen0' enabled with head(s) screen0
+[00:05:58.084] Compositor capabilities:
+               arbitrary surface rotation: yes
+               screen capture uses y-flip: no
+               cursor planes: no
+               arbitrary resolutions: no
+               view mask clipping: yes
+               explicit sync: no
+               color operations: no
+               presentation clock: CLOCK_MONOTONIC_RAW, id 4
+               presentation clock resolution: 0.000000001 s
+[00:05:58.084] Loading module '/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/weston/desktop-shell.so'
+[00:05:58.084] launching '/tmp/yami-retained-fixture-RTzmnA/ibus-wrapper.sh'
+[00:05:58.084] launching '/workspace/gpui-locked-profile/prefix/usr/libexec/weston-desktop-shell'
+[00:06:12.045] caught signal 15
