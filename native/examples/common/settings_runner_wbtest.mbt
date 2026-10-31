@@ -2387,11 +2387,197 @@ test "direct platform text changes the field without advancing the text lease" {
   assert_true(owner.mounted.has_pending_actions())
   let action = owner.mounted.next_action().unwrap()
   assert_true(action is @view.TextChanged(_, "a"))
-  owner.settings = owner.settings.update(@shared_settings.Ui(action))
+  owner.replace_settings(owner.settings.update(@shared_settings.Ui(action)))
   assert_eq(owner.model().name(), "a")
   // This fixture characterizes the gap: the old TextSession owner has not
   // been advanced even though the same field/action changed successfully.
   assert_false(owner.mounted.terminal_owner_is_current(lease))
+  assert_false(owner.can_stop())
+}
+
+///|
+test "owned direct text retains its original action and advances the lease once" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  let event = @platform.Event::new(owner.window, 1L, 1.0,
+    @platform.Input(@primitives.TextInput(text="a")))
+  let receipt = owner.mounted.reserve_owned_direct_text(lease, event, 1, 1L).unwrap()
+  assert_false(receipt.attempted())
+  owner.mounted.apply_owned_direct_text(receipt).unwrap()
+  assert_true(receipt.attempted())
+  assert_true(receipt.applied())
+  assert_true(receipt.owner_noted())
+  assert_true(receipt.action_required() is Some(true))
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "a")))
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  assert_true(owner.mounted.apply_owned_direct_text(receipt) is Err(_))
+  let action = owner.mounted.owned_direct_text_action(receipt).unwrap().unwrap()
+  owner.replace_settings(owner.settings.update(@shared_settings.Ui(action)))
+  owner.mounted.mark_owned_direct_text_model_applied(receipt).unwrap()
+  assert_eq(owner.model().name(), "a")
+  assert_true(receipt.model_applied())
+  assert_true(receipt.pending_action() is None)
+  assert_true(owner.mounted.mark_owned_direct_text_model_applied(receipt) is Err(_))
+  let (_, _, _, _, platform_sequence) = receipt.identity()
+  assert_eq(platform_sequence, 1L)
+  assert_eq(receipt.ordinal(), 1L)
+  assert_eq(receipt.native_sequence(), 1)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "owned direct typing retains existing undo and redo grouping" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  for (sequence, value) in [(1L, "a"), (2L, "b")] {
+    let event = @platform.Event::new(owner.window, sequence, 1.0,
+      @platform.Input(@primitives.TextInput(text=value)))
+    let receipt = owner.mounted.reserve_owned_direct_text(lease, event, sequence.to_int(), sequence).unwrap()
+    owner.mounted.apply_owned_direct_text(receipt).unwrap()
+    let action = owner.mounted.owned_direct_text_action(receipt).unwrap().unwrap()
+    owner.replace_settings(owner.settings.update(@shared_settings.Ui(action)))
+    owner.mounted.mark_owned_direct_text_model_applied(receipt).unwrap()
+  }
+  assert_eq(owner.model().name(), "ab")
+  let control = @primitives.Modifiers::new(shift=false, control=true, alt=false, meta=false)
+  let undo = @platform.Event::new(owner.window, 3L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.Character("z"), repeat=false, modifiers=control)))
+  assert_true(owner.mounted.handle_event(undo).unwrap())
+  assert_true(owner.mounted.next_action() is Some(@view.TextChanged(_, "")))
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "")
+  let redo = @platform.Event::new(owner.window, 4L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.Character("y"), repeat=false, modifiers=control)))
+  assert_true(owner.mounted.handle_event(redo).unwrap())
+  assert_true(owner.mounted.next_action() is Some(@view.TextChanged(_, "ab")))
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "ab")
+}
+
+///|
+test "owned direct text rejects pending action and preserves active preedit" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  let event = @platform.Event::new(owner.window, 1L, 1.0,
+    @platform.Input(@primitives.TextInput(text="a")))
+  let save = owner.mounted.callback(@shared_settings.settings_save()).unwrap()
+  assert_true(owner.mounted.activate(save))
+  assert_true(owner.mounted.reserve_owned_direct_text(lease, event, 1, 1L) is Err(_))
+  assert_true(owner.mounted.next_action() is Some(@view.Activate(_)))
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.deliver_owned_observation(preedit).unwrap()
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  assert_true(owner.mounted.reserve_owned_direct_text(lease, event, 1, 1L) is Err(_))
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  assert_eq(owner.model().name(), "")
+  assert_false(owner.can_stop())
+}
+
+///|
+test "owned direct text refuses replay and stale native event sequence" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="a")))
+  assert_true(owner.mounted.reserve_owned_direct_text(lease, event, 3, 1L) is Err(_))
+  assert_true(owner.mounted.reserve_owned_direct_text(lease, event, 2, 2L) is Err(_))
+  let receipt = owner.mounted.reserve_owned_direct_text(lease, event, 2, 1L).unwrap()
+  owner.mounted.apply_owned_direct_text(receipt).unwrap()
+  assert_true(owner.mounted.reserve_owned_direct_text(lease, event, 2, 1L) is Err(_))
+  let stale = @platform.Event::new(owner.window, 1L, 1.0,
+    @platform.Input(@primitives.TextInput(text="b")))
+  assert_true(owner.mounted.reserve_owned_direct_text(lease, stale, 1, 2L) is Err(_))
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "a")))
+  assert_eq(owner.model().name(), "")
+}
+
+///|
+test "owned direct reservation cannot follow a different field revision" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  let first = @platform.Event::new(owner.window, 1L, 1.0,
+    @platform.Input(@primitives.TextInput(text="a")))
+  let second = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="b")))
+  let first_receipt = owner.mounted.reserve_owned_direct_text(lease, first, 1, 1L).unwrap()
+  let stale_receipt = owner.mounted.reserve_owned_direct_text(lease, second, 2, 1L).unwrap()
+  owner.mounted.apply_owned_direct_text(first_receipt).unwrap()
+  assert_true(owner.mounted.apply_owned_direct_text(stale_receipt) is Err(_))
+  assert_false(stale_receipt.attempted())
+  assert_true(first_receipt.pending_action() is Some(@view.TextChanged(_, "a")))
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "a")
+  assert_eq(owner.model().name(), "")
+}
+
+///|
+test "owned direct measurement failure preserves receipt and forbids replay" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let reject_text = Ref(false)
+  let measure = fn(value, size) {
+    if reject_text.val && value == "a" {
+      Err(runner_error("fixture", "measurement failed"))
+    } else {
+      text_runner_measure(value, size)
+    }
+  }
+  let owner = SettingsRunOwner::new(host, Linux, measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  let event = @platform.Event::new(owner.window, 1L, 1.0,
+    @platform.Input(@primitives.TextInput(text="a")))
+  let receipt = owner.mounted.reserve_owned_direct_text(lease, event, 1, 1L).unwrap()
+  reject_text.val = true
+  assert_true(owner.mounted.apply_owned_direct_text(receipt) is Err(_))
+  assert_true(receipt.attempted())
+  assert_false(receipt.applied())
+  reject_text.val = false
+  assert_true(owner.mounted.apply_owned_direct_text(receipt) is Err(_))
+  assert_eq(owner.model().name(), "")
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "direct owner is applied once across native ACK failure" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  let session = owner.session.unwrap()
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let ack_count = Ref(0)
+  let native = NativeRetainedReceipt::new(
+    Some(OrderedPlatform(event)), owner.window, 2, session.binding, 7UL,
+    fn() {
+      ack_count.val += 1
+      if ack_count.val == 1 { Err(runner_error("fixture", "ACK failed")) } else { Ok(()) }
+    },
+  )
+  owner.pending_host_receipt = Some(native)
+  owner.inflight = Some(OrderedPlatform(event))
+  let receipt = owner.mounted.reserve_owned_direct_text(lease, event, 2, 1L).unwrap()
+  owner.mounted.apply_owned_direct_text(receipt).unwrap()
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日")))
+  let action = owner.mounted.owned_direct_text_action(receipt).unwrap().unwrap()
+  let next = owner.settings.update(@shared_settings.Ui(action))
+  owner.mounted.mark_owned_direct_text_model_applied(receipt).unwrap()
+  owner.replace_settings(next)
+  assert_eq(owner.model().name(), "日")
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_true(owner.pending_host_receipt is Some(_))
+  assert_true(receipt.model_applied())
+  assert_true(owner.mounted.apply_owned_direct_text(receipt) is Err(_))
+  assert_true(owner.mounted.reserve_owned_direct_text(lease, event, 2, 1L) is Err(_))
+  assert_false(owner.mounted.handle_event(event).unwrap())
+  owner.ack_owned_receipt().unwrap()
+  assert_eq(ack_count.val, 2)
+  assert_eq(owner.model().name(), "日")
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "日")
+  // The generic ledger does not yet carry this direct receipt's model proof.
+  assert_true(owner.receipt_stage_for_sequence(2L) is Some(ReceiptAcknowledgedOnly))
   assert_false(owner.can_stop())
 }
 
