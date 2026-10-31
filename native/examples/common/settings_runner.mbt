@@ -841,6 +841,10 @@ priv struct SettingsGeometryArrival {
   native_target : (Int32, Int64, Int32)
   owner_progress : (UInt64, Int32, Int64)
   mut state : SettingsGeometryArrivalState
+  // Opaque native payload is retained by the closed adapter; this is only
+  // callback bookkeeping, never evidence of field/model application.
+  mut take_attempted : Bool
+  mut take_callback_succeeded : Bool
 }
 
 ///|
@@ -1081,7 +1085,7 @@ pub fn SettingsRunOwner::reserve_geometry_arrival(
   if receipt.sequence.to_int64() != base.to_int64() + self.acknowledged_receipts.length().to_int64() + 1L {
     return Err(runner_error("geometry_handoff", "arrival is not next in sequence"))
   }
-  self.geometry_arrival = Some({ receipt, native_target, owner_progress: owner.observed_progress(), state: GeometryArrivalReserved })
+  self.geometry_arrival = Some({ receipt, native_target, owner_progress: owner.observed_progress(), state: GeometryArrivalReserved, take_attempted: false, take_callback_succeeded: false })
   Ok(())
 }
 
@@ -1178,7 +1182,7 @@ pub fn SettingsRunOwner::inspect_geometry_arrival_before_apply(
     _ => return Err(runner_error("geometry_handoff", "host callback has not completed"))
   }
   let held = match self.geometry_arrival {
-    Some(value) if value.state is GeometryArrivalCallbackSucceeded => value
+    Some(value) if value.state is GeometryArrivalCallbackSucceeded && !value.take_attempted => value
     _ => return Err(runner_error("geometry_handoff", "original arrival is unavailable"))
   }
   if !self.geometry_arrival_owner_current(staged, held) {
@@ -1194,6 +1198,67 @@ pub fn SettingsRunOwner::inspect_geometry_arrival_before_apply(
     return Err(runner_error("geometry_handoff", "original owner changed during inspection"))
   }
   Ok(())
+}
+
+///|
+/// Once-only slot transfer seam. The closed platform adapter must retain the
+/// exact native object before returning, including on any later validation
+/// error. The common receipt, old staged scene, model and host remain owned.
+/// A return value is callback bookkeeping, never proof of scene or model.
+pub fn SettingsRunOwner::take_geometry_arrival_to_local_owner(
+  self : SettingsRunOwner, transfer : () -> Result[Unit, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  match self.inspect_geometry_arrival_before_apply() { Err(error) => return Err(error); Ok(_) => () }
+  let staged = match self.pending_dirty_stage { Some(value) => value; None => return Err(runner_error("geometry_handoff", "original stage unavailable")) }
+  let held = match self.geometry_arrival { Some(value) => value; None => return Err(runner_error("geometry_handoff", "original arrival unavailable")) }
+  if held.take_attempted || !self.geometry_arrival_owner_current(staged, held) {
+    return Err(runner_error("geometry_handoff", "slot transfer already attempted or stale"))
+  }
+  held.take_attempted = true
+  self.running = true
+  let result = transfer()
+  self.running = false
+  match result { Err(error) => return Err(error); Ok(_) => () }
+  if !self.geometry_arrival_owner_current(staged, held) {
+    return Err(runner_error("geometry_handoff", "owner changed during slot transfer"))
+  }
+  held.take_callback_succeeded = true
+  Ok(())
+}
+
+///|
+/// Inspect an uncertain transfer without calling it again. The closed
+/// adapter must check its retained original native object and route identity.
+pub fn SettingsRunOwner::reconcile_geometry_arrival_take(
+  self : SettingsRunOwner, inspect : () -> Result[Unit, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let staged = match self.pending_dirty_stage { Some(value) => value; None => return Err(runner_error("geometry_handoff", "original stage unavailable")) }
+  let held = match self.geometry_arrival {
+    Some(value) if value.take_attempted && !value.take_callback_succeeded => value
+    _ => return Err(runner_error("geometry_handoff", "no uncertain slot transfer"))
+  }
+  if !self.geometry_arrival_owner_current(staged, held) {
+    return Err(runner_error("geometry_handoff", "original owner changed"))
+  }
+  self.running = true
+  let result = inspect()
+  self.running = false
+  match result { Err(error) => return Err(error); Ok(_) => () }
+  if !self.geometry_arrival_owner_current(staged, held) {
+    return Err(runner_error("geometry_handoff", "owner changed during slot inspection"))
+  }
+  held.take_callback_succeeded = true
+  Ok(())
+}
+
+///| Local callback state only; it does not attest native or model completion.
+pub fn SettingsRunOwner::geometry_arrival_take_state(self : SettingsRunOwner) -> Int? {
+  match self.geometry_arrival {
+    Some(value) if value.take_callback_succeeded => Some(2)
+    Some(value) if value.take_attempted => Some(1)
+    Some(_) => Some(0)
+    None => None
+  }
 }
 
 ///|

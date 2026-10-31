@@ -146,6 +146,7 @@ fn run_settings_control(
   geometry_policy : () -> Result[Unit, @diagnostics.FrameworkError],
   geometry_arrival_policy : () -> Result[Unit, @diagnostics.FrameworkError],
   geometry_inspection_policy : () -> Result[Unit, @diagnostics.FrameworkError],
+  geometry_take_policy : () -> Result[Unit, @diagnostics.FrameworkError],
 ) -> Unit {
   println("YAMI_SETTINGS_CONTROL {\"state\":\"active\",\"scene_published\":false}")
   match entry.error() {
@@ -199,6 +200,11 @@ fn run_settings_control(
       // i: inspect only; no application, ACK, scene or stop authority.
       105 => match geometry_inspection_policy() {
         Ok(_) => control_reply(73)
+        Err(error) => control_step_error(error, 69)
+      }
+      // x: transfer the same reserved slot locally; no field/model/scene apply.
+      120 => match geometry_take_policy() {
+        Ok(_) => control_reply(74)
         Err(error) => control_step_error(error, 69)
       }
       // r: retry ACK only for the inspected native sequence.
@@ -643,6 +649,24 @@ fn main {
       match arrival.inspect_after_geometry_acceptance(geometry) { Err(error) => return Err(error); Ok(_) => () }
       match owner.inspect_geometry_arrival_before_apply() { Err(error) => return Err(error); Ok(_) => () }
       arrival.inspect_after_geometry_acceptance(geometry)
+    }, fn() {
+      let owner = match entry.owner() {
+        Some(value) => value
+        None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_owner_unavailable"))
+      }
+      let arrival = match geometry_arrival_adapter.val {
+        Some(value) => value
+        None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_arrival_unavailable"))
+      }
+      let geometry = match geometry_adapter.val {
+        Some(value) => value
+        None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_adapter_unavailable"))
+      }
+      match owner.geometry_arrival_take_state() {
+        Some(0) => owner.take_geometry_arrival_to_local_owner(fn() { arrival.take_after_geometry_acceptance(geometry) })
+        Some(1) => owner.reconcile_geometry_arrival_take(fn() { arrival.inspect_taken_after_geometry_acceptance(geometry) })
+        _ => Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "geometry_local_arrival_retained"))
+      }
     })
     return
   }
