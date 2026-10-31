@@ -105,5 +105,41 @@ class EvidenceTest(unittest.TestCase):
                 os.killpg(proc.pid, signal.SIGKILL)
                 proc.wait(timeout=5)
 
+    def test_denied_descriptor_visibility_is_unverified(self):
+        with tempfile.TemporaryDirectory() as name, tempfile.TemporaryDirectory() as hooks:
+            out = Path(name)
+            (Path(hooks) / 'sitecustomize.py').write_text("""
+import os
+from pathlib import Path
+original_link = os.readlink
+original_read = Path.read_text
+pid = os.environ['DENY_PID']
+mode = os.environ['DENY_MODE']
+def readlink(path, *args, **kwargs):
+    if mode == 'link' and str(path).startswith('/proc/' + pid + '/fd/'):
+        raise PermissionError('controlled readlink denial')
+    return original_link(path, *args, **kwargs)
+def read_text(self, *args, **kwargs):
+    if mode == 'info' and str(self).startswith('/proc/' + pid + '/fdinfo/'):
+        raise PermissionError('controlled fdinfo denial')
+    return original_read(self, *args, **kwargs)
+os.readlink = readlink
+Path.read_text = read_text
+""")
+            with (out / 'hidden-writer.log').open('w') as log:
+                proc = subprocess.Popen(['sleep', '60'], stdout=log, stderr=log,
+                                        start_new_session=True)
+            try:
+                for mode in ('link', 'info'):
+                    env = dict(os.environ, PYTHONPATH=hooks, DENY_PID=str(proc.pid), DENY_MODE=mode)
+                    subprocess.run(['python3', str(HERE / 'finish.py'), name, '1', 'test'],
+                                   env=env, check=True, timeout=12)
+                    result = json.loads((out / 'result.json').read_text())
+                    self.assertGreater(result['log_shutdown']['uninspectable_fds'], 0, mode)
+                    self.assertEqual(result['artifact_stability'], 'UNVERIFIED_WRITERS_OR_GROUPS', mode)
+            finally:
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait(timeout=5)
+
 if __name__ == '__main__':
     unittest.main()

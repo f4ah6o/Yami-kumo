@@ -36,7 +36,7 @@ source revisions, binary hash, dependency manifests, commands, outcomes and
 scope. On any failure after a valid empty output directory is accepted, the
 harness records a result and artifact manifest. Tracked process groups receive
 bounded TERM/KILL shutdown and `/proc` is scanned for visible artifact writers
-before the manifest is written. Inaccessible processes, surviving groups, or
+before the manifest is written. Inaccessible processes, uninspectable descriptors, surviving groups, or
 visible writers mark stability unverified; even a clear scan is an observation,
 not proof against escaped processes or later modification. Run URL is null for a local run.
 
