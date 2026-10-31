@@ -49,6 +49,12 @@ test "bounded dirty staging preserves preedit and blocks continuation until disc
   // preservation of the candidate did not make local inspection impossible.
   owner.host_epoch_verified = true
   assert_eq(owner.staged_dirty_geometry().unwrap().preview().text(), "にほん")
+  // A verified but replaced epoch is not the staged owner either.
+  owner.host_epoch = Some(8UL)
+  assert_true(owner.discard_staged_dirty_scene() is Err(_))
+  assert_true(owner.pending_dirty_stage is Some(_))
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  owner.host_epoch = Some(7UL) // Whitebox only; not native owner proof.
   assert_eq(updates.val, 0)
   assert_eq(host.present_count(), 0)
   assert_true(owner.mounted.terminal_owner_is_current(lease))
