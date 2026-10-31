@@ -111,3 +111,58 @@ test "original owner retries an actually rejected native reservation" {
   assert_false(owner.can_stop())
   @ubuntu_host.fixture_intent_finish()
 }
+
+///|
+/// Characterization: native FIFO + controlled callbacks, not live IME.
+/// The handoff succeeds but no published transaction can yet apply its commit.
+test "handoff commit after native preedit remains blocked at original owner" {
+  let (owner, root) = @common.fixture_intent_owner()
+  let initial = @text_host.TextInputState::new(
+    @text.TextDocument::new("").unwrap(),
+    @primitives.Rect::new(1.0, 2.0, 1.0, 18.0).unwrap(),
+  )
+  let route = @ubuntu_host.fixture_intent_route(initial, owner.window(), root)
+  let epoch = route.binding_epoch().unwrap()
+  let native_epoch = route.native_epoch().unwrap()
+  @ubuntu_host.fixture_intent_preedit()
+  let preview_receipt = route.peek().unwrap().unwrap()
+  assert_eq(preview_receipt.native_sequence(), 2)
+  let preview = match preview_receipt.event() {
+    @ubuntu_host.Text(value) => value
+    _ => fail("preedit must be retained text")
+  }
+  assert_eq(preview.sequence(), 1L)
+  assert_true(preview.kind() is @text_host.Preedit(..))
+  preview_receipt.ack().unwrap()
+  @common.fixture_prepare_intent_owner_with_preedit(owner, root, epoch, native_epoch, preview)
+  let geometry = owner.staged_dirty_geometry().unwrap()
+  let state = ubuntu_text_state(@text_host.TextInputState::new(geometry.committed(), geometry.caret())).unwrap()
+  let adapter = SettingsGeometryAdapter::new(route, geometry, state).unwrap()
+  @ubuntu_host.fixture_intent_commit()
+  assert_true(owner.attempt_staged_host_geometry(fn(retry, candidate) { adapter.attempt(retry, candidate) }) is Err(_))
+  let original = route.peek().unwrap().unwrap()
+  assert_eq(original.native_sequence(), 3)
+  let arrival = SettingsGeometryArrivalAdapter::new(route, original).unwrap()
+  assert_eq(arrival.portable.sequence(), 2L)
+  let receipt = @common.NativeRetainedReceipt::new(
+    Some(@common.OrderedText(arrival.portable)), original.native_window(), original.native_sequence(),
+    original.root(), original.epoch(), fn() { arrival.transfer() },
+  )
+  owner.reserve_geometry_arrival(receipt, (arrival.target.epoch, arrival.target.seat, arrival.target.proxy_generation)).unwrap()
+  owner.transfer_geometry_arrival().unwrap()
+  owner.attempt_staged_host_geometry(fn(retry, candidate) { adapter.attempt(retry, candidate) }).unwrap()
+  assert_true(route.geometry_receipt_is_current(adapter.receipt.unwrap()))
+  assert_true(route.owned_geometry_text() is Some(_))
+  assert_true(owner.geometry_arrival_state() is Some((3, 2)))
+  assert_true(@common.fixture_intent_preedit_is_retained(owner))
+  @ubuntu_host.fixture_intent_commit_next()
+  let later = route.peek().unwrap().unwrap()
+  assert_eq(later.native_sequence(), 4)
+  assert_true(owner.drive() is Err(_))
+  assert_true(owner.reconcile_owned_delivery() is Err(_))
+  assert_true(owner.discard_staged_dirty_scene() is Err(_))
+  assert_true(route.owned_geometry_text() is Some(_))
+  assert_eq(owner.model().name(), "")
+  assert_false(owner.can_stop())
+  @ubuntu_host.fixture_intent_finish()
+}

@@ -49,3 +49,31 @@ pub fn fixture_prepare_intent_owner(
   owner.dirty = true
   owner.stage_dirty_scene().unwrap()
 }
+
+///| FIXTURE ONLY: original owner sees the exact preedit already ACKed at FIFO head.
+pub fn fixture_prepare_intent_owner_with_preedit(
+  owner : SettingsRunOwner, binding : UInt64, epoch : UInt64, native_epoch : Int32,
+  preedit : @text_host.TextInputEvent,
+) -> Unit {
+  owner.session = Some({ epoch, binding })
+  owner.host_epoch = Some(epoch)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(epoch).unwrap())
+  owner.entered_target = Some((native_epoch, 117L, 4))
+  let entered = NativeRetainedReceipt::entered(owner.window, 1, binding, epoch, native_epoch, 117L, 4, fn() { Ok(()) })
+  owner.acknowledged_receipts.push({ receipt: entered, stage: ReceiptOwnerEntered })
+  owner.deliver_owned_observation(preedit).unwrap()
+  let prior = NativeRetainedReceipt::new(Some(OrderedText(preedit)), owner.window, 2, binding, epoch, fn() { Ok(()) })
+  owner.acknowledged_receipts.push({ receipt: prior, stage: ReceiptNoModelAction })
+  owner.suspended = true
+  owner.dirty = true
+  owner.stage_dirty_scene().unwrap()
+}
+
+///| Fixture only: inspect preedit without mutating the held owner.
+pub fn fixture_intent_preedit_is_retained(owner : SettingsRunOwner) -> Bool {
+  match owner.mounted.focused_text() {
+    Some(field) => field.composing() && field.document().text() == ""
+    None => false
+  }
+}
