@@ -20,6 +20,7 @@ pub struct NativeOrderedTextPort {
   next : (Int32) -> Result[NativeOrderedEvent?, @diagnostics.FrameworkError]
   end_when_drained : (UInt64) -> Result[Unit, @diagnostics.FrameworkError]
   peek : ((Int32) -> Result[NativeRetainedReceipt?, @diagnostics.FrameworkError])?
+  direct_lifecycle : NativeDirectLifecyclePort?
 }
 
 ///|
@@ -27,7 +28,7 @@ pub fn NativeOrderedTextPort::new(
   next : (Int32) -> Result[NativeOrderedEvent?, @diagnostics.FrameworkError],
   end_when_drained : (UInt64) -> Result[Unit, @diagnostics.FrameworkError],
 ) -> NativeOrderedTextPort {
-  { next, end_when_drained, peek: None }
+  { next, end_when_drained, peek: None, direct_lifecycle: None }
 }
 
 ///|
@@ -285,7 +286,7 @@ pub fn NativeOrderedTextPort::with_retained_receipts(
   peek : (Int32) -> Result[NativeRetainedReceipt?, @diagnostics.FrameworkError],
   end_when_drained : (UInt64) -> Result[Unit, @diagnostics.FrameworkError],
 ) -> NativeOrderedTextPort {
-  { next: fn(_) { Ok(None) }, end_when_drained, peek: Some(peek) }
+  { next: fn(_) { Ok(None) }, end_when_drained, peek: Some(peek), direct_lifecycle: None }
 }
 
 ///|
@@ -517,7 +518,7 @@ pub fn run_native_settings_retained(
 /// controller and its host alive whenever `suspended()` is true.
 pub struct SettingsEntryController {
   priv host : &@platform.Backend
-  priv outcome : SettingsRunOutcome
+  priv mut outcome : SettingsRunOutcome
   priv mut stop_attempted : Bool
   priv mut stopped : Bool
 }
@@ -646,7 +647,11 @@ pub fn SettingsEntryController::advance_once(
   self : SettingsEntryController, generation : Int64,
 ) -> Result[SettingsTerminalProgress, @diagnostics.FrameworkError] {
   match self.outcome {
-    Suspended(owner, _) => owner.advance_once(generation)
+    Suspended(owner, _) => {
+      let result = owner.advance_once(generation)
+      if result is Ok(_) && owner.can_stop() { self.outcome = Completed }
+      result
+    }
     _ => Err(runner_error("settings_entry", "no suspended owner"))
   }
 }
@@ -806,6 +811,7 @@ pub struct SettingsRunOwner {
   priv mut completed : Bool
   priv mut running : Bool
   priv mut suspended : Bool
+  priv mut direct_run : SettingsDirectRun?
 }
 
 ///|
@@ -2033,8 +2039,12 @@ pub fn SettingsRunOwner::terminal_step(
   }
   match command {
     RetryReceiptAck => {
+      if self.direct_run is Some(run) && run.pending is None {
+        return Err(runner_error("direct_lifecycle", "receipt admission was rejected before ACK"))
+      }
       self.running = true
       let result = match self.ack_owned_receipt() {
+        Ok(_) if self.direct_run is Some(run) && run.pending is Some(_) => self.complete_direct_admission(run)
         Ok(_) if self.pending_direct is Some(_) => self.complete_pending_direct()
         result => result
       }
@@ -2134,7 +2144,10 @@ pub fn SettingsRunOwner::reconcile_direct_delivery(
     return Err(runner_error("ordered_text", "direct recovery is unavailable"))
   }
   self.running = true
-  let result = self.complete_pending_direct()
+  let result = match self.direct_run {
+    Some(run) if run.pending is Some(_) => self.complete_direct_admission(run)
+    _ => self.complete_pending_direct()
+  }
   self.running = false
   result
 }
@@ -2281,10 +2294,18 @@ pub fn SettingsRunOwner::owned_delivery_native_sequence(
 /// Only successful, fully resolved cleanup permits the host to stop. This is
 /// not evidence of IME quiescence or an ACK for callbacks not yet delivered.
 pub fn SettingsRunOwner::can_stop(self : SettingsRunOwner) -> Bool {
-  // Neither route currently supplies an explicit host-queue terminal receipt.
-  // Simply observing a destroyed window does not establish that receipt.
-  ignore(self)
-  false
+  match self.direct_run {
+    Some(run) => self.completed && run.admission_sealed && self.destroyed &&
+      !run.rebind_attempted && !run.release_attempted &&
+      run.pending is None && run.records.is_empty() && run.pressed.is_empty() &&
+      self.session is None && self.terminal_owner is None &&
+      self.pending_host_receipt is None && self.receipt_pre_dispatch is None &&
+      self.pending_direct is None && self.owned_delivery is None &&
+      self.inflight is None && self.buffered.is_empty() && self.held_platform.is_empty() &&
+      self.held_tab is None && self.acknowledged_receipts.is_empty() &&
+      self.direct_receipts.is_empty() && !self.mounted.has_pending_actions()
+    None => false
+  }
 }
 
 ///|
@@ -2379,6 +2400,7 @@ pub fn SettingsRunOwner::new(
     completed: false,
     running: false,
     suspended: false,
+    direct_run: None,
   })
 }
 
@@ -2568,6 +2590,9 @@ fn SettingsRunOwner::drive_inner(
     6000
   }
   while !self.destroyed && self.ticks < tick_limit {
+    if self.direct_run is Some(_) || self.can_start_direct_lifecycle() {
+      return self.drive_direct_lifecycle()
+    }
     self.ticks += 1
     let mut drained = 0
     while ordered_text is None && drained < 32 && gate.input_ready() {
