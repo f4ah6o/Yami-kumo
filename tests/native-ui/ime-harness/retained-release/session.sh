@@ -14,7 +14,7 @@ cleanup() {
   status=$?
   trap - EXIT
   set +e
-  python3 "$harness_dir/finish.py" "$out" "$status" "$phase" "${pids[@]}" || echo 'evidence finalization failed' >&2
+  python3 "$harness_dir/finish.py" "$out" "$status" "$phase" "${pids[@]}" || { echo 'evidence finalization failed' >&2; status=1; }
   rm -rf "$runtime"
   exit "$status"
 }
