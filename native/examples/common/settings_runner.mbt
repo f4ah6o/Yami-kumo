@@ -892,6 +892,15 @@ fn SettingsRunOwner::stage_dirty_scene_inner(
     binding != session.binding || geometry.committed().text() != model.name() {
     return Err(runner_error("dirty_scene", "staged model or owner changed"))
   }
+  let current_metrics = match self.host.window_metrics(self.window) { Ok(value) => value; Err(error) => return Err(error) }
+  if current_metrics != metrics || !fence.live || self.settings != model ||
+    self.host_epoch != Some(session.epoch) || !self.host_epoch_verified {
+    return Err(runner_error("dirty_scene", "window metrics or owner changed during staging"))
+  }
+  match self.mounted.inspect_staged_text_geometry(owner, prepared) {
+    Ok(_) => ()
+    Err(error) => return Err(error)
+  }
   self.pending_dirty_stage = Some({ prepared, model, fence, window, epoch, binding, metrics })
   Ok(())
 }

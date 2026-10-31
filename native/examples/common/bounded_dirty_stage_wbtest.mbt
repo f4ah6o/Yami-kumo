@@ -98,3 +98,43 @@ test "bounded dirty stage measurement failure retains the original preedit" {
   owner.discard_staged_dirty_scene().unwrap()
   assert_true(owner.mounted.focused_text().unwrap().composing())
 }
+
+///|
+test "bounded dirty stage rejects metrics changed by its measurement callback" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let trigger = Ref(false)
+  let measure = fn(value, size) {
+    if trigger.val {
+      trigger.val = false
+      ignore(host.set_metrics(800.0, 480.0, 1.5))
+    }
+    text_runner_measure(value, size)
+  }
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  owner.terminal_owner = Some(lease)
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.deliver_owned_observation(preedit).unwrap()
+  owner.suspended = true
+  owner.dirty = true
+  trigger.val = true
+  assert_true(owner.stage_dirty_scene() is Err(_))
+  assert_true(owner.pending_dirty_stage is None)
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  assert_eq(owner.model().name(), "")
+  assert_eq(host.present_count(), 0)
+  owner.stage_dirty_scene().unwrap()
+  assert_eq(owner.staged_dirty_geometry().unwrap().preview().text(), "にほん")
+  owner.discard_staged_dirty_scene().unwrap()
+}
