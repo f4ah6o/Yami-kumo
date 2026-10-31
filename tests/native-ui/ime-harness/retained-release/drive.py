@@ -6,6 +6,7 @@ import os
 import platform
 import re
 import signal
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -17,6 +18,19 @@ app_tree = Path(os.environ['YAMI_RELEASE_APP_TREE'])
 framework_tree = Path(os.environ['YAMI_RELEASE_FRAMEWORK_TREE'])
 harness_tree = Path(__file__).resolve().parents[4]
 control = app_tree / 'scripts/settings_retained_control.py'
+
+def tool_info(name: str, *arguments: str) -> dict:
+    path = shutil.which(name)
+    if not path:
+        return {'path': None, 'version': None, 'sha256': None}
+    resolved = Path(path).resolve()
+    try:
+        version = subprocess.run([path, *arguments], capture_output=True, text=True, timeout=5)
+        output = (version.stdout + version.stderr).strip()
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        output = repr(exc)
+    return {'path': str(resolved), 'version': output,
+            'sha256': hashlib.sha256(resolved.read_bytes()).hexdigest()}
 
 def git(tree: Path, *args: str) -> str:
     return subprocess.check_output(['git', '-C', str(tree), *args], text=True).strip()
@@ -44,6 +58,10 @@ result = {
                         'native_moon_mod_sha256': hashlib.sha256((app_tree / 'native/moon.mod').read_bytes()).hexdigest(),
                         'root_moon_mod_sha256': hashlib.sha256((app_tree / 'moon.mod').read_bytes()).hexdigest()},
     'toolchain': subprocess.run(['moon', 'version', '--all'], capture_output=True, text=True).stdout,
+    'host_tools': {'weston': tool_info('weston', '--version'),
+                   'ibus': tool_info('ibus', 'version'),
+                   'xdotool': tool_info('xdotool', '--version'),
+                   'mozc_server_sha256': hashlib.sha256(Path('/workspace/gpui-locked-profile/prefix/usr/lib/mozc/mozc_server').read_bytes()).hexdigest()},
     'command': 'dbus-run-session -- xvfb-run -a <harness>/session.sh',
     'run_url': None, 'full_live_acceptance': 'NOT_RUN',
     'release_policy': 'NOT_RUN', 'consumer_commit': 'NOT_RUN',
