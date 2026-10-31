@@ -1,4 +1,17 @@
 ///|
+/// A direct keyboard route has no native IME geometry update. Reject before
+/// staging or marking the retained owner uncertain.
+fn with_ime_geometry_only(
+  direct : Bool,
+  action : () -> Result[Unit, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if direct {
+    return Err(@diagnostics.FrameworkError::new(@diagnostics.UnsupportedCapability, "geometry_direct_unsupported"))
+  }
+  action()
+}
+
+///|
 /// Ubuntu-only adapter retaining the actual route receipt. Common's callback
 /// return is not itself native proof, and this adapter does not publish a scene.
 priv struct SettingsGeometryAdapter {
