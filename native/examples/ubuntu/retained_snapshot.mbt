@@ -5,13 +5,22 @@
 fn inspect_retained_head(
   route : @ubuntu_host.RetainedOrderedRoute, owner_host_verified : Bool,
 ) -> Result[Int64, @diagnostics.FrameworkError] {
+  inspect_retained_head_from(route, owner_host_verified, fn() { route.peek() })
+}
+
+///| The production entry supplies only `route.peek`; injection permits a
+/// fixture to prove a failed peek cannot trigger dispatch or acknowledgment.
+fn inspect_retained_head_from(
+  route : @ubuntu_host.RetainedOrderedRoute, owner_host_verified : Bool,
+  peek : () -> Result[@ubuntu_host.RetainedOrderedReceipt?, @diagnostics.FrameworkError],
+) -> Result[Int64, @diagnostics.FrameworkError] {
   let pending = route.pending_geometry() is Some(_)
   let handoff = route.geometry_handoff_in_progress()
   let owned = route.owned_geometry_text() is Some(_)
   let reserved = route.reserved_geometry_text() is Some(_)
   let portable_epoch = route.binding_epoch().unwrap_or(0UL)
   let native_epoch = route.native_epoch().unwrap_or(0)
-  let record = match route.peek() {
+  let record = match peek() {
     Err(error) => return Err(error)
     Ok(value) => value
   }
