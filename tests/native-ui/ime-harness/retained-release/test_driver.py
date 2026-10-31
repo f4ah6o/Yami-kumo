@@ -102,6 +102,7 @@ class DriverTimeoutTest(unittest.TestCase):
                 if command in ('generation', 'advance'):
                     self.assertEqual(result['geometry_race'], 'NOT_RUN_CONSUMER_PREEDIT_NOT_OBSERVED')
                     self.assertEqual(result['preedit_probe']['result'], 'BLOCKED_' + command.upper() + '_TIMEOUT_OUTCOME_UNKNOWN')
+                self.assertEqual(result['native_head_inspection']['result'], 'NOT_RUN')
 
     def test_missing_runner_receipt_inspects_native_head_once_without_advance(self):
         calls, result = self.run_case(None, b'', missing_receipt=True)
@@ -115,6 +116,7 @@ class DriverTimeoutTest(unittest.TestCase):
         calls, result = self.run_case('inspect-native', b'observed native head sequence: 11', missing_receipt=True)
         self.assertEqual(calls, ['status', 'prefix', 'receipt', 'inspect-native'])
         self.assertEqual(result['steps'][-1]['status'], 'TIMEOUT_OUTCOME_UNKNOWN')
+        self.assertEqual(result['native_head_inspection']['result'], 'TIMEOUT_OUTCOME_UNKNOWN')
         self.assertEqual(result['final_stop']['result'], 'NOT_RUN_COMMAND_OUTCOME_UNKNOWN')
         self.assertEqual(result['release_policy'], 'NOT_RUN')
 
