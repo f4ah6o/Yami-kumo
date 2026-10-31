@@ -2,6 +2,7 @@
 /// FIXTURE ONLY: production native FIFO with mocked Wayland callbacks. This
 /// does not run a live compositor or IME and never ships fixture helpers.
 fn snapshot_fixture_route() -> @ubuntu_host.RetainedOrderedRoute {
+  ignore(@linux_text.require_grayscale_raster())
   let state = @text_host.TextInputState::new(
     @text.TextDocument::new("").unwrap(),
     @primitives.Rect::new(1.0, 2.0, 1.0, 18.0).unwrap(),
