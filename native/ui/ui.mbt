@@ -1671,6 +1671,7 @@ fn Mounted::prepare(
   height : Double,
   scale : Double,
   measure : @components.TextMeasure,
+  remeasure_binding : UInt64?,
 ) -> Result[Candidate, @diagnostics.FrameworkError] {
   let dialog_views : Array[@view.View] = []
   collect_open_dialogs(view, dialog_views)
@@ -2141,6 +2142,8 @@ fn Mounted::prepare(
         }
         let focused = focus == Some(binding.id)
         let model = match binding.field {
+          Some(old) if remeasure_binding == Some(binding.id) && old.committed_document().text() == props.value() =>
+            old.remeasure(content, FIELD_FONT_SIZE, fn(document) { field_measure(measure, document) }, field_admit)
           Some(old) if old.is_composing() ||
             old.document().text() == props.value() => old.with_bounds(content)
           _ => {
@@ -2365,6 +2368,8 @@ pub struct Prepared {
   priv candidate : Candidate
   priv change : Epoch
   priv measure : @components.TextMeasure
+  priv owned_text : TerminalTextOwner?
+  priv owned_progress : (UInt64, Int32, Int64)?
 }
 
 ///|
@@ -2381,7 +2386,7 @@ pub fn Mounted::stage(
   }
   let change = self.change
   self.busy = true
-  let prepared = self.prepare(view, width, height, scale, measure)
+  let prepared = self.prepare(view, width, height, scale, measure, None)
   self.busy = false
   let candidate = match prepared {
     Err(error) => return Err(error)
@@ -2391,7 +2396,120 @@ pub fn Mounted::stage(
   if self.is_disposed() || !same_epoch(change, self.change) {
     return Err(adapter_error("native root changed during preparation"))
   }
-  Ok({ view, candidate, change, measure, })
+  Ok({ view, candidate, change, measure, owned_text: None, owned_progress: None })
+}
+
+///|
+/// Stage a remeasured scene for the existing editing owner without publishing
+/// it. The host geometry transaction is separate; this candidate cannot be
+/// passed to `publish` until an owner-bound host contract exists.
+pub fn Mounted::stage_owned_text_geometry(
+  self : Mounted, owner : TerminalTextOwner, view : @view.View,
+  width : Double, height : Double, scale : Double, measure : @components.TextMeasure,
+) -> Result[Prepared, @diagnostics.FrameworkError] {
+  if !self.terminal_owner_is_current(owner) {
+    return Err(adapter_error("staged text owner is stale"))
+  }
+  let change = self.change
+  let progress = owner.observed_progress()
+  self.busy = true
+  let result = self.prepare(view, width, height, scale, measure, Some(owner.binding))
+  self.busy = false
+  if self.is_disposed() || !same_epoch(change, self.change) ||
+    !self.terminal_owner_is_current(owner) || owner.observed_progress() != progress {
+    return Err(adapter_error("staged text owner changed during measurement"))
+  }
+  let candidate = match result { Ok(value) => value; Err(error) => return Err(error) }
+  let prepared = { view, candidate, change, measure, owned_text: Some(owner), owned_progress: Some(progress) }
+  match self.inspect_staged_text_geometry(owner, prepared) {
+    Ok(_) => Ok(prepared)
+    Err(error) => Err(error)
+  }
+}
+
+///|
+/// Read-only candidate values for host coordination. They do not publish a
+/// scene, mutate the live field, acknowledge geometry or authorize a cutoff.
+pub struct StagedTextGeometry {
+  priv window : @platform.WindowId
+  priv epoch : UInt64
+  priv binding : UInt64
+  priv generation : UInt64
+  priv source_revision : Int32
+  priv candidate_revision : Int32
+  priv preview : @text.TextDocument
+  priv committed : @text.TextDocument
+  priv caret : @primitives.Rect
+  priv composing : Bool
+  priv scene_revision : UInt64
+}
+
+///|
+pub fn StagedTextGeometry::identity(self : StagedTextGeometry) -> (@platform.WindowId, UInt64, UInt64, UInt64) {
+  (self.window, self.epoch, self.binding, self.generation)
+}
+
+///|
+pub fn StagedTextGeometry::revisions(self : StagedTextGeometry) -> (Int32, Int32) {
+  (self.source_revision, self.candidate_revision)
+}
+
+///|
+pub fn StagedTextGeometry::preview(self : StagedTextGeometry) -> @text.TextDocument { self.preview }
+
+///|
+pub fn StagedTextGeometry::committed(self : StagedTextGeometry) -> @text.TextDocument { self.committed }
+
+///|
+pub fn StagedTextGeometry::caret(self : StagedTextGeometry) -> @primitives.Rect { self.caret }
+
+///|
+pub fn StagedTextGeometry::composing(self : StagedTextGeometry) -> Bool { self.composing }
+
+///|
+pub fn StagedTextGeometry::scene_revision(self : StagedTextGeometry) -> UInt64 { self.scene_revision }
+
+///|
+/// Inspect only a still-current candidate from this exact mounted text lease.
+pub fn Mounted::inspect_staged_text_geometry(
+  self : Mounted, owner : TerminalTextOwner, prepared : Prepared,
+) -> Result[StagedTextGeometry, @diagnostics.FrameworkError] {
+  let original = match prepared.owned_text { Some(value) => value; None => return Err(adapter_error("not an owned text candidate")) }
+  if !same_epoch(original.identity, owner.identity) ||
+    !same_epoch(original.session_identity, owner.session_identity) ||
+    !same_epoch(prepared.change, self.change) || !self.terminal_owner_is_current(owner) ||
+    prepared.owned_progress != Some(owner.observed_progress()) ||
+    prepared.candidate.focused != Some(owner.binding) {
+    return Err(adapter_error("staged text candidate is stale"))
+  }
+  let mut live_field : @text_field.TextField? = None
+  for binding in self.bindings {
+    if binding.id == owner.binding && binding.field_generation == owner.generation && binding.token == Some(owner.token) {
+      live_field = binding.field
+    }
+  }
+  let live = match live_field { Some(value) => value; None => return Err(adapter_error("live original field is unavailable")) }
+  for binding in prepared.candidate.bindings {
+    if binding.id == owner.binding && binding.field_generation == owner.generation &&
+      binding.view.key() == owner.token.key() && binding.token is None {
+      match binding.field {
+        Some(field) => {
+          if owner.revision == 2147483647 || field.revision() != owner.revision + 1 ||
+            field.document() != live.document() || field.committed_document() != live.committed_document() ||
+            field.is_composing() != live.is_composing() || field.marked_range() != live.marked_range() {
+            return Err(adapter_error("staged field does not preserve the original composition"))
+          }
+          let caret = match field.caret_rect() { Ok(value) => value; Err(_) => return Err(adapter_error("staged caret unavailable")) }
+          return Ok({ window: owner.window, epoch: owner.epoch, binding: owner.binding, generation: owner.generation,
+            source_revision: owner.revision, candidate_revision: field.revision(),
+            preview: field.document(), committed: field.committed_document(), caret, composing: field.is_composing(),
+            scene_revision: prepared.candidate.frame.revision })
+        }
+        None => ()
+      }
+    }
+  }
+  Err(adapter_error("staged original binding is unavailable"))
 }
 
 ///|
@@ -2438,6 +2556,9 @@ pub fn Mounted::publish(
   self : Mounted,
   prepared : Prepared,
 ) -> Result[Frame, @diagnostics.FrameworkError] {
+  if prepared.owned_text is Some(_) {
+    return Err(adapter_error("staged text geometry requires a host publication receipt"))
+  }
   if self.is_disposed() ||
     self.held_text is Some(_) ||
     self.busy ||

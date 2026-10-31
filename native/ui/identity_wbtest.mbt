@@ -180,7 +180,7 @@ test "exploratory held composition prepare cannot publish the session" {
     @view.button(@view.NodeKey::new("preceding"), "Before"),
     @view.text_field(key, @view.TextFieldProps::new("", "Name")),
   ])
-  let candidate = mounted.prepare(shifted, 800.0, 480.0, 1.0, measure).unwrap()
+  let candidate = mounted.prepare(shifted, 800.0, 480.0, 1.0, measure, None).unwrap()
   let staged = binding_for(candidate.bindings, key).unwrap().field.unwrap()
   let after = mounted.held_text.unwrap().session.snapshot()
   assert_true(staged.is_composing())
