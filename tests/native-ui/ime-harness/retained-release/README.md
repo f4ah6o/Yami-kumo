@@ -3,9 +3,11 @@
 This prepares a bounded live IBus/Mozc probe for Yami source
 `1a59626cf67910917c4d660dd6db8bedae55a722` (#142) and GPUI source
 `35b9041dfb3642b43ca37c604834942614eb50fb` (#211). The app binary must be
-built from that exact source pair and its digest supplied separately. The
-harness rejects dirty app/framework/harness trees, mismatched source SHAs and
-mismatched binary digest. A source override is used; this is not a registry
+built by the harness in a new temporary workspace from that exact source pair.
+The harness rejects dirty app/framework/harness trees, mismatched source SHAs,
+and dependency pins that differ from the framework. It records build.json,
+build.log, and the resulting executable and digest together. This local build
+record is evidence of the observed build process, not a signed attestation. A source override is used; this is not a registry
 consumer check.
 
 Do not execute as an acceptance run until the same app and framework heads
@@ -26,12 +28,16 @@ recorded as blocked without claiming its cause from an error code alone.
 
 Set `YAMI_RELEASE_OUT` to a new empty directory, `YAMI_RELEASE_APP_TREE` and
 `YAMI_RELEASE_FRAMEWORK_TREE` to the clean exact source trees, and
-`YAMI_RELEASE_BINARY` and `YAMI_RELEASE_BINARY_SHA256` to the independently
-built executable and its digest. Run `session.sh` with the local Xvfb, Weston,
+provide a toolchain capable of the native build. The harness sets
+`YAMI_RELEASE_BINARY` and `YAMI_RELEASE_BINARY_SHA256` from its own build. Run `session.sh` with the local Xvfb, Weston,
 IBus/Mozc and library environment used for the profile. `result.json` records
 source revisions, binary hash, dependency manifests, commands, outcomes and
-scope; raw logs are listed in `artifact-manifest.json` after all child processes
-stop. Run URL is null for a local run.
+scope. On any failure after a valid empty output directory is accepted, the
+harness records a result and artifact manifest. Tracked process groups receive
+bounded TERM/KILL shutdown and `/proc` is scanned for visible artifact writers
+before the manifest is written. Inaccessible processes, surviving groups, or
+visible writers mark stability unverified; even a clear scan is an observation,
+not proof against escaped processes or later modification. Run URL is null for a local run.
 
 The harness may force SIGTERM if the owner cannot stop. That teardown destroys
 in-process ownership and is recorded as cleanup **FAIL**, never as safe stop.

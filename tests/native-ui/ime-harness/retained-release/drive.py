@@ -71,7 +71,7 @@ result = {
 }
 log = (out / 'app.log').open('w', encoding='utf-8')
 proc = subprocess.Popen(['stdbuf', '-oL', '-eL', str(app), '--settings-retained-control'],
-                        stdout=log, stderr=subprocess.STDOUT, env=dict(os.environ, WAYLAND_DEBUG='client'))
+                        stdout=log, stderr=subprocess.STDOUT, env=dict(os.environ, WAYLAND_DEBUG='client'), start_new_session=True)
 (out / 'pid').write_text(str(proc.pid) + '\n')
 
 def app_data() -> str:
@@ -168,11 +168,11 @@ finally:
         # This exploratory teardown loses any in-memory owner/receipt. It is
         # not host.stop or safe cleanup and must never be scored as a PASS.
         result['cleanup_result'] = 'FAIL_FORCED_TERMINATION_OWNER_NOT_PERSISTED'
-        proc.send_signal(signal.SIGTERM)
+        os.killpg(proc.pid, signal.SIGTERM)
     try:
         result['app_exit_code'] = proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        proc.kill()
+        os.killpg(proc.pid, signal.SIGKILL)
         result['app_exit_code'] = proc.wait(timeout=5)
         result['forced_sigkill'] = True
     log.close()
