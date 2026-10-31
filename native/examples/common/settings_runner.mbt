@@ -68,6 +68,25 @@ struct NativeReceiptEntry {
 }
 
 ///|
+/// Candidate for a frame covering only a proved direct-owner prefix. This is
+/// an observation, not host cutoff, release authority or physical display.
+priv struct DirectFrameObservation {
+  frame : @ui.Frame
+  window : @platform.WindowId
+  binding : UInt64
+  epoch : UInt64
+  native_epoch : Int32
+  progress : (UInt64, Int32, Int64)
+  model : @shared_settings.Model
+  fence : SettingsModelFence
+  caret : @primitives.Rect
+  watermark : Int32
+  prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)]
+  mut presented : Bool
+  mut completed : Bool
+}
+
+///|
 /// One immutable scene/owner snapshot and the native prefix already applied
 /// before its present call. This is observational: it never retires a record.
 pub struct SettingsFramePublication {
@@ -756,6 +775,8 @@ pub struct SettingsRunOwner {
   priv gate : PresentationGate
   priv mut pending_frame : String?
   priv mut pending_publication : SettingsFramePublication?
+  priv mut pending_direct_frame : DirectFrameObservation?
+  priv mut completed_direct_frame : DirectFrameObservation?
   priv completed_publications : Array[SettingsFramePublication]
   priv mut dirty : Bool
   priv mut focus_initialized : Bool
@@ -1221,6 +1242,103 @@ fn SettingsRunOwner::prepare_frame_publication(
 }
 
 ///|
+/// A unique direct delivery is locally resolved only when the same native
+/// record owns an applied field and its required model action.
+fn SettingsRunOwner::resolved_direct_delivery(
+  self : SettingsRunOwner, receipt : NativeRetainedReceipt,
+) -> @ui.OwnedDirectDelivery? {
+  let mut found : @ui.OwnedDirectDelivery? = None
+  for (native, delivery) in self.direct_receipts {
+    if native.window != receipt.window || native.root != receipt.root || native.epoch != receipt.epoch ||
+      native.sequence != receipt.sequence || native.direct != receipt.direct || native.edit_key_epoch != receipt.edit_key_epoch {
+      continue
+    }
+    let same = match (native.event, receipt.event) {
+      (Some(OrderedPlatform(a)), Some(OrderedPlatform(b))) => same_direct_event(a, b)
+      _ => false
+    }
+    if !same { continue }
+    if found is Some(_) { return None }
+    let (window, epoch, binding, _, _) = delivery.identity()
+    if window != receipt.window || epoch != receipt.epoch || binding != receipt.root ||
+      delivery.native_sequence() != receipt.sequence || !delivery.applied() || !delivery.owner_noted() ||
+      !(delivery.action_required() is Some(false) || delivery.model_applied()) {
+      return None
+    }
+    found = Some(delivery)
+  }
+  found
+}
+
+///|
+fn SettingsRunOwner::prepare_direct_frame(
+  self : SettingsRunOwner, frame : @ui.Frame,
+) -> DirectFrameObservation? {
+  if self.pending_direct_frame is Some(_) || self.completed_direct_frame is Some(_) ||
+    self.retired_prefix is Some(_) || self.entered_target is Some(_) || self.destroyed || self.dirty ||
+    !self.host_epoch_verified || self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) ||
+    self.inflight is Some(_) || self.owned_delivery is Some(_) || self.pending_direct is Some(_) ||
+    self.held_tab is Some(_) || !self.buffered.is_empty() || !self.held_platform.is_empty() ||
+    self.mounted.has_pending_actions() {
+    return None
+  }
+  let current = match self.session { Some(value) => value; None => return None }
+  let owner = match self.terminal_owner { Some(value) => value; None => return None }
+  let field = match self.mounted.focused_text() { Some(value) => value; None => return None }
+  if self.host_epoch != Some(current.epoch) || !owner.matches_session(self.window, current.epoch, current.binding) ||
+    !self.mounted.terminal_owner_is_current(owner) || field.composing() ||
+    frame.binding_id(@shared_settings.settings_name()) != Some(current.binding) ||
+    !frame.focused(@shared_settings.settings_name()) || field.binding_id() != current.binding ||
+    field.document().text() != self.last_document || self.settings.name() != self.last_document ||
+    settings_caret(field.caret()) != self.last_caret {
+    return None
+  }
+  let prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)] = []
+  let mut watermark = 0
+  let mut native_epoch = 0
+  let mut direct_ordinal = 0L
+  for entry in self.acknowledged_receipts {
+    let receipt = entry.receipt
+    if receipt.window != self.window || receipt.sequence != watermark + 1 ||
+      self.receipt_stage_for_sequence(receipt.sequence.to_int64()) is None { break }
+    if receipt.direct is Some(_) || receipt.edit_key_epoch is Some(_) {
+      let next_epoch = match (receipt.direct, receipt.edit_key_epoch) {
+        (Some((value, _)), None) | (None, Some(value)) => value
+        _ => break
+      }
+      if next_epoch <= 0 || (native_epoch != 0 && native_epoch != next_epoch) ||
+        receipt.root != current.binding || receipt.epoch != current.epoch ||
+        !(entry.stage is ReceiptAcknowledgedOnly) { break }
+      let delivery = match self.resolved_direct_delivery(receipt) { Some(value) => value; None => break }
+      match (receipt.direct, receipt.edit_key_epoch) {
+        (Some((_, ordinal)), None) if !delivery.is_edit_key() && direct_ordinal < 9223372036854775807L &&
+          ordinal == direct_ordinal + 1L && delivery.ordinal() == ordinal => direct_ordinal = ordinal
+        (None, Some(_)) if delivery.is_edit_key() && delivery.ordinal() == direct_ordinal => ()
+        _ => break
+      }
+      native_epoch = next_epoch
+    } else {
+      match (receipt.event, entry.stage) {
+        (Some(OrderedPlatform(event)), ReceiptPlatformHandled | ReceiptPointerMovedHandled) if
+          event.window() == self.window && event.sequence() == receipt.sequence.to_int64() &&
+          ((receipt.root == 0UL && receipt.epoch == 0UL) ||
+           (receipt.root == current.binding && receipt.epoch == current.epoch)) => ()
+        _ => break
+      }
+    }
+    prefix.push((receipt, entry.stage))
+    watermark += 1
+  }
+  // If a later acknowledged item is unresolved, the current model might
+  // already include it. Do not attribute that later state to a shorter
+  // prefix without an independent per-prefix model snapshot.
+  if native_epoch <= 0 || watermark <= 0 || prefix.length() != self.acknowledged_receipts.length() { return None }
+  Some({ frame, window: self.window, binding: current.binding, epoch: current.epoch,
+    native_epoch, progress: owner.observed_progress(), model: self.settings, fence: self.model_fence,
+    caret: self.last_caret, watermark, prefix, presented: false, completed: false })
+}
+
+///|
 /// Attempt presentation without upgrading the candidate on an error. If a
 /// backend fails after side effects the original candidate remains available,
 /// but neither presentation nor completion is asserted.
@@ -1228,16 +1346,59 @@ fn SettingsRunOwner::present_with_frame_publication(
   self : SettingsRunOwner, frame : @ui.Frame,
   present : (@platform.WindowId, @scene.SceneSnapshot) -> Result[Unit, @diagnostics.FrameworkError],
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if self.pending_publication is Some(_) {
+  if self.pending_publication is Some(_) || self.pending_direct_frame is Some(_) {
     return Err(runner_error("ordered_text", "previous frame publication remains unresolved"))
   }
   self.pending_publication = self.prepare_frame_publication(frame)
+  self.pending_direct_frame = self.prepare_direct_frame(frame)
   match present(self.window, frame.snapshot()) {
     Err(error) => Err(error)
     Ok(_) => {
       match self.pending_publication { Some(candidate) => candidate.presented = true; None => () }
+      match self.pending_direct_frame { Some(candidate) => candidate.presented = true; None => () }
       Ok(())
     }
+  }
+}
+
+///|
+fn SettingsRunOwner::complete_direct_frame(self : SettingsRunOwner) -> Unit {
+  let candidate = match self.pending_direct_frame { Some(value) => value; None => return }
+  if candidate.completed || !candidate.presented || !candidate.fence.live || self.settings != candidate.model ||
+    self.destroyed || self.cutoff_done || self.retired_prefix is Some(_) || self.entered_target is Some(_) ||
+    candidate.watermark != candidate.prefix.length() ||
+    self.acknowledged_receipts.length() < candidate.prefix.length() { return }
+  let current = match self.session { Some(value) => value; None => return }
+  let owner = match self.terminal_owner { Some(value) => value; None => return }
+  let field = match self.mounted.focused_text() { Some(value) => value; None => return }
+  let frame = match self.mounted.frame() { Some(value) => value; None => return }
+  for i = 0; i < candidate.prefix.length(); i = i + 1 {
+    let (receipt, stage) = candidate.prefix[i]
+    let now = self.acknowledged_receipts[i]
+    if self.receipt_stage_for_sequence(receipt.sequence.to_int64()) is None { return }
+    if receipt.direct is Some(_) || receipt.edit_key_epoch is Some(_) {
+      if !(stage is ReceiptAcknowledgedOnly) || !(now.stage is ReceiptAcknowledgedOnly) ||
+        receipt.window != now.receipt.window || receipt.root != now.receipt.root ||
+        receipt.epoch != now.receipt.epoch || receipt.sequence != now.receipt.sequence ||
+        receipt.direct != now.receipt.direct || receipt.edit_key_epoch != now.receipt.edit_key_epoch ||
+        self.resolved_direct_delivery(receipt) is None { return }
+      match (receipt.event, now.receipt.event) {
+        (Some(OrderedPlatform(a)), Some(OrderedPlatform(b))) if same_direct_event(a, b) => ()
+        _ => return
+      }
+    } else if !same_publication_receipt(receipt, now.receipt) || !same_publication_stage(stage, now.stage) {
+      return
+    }
+  }
+  if candidate.window == self.window && candidate.binding == current.binding && candidate.epoch == current.epoch &&
+    candidate.native_epoch > 0 && self.host_epoch_verified && self.host_epoch == Some(current.epoch) &&
+    owner.matches_session(self.window, current.epoch, current.binding) && self.mounted.terminal_owner_is_current(owner) &&
+    owner.observed_progress() == candidate.progress && frame.revision() == candidate.frame.revision() &&
+    field.document().text() == candidate.model.name() && settings_caret(field.caret()) == candidate.caret &&
+    self.last_caret == candidate.caret && self.last_document == candidate.model.name() {
+    candidate.completed = true
+    self.completed_direct_frame = Some(candidate)
+    self.pending_direct_frame = None
   }
 }
 
@@ -1245,6 +1406,7 @@ fn SettingsRunOwner::present_with_frame_publication(
 /// Complete only the captured prefix, never any record received after the
 /// present. A later owner/field/scene change invalidates this observation.
 fn SettingsRunOwner::complete_frame_publication(self : SettingsRunOwner) -> Unit {
+  self.complete_direct_frame()
   let candidate = match self.pending_publication { Some(value) => value; None => return }
   if self.destroyed || self.cutoff_done { return }
   let current = match self.session { Some(value) => value; None => return }
@@ -2342,6 +2504,8 @@ pub fn SettingsRunOwner::new(
     gate: PresentationGate::{ rendered: false, pending_stale: false, },
     pending_frame: None,
     pending_publication: None,
+    pending_direct_frame: None,
+    completed_direct_frame: None,
     completed_publications: [],
     dirty: true,
     focus_initialized: false,
