@@ -1,5 +1,5 @@
 ///|
-test "old epoch cannot deliver text to same key replacement field" {
+test "old epoch cannot deliver text after injected same key replacement" {
   let mounted = Mounted::new(@platform.WindowId::new(1L))
   let key = @view.NodeKey::new("name")
   let view = fn(value) {
@@ -14,11 +14,19 @@ test "old epoch cannot deliver text to same key replacement field" {
   let owner = mounted.capture_terminal_text_owner(7UL).unwrap()
   let focus = mounted.scope.unwrap().snapshot().focus_owner()
   let generation = owner.observed_progress().0
-  ignore(
-    mounted
-    .commit(view("replacement"), 640.0, 480.0, 1.0, owner_focus_measure)
-    .unwrap(),
-  )
+  let replacement = mounted
+    .stage(view("replacement"), 640.0, 480.0, 1.0, owner_focus_measure)
+    .unwrap()
+  assert_true(mounted.publish(replacement) is Err(_))
+  // Fault injection: force the once-public replacement state after admission
+  // refused it. Raw input must still reject even if another bug bypasses the
+  // pre-publication fence.
+  let proposed = binding_for(replacement.candidate.bindings, key).unwrap()
+  for i = 0; i < mounted.bindings.length(); i = i + 1 {
+    if mounted.bindings[i].id == owner.binding {
+      mounted.bindings[i] = { ..proposed, token: Some(owner.token), }
+    }
+  }
   assert_true(mounted.scope.unwrap().snapshot().focus_owner() == focus)
   assert_true(
     binding_for(mounted.bindings, key).unwrap().field_generation != generation,

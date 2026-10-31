@@ -2600,6 +2600,54 @@ pub fn Mounted::publish(
       if self.runtime.has_pending_actions() {
         return Err(adapter_error("owned focus has pending actions"))
       }
+      // Until the original lease is explicitly resolved, preserve the field
+      // generation and both its committed and preview documents even if
+      // focus has changed. This is not authority to apply a late record to a
+      // newly acquired focus target.
+      let owner = match self.terminal_lease {
+        Some(value) => value
+        None => return Err(adapter_error("original field lease unavailable"))
+      }
+      let mut current : @text_field.TextField? = None
+      let mut next : @text_field.TextField? = None
+      for binding in self.bindings {
+        if binding.id == owner.binding && binding.field_generation == owner.generation &&
+          binding.token == Some(owner.token) { current = binding.field }
+      }
+      for binding in candidate.bindings {
+        if binding.id == owner.binding && binding.field_generation == owner.generation &&
+          binding.view.key() == owner.token.key() && field_editable(binding.view) {
+          next = binding.field
+        }
+      }
+      match (current, next) {
+        (Some(old), Some(candidate_field)) if
+          old.document() == candidate_field.document() &&
+          old.committed_document() == candidate_field.committed_document() &&
+          old.marked_range() == candidate_field.marked_range() &&
+          old.is_composing() == candidate_field.is_composing() => ()
+        _ => return Err(adapter_error("original field replacement or composition change unresolved"))
+      }
+      // While the original acquisition is still live, an ordinary publication
+      // must also keep the exact revision and measurement environment. A
+      // resize/remeasure instead needs the owned-geometry recovery path.
+      if scope.snapshot().focus_owner() == self.terminal_focus_owner {
+        // Scale and viewport changes require remeasurement even when this
+        // particular field happens to retain numerically identical bounds.
+        match self.current_frame {
+          Some(frame) if frame.snapshot.viewport() == candidate.frame.snapshot.viewport() &&
+            frame.snapshot.scale() == candidate.frame.snapshot.scale() => ()
+          _ => return Err(adapter_error("original field measurement environment changed"))
+        }
+        if candidate.focused != Some(owner.binding) {
+          return Err(adapter_error("original field focus change unresolved"))
+        }
+        match (current, next) {
+          (Some(old), Some(candidate_field)) if
+            old.revision() == owner.revision && candidate_field.revision() == owner.revision => ()
+          _ => return Err(adapter_error("original field replacement or geometry change unresolved"))
+        }
+      }
       if self.window_focused && scope.focused() == candidate.focused &&
         scope.snapshot().focus_owner() == self.terminal_focus_owner &&
         candidate.plan.opens.is_empty() {
