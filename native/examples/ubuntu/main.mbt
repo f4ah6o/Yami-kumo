@@ -662,6 +662,10 @@ fn main {
         Some(value) => value
         None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_adapter_unavailable"))
       }
+      match owner.geometry_arrival_state() {
+        Some((sequence, _)) if sequence.to_int64() == control_sequence() => ()
+        _ => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_arrival_sequence_changed"))
+      }
       match owner.geometry_arrival_take_state() {
         Some(0) => owner.take_geometry_arrival_to_local_owner(fn() { arrival.take_after_geometry_acceptance(geometry) })
         Some(1) => owner.reconcile_geometry_arrival_take(fn() { arrival.inspect_taken_after_geometry_acceptance(geometry) })

@@ -105,6 +105,20 @@ class ControlSocketTests(unittest.TestCase):
         self.assertIn("owner and host retained", stdout)
         self.assertIn("next text sequence: 12", stdout)
 
+    def test_geometry_take_requires_exact_positive_sequence(self) -> None:
+        with socket.socket(socket.AF_UNIX) as peer:
+            peer.connect(str(self.path))
+            peer.sendall(b"x" + struct.pack("!q", 41))
+            self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("x"))
+            self.assertEqual(self.lib.gpui_settings_control_sequence(), 41)
+            self.lib.gpui_settings_control_reply(ord("J"))
+            self.assertEqual(peer.recv(1), b"J")
+        with socket.socket(socket.AF_UNIX) as peer:
+            peer.connect(str(self.path))
+            peer.sendall(b"x" + struct.pack("!q", 0))
+            self.assertEqual(self.lib.gpui_settings_control_next(2000), 0)
+            self.assertEqual(peer.recv(1), b"")
+
     def test_apply_request_carries_exact_positive_sequence(self) -> None:
         with socket.socket(socket.AF_UNIX) as peer:
             peer.connect(str(self.path))
