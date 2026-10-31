@@ -2323,6 +2323,93 @@ test "local unsupported prefix snapshot requires consecutive resolved original o
 }
 
 ///|
+test "direct platform text changes the field without advancing the text lease" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  let event = @platform.Event::new(owner.window, 1L, 1.0,
+    @platform.Input(@primitives.TextInput(text="a")))
+  assert_true(owner.mounted.handle_event(event).unwrap())
+  assert_true(owner.mounted.has_pending_actions())
+  let action = owner.mounted.next_action().unwrap()
+  assert_true(action is @view.TextChanged(_, "a"))
+  owner.settings = owner.settings.update(@shared_settings.Ui(action))
+  assert_eq(owner.model().name(), "a")
+  // This fixture characterizes the gap: the old TextSession owner has not
+  // been advanced even though the same field/action changed successfully.
+  assert_false(owner.mounted.terminal_owner_is_current(lease))
+  assert_false(owner.can_stop())
+}
+
+///|
+test "direct platform text is rejected while the original preedit is active" {
+  let (owner, _) = publication_fixture()
+  let binding = owner.session.unwrap().binding
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedText(preedit)), owner.window, 2, binding, 7UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  owner.deliver_owned_observation(preedit).unwrap()
+  let direct = @platform.Event::new(owner.window, 3L, 1.0,
+    @platform.Input(@primitives.TextInput(text="a")))
+  assert_true(owner.mounted.handle_event(direct) is Err(_))
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  assert_eq(owner.model().name(), "")
+  assert_false(owner.can_stop())
+}
+
+///|
+test "runner leaves rejected direct text at ACK-only when destruction follows" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let native_sequence = Ref(1)
+  let binding_ref = Ref(0UL)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      let sequence = native_sequence.val
+      let event = match sequence {
+        1 => @platform.Event::new(window, 1L, 1.0, @platform.Input(@primitives.TextInput(text="a")))
+        2 => @platform.Event::new(window, 2L, 1.0, @platform.Destroyed)
+        _ => return Ok(None)
+      }
+      Ok(Some(NativeRetainedReceipt::new(Some(OrderedPlatform(event)), window, sequence, binding_ref.val, 7UL, fn() {
+        native_sequence.val += 1
+        Ok(())
+      })))
+    }, fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  binding_ref.val = binding
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  let preedit = @text_host.TextInputEvent::new(window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.deliver_owned_observation(preedit).unwrap()
+  owner.gate.rendered = true
+  owner.pending_frame = Some("fixture")
+  owner.dirty = false
+  assert_true(owner.drive() is Err(_))
+  assert_true(owner.receipt_stage_for_sequence(1L) is Some(ReceiptAcknowledgedOnly))
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(event)) && event.kind() is @platform.Destroyed)
+  assert_eq(owner.model().name(), "")
+  // Invalidation makes the focused field unavailable for public observation;
+  // do not infer its contents from the absent frame.
+  assert_true(owner.mounted.focused_text() is None)
+  assert_true(owner.terminal_owner is Some(_))
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
 fn unsupported_policy_fixture(
   ack : () -> Result[Unit, @diagnostics.FrameworkError],
 ) -> (SettingsRunOwner, UnsupportedPrefixSnapshot) {
