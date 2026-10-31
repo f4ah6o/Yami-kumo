@@ -12,11 +12,11 @@ import unittest
 from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
-APP_SHA = 'cfa87adb6214f7ba50fa3a91075ca6e4eafddb9d'
+APP_SHA = 'e9fe5fe06111dce33be20f3f93d8be819194486f'
 FRAMEWORK_SHA = '35b9041dfb3642b43ca37c604834942614eb50fb'
 
 class DriverTimeoutTest(unittest.TestCase):
-    def run_case(self, timeout_command, partial, *, geometry_failure=False):
+    def run_case(self, timeout_command, partial, *, geometry_failure=False, missing_receipt=False):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             out, app_tree, framework = root / 'out', root / 'app', root / 'framework'
@@ -60,9 +60,14 @@ class DriverTimeoutTest(unittest.TestCase):
                 if command == 'advance':
                     with (out / 'app.log').open('a') as log:
                         log.write('YAMI_NATIVE_UI_SETTINGS {"phase":"preedit","text":"に"}\n')
+                if command == 'inspect-native':
+                    with (out / 'app.log').open('a') as log:
+                        log.write('YAMI_SETTINGS_RETAINED_HEAD {"present":true,"kind":"forwarded_released","sequence":11}\n')
                 stdout = {'receipt': 'native receipt sequence: 1\n',
                           'stage': 'native adapter acknowledged\n',
                           'generation': 'continuation generation: 19\n'}.get(command, '')
+                if command == 'receipt' and missing_receipt:
+                    stdout = 'native receipt sequence: none or non-text prefix\n'
                 rc = 2 if command == 'geometry-submit' and geometry_failure else 0
                 return subprocess.CompletedProcess(args, rc, stdout, '')
             def terminate(*args):
@@ -97,6 +102,21 @@ class DriverTimeoutTest(unittest.TestCase):
                 if command in ('generation', 'advance'):
                     self.assertEqual(result['geometry_race'], 'NOT_RUN_CONSUMER_PREEDIT_NOT_OBSERVED')
                     self.assertEqual(result['preedit_probe']['result'], 'BLOCKED_' + command.upper() + '_TIMEOUT_OUTCOME_UNKNOWN')
+
+    def test_missing_runner_receipt_inspects_native_head_once_without_advance(self):
+        calls, result = self.run_case(None, b'', missing_receipt=True)
+        self.assertEqual(calls, ['status', 'prefix', 'receipt', 'inspect-native'])
+        self.assertEqual(result['native_head_markers'], [{'present': True, 'kind': 'forwarded_released', 'sequence': 11}])
+        self.assertEqual(result['release_policy'], 'NOT_RUN')
+        self.assertEqual(result['geometry_race'], 'NOT_RUN')
+        self.assertEqual(result['cleanup_result'], 'FAIL_FORCED_TERMINATION_OWNER_NOT_PERSISTED')
+
+    def test_native_head_inspection_timeout_stops_without_guess_or_retry(self):
+        calls, result = self.run_case('inspect-native', b'observed native head sequence: 11', missing_receipt=True)
+        self.assertEqual(calls, ['status', 'prefix', 'receipt', 'inspect-native'])
+        self.assertEqual(result['steps'][-1]['status'], 'TIMEOUT_OUTCOME_UNKNOWN')
+        self.assertEqual(result['final_stop']['result'], 'NOT_RUN_COMMAND_OUTCOME_UNKNOWN')
+        self.assertEqual(result['release_policy'], 'NOT_RUN')
 
 if __name__ == '__main__':
     unittest.main()
