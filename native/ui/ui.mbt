@@ -290,6 +290,7 @@ pub struct Mounted {
   priv mut last_sequence : Int64
   priv mut window_focused : Bool
   priv mut ready : Bool
+  priv mut staging_invalidation_safe : Bool
   priv mut busy : Bool
   priv mut theme : @theme.Theme?
   priv mut measure : @components.TextMeasure?
@@ -418,6 +419,7 @@ pub fn Mounted::new(
     last_dispatched_input: 0,
     window_focused: true,
     ready: false,
+    staging_invalidation_safe: false,
     busy: false,
     theme,
     measure: None,
@@ -2565,6 +2567,9 @@ pub fn Mounted::publish(
     !same_epoch(prepared.change, self.change) {
     return Err(adapter_error("stale, foreign or disposed native preparation"))
   }
+  // Any fallible runtime/focus adoption below may leave the old frame
+  // unavailable; it must not masquerade as a clean layout invalidation.
+  self.staging_invalidation_safe = false
   match self.runtime.commit(prepared.view) {
     Err(_) => return Err(adapter_error("common view commit rejected"))
     Ok(_) => ()
@@ -2719,6 +2724,8 @@ fn Mounted::sync_focus(self : Mounted) -> Unit {
 ///|
 /// A resize/scale event makes old geometry unusable until a successful commit.
 pub fn Mounted::invalidate_layout(self : Mounted) -> Unit {
+  self.staging_invalidation_safe = (self.ready || self.staging_invalidation_safe) &&
+    !self.busy && self.held_text is None && !self.runtime.has_pending_actions() && self.clipboard.is_empty()
   self.change = fresh_epoch()
   if self.held_text is Some(held) {
     // Do not discard already published old-owner actions while the held
@@ -3763,7 +3770,7 @@ fn Mounted::terminal_owner_can_stage(
   self : Mounted,
   owner : TerminalTextOwner,
 ) -> Bool {
-  if self.is_disposed() || self.busy || owner.busy ||
+  if self.is_disposed() || self.busy || owner.busy || (!self.ready && !self.staging_invalidation_safe) ||
     !self.window_focused || self.held_text is Some(_) ||
     !self.identity.live || !owner.session_identity.live ||
     !same_epoch(self.identity, owner.identity) ||
@@ -5253,6 +5260,7 @@ fn Mounted::dispatch(
 
 ///|
 pub fn Mounted::dispose(self : Mounted) -> Unit {
+  self.staging_invalidation_safe = false
   self.identity.live = false
   match self.terminal_identity {
     Some(value) => value.live = false
