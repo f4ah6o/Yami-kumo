@@ -1,0 +1,24 @@
+{
+  "result": "PASS",
+  "source_override": true,
+  "app_sha": "cfa87adb6214f7ba50fa3a91075ca6e4eafddb9d",
+  "framework_sha": "35b9041dfb3642b43ca37c604834942614eb50fb",
+  "harness_sha": "bc5ea9398abbdcc11147aac0a1b7cf92c90d6e92",
+  "manifests": {
+    "moon.mod": "922ca99baf05f1be96567b06097486b2ea24a919397ab7e0c5e7c69723893e6f",
+    "native/moon.mod": "b595be30e056da48775543ef1aa430d7e2ec93cbd9974d95c93d255628994b62",
+    "tests/native-ui/gpui-revision.txt": "d3cc330ad81012dd256822ad72215919e0fba081cefe7186388a8785845d9815",
+    "tests/shared-ui/gpui-revision.txt": "d3cc330ad81012dd256822ad72215919e0fba081cefe7186388a8785845d9815"
+  },
+  "toolchain": "moon 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moon\nmoonc v0.10.15+943464bfa (2026-10-12) /workspace/yami-tools/bin/moonc\nmoonrun 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg\n",
+  "command": [
+    "sh",
+    "/workspace/review162-live-prep-agent/app/scripts/native_ui_workspace.sh",
+    "sh",
+    "-c",
+    "cd \"$YAMI_NATIVE_WORKSPACE_ROOT\" && moon build \"$YAMI_RELEASE_APP_TREE/native/examples/ubuntu\" --target native --target-dir \"$YAMI_NATIVE_WORKSPACE_ROOT/_build\""
+  ],
+  "exit_code": 0,
+  "binary_sha256": "e3b6b44e98cf828e65d45aa608e32bec223ec76a1e0a51c5fdf4ee7cc3522ff4",
+  "build_log_sha256": "49afc4f445fad9153d7d659a4131a3c0569cdcbd87239b0c34c49a17fbe1d8b7"
+}

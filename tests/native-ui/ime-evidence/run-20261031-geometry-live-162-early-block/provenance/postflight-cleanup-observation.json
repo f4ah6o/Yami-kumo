@@ -1,0 +1,24 @@
+{
+  "checked_utc": "2026-10-31T03:53:44.443204+00:00",
+  "app_pid": 355064,
+  "app_proc_path_exists": false,
+  "runtime_path": "/tmp/yami-retained-fixture-HS0gs6",
+  "runtime_exists": false,
+  "control_socket_path": "/tmp/yami-settings-0Wwy14/control.sock",
+  "control_socket_exists": false,
+  "visible_run_processes": [],
+  "cmdline_scan_permission_denied": 0,
+  "exact_harness_log_shutdown": {
+    "tracked_groups_remaining": [],
+    "visible_open_writers": [],
+    "inaccessible_processes": 727,
+    "uninspectable_fds": 0,
+    "scope": "local /proc observation, not proof against escaped or inaccessible writers"
+  },
+  "cleanup_result": "FAIL_FORCED_TERMINATION_OWNER_NOT_PERSISTED",
+  "artifact_stability": "UNVERIFIED_WRITERS_OR_GROUPS",
+  "raw_manifest_digest": "sha256:79b891cc66855a285e162cd952f5e8da3155cb5aead8c62a720c66439698b874",
+  "raw_files_modified_by_reviewer": false,
+  "live_command_exit_code": 0,
+  "live_command_exit_code_is_not_acceptance": true
+}

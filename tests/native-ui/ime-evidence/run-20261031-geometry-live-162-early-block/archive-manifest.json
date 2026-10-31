@@ -1,0 +1,169 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "104314dbcfaa41fbe151a5f531191bfd18c8945e04606eddcc5da705051294cc"
+    },
+    {
+      "path": "app.exe.gz",
+      "sha256": "e2fbd06dab4ef5b02299be86feb063071a02870ab24d3616800c577a6fbcc104"
+    },
+    {
+      "path": "app.log",
+      "sha256": "87790da7f687fdeba9e7da1c6b7a45f7283fe06ddb8efcbd7800437f430def63"
+    },
+    {
+      "path": "artifact-manifest.json",
+      "sha256": "79b891cc66855a285e162cd952f5e8da3155cb5aead8c62a720c66439698b874"
+    },
+    {
+      "path": "build.json",
+      "sha256": "f52ccb74558546997f4b1f09e62c21f06a97b22a283598a9a198dac223162143"
+    },
+    {
+      "path": "build.log",
+      "sha256": "49afc4f445fad9153d7d659a4131a3c0569cdcbd87239b0c34c49a17fbe1d8b7"
+    },
+    {
+      "path": "engine.log",
+      "sha256": "7b2be77df2274ba8ffeff3948afd6e7514bf2fe1142759ada3656b5ada1a5310"
+    },
+    {
+      "path": "ibus-daemon.log",
+      "sha256": "6cf95708db19acfc6eafe043b2123080c00ec218d669f14f0ada60074e22d53b"
+    },
+    {
+      "path": "ibus-ui-dbus.log",
+      "sha256": "5532a727c8ec906aa1f6a2ca662d2e102ac87bcc1230458d7605f9a6d7492a18"
+    },
+    {
+      "path": "ibus-ui-wayland.log",
+      "sha256": "d23e5193e87dcbf167d63ee548b57e43574c56eefca5a43600e520e483a4ed8d"
+    },
+    {
+      "path": "mozc-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "pid",
+      "sha256": "afd55721479e4ef3a1b24f115d827594ee5dd5e13f3055a3737156b9452bcb0f"
+    },
+    {
+      "path": "provenance/REPORT.md",
+      "sha256": "97cf011ee84668ce84603fa03b075a2cabf7ce77b23694975766e840eb9da329"
+    },
+    {
+      "path": "provenance/capture-provenance.py",
+      "sha256": "a9b112bad7e96f2a68e12d6076989bbdb8a333f663d361be18eba72974e74f62"
+    },
+    {
+      "path": "provenance/env.sh",
+      "sha256": "c0cb82fd7e76dd4f2b08f4446c1400d9a4caff8274f0d8e4e53631233716ba04"
+    },
+    {
+      "path": "provenance/launch-after-confirmation.sh",
+      "sha256": "2accbdee913569bbe5da1f4aed6b6b932bdbdba3ee616bbf3cd41c8c4ff162b3"
+    },
+    {
+      "path": "provenance/launch-gate-check.log",
+      "sha256": "cf704ffbe812cf98c3d1694297f489f0e117c6c28287ec2a2867791ae124e303"
+    },
+    {
+      "path": "provenance/live-launch.log",
+      "sha256": "13444e6dcf07f82d5dd2273e80c2ef363e8adc1a077e0277c9f447d41477de6a"
+    },
+    {
+      "path": "provenance/local-archive-manifest.json",
+      "sha256": "0b35e9099568100b793cb9dc862e880990298fde90a86461c105c43de60bee72"
+    },
+    {
+      "path": "provenance/local-archive-manifest.sha256",
+      "sha256": "a8029aafa3aa0cbfc4bf2facf54723ac35d06445a637ca0e262c7375bae64a78"
+    },
+    {
+      "path": "provenance/postflight-artifact-verification.json",
+      "sha256": "7b30330fa803d4bbf165a09bc040cceffc750d50c9719952f5bcbb09d20fe1c9"
+    },
+    {
+      "path": "provenance/postflight-cleanup-observation.json",
+      "sha256": "8a595db95f90b6ec04b3e427e5f3a17f3882604473fe27623551d715432161b9"
+    },
+    {
+      "path": "provenance/postflight-source-verification.log",
+      "sha256": "de7e8b6782669210760f683439546d2886a36bb48af32518fa0e09564fa3d8e4"
+    },
+    {
+      "path": "provenance/preflight.log",
+      "sha256": "37dd4d91e31d8e280f5e36eaf71c42c13dfca0ea51d5d5fa2fc7e9c0cc7450df"
+    },
+    {
+      "path": "provenance/preparation-provenance.json",
+      "sha256": "35bc7bce63fd3879a0d8394449675a7acc078de7e2e4288a67b85677ce0d33c3"
+    },
+    {
+      "path": "provenance/prepare-framework.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "provenance/protocol/generated/text-input-v1-client-protocol.h",
+      "sha256": "9c90f9b29bd85a68bec63658d78a2e07aa15e622b01382cc04861935824bf370"
+    },
+    {
+      "path": "provenance/protocol/generated/text-input-v1-protocol.c",
+      "sha256": "95387edb6409150aed47ec940f8321c5f6f54e10161f46ebd62fce4a80ae0873"
+    },
+    {
+      "path": "provenance/protocol/generated/xdg-shell-client-protocol.h",
+      "sha256": "1fa7e6cdfd0adafe3a2d9870af6fbc7d36de500ca7ad09f3fd51130a8dfa450e"
+    },
+    {
+      "path": "provenance/protocol/generated/xdg-shell-protocol.c",
+      "sha256": "1ffea71e9cbe07758b437a7e43a60ee6f93c406d020eca568df220e9488ae999"
+    },
+    {
+      "path": "provenance/protocol/inputs/prepare_ubuntu.sh",
+      "sha256": "8762b81df5d87c62233ee475c9989627ea20c1de6fff92139f48efc104497708"
+    },
+    {
+      "path": "provenance/protocol/inputs/text-input-unstable-v1.xml",
+      "sha256": "a3671b8e50ebe04f4d114c7b982763ae2964e44be163fb3e9eb30efca8a111b1"
+    },
+    {
+      "path": "provenance/protocol/inputs/xdg-shell.xml",
+      "sha256": "9d9e27038ca722f159a361293f8c6cd270dab907ab52de5b8ecfbb8d6b9651c2"
+    },
+    {
+      "path": "provenance/run-authorization.json",
+      "sha256": "9015f9e670d4ec3e62636fc4dda227b03f2de9076cd713b190c16b28eeed8411"
+    },
+    {
+      "path": "provenance/verify-live-artifacts.py",
+      "sha256": "00504c5a0d4f849b52157743bd5b809a0e78bfe1501ac5a57a7f7831e0e7733f"
+    },
+    {
+      "path": "provenance/verify-preparation.py",
+      "sha256": "61f262de42b3345bf097ef864c86b94163d4a32469385c745cf5178a0d3ce35b"
+    },
+    {
+      "path": "result.json",
+      "sha256": "d0651ac016694fe6dedc8b62605b7f522888938e5f22121505074d8697bce07e"
+    },
+    {
+      "path": "source-copy-map.json",
+      "sha256": "5af68f3d7969ac46e680717309ce07a989c4d17c65d4dca4d9077d48a59549aa"
+    },
+    {
+      "path": "verify_archive.py",
+      "sha256": "4ddf40b5ecd3f4a571ca2def2b545098332344180f7212ff5dc804d1d9fc73ce"
+    },
+    {
+      "path": "weston-stdio.log",
+      "sha256": "47f23fdb9ba3fdf0841f595ff270e77b5bd19ffff874c81f114d44a5a9a86c2e"
+    },
+    {
+      "path": "weston.log",
+      "sha256": "0d2418b4eecfd43cea3d0aa78263cbf8cd86db0fbcbc62d34a7d4bf25ff6510e"
+    }
+  ],
+  "scope": "Committed evidence representations, excluding this manifest; original raw manifest and copy-map preserve gzip mapping; matching local hashes do not prove writer cessation."
+}
