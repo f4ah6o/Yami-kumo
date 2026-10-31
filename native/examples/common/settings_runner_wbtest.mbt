@@ -1118,6 +1118,12 @@ test "suspended applied delivery reconciles retained action once" {
   owner.inflight = Some(OrderedText(@text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="偽"))))
   assert_true(entry.owned_delivery_sequence() is None)
   assert_true(entry.reconcile_owned_sequence(42L) is Err(_))
+  // The lower-level public recovery must enforce the same original payload,
+  // even if the caller bypasses the sequence-bound controller.
+  assert_true(owner.reconcile_owned_delivery() is Err(_))
+  assert_true(owner.owned_text_delivery() is Some(_))
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日本")))
+  assert_eq(owner.model().name(), "")
   owner.inflight = Some(OrderedText(event))
   assert_eq(owner.model().name(), "")
   entry.reconcile_owned_sequence(42L).unwrap()

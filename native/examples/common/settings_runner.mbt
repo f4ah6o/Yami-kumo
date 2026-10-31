@@ -2054,9 +2054,12 @@ pub fn SettingsRunOwner::reconcile_owned_delivery(
     _ => return Err(runner_error("ordered_text", "original inflight text is unavailable"))
   }
   let (window, epoch, binding, _, sequence) = receipt.identity()
+  let original = receipt.event()
   let session = match self.session { Some(value) => value; None => return Err(runner_error("ordered_text", "original session is unavailable")) }
   if window != self.window || epoch != session.epoch || binding != session.binding ||
-    event.window() != window || event.epoch() != epoch || event.sequence() != sequence {
+    event.window() != window || event.epoch() != epoch || event.sequence() != sequence ||
+    original.window() != window || original.epoch() != epoch || original.sequence() != sequence ||
+    !same_text_observation_kind(event.kind(), original.kind()) {
     return Err(runner_error("ordered_text", "owned delivery identity changed"))
   }
   self.running = true
