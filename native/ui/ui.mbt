@@ -303,6 +303,7 @@ pub struct Mounted {
   priv mut held_text : HeldText?
   priv terminal_epochs : Array[UInt64]
   priv mut terminal_identity : Epoch?
+  priv mut terminal_focus_owner : @element.FocusOwner?
   priv mut terminal_required : Bool
 }
 
@@ -432,6 +433,7 @@ pub fn Mounted::new(
     held_text: None,
     terminal_epochs: [],
     terminal_identity: None,
+    terminal_focus_owner: None,
     terminal_required: false,
   }
 }
@@ -2372,6 +2374,9 @@ pub struct Prepared {
   priv measure : @components.TextMeasure
   priv owned_text : TerminalTextOwner?
   priv owned_progress : (UInt64, Int32, Int64)?
+  // This is a focus-only proposal. It cannot prove host acceptance or publish
+  // runtime, scene, or field state. Keep it with the exact owned candidate.
+  priv owned_focus : (@element.FocusScopeTarget, @element.FocusBoundsProposal)?
 }
 
 ///|
@@ -2398,7 +2403,7 @@ pub fn Mounted::stage(
   if self.is_disposed() || !same_epoch(change, self.change) {
     return Err(adapter_error("native root changed during preparation"))
   }
-  Ok({ view, candidate, change, measure, owned_text: None, owned_progress: None })
+  Ok({ view, candidate, change, measure, owned_text: None, owned_progress: None, owned_focus: None })
 }
 
 ///|
@@ -2414,15 +2419,22 @@ pub fn Mounted::stage_owned_text_geometry(
   }
   let change = self.change
   let progress = owner.observed_progress()
+  let scope = match self.scope { Some(value) => value; None => return Err(adapter_error("staged focus scope is unavailable")) }
+  let focus_target = scope.target()
   self.busy = true
   let result = self.prepare(view, width, height, scale, measure, Some(owner.binding))
   self.busy = false
   if self.is_disposed() || !same_epoch(change, self.change) ||
-    !self.terminal_owner_can_stage(owner) || owner.observed_progress() != progress {
+    !self.terminal_owner_can_stage(owner) || owner.observed_progress() != progress || scope.target() != focus_target {
     return Err(adapter_error("staged text owner changed during measurement"))
   }
   let candidate = match result { Ok(value) => value; Err(error) => return Err(error) }
-  let prepared = { view, candidate, change, measure, owned_text: Some(owner), owned_progress: Some(progress) }
+  let focus_proposal = match scope.prepare_bounds_tree(focus_target, candidate.tree) {
+    Ok(value) => value
+    Err(_) => return Err(adapter_error("staged focus bounds are incompatible"))
+  }
+  let prepared = { view, candidate, change, measure, owned_text: Some(owner), owned_progress: Some(progress),
+    owned_focus: Some((focus_target, focus_proposal)) }
   match self.inspect_staged_text_geometry(owner, prepared) {
     Ok(_) => Ok(prepared)
     Err(error) => Err(error)
@@ -2477,11 +2489,13 @@ pub fn Mounted::inspect_staged_text_geometry(
   self : Mounted, owner : TerminalTextOwner, prepared : Prepared,
 ) -> Result[StagedTextGeometry, @diagnostics.FrameworkError] {
   let original = match prepared.owned_text { Some(value) => value; None => return Err(adapter_error("not an owned text candidate")) }
+  let (focus_target, _) = match prepared.owned_focus { Some(value) => value; None => return Err(adapter_error("staged focus proposal is unavailable")) }
+  let scope = match self.scope { Some(value) => value; None => return Err(adapter_error("staged focus scope is unavailable")) }
   if !same_epoch(original.identity, owner.identity) ||
     !same_epoch(original.session_identity, owner.session_identity) ||
     !same_epoch(prepared.change, self.change) || !self.terminal_owner_can_stage(owner) ||
     prepared.owned_progress != Some(owner.observed_progress()) ||
-    prepared.candidate.focused != Some(owner.binding) {
+    prepared.candidate.focused != Some(owner.binding) || scope.target() != focus_target {
     return Err(adapter_error("staged text candidate is stale"))
   }
   let mut live_field : @text_field.TextField? = None
@@ -2567,6 +2581,34 @@ pub fn Mounted::publish(
     !same_epoch(prepared.change, self.change) {
     return Err(adapter_error("stale, foreign or disposed native preparation"))
   }
+  let candidate = prepared.candidate
+  // A live text lease owns its focus acquisition. General tree adoption
+  // creates a fresh acquisition even when it names the same numeric binding.
+  // Keep the old acquisition only for a validated bounds-only update. Other
+  // transitions do not refresh the retained owner: its old acquisition will
+  // no longer authorize text input, and the caller must retain its records.
+  let owner_focus_proposal : @element.FocusBoundsProposal? =
+    if self.terminal_identity is Some(active) && active.live {
+      let scope = match self.scope {
+        Some(value) => value
+        None => return Err(adapter_error("owned focus scope is unavailable"))
+      }
+      if self.runtime.has_pending_actions() {
+        return Err(adapter_error("owned focus has pending actions"))
+      }
+      if self.window_focused && scope.focused() == candidate.focused &&
+        scope.snapshot().focus_owner() == self.terminal_focus_owner &&
+        candidate.plan.opens.is_empty() {
+        match scope.prepare_bounds_tree(scope.target(), candidate.tree) {
+          Ok(value) => Some(value)
+          Err(_) => return Err(adapter_error("owned focus bounds are incompatible"))
+        }
+      } else {
+        None
+      }
+    } else {
+      None
+    }
   // Any fallible runtime/focus adoption below may leave the old frame
   // unavailable; it must not masquerade as a clean layout invalidation.
   self.staging_invalidation_safe = false
@@ -2574,7 +2616,6 @@ pub fn Mounted::publish(
     Err(_) => return Err(adapter_error("common view commit rejected"))
     Ok(_) => ()
   }
-  let candidate = prepared.candidate
   if candidate.cancel_pending {
     self.cancel_pending()
   }
@@ -2594,12 +2635,21 @@ pub fn Mounted::publish(
     }
   }
   let scopes_before = scope.scope_count()
-  let handles = match self.apply_dialog_plan(scope, tree, candidate.plan) {
+  let handles = match owner_focus_proposal {
+    Some(proposal) => match scope.publish_bounds_tree(proposal) {
+      Ok(_) => []
+      Err(_) => {
+        self.ready = false
+        return Err(adapter_error("owned focus bounds publication failed"))
+      }
+    }
+    None => match self.apply_dialog_plan(scope, tree, candidate.plan) {
     Err(error) => {
       self.ready = false
       return Err(error)
     }
     Ok(value) => value
+    }
   }
   let revoked = scope.scope_count() < scopes_before
   // New levels are the tail of the stack and are opened outermost first.
@@ -3048,6 +3098,9 @@ pub struct TerminalTextOwner {
   priv epoch : UInt64
   priv binding : UInt64
   priv generation : UInt64
+  // Numeric binding IDs survive focus reacquisition. Retain the acquisition
+  // itself so an old delivery cannot be applied to a later focus owner.
+  priv focus_owner : @element.FocusOwner
   priv mut revision : Int32
   priv token : @runtime.InstanceToken
   priv mut sequence : Int64
@@ -3360,7 +3413,7 @@ pub fn Mounted::complete_owned_direct_text(
     return Err(adapter_error("direct text evidence or owner is stale"))
   }
   let scope = match self.scope { Some(value) => value; None => return Err(adapter_error("direct text focus is unavailable")) }
-  if scope.focused() != Some(owner.binding) {
+  if (scope.focused() != Some(owner.binding) || scope.snapshot().focus_owner() != Some(owner.focus_owner)) {
     return Err(adapter_error("direct text focus changed"))
   }
   let mut revision : Int32? = None
@@ -3652,15 +3705,20 @@ pub fn Mounted::capture_terminal_text_owner(
     }
     match (binding.field, binding.token) {
       (Some(field), Some(token)) if self.runtime.is_current(token) => {
+        let focus_owner = match scope.snapshot().focus_owner() {
+          Some(value) => value
+          None => return Err(adapter_error("terminal focus acquisition unavailable"))
+        }
         let session_identity = fresh_epoch()
         self.terminal_epochs.push(epoch)
         self.terminal_identity = Some(session_identity)
+        self.terminal_focus_owner = Some(focus_owner)
         self.terminal_required = true
         self.text_epoch = epoch
         self.last_text_sequence = 0L
         return Ok({
           identity: self.identity, session_identity, window: self.window, epoch,
-          binding: binding.id, generation: binding.field_generation,
+          binding: binding.id, generation: binding.field_generation, focus_owner,
           revision: field.revision(), token,
           sequence: 0L,
           direct_sequence: 0L,
@@ -3698,7 +3756,7 @@ pub fn Mounted::validate_terminal_text_delivery(
     Some(value) => value
     None => return Err(adapter_error("terminal focus unavailable"))
   }
-  if scope.focused() != Some(owner.binding) {
+  if (scope.focused() != Some(owner.binding) || scope.snapshot().focus_owner() != Some(owner.focus_owner)) {
     return Err(adapter_error("terminal focus changed"))
   }
   for binding in self.bindings {
@@ -3732,7 +3790,7 @@ pub fn Mounted::note_terminal_text_delivery(
     Some(value) => value
     None => return Err(adapter_error("terminal focus unavailable"))
   }
-  if scope.focused() != Some(owner.binding) || !self.runtime.is_current(owner.token) {
+  if (scope.focused() != Some(owner.binding) || scope.snapshot().focus_owner() != Some(owner.focus_owner)) || !self.runtime.is_current(owner.token) {
     return Err(adapter_error("terminal focus or token changed"))
   }
   for binding in self.bindings {
@@ -3781,7 +3839,7 @@ fn Mounted::terminal_owner_can_stage(
     return false
   }
   let scope = match self.scope { Some(value) => value; None => return false }
-  if scope.focused() != Some(owner.binding) { return false }
+  if (scope.focused() != Some(owner.binding) || scope.snapshot().focus_owner() != Some(owner.focus_owner)) { return false }
   for binding in self.bindings {
     if binding.id == owner.binding && binding.field_generation == owner.generation &&
       binding.token == Some(owner.token) {
@@ -3814,7 +3872,7 @@ pub fn Mounted::terminal_field_can_cutoff(
     Some(value) => value
     None => return false
   }
-  if scope.focused() != Some(owner.binding) {
+  if (scope.focused() != Some(owner.binding) || scope.snapshot().focus_owner() != Some(owner.focus_owner)) {
     return false
   }
   for binding in self.bindings {
@@ -3873,7 +3931,7 @@ pub fn Mounted::apply_terminal_observation(
     Some(value) => value
     None => return Err(adapter_error("terminal focus unavailable"))
   }
-  if scope.focused() != Some(owner.binding) {
+  if (scope.focused() != Some(owner.binding) || scope.snapshot().focus_owner() != Some(owner.focus_owner)) {
     return Err(adapter_error("terminal focus changed"))
   }
   let mut index = -1
@@ -3941,7 +3999,8 @@ pub fn Mounted::apply_terminal_observation(
   // The provider can reenter the owner. No callback runs after these checks
   // and before action enqueue plus binding publication on the UI thread.
   if self.is_disposed() || !same_epoch(change, self.change) ||
-    !self.runtime.is_current(owner.token) || self.runtime.has_pending_actions() {
+    !self.runtime.is_current(owner.token) || self.runtime.has_pending_actions() ||
+    scope.snapshot().focus_owner() != Some(owner.focus_owner) {
     return Err(adapter_error("terminal owner changed during measurement"))
   }
   let value = next.committed_document().text()
@@ -4027,6 +4086,16 @@ pub fn Mounted::begin_held_text(
   if self.terminal_required &&
     (self.terminal_identity is None || self.text_epoch != epoch) {
     return Err(adapter_error("text transition epoch is stale"))
+  }
+  if self.terminal_required {
+    let same_focus = match self.scope {
+      Some(scope) => self.terminal_focus_owner is Some(_) &&
+        scope.snapshot().focus_owner() == self.terminal_focus_owner
+      None => false
+    }
+    if !(self.terminal_identity is Some(active) && active.live) || !same_focus {
+      return Err(adapter_error("text transition focus acquisition changed"))
+    }
   }
   if self.held_text is Some(_) {
     return Err(adapter_error("a text transition is already held"))
@@ -4859,6 +4928,17 @@ fn Mounted::text_input_inner(
     (self.terminal_identity is None || self.text_epoch != epoch) {
     return Ok(false)
   }
+  if self.terminal_required {
+    let live = self.terminal_identity is Some(active) && active.live
+    let same_focus = match self.scope {
+      Some(scope) => self.terminal_focus_owner is Some(_) &&
+        scope.snapshot().focus_owner() == self.terminal_focus_owner
+      None => false
+    }
+    if !live || !same_focus {
+      return Err(adapter_error("text input focus acquisition changed"))
+    }
+  }
   if self.held_text is Some(_) {
     return Err(adapter_error("text is held for text transition"))
   }
@@ -4907,6 +4987,14 @@ fn Mounted::text_input_inner(
       if self.is_disposed() || !self.ready || !same_epoch(change, self.change) ||
         index >= self.bindings.length() {
         return false
+      }
+      if self.terminal_required {
+        let same_focus = match self.scope {
+          Some(scope) => self.terminal_focus_owner is Some(_) &&
+            scope.snapshot().focus_owner() == self.terminal_focus_owner
+          None => false
+        }
+        if !same_focus { return false }
       }
       let current = self.bindings[index]
       if current.id != binding.id || current.field_generation != binding.field_generation ||
