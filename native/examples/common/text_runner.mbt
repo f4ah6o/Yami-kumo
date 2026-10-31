@@ -26,6 +26,14 @@ pub type NativeTextNext = (Int32) -> Result[
 ]
 
 ///|
+/// Route selected by the host for the current Linux text owner.
+pub(all) enum NativeLinuxTextTransport {
+  WaylandIme
+  DirectKeyboard
+  UnknownLinuxTransport
+}
+
+///|
 /// Optional portable text-input transport supplied by a host entrypoint. The
 /// runner owns begin/update/cancel/end and maps observations into the focused
 /// field; the port only translates the host's trait methods.
@@ -36,6 +44,7 @@ pub struct NativeTextInputPort {
   cancel : NativeTextCancel
   end : NativeTextEnd
   next : NativeTextNext
+  linux_transport : (() -> NativeLinuxTextTransport)?
 }
 
 ///|
@@ -46,7 +55,7 @@ pub fn NativeTextInputPort::new(
   end : NativeTextEnd,
   next : NativeTextNext,
 ) -> NativeTextInputPort {
-  { begin, begin_with_state: None, update, cancel, end, next, }
+  { begin, begin_with_state: None, update, cancel, end, next, linux_transport: None }
 }
 
 ///|
@@ -59,7 +68,16 @@ pub fn NativeTextInputPort::with_initial_state(
   next : NativeTextNext,
 ) -> NativeTextInputPort {
   { begin: fn(_, _) { Err(@diagnostics.FrameworkError::new(@diagnostics.InvalidInput, "stateful_begin_required")) },
-    begin_with_state: Some(begin), update, cancel, end, next }
+    begin_with_state: Some(begin), update, cancel, end, next, linux_transport: None }
+}
+
+///|
+/// Report the selected route for the current owner; this is not proof of a
+/// delivered character, composition or live IME.
+pub fn NativeTextInputPort::with_linux_transport(
+  self : NativeTextInputPort, probe : () -> NativeLinuxTextTransport,
+) -> NativeTextInputPort {
+  { ..self, linux_transport: Some(probe) }
 }
 
 ///|

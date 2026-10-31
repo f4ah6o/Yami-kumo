@@ -349,7 +349,9 @@ fn main {
       fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.InvalidInput, "retained_cancel_policy")) },
       fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.InvalidInput, "retained_end_policy")) },
       fn(_) { Ok(None) },
-    )
+    ).with_linux_transport(fn() {
+      if direct_mode.val { @common.DirectKeyboard } else { @common.WaylandIme }
+    })
     // The opt-in entry owns this host, claims the retained route before
     // creating the first window, and uses no other input reader. A captured
     // native receipt is meaningful only within that closed ownership scope.
