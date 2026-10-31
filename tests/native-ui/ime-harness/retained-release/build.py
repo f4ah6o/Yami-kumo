@@ -39,7 +39,7 @@ try:
         'tests/shared-ui/gpui-revision.txt')}
     record['toolchain'] = subprocess.check_output(['moon', 'version', '--all'], text=True)
     with tempfile.TemporaryDirectory(prefix='yami-live-build-') as build:
-        command = [str(app_tree / 'scripts/native_ui_workspace.sh'), 'sh', '-c',
+        command = ['sh', str(app_tree / 'scripts/native_ui_workspace.sh'), 'sh', '-c',
                    'cd "$YAMI_NATIVE_WORKSPACE_ROOT" && moon build "$YAMI_RELEASE_APP_TREE/native/examples/ubuntu" --target native --target-dir "$YAMI_NATIVE_WORKSPACE_ROOT/_build"']
         env = dict(os.environ, GPUI_SOURCE=str(framework_tree),
                    YAMI_NATIVE_WORKSPACE_ROOT=build, YAMI_RELEASE_APP_TREE=str(app_tree))
