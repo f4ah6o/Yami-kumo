@@ -1,0 +1,12 @@
+{
+  "raw_artifact_hashes": "MATCH",
+  "fresh_binary_provenance": "MATCH",
+  "build": "PASS",
+  "preedit_probe": {
+    "result": "NOT_RUN"
+  },
+  "geometry_race": "NOT_RUN",
+  "cleanup_result": "FAIL_FORCED_TERMINATION_OWNER_NOT_PERSISTED",
+  "artifact_stability": "UNVERIFIED_WRITERS_OR_GROUPS",
+  "full_live_acceptance": "NOT_RUN"
+}

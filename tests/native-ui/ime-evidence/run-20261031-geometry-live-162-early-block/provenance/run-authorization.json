@@ -1,0 +1,14 @@
+{
+  "authorization": "Parent explicitly instructed this live IBus/Mozc guard diagnostic after independently confirming BOTH exact #160 and #162 reviews complete and each CI 7/7 SUCCESS.",
+  "app_review_url": "https://github.com/f4ah6o/Yami-kumo/pull/160#pullrequestreview-5721035018",
+  "harness_review_url": "https://github.com/f4ah6o/Yami-kumo/pull/162#pullrequestreview-5721022867",
+  "app_sha": "cfa87adb6214f7ba50fa3a91075ca6e4eafddb9d",
+  "framework_sha": "35b9041dfb3642b43ca37c604834942614eb50fb",
+  "harness_sha": "bc5ea9398abbdcc11147aac0a1b7cf92c90d6e92",
+  "scope": "Diagnostic staging-guard observation only; app #160 is based on #142 and adds a marker, and does not include #154 P1 fix. No post-fix, scene, model, shutdown or full IME acceptance claim.",
+  "command": "YAMI_160_162_REVIEW_CI_CONFIRMED=bc5ea9398abbdcc11147aac0a1b7cf92c90d6e92 bash /workspace/review162-live-prep-agent/launch-after-confirmation.sh > /workspace/review162-live-prep-agent/live-launch.log 2>&1",
+  "fresh_build": "Exact session build.py uses a new temporary Moon workspace and retains app.exe/build.json/build.log in its fresh empty live directory before starting IBus, Mozc, Weston or the app.",
+  "old_binary_reused": false,
+  "unrelated_process_termination_authorized": false,
+  "dependency_resolution": "source override; both exact checked-in GPUI pins; no registry consumer or package lock"
+}
