@@ -760,6 +760,9 @@ pub struct SettingsRunOwner {
   priv mut dirty : Bool
   // Staging is local only; no host update or scene present has occurred.
   priv mut pending_dirty_stage : SettingsDirtyStage?
+  // One bounded, original-owner arrival. It stays here across any ACK result;
+  // no application, scene or cutoff is implied by the host handoff.
+  priv mut geometry_arrival : SettingsGeometryArrival?
   priv mut focus_initialized : Bool
   priv mut text_suspended : Bool
   priv mut text_transport_failed : Bool
@@ -823,6 +826,21 @@ priv struct SettingsDirtyStage {
   // success, only a future publication transaction may release this stage.
   mut host_attempted : Bool
   mut callback_returned_success : Bool
+}
+
+///|
+priv enum SettingsGeometryArrivalState {
+  GeometryArrivalReserved
+  GeometryArrivalAttempted
+  GeometryArrivalCallbackSucceeded
+}
+
+///|
+priv struct SettingsGeometryArrival {
+  receipt : NativeRetainedReceipt
+  native_target : (Int32, Int64, Int32)
+  owner_progress : (UInt64, Int32, Int64)
+  mut state : SettingsGeometryArrivalState
 }
 
 ///|
@@ -957,6 +975,11 @@ pub fn SettingsRunOwner::attempt_staged_host_geometry(
   if !self.suspended || self.running || self.cutoff_done {
     return Err(runner_error("dirty_scene", "staged host attempt unavailable"))
   }
+  match self.geometry_arrival {
+    Some(held) if !(held.state is GeometryArrivalCallbackSucceeded) =>
+      return Err(runner_error("dirty_scene", "arrival handoff outcome is unresolved"))
+    _ => ()
+  }
   let staged = match self.pending_dirty_stage {
     Some(value) => value
     None => return Err(runner_error("dirty_scene", "no staged candidate"))
@@ -998,6 +1021,102 @@ fn SettingsRunOwner::attempt_staged_host_geometry_inner(
   // uncertain even on success, until a platform-owned receipt can be checked.
   staged.callback_returned_success = true
   Ok(())
+}
+
+///|
+/// Reserve exactly one supported later text receipt before asking the trusted
+/// host route to hand it off. No input is applied and the host has not yet
+/// acknowledged the record. The native adapter must supply an exact-head
+/// handoff callback; a generic callback's result is not native evidence.
+pub fn SettingsRunOwner::reserve_geometry_arrival(
+  self : SettingsRunOwner, receipt : NativeRetainedReceipt, native_target : (Int32, Int64, Int32),
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.cutoff_done || self.geometry_arrival is Some(_) ||
+    self.host_epoch_verified || self.acknowledged_receipts.length() >= 64 ||
+    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) || self.inflight is Some(_) ||
+    self.owned_delivery is Some(_) || self.pending_direct is Some(_) || self.held_tab is Some(_) ||
+    !self.buffered.is_empty() || !self.held_platform.is_empty() || self.mounted.has_pending_actions() {
+    return Err(runner_error("geometry_handoff", "arrival slot unavailable"))
+  }
+  let staged = match self.pending_dirty_stage {
+    Some(value) if value.host_attempted => value
+    _ => return Err(runner_error("geometry_handoff", "original stage unavailable"))
+  }
+  let owner = match self.terminal_owner { Some(value) => value; None => return Err(runner_error("geometry_handoff", "original owner unavailable")) }
+  let session = match self.session { Some(value) => value; None => return Err(runner_error("geometry_handoff", "original session unavailable")) }
+  if !staged.fence.live || self.settings != staged.model || self.window != staged.window ||
+    self.host_epoch != Some(staged.epoch) || session.epoch != staged.epoch || session.binding != staged.binding ||
+    self.entered_target != Some(native_target) || native_target.0 <= 0 ||
+    !owner.matches_session(staged.window, staged.epoch, staged.binding) || !self.mounted.terminal_owner_is_current(owner) ||
+    receipt.window != staged.window || receipt.root != staged.binding || receipt.epoch != staged.epoch ||
+    receipt.direct is Some(_) || receipt.edit_key_epoch is Some(_) || receipt.entered is Some(_) {
+    return Err(runner_error("geometry_handoff", "arrival owner changed"))
+  }
+  match receipt.event {
+    Some(OrderedText(event)) if event.window() == receipt.window && event.epoch() == receipt.epoch &&
+      event.sequence() == receipt.sequence.to_int64() &&
+      (event.kind() is @text_host.Preedit(..) || event.kind() is @text_host.Commit(..) || event.kind() is @text_host.Cancel) => ()
+    _ => return Err(runner_error("geometry_handoff", "unsupported arrival remains at host"))
+  }
+  let base = match self.retired_prefix { Some(prefix) => prefix.watermark; None => 0 }
+  for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
+    if self.acknowledged_receipts[i].receipt.sequence.to_int64() != base.to_int64() + i.to_int64() + 1L {
+      return Err(runner_error("geometry_handoff", "earlier receipt prefix is not contiguous"))
+    }
+  }
+  if receipt.sequence.to_int64() != base.to_int64() + self.acknowledged_receipts.length().to_int64() + 1L {
+    return Err(runner_error("geometry_handoff", "arrival is not next in sequence"))
+  }
+  self.geometry_arrival = Some({ receipt, native_target, owner_progress: owner.observed_progress(), state: GeometryArrivalReserved })
+  Ok(())
+}
+
+///|
+/// Ask the route to transfer only the reserved head. After any error the
+/// result is uncertain and must be reconciled against the same native route;
+/// this seam never automatically calls it twice. A successful callback is not
+/// a scene, model, native acceptance or cutoff proof.
+pub fn SettingsRunOwner::transfer_geometry_arrival(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.cutoff_done || self.host_epoch_verified {
+    return Err(runner_error("geometry_handoff", "arrival transfer unavailable"))
+  }
+  let staged = match self.pending_dirty_stage { Some(value) if value.host_attempted => value; _ => return Err(runner_error("geometry_handoff", "original stage unavailable")) }
+  let held = match self.geometry_arrival { Some(value) if value.state is GeometryArrivalReserved => value; _ => return Err(runner_error("geometry_handoff", "arrival transfer already attempted")) }
+  let owner = match self.terminal_owner { Some(value) => value; None => return Err(runner_error("geometry_handoff", "original owner unavailable")) }
+  let session = match self.session { Some(value) => value; None => return Err(runner_error("geometry_handoff", "original session unavailable")) }
+  if !staged.fence.live || self.settings != staged.model || self.window != staged.window ||
+    self.host_epoch != Some(staged.epoch) || session.epoch != staged.epoch || session.binding != staged.binding ||
+    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) || self.inflight is Some(_) ||
+    self.owned_delivery is Some(_) || self.pending_direct is Some(_) || self.held_tab is Some(_) ||
+    !self.buffered.is_empty() || !self.held_platform.is_empty() || self.mounted.has_pending_actions() ||
+    self.entered_target != Some(held.native_target) ||
+    !owner.matches_session(staged.window, staged.epoch, staged.binding) || !self.mounted.terminal_owner_is_current(owner) ||
+    owner.observed_progress() != held.owner_progress {
+    return Err(runner_error("geometry_handoff", "original owner changed"))
+  }
+  held.state = GeometryArrivalAttempted
+  self.running = true
+  let result = (held.receipt.ack)()
+  self.running = false
+  match result {
+    Err(error) => Err(error)
+    Ok(_) => { held.state = GeometryArrivalCallbackSucceeded; Ok(()) }
+  }
+}
+
+///|
+/// Inspect local transfer bookkeeping, not native ACK or application proof.
+pub fn SettingsRunOwner::geometry_arrival_state(self : SettingsRunOwner) -> (Int32, Int)? {
+  match self.geometry_arrival {
+    None => None
+    Some(held) => Some((held.receipt.sequence, match held.state {
+      GeometryArrivalReserved => 0
+      GeometryArrivalAttempted => 1
+      GeometryArrivalCallbackSucceeded => 2
+    }))
+  }
 }
 
 ///|
@@ -2535,6 +2654,7 @@ pub fn SettingsRunOwner::new(
     completed_publications: [],
     dirty: true,
     pending_dirty_stage: None,
+    geometry_arrival: None,
     focus_initialized: false,
     text_suspended: false,
     text_transport_failed: false,
