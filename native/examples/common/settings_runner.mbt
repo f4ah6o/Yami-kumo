@@ -51,6 +51,7 @@ pub(all) enum NativeReceiptStage {
   ReceiptOwnerEntered
   ReceiptPlatformHandled
   ReceiptPointerMovedHandled
+  ReceiptUnsupportedAcknowledged
   ReceiptSessionApplied
   ReceiptNoModelAction
   ReceiptActionRequired
@@ -104,7 +105,7 @@ pub fn SettingsFramePublication::owner_identity(
 fn receipt_stage_rank(stage : NativeReceiptStage) -> Int {
   match stage {
     ReceiptAcknowledgedOnly => 0
-    ReceiptOwnerEntered | ReceiptPlatformHandled | ReceiptPointerMovedHandled => 1
+    ReceiptOwnerEntered | ReceiptPlatformHandled | ReceiptPointerMovedHandled | ReceiptUnsupportedAcknowledged => 1
     ReceiptSessionApplied => 1
     ReceiptNoModelAction => 2
     ReceiptActionRequired => 2
@@ -131,6 +132,7 @@ fn same_publication_stage(a : NativeReceiptStage, b : NativeReceiptStage) -> Boo
     (ReceiptOwnerEntered, ReceiptOwnerEntered)
     | (ReceiptPlatformHandled, ReceiptPlatformHandled)
     | (ReceiptPointerMovedHandled, ReceiptPointerMovedHandled)
+    | (ReceiptUnsupportedAcknowledged, ReceiptUnsupportedAcknowledged)
     | (ReceiptNoModelAction, ReceiptNoModelAction)
     | (ReceiptModelApplied, ReceiptModelApplied) => true
     _ => false
@@ -165,6 +167,37 @@ fn same_handled_platform_kind(left : @platform.EventKind, right : @platform.Even
     (@platform.FocusChanged(true), @platform.FocusChanged(true)) => true
     (@platform.Input(@primitives.PointerMoved(position=a)), @platform.Input(@primitives.PointerMoved(position=b))) =>
       a.x() == b.x() && a.y() == b.y()
+    _ => false
+  }
+}
+
+///|
+fn same_prefix_stage(a : NativeReceiptStage, b : NativeReceiptStage) -> Bool {
+  match (a, b) {
+    (ReceiptOwnerEntered, ReceiptOwnerEntered)
+    | (ReceiptPlatformHandled, ReceiptPlatformHandled)
+    | (ReceiptPointerMovedHandled, ReceiptPointerMovedHandled)
+    | (ReceiptUnsupportedAcknowledged, ReceiptUnsupportedAcknowledged)
+    | (ReceiptNoModelAction, ReceiptNoModelAction)
+    | (ReceiptModelApplied, ReceiptModelApplied) => true
+    _ => false
+  }
+}
+
+///|
+fn same_prefix_receipt(a : NativeRetainedReceipt, b : NativeRetainedReceipt) -> Bool {
+  if a.window != b.window || a.sequence != b.sequence || a.root != b.root ||
+    a.epoch != b.epoch || a.entered != b.entered {
+    return false
+  }
+  match (a.event, b.event) {
+    (None, None) => true
+    (Some(OrderedPlatform(x)), Some(OrderedPlatform(y))) =>
+      x.window() == y.window() && x.sequence() == y.sequence() &&
+      x.scale() == y.scale() && same_handled_platform_kind(x.kind(), y.kind())
+    (Some(OrderedText(x)), Some(OrderedText(y))) =>
+      x.window() == y.window() && x.sequence() == y.sequence() && x.epoch() == y.epoch() &&
+      same_text_observation_kind(x.kind(), y.kind())
     _ => false
   }
 }
@@ -900,7 +933,14 @@ pub fn SettingsRunOwner::receipt_stage_for_sequence(
 pub fn SettingsRunOwner::unsupported_prefix_has_observed_stages(
   self : SettingsRunOwner,
 ) -> Bool {
-  if !self.suspended || self.running || self.destroyed || self.cutoff_done ||
+  self.unsupported_prefix_matches_running(false)
+}
+
+///|
+fn SettingsRunOwner::unsupported_prefix_matches_running(
+  self : SettingsRunOwner, running : Bool,
+) -> Bool {
+  if !self.suspended || self.running != running || self.destroyed || self.cutoff_done ||
     !self.host_epoch_verified || !self.buffered.is_empty() ||
     !self.held_platform.is_empty() || self.held_tab is Some(_) ||
     self.inflight is Some(_) || self.owned_delivery is Some(_) ||
@@ -938,6 +978,8 @@ pub fn SettingsRunOwner::unsupported_prefix_has_observed_stages(
     match (entry.receipt.event, entry.stage) {
       (None, ReceiptOwnerEntered) if !entered && entry.receipt.entered == self.entered_target &&
         entry.receipt.root == current.binding && entry.receipt.epoch == current.epoch => entered = true
+      (None, ReceiptUnsupportedAcknowledged) if entered && entry.receipt.entered is None &&
+        entry.receipt.root == current.binding && entry.receipt.epoch == current.epoch => ()
       (Some(OrderedPlatform(event)), ReceiptPlatformHandled | ReceiptPointerMovedHandled) if
         event.window() == self.window && event.sequence() == entry.receipt.sequence.to_int64() &&
         (if entered {
@@ -994,6 +1036,8 @@ fn SettingsRunOwner::prepare_frame_publication(
           entered = true
           true
         }
+      (None, ReceiptUnsupportedAcknowledged) => entered && entry.receipt.entered is None &&
+        entry.receipt.root == current.binding && entry.receipt.epoch == current.epoch
       (Some(OrderedPlatform(event)), ReceiptPlatformHandled | ReceiptPointerMovedHandled) =>
         event.window() == self.window && event.sequence() == entry.receipt.sequence.to_int64() &&
         (if entered { entry.receipt.root == current.binding && entry.receipt.epoch == current.epoch }
@@ -1091,6 +1135,152 @@ pub fn SettingsRunOwner::completed_publication(
 ) -> SettingsFramePublication? {
   if index < 0 || index >= self.completed_publications.length() { None }
   else { Some(self.completed_publications[index]) }
+}
+
+///|
+/// Opaque observation tied to one suspended owner and one exact unsupported
+/// receipt. It is not native input provenance and cannot acknowledge a record.
+pub struct UnsupportedPrefixSnapshot {
+  priv owner : SettingsRunOwner
+  priv pending : NativeRetainedReceipt
+  priv entered : (Int32, Int64, Int32)
+  priv field_progress : (UInt64, Int32, Int64)
+  priv prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)]
+}
+
+///|
+/// Capture the original owner's local prefix, without accepting an external
+/// boolean as proof and without changing the native queue or pending record.
+pub fn SettingsRunOwner::capture_unsupported_prefix(
+  self : SettingsRunOwner, sequence : Int64,
+) -> Result[UnsupportedPrefixSnapshot, @diagnostics.FrameworkError] {
+  if !self.unsupported_prefix_has_observed_stages() {
+    return Err(runner_error("ordered_text", "unsupported prefix is not locally observable"))
+  }
+  let pending = self.pending_host_receipt.unwrap()
+  if sequence <= 0L || pending.sequence.to_int64() != sequence {
+    return Err(runner_error("ordered_text", "unsupported receipt identity changed"))
+  }
+  let owner = self.terminal_owner.unwrap()
+  let prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)] = []
+  for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
+    let entry = self.acknowledged_receipts[i]
+    let stage = match self.receipt_stage_for_sequence(entry.receipt.sequence.to_int64()) {
+      Some(value) => value
+      None => return Err(runner_error("ordered_text", "ambiguous prefix receipt"))
+    }
+    prefix.push((entry.receipt, stage))
+  }
+  Ok({ owner: self, pending, entered: self.entered_target.unwrap(), field_progress: owner.observed_progress(), prefix })
+}
+
+///|
+/// Identity observed at this owner's original native Entered receipt.
+/// This is not a physical key proof or permission to acknowledge anything.
+pub fn UnsupportedPrefixSnapshot::native_entered_identity(
+  self : UnsupportedPrefixSnapshot,
+) -> (Int32, Int64, Int32) {
+  self.entered
+}
+
+///|
+/// Recheck immediately before using an observation. This remains only a
+/// local owner/prefix check; native proof and the FIFO ACK must be performed
+/// by the backend adapter against the original opaque native receipt.
+pub fn UnsupportedPrefixSnapshot::is_current(self : UnsupportedPrefixSnapshot) -> Bool {
+  self.is_current_with_running(false)
+}
+
+///|
+fn UnsupportedPrefixSnapshot::is_current_with_running(
+  self : UnsupportedPrefixSnapshot, running : Bool,
+) -> Bool {
+  let owner = self.owner
+  if !owner.unsupported_prefix_matches_running(running) ||
+    owner.acknowledged_receipts.length() != self.prefix.length() {
+    return false
+  }
+  let pending = match owner.pending_host_receipt { Some(value) => value; None => return false }
+  let field_owner = match owner.terminal_owner { Some(value) => value; None => return false }
+  if !same_prefix_receipt(self.pending, pending) ||
+    owner.entered_target != Some(self.entered) ||
+    field_owner.observed_progress() != self.field_progress {
+    return false
+  }
+  for i = 0; i < self.prefix.length(); i = i + 1 {
+    let (receipt, stage) = self.prefix[i]
+    let current = owner.acknowledged_receipts[i]
+    let current_stage = match owner.receipt_stage_for_sequence(receipt.sequence.to_int64()) {
+      Some(value) => value
+      None => return false
+    }
+    if !same_prefix_receipt(receipt, current.receipt) || !same_prefix_stage(stage, current_stage) {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Execute a synchronous native-adapter policy while the original owner is
+/// guarded against reentry. The policy must verify platform provenance on the
+/// exact opaque native receipt before invoking the provided one-shot ACK.
+/// The local snapshot alone is not that proof. The callback cannot be saved
+/// for later, retried within this operation, or used after owner state moves.
+///
+/// The ordered port is a trusted host adapter: its ACK must dequeue exactly
+/// this original receipt on success and leave it owned on error. An arbitrary
+/// application callback that merely calls the continuation is not evidence
+/// that an unsupported event is safe. A failed/unused policy preserves the
+/// owner; a success followed by policy failure remains recorded as ACKed.
+pub fn SettingsRunOwner::with_unsupported_native_policy(
+  self : SettingsRunOwner, sequence : Int64,
+  policy : ((Int32, Int64, Int32), () -> Result[Unit, @diagnostics.FrameworkError]) -> Result[Unit, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  // A diagnostic snapshot may be saved across an ABA change. Never accept
+  // one as authority: capture a new observation inside this synchronous step.
+  let snapshot = match self.capture_unsupported_prefix(sequence) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  let owner = self
+  if owner.acknowledged_receipts.length() >= 64 {
+    return Err(runner_error("ordered_text", "unsupported owner snapshot is stale or full"))
+  }
+  owner.running = true
+  let active = Ref(true)
+  let attempted = Ref(false)
+  let acknowledged = Ref(false)
+  let result = policy(snapshot.entered, fn() {
+    if !active.val || attempted.val || !snapshot.is_current_with_running(true) {
+      return Err(runner_error("ordered_text", "unsupported ACK capability is stale or consumed"))
+    }
+    attempted.val = true
+    let pending = match owner.pending_host_receipt {
+      Some(value) => value
+      None => return Err(runner_error("ordered_text", "unsupported receipt is no longer held"))
+    }
+    match (pending.ack)() {
+      Err(error) => Err(error)
+      Ok(_) => {
+        owner.acknowledged_receipts.push({ receipt: pending, stage: ReceiptUnsupportedAcknowledged })
+        owner.pending_host_receipt = None
+        owner.receipt_pre_dispatch = None
+        owner.inflight = None
+        owner.live_step_ready = true
+        if owner.live_step_generation == 0L { owner.live_step_generation = 1L }
+        acknowledged.val = true
+        Ok(())
+      }
+    }
+  })
+  active.val = false
+  owner.running = false
+  match result {
+    Err(error) => Err(error)
+    Ok(_) if !acknowledged.val => Err(runner_error("ordered_text", "native policy did not acknowledge its receipt"))
+    Ok(_) => Ok(())
+  }
 }
 
 ///|

@@ -2269,32 +2269,179 @@ test "local unsupported prefix snapshot requires consecutive resolved original o
   owner.receipt_pre_dispatch = Some(pending)
   owner.suspended = true
   assert_true(owner.unsupported_prefix_has_observed_stages())
+  assert_true(owner.capture_unsupported_prefix(3L) is Err(_))
+  let snapshot = owner.capture_unsupported_prefix(4L).unwrap()
+  assert_true(snapshot.is_current())
   assert_true(owner.mounted.focused_text().unwrap().composing())
   // The snapshot is not permission to ACK; existing policy still refuses it.
   assert_true(owner.ack_owned_receipt() is Err(_))
   owner.acknowledged_receipts[2].stage = ReceiptSessionApplied
   assert_false(owner.unsupported_prefix_has_observed_stages())
+  assert_false(snapshot.is_current())
   owner.acknowledged_receipts[2].stage = ReceiptNoModelAction
   owner.buffered.push(OrderedText(preedit))
   assert_false(owner.unsupported_prefix_has_observed_stages())
+  assert_false(snapshot.is_current())
   ignore(owner.buffered.pop())
   owner.host_epoch = Some(8UL)
   assert_false(owner.unsupported_prefix_has_observed_stages())
+  assert_false(snapshot.is_current())
   owner.host_epoch = Some(7UL)
+  let original_entry = owner.acknowledged_receipts[0]
+  let changed_frame = @platform.Event::new(owner.window, 1L, 2.0, @platform.FrameCompleted)
+  owner.acknowledged_receipts[0] = {
+    receipt: NativeRetainedReceipt::new(Some(OrderedPlatform(changed_frame)), owner.window, 1, 0UL, 0UL, fn() { Ok(()) }),
+    stage: ReceiptPlatformHandled,
+  }
+  assert_true(owner.unsupported_prefix_has_observed_stages())
+  assert_false(snapshot.is_current())
+  owner.acknowledged_receipts[0] = original_entry
+  assert_true(snapshot.is_current())
   owner.session = Some({ epoch: 7UL, binding: binding + 1UL })
   assert_false(owner.unsupported_prefix_has_observed_stages())
   owner.session = Some({ epoch: 7UL, binding })
+  let substitute = NativeRetainedReceipt::new(None, owner.window, 4, binding + 1UL, 7UL, fn() { Ok(()) })
+  owner.pending_host_receipt = Some(substitute)
+  assert_false(snapshot.is_current())
+  owner.pending_host_receipt = Some(pending)
+  assert_true(snapshot.is_current())
   let save = owner.mounted.callback(@shared_settings.settings_save()).unwrap()
   assert_true(owner.mounted.activate(save))
   assert_false(owner.unsupported_prefix_has_observed_stages())
+  assert_false(snapshot.is_current())
   assert_true(owner.pending_receipt_identity() is Some((_, 4, _, 7UL)))
   assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
+  ignore(owner.mounted.next_action())
+  let next_preedit = @text_host.TextInputEvent::new(owner.window, 2L, 7UL, @text_host.Preedit(text="日本", cursor=2))
+  owner.deliver_owned_observation(next_preedit).unwrap()
+  assert_false(snapshot.is_current())
   // Invalidating the mounted frame makes the captured owner's token/geometry
   // unusable for this snapshot even though its epoch and binding still match.
-  ignore(owner.mounted.next_action())
   owner.mounted.invalidate_layout()
   assert_false(owner.unsupported_prefix_has_observed_stages())
+}
+
+///|
+fn unsupported_policy_fixture(
+  ack : () -> Result[Unit, @diagnostics.FrameworkError],
+) -> (SettingsRunOwner, UnsupportedPrefixSnapshot) {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  if !owner.mounted.focus(@shared_settings.settings_name()) { abort("fixture focus failed") }
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.entered_target = Some((5, 11L, 4))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::entered(owner.window, 1, binding, 7UL, 5, 11L, 4, fn() { Ok(()) }),
+    stage: ReceiptOwnerEntered,
+  })
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedText(preedit)), owner.window, 2, binding, 7UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  owner.deliver_owned_observation(preedit).unwrap()
+  let pending = NativeRetainedReceipt::new(None, owner.window, 3, binding, 7UL, ack)
+  owner.pending_host_receipt = Some(pending)
+  owner.receipt_pre_dispatch = Some(pending)
+  owner.suspended = true
+  (owner, owner.capture_unsupported_prefix(3L).unwrap())
+}
+
+///|
+test "unsupported policy cannot escape, replay, or reenter the owner" {
+  let native_acks = Ref(0)
+  let (owner, _) = unsupported_policy_fixture(fn() { native_acks.val += 1; Ok(()) })
+  let saved : Ref[(() -> Result[Unit, @diagnostics.FrameworkError])?] = Ref(None)
+  assert_true(owner.with_unsupported_native_policy(3L, fn(_, ack) { saved.val = Some(ack); Ok(()) }) is Err(_))
+  assert_true(saved.val.unwrap()() is Err(_))
+  assert_eq(native_acks.val, 0)
+  assert_true(owner.pending_receipt_identity() is Some((_, 3, _, 7UL)))
+  let reentry_refused = Ref(false)
+  let duplicate_refused = Ref(false)
+  owner.with_unsupported_native_policy(3L, fn(_, ack) {
+    reentry_refused.val = owner.drive() is Err(_)
+    match ack() { Err(error) => return Err(error); Ok(_) => () }
+    duplicate_refused.val = ack() is Err(_)
+    Ok(())
+  }).unwrap()
+  assert_true(reentry_refused.val)
+  assert_true(duplicate_refused.val)
+  assert_eq(native_acks.val, 1)
+  assert_true(owner.pending_receipt_identity() is None)
+  assert_true(owner.receipt_stage_for_sequence(3L) is Some(ReceiptUnsupportedAcknowledged))
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.with_unsupported_native_policy(3L, fn(_, ack) { ack() }) is Err(_))
+  assert_false(owner.can_stop())
+}
+
+///|
+test "unsupported policy retains the exact owner through an ACK error" {
+  let native_acks = Ref(0)
+  let (owner, snapshot) = unsupported_policy_fixture(fn() {
+    native_acks.val += 1
+    if native_acks.val == 1 { Err(runner_error("test_ack", "injected error")) } else { Ok(()) }
+  })
+  assert_true(owner.with_unsupported_native_policy(3L, fn(_, ack) { ack() }) is Err(_))
+  assert_eq(native_acks.val, 1)
+  assert_true(snapshot.is_current())
+  assert_true(owner.pending_receipt_identity() is Some((_, 3, _, 7UL)))
+  owner.with_unsupported_native_policy(3L, fn(_, ack) { ack() }).unwrap()
+  assert_eq(native_acks.val, 2)
+  assert_true(owner.receipt_stage_for_sequence(3L) is Some(ReceiptUnsupportedAcknowledged))
+  assert_false(owner.can_stop())
+}
+
+///|
+test "policy failure after ACK retains the acknowledged stage" {
+  let native_acks = Ref(0)
+  let (owner, snapshot) = unsupported_policy_fixture(fn() { native_acks.val += 1; Ok(()) })
+  assert_true(owner.with_unsupported_native_policy(3L, fn(_, ack) {
+    match ack() { Err(error) => return Err(error); Ok(_) => () }
+    Err(runner_error("test_policy", "failure after acknowledged effect"))
+  }) is Err(_))
+  assert_eq(native_acks.val, 1)
+  assert_true(owner.pending_receipt_identity() is None)
+  assert_true(owner.receipt_stage_for_sequence(3L) is Some(ReceiptUnsupportedAcknowledged))
+  assert_false(snapshot.is_current())
+  assert_false(owner.can_stop())
+}
+
+///|
+test "owner changes inside the adapter check reject the exact ACK" {
+  let native_acks = Ref(0)
+  let (owner, _) = unsupported_policy_fixture(fn() { native_acks.val += 1; Ok(()) })
+  assert_true(owner.with_unsupported_native_policy(3L, fn(_, ack) {
+    // Simulate an illicit/reentrant host-epoch change between proof and ACK.
+    owner.host_epoch = Some(8UL)
+    ack()
+  }) is Err(_))
+  assert_eq(native_acks.val, 0)
+  assert_true(owner.pending_receipt_identity() is Some((_, 3, _, 7UL)))
+  assert_eq(owner.acknowledged_receipt_count(), 2)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "captured entered target cannot follow a replacement seat or proxy" {
+  let native_acks = Ref(0)
+  let (owner, snapshot) = unsupported_policy_fixture(fn() { native_acks.val += 1; Ok(()) })
+  assert_eq(snapshot.native_entered_identity(), (5, 11L, 4))
+  owner.entered_target = Some((5, 12L, 4))
+  assert_false(snapshot.is_current())
+  assert_true(owner.with_unsupported_native_policy(3L, fn(_, ack) { ack() }) is Err(_))
+  assert_eq(native_acks.val, 0)
+  assert_true(owner.pending_receipt_identity() is Some((_, 3, _, 7UL)))
 }
 
 ///|
