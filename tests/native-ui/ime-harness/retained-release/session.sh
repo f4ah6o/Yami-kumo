@@ -12,6 +12,9 @@ pids=()
 cleanup() {
   for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done
   for pid in "${pids[@]}"; do wait "$pid" 2>/dev/null || true; done
+  if test -f "$out/result.json"; then
+    python3 "$harness_dir/finalize.py" "$out" || echo 'evidence digest finalization failed' >&2
+  fi
   rm -rf "$runtime"
 }
 trap cleanup EXIT

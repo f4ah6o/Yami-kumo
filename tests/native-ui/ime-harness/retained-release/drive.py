@@ -47,6 +47,8 @@ result = {
     'command': 'dbus-run-session -- xvfb-run -a <harness>/session.sh',
     'run_url': None, 'full_live_acceptance': 'NOT_RUN',
     'release_policy': 'NOT_RUN', 'consumer_commit': 'NOT_RUN',
+    'model_reflection': 'NOT_RUN', 'candidate_table_oracle': 'NOT_RUN',
+    'dialog_and_focus': 'NOT_RUN', 'resize_blur_close_races': 'NOT_RUN',
     'forced_process_termination': False, 'steps': [],
 }
 log = (out / 'app.log').open('w', encoding='utf-8')
@@ -136,6 +138,12 @@ try:
             break
     result['preedit_markers'] = re.findall(r'^YAMI_NATIVE_UI_SETTINGS .*"phase":"preedit".*$', app_data(), re.M)
     result['commit_markers'] = re.findall(r'^YAMI_NATIVE_UI_SETTINGS .*"phase":"commit".*$', app_data(), re.M)
+    commits = re.findall(r'YAMI_SETTINGS_IME \{"stage":"record_peek","kind":"commit","native_sequence":(\d+)', app_data())
+    if result['consumer_commit'] == 'OBSERVED_LOG_ONLY' and len(commits) == 1:
+        result['commit_native_sequence'] = int(commits[0])
+        result['commit_stage'] = send_command(socket_path, 'stage', int(commits[0]))
+        if 'commit reflected in the model' in result['commit_stage']['stdout']:
+            result['model_reflection'] = 'PASS_RECEIPT_STAGE_ONLY'
     result['final_status'] = send_command(socket_path, 'status')
     result['final_receipt'] = send_command(socket_path, 'receipt')
     result['final_stop'] = send_command(socket_path, 'stop')

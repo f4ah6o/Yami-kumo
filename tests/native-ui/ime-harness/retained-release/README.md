@@ -30,6 +30,11 @@ env PATH="/workspace/gpui-locked-profile/prefix/usr/bin:/workspace/linux-user-ap
 
 Any output is exploratory. An observed native release ACK or commit log is not
 by itself model/geometry/cutoff proof, nor the full Shared Settings acceptance.
+When exactly one native commit receipt accompanies the logged Japanese commit,
+the harness separately queries its retained model stage. It does not infer a
+model result from the picture or the commit marker. After compositor and IME
+logs close, `artifact-manifest.json` lists raw file digests and `result.json`
+records the manifest SHA-256; the manifest excludes itself and `result.json`.
 The script currently force-terminates an unresolved process after collecting
 status, and records cleanup FAIL because in-memory ownership is lost; it does
 not call that a safe host stop. A later result cannot be attributed to the app
