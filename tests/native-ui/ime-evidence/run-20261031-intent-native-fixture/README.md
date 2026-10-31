@@ -2,6 +2,8 @@
 
 This is a controlled test, not a Linux live IME or GUI acceptance. The test-only GPUI backend wrapper uses its real native queue, decoder, route and exact ACK, but mocks Wayland protocol requests and creates a fake host. It is not used by the product source.
 
+Independent audit of the original evidence head [#135](https://github.com/f4ah6o/Yami-kumo/pull/135#pullrequestreview-5720670169) verified the packaged digests and the cited source relationships. The raw test/build logs do **not** contain embedded source SHA or toolchain stamps. Their hashes alone cannot independently authenticate which revisions or toolchain actually produced the earlier execution; the revision and toolchain fields below are recorded execution metadata, not self-authenticating provenance. No app binary was retained for independent comparison.
+
 | Field | Value |
 | --- | --- |
 | framework source | `6f7fbd20c4e916e64f13aaeaf58aaa410a1e9d20` (candidate #210) |
