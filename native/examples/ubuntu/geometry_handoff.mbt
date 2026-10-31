@@ -8,6 +8,8 @@ priv struct SettingsGeometryArrivalAdapter {
   source : @ubuntu_host.TextSessionEvent
   portable : @text_host.TextInputEvent
   geometry_generation : UInt64
+  // Reserved before route take; retains the full original native payload.
+  mut taken : @ubuntu_host.GeometryOwnedText?
 }
 
 ///|
@@ -69,7 +71,7 @@ fn SettingsGeometryArrivalAdapter::new(
     portable.window() != target.window || portable.sequence() <= 0L || portable.epoch() != pending.epoch() {
     return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_arrival_owner"))
   }
-  Ok({ route, receipt, target, source, portable, geometry_generation: pending.generation() })
+  Ok({ route, receipt, target, source, portable, geometry_generation: pending.generation(), taken: None })
 }
 
 ///|
@@ -116,4 +118,74 @@ fn SettingsGeometryArrivalAdapter::transfer(
     Err(error) => Err(error)
     Ok(_) => self.inspect_owned()
   }
+}
+
+///|
+/// Inspect the same route-owned record after native-local geometry acceptance.
+/// This does not take the slot, authorize field/model application, publish a
+/// scene, or prove that a compositor rendered the candidate. The caller must
+/// recheck the original common owner in the same synchronous owner step.
+fn SettingsGeometryArrivalAdapter::inspect_after_geometry_acceptance(
+  self : SettingsGeometryArrivalAdapter,
+  geometry : SettingsGeometryAdapter,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.route.geometry_handoff_in_progress() {
+    return Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "geometry_handoff_in_progress"))
+  }
+  let accepted = match geometry.receipt {
+    Some(value) => value
+    None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_receipt_missing"))
+  }
+  let pending = accepted.pending()
+  if !self.route.geometry_receipt_is_current(accepted) || !geometry.matches(pending) ||
+    pending.generation() != self.geometry_generation || pending.window() != self.target.window ||
+    pending.root() != self.receipt.root() || pending.epoch() != self.receipt.epoch() ||
+    pending.native_epoch() != self.target.epoch {
+    return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_accepted_owner_changed"))
+  }
+  match self.route.owned_geometry_text() {
+    Some(value) if self.matches_owned(value) => Ok(())
+    _ => Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_owned_slot_unavailable"))
+  }
+}
+
+///| Transfer once into this original adapter. Store the opaque record before
+/// any post-take check; failures must leave it attached to this owner.
+fn SettingsGeometryArrivalAdapter::take_after_geometry_acceptance(
+  self : SettingsGeometryArrivalAdapter,
+  geometry : SettingsGeometryAdapter,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.taken is Some(_) {
+    return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_slot_already_taken"))
+  }
+  match self.inspect_after_geometry_acceptance(geometry) { Err(error) => return Err(error); Ok(_) => () }
+  let taken = match self.route.take_owned_geometry_text(self.receipt.epoch()) {
+    Err(error) => return Err(error)
+    Ok(value) => value
+  }
+  self.taken = Some(taken)
+  self.inspect_taken_after_geometry_acceptance(geometry)
+}
+
+///| Read-only reconciliation of the exact retained local native object.
+fn SettingsGeometryArrivalAdapter::inspect_taken_after_geometry_acceptance(
+  self : SettingsGeometryArrivalAdapter,
+  geometry : SettingsGeometryAdapter,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let taken = match self.taken {
+    Some(value) if self.matches_owned(value) => value
+    _ => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_taken_slot_unavailable"))
+  }
+  let accepted = match geometry.receipt {
+    Some(value) => value
+    None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_receipt_missing"))
+  }
+  let pending = accepted.pending()
+  if self.route.geometry_handoff_in_progress() || !self.route.geometry_receipt_is_current(accepted) ||
+    !geometry.matches(pending) || pending.generation() != taken.geometry_generation() ||
+    pending.window() != taken.window() || pending.root() != taken.root() ||
+    pending.epoch() != taken.epoch() || pending.native_epoch() != taken.native_epoch() {
+    return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_taken_owner_changed"))
+  }
+  Ok(())
 }

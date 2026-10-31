@@ -180,3 +180,72 @@ test "reentrant owner loss during slot query does not release the receipt" {
   assert_true(owner.pending_dirty_stage is Some(_))
   assert_false(owner.can_stop())
 }
+
+///|
+test "preapply inspection retains original owner and is not an application" {
+  let (owner, _, binding) = geometry_handoff_owner()
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  let receipt = NativeRetainedReceipt::new(Some(OrderedText(event)), owner.window, 1, binding, 7UL, fn() { Ok(()) })
+  owner.reserve_geometry_arrival(receipt, (7, 11L, 4)).unwrap()
+  assert_true(owner.inspect_geometry_arrival_before_apply() is Err(_))
+  owner.transfer_geometry_arrival().unwrap()
+  assert_true(owner.inspect_geometry_arrival_before_apply() is Err(_))
+  owner.attempt_staged_host_geometry(fn(_, _) { Ok(()) }).unwrap()
+  owner.inspect_geometry_arrival_before_apply().unwrap()
+  owner.inspect_geometry_arrival_before_apply().unwrap()
+  assert_true(owner.geometry_arrival_state() is Some((1, 2)))
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.pending_dirty_stage is Some(_))
+  assert_false(owner.host_epoch_verified())
+  assert_true(owner.drive() is Err(_))
+  assert_false(owner.can_stop())
+  owner.entered_target = Some((8, 11L, 4))
+  assert_true(owner.inspect_geometry_arrival_before_apply() is Err(_))
+  assert_true(owner.geometry_arrival_state() is Some((1, 2)))
+  assert_eq(owner.model().name(), "")
+}
+
+///|
+test "accepted geometry slot transfer is once only and leaves scene unpublished" {
+  let (owner, _, binding) = geometry_handoff_owner()
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  let receipt = NativeRetainedReceipt::new(Some(OrderedText(event)), owner.window, 1, binding, 7UL, fn() { Ok(()) })
+  owner.reserve_geometry_arrival(receipt, (7, 11L, 4)).unwrap()
+  owner.transfer_geometry_arrival().unwrap()
+  owner.attempt_staged_host_geometry(fn(_, _) { Ok(()) }).unwrap()
+  let calls = Ref(0)
+  owner.take_geometry_arrival_to_local_owner(fn() { calls.val += 1; Ok(()) }).unwrap()
+  assert_eq(owner.geometry_arrival_take_state(), Some(2))
+  assert_true(owner.take_geometry_arrival_to_local_owner(fn() { calls.val += 1; Ok(()) }) is Err(_))
+  assert_eq(calls.val, 1)
+  assert_true(owner.geometry_arrival_state() is Some((1, 2)))
+  assert_true(owner.pending_dirty_stage is Some(_))
+  assert_false(owner.host_epoch_verified())
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.drive() is Err(_))
+  assert_false(owner.can_stop())
+}
+
+///|
+test "uncertain slot take is reconciled without a second transfer" {
+  let (owner, _, binding) = geometry_handoff_owner()
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  let receipt = NativeRetainedReceipt::new(Some(OrderedText(event)), owner.window, 1, binding, 7UL, fn() { Ok(()) })
+  owner.reserve_geometry_arrival(receipt, (7, 11L, 4)).unwrap()
+  owner.transfer_geometry_arrival().unwrap()
+  owner.attempt_staged_host_geometry(fn(_, _) { Ok(()) }).unwrap()
+  let takes = Ref(0)
+  assert_true(owner.take_geometry_arrival_to_local_owner(fn() { takes.val += 1; Err(runner_error("fixture", "unknown after take")) }) is Err(_))
+  assert_eq(owner.geometry_arrival_take_state(), Some(1))
+  assert_true(owner.take_geometry_arrival_to_local_owner(fn() { takes.val += 1; Ok(()) }) is Err(_))
+  let inspections = Ref(0)
+  assert_true(owner.reconcile_geometry_arrival_take(fn() { inspections.val += 1; Err(runner_error("fixture", "object unavailable")) }) is Err(_))
+  assert_eq(owner.geometry_arrival_take_state(), Some(1))
+  owner.reconcile_geometry_arrival_take(fn() { inspections.val += 1; Ok(()) }).unwrap()
+  assert_eq(inspections.val, 2)
+  assert_eq(takes.val, 1)
+  assert_eq(owner.geometry_arrival_take_state(), Some(2))
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.pending_dirty_stage is Some(_))
+  assert_false(owner.can_stop())
+}
