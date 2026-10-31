@@ -267,8 +267,18 @@ fn run_settings_control(
 }
 
 ///|
+///|
+/// Settings always keeps the native route and original owner alive on an
+/// interruption. A one-shot entry cannot hand those resources back safely.
+fn use_retained_settings_entry(args : Array[String], configured : String?) -> Bool {
+  args.contains("--settings-retained-control") || args.contains("--settings-e2e") || configured == Some("1")
+}
+
+///|
 fn main {
-  let controlled = @env.args().contains("--settings-retained-control")
+  let controlled = use_retained_settings_entry(
+    @env.args(), @env.get_env_var("YAMI_NATIVE_UI_SETTINGS_E2E"),
+  )
   if controlled && control_open() != 0 {
     abort("could not open private Settings control socket")
   }
