@@ -3148,7 +3148,8 @@ pub fn Mounted::reserve_owned_edit_key(
     @platform.Input(@primitives.KeyPressed(key~, modifiers~, ..)) if !modifiers.alt() =>
       if modifiers.control() || modifiers.meta() {
         match key {
-          @primitives.Character(value) => value == "a" || value == "A" || value == "z" || value == "Z" || value == "y" || value == "Y"
+          @primitives.Character(value) => value == "a" || value == "A" || value == "z" || value == "Z" ||
+            ((value == "y" || value == "Y") && modifiers.control())
           _ => false
         }
       } else {
