@@ -1,8 +1,8 @@
 # Pinned intent / handoff exploratory harness
 
 This prepares a bounded live IBus/Mozc probe for Yami source
-`80c2acc08d203f23dde164e07ace4e8381f573c0` (#137) and GPUI source
-`6f7fbd20c4e916e64f13aaeaf58aaa410a1e9d20` (#210). The app binary must be
+`1a59626cf67910917c4d660dd6db8bedae55a722` (#142) and GPUI source
+`35b9041dfb3642b43ca37c604834942614eb50fb` (#211). The app binary must be
 built from that exact source pair and its digest supplied separately. The
 harness rejects dirty app/framework/harness trees, mismatched source SHAs and
 mismatched binary digest. A source override is used; this is not a registry
@@ -11,7 +11,7 @@ consumer check.
 Do not execute as an acceptance run until the same app and framework heads
 have required CI and independent review. No binary or result from an older
 revision may be substituted. The expected app source includes the experimental
-geometry control CLI from #137; updating that source requires repinning and
+geometry control CLI and reservation-retry union from #142; updating that source requires repinning and
 rebuilding.
 
 The driver uses X11 synthetic keys through nested Weston and live IBus/Mozc. It
