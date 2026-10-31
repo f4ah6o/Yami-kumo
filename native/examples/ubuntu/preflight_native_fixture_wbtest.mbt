@@ -34,11 +34,11 @@ test "native preflight Busy preserves head and same geometry until explicit retr
   assert_eq(@ubuntu_host.fixture_intent_wayland_calls(), before)
   // Explicit fixture ACK: not a policy for a production IME record.
   head.ack().unwrap()
-  ignore(adapter.retry(@platform.WindowId::new(51L), 9UL, epoch, state).unwrap())
+  assert_eq(adapter.retry(@platform.WindowId::new(51L), 9UL, epoch, state).unwrap(), epoch)
   assert_true(adapter.accepted is Some(_))
   let after = @ubuntu_host.fixture_intent_wayland_calls()
   assert_true(after > before)
-  ignore(adapter.retry(@platform.WindowId::new(51L), 9UL, epoch, state).unwrap())
+  assert_eq(adapter.retry(@platform.WindowId::new(51L), 9UL, epoch, state).unwrap(), epoch)
   assert_eq(@ubuntu_host.fixture_intent_wayland_calls(), after)
   assert_true(route.peek().unwrap() is None)
   @ubuntu_host.fixture_intent_finish()
