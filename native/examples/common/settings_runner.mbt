@@ -892,6 +892,15 @@ fn SettingsRunOwner::stage_dirty_scene_inner(
     binding != session.binding || geometry.committed().text() != model.name() {
     return Err(runner_error("dirty_scene", "staged model or owner changed"))
   }
+  let current_metrics = match self.host.window_metrics(self.window) { Ok(value) => value; Err(error) => return Err(error) }
+  if current_metrics != metrics || !fence.live || self.settings != model ||
+    self.host_epoch != Some(session.epoch) || !self.host_epoch_verified {
+    return Err(runner_error("dirty_scene", "window metrics or owner changed during staging"))
+  }
+  match self.mounted.inspect_staged_text_geometry(owner, prepared) {
+    Ok(_) => ()
+    Err(error) => return Err(error)
+  }
   self.pending_dirty_stage = Some({ prepared, model, fence, window, epoch, binding, metrics })
   Ok(())
 }
@@ -936,7 +945,10 @@ fn SettingsRunOwner::staged_dirty_geometry_inner(
 pub fn SettingsRunOwner::discard_staged_dirty_scene(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.pending_dirty_stage is None {
+  // An uncertain host update must not lose the exact local candidate needed
+  // to reconcile that attempt. This guard does not itself provide a host
+  // receipt or a way to restore host_epoch_verified.
+  if !self.suspended || self.running || !self.host_epoch_verified || self.pending_dirty_stage is None {
     return Err(runner_error("dirty_scene", "no discardable local candidate"))
   }
   self.pending_dirty_stage = None

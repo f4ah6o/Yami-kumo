@@ -85,3 +85,46 @@ test "reentrant invalidation is not promoted to a safe resize stage" {
   assert_eq(host.stop_count(), 0)
   assert_false(owner.can_stop())
 }
+
+///|
+test "invalidated stage uses changed measurements for preview and rollback" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let factor = Ref(1.0)
+  let measured : Ref[Array[String]] = Ref([])
+  let measure = fn(value, size) {
+    if factor.val > 1.0 { measured.val.push(value) }
+    text_runner_measure(value, size * factor.val)
+  }
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.deliver_owned_observation(preedit).unwrap()
+  let old_caret = owner.mounted.focused_text().unwrap().caret()
+  owner.mounted.invalidate_layout()
+  owner.suspended = true
+  owner.dirty = true
+  factor.val = 1.1
+  host.set_metrics(640.0, 480.0, 1.5).unwrap()
+  owner.stage_dirty_scene().unwrap()
+  let staged = owner.staged_dirty_geometry().unwrap()
+  assert_true(measured.val.contains("にほん"))
+  assert_true(measured.val.contains(""))
+  assert_true(staged.caret() != old_caret)
+  assert_true(staged.composing())
+  assert_eq(staged.preview().text(), "にほん")
+  assert_eq(staged.committed().text(), "")
+  assert_eq(owner.model().name(), "")
+  assert_eq(host.present_count(), 0)
+  owner.discard_staged_dirty_scene().unwrap()
+  assert_false(owner.can_stop())
+}
