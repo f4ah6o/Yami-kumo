@@ -52,6 +52,7 @@ for _ in range(30):
 remaining = [group for group in groups if group_exists(group)]
 writers = []
 inaccessible = 0
+uninspectable_fds = 0
 for proc in Path('/proc').iterdir():
     if not proc.name.isdigit() or int(proc.name) == os.getpid():
         continue
@@ -71,7 +72,13 @@ for proc in Path('/proc').iterdir():
             flags = next(int(line.split()[1], 8) for line in info.splitlines() if line.startswith('flags:'))
             if flags & os.O_ACCMODE in (os.O_WRONLY, os.O_RDWR):
                 writers.append({'pid': int(proc.name), 'fd': int(fd.name), 'path': str(path)})
+        except (FileNotFoundError, ProcessLookupError):
+            # A process or descriptor can disappear naturally during the scan.
+            continue
         except (OSError, StopIteration, ValueError):
+            # The descriptor may point at an artifact and its access mode may
+            # be writable. A failed readlink/fdinfo is not evidence of absence.
+            uninspectable_fds += 1
             continue
 path = out / 'result.json'
 if path.exists():
@@ -84,8 +91,9 @@ result['session_exit_phase'] = phase
 result['log_shutdown'] = {'tracked_groups_remaining': remaining,
                           'visible_open_writers': writers,
                           'inaccessible_processes': inaccessible,
+                          'uninspectable_fds': uninspectable_fds,
                           'scope': 'local /proc observation, not proof against escaped or inaccessible writers'}
-result['artifact_stability'] = ('UNVERIFIED_WRITERS_OR_GROUPS' if remaining or writers or inaccessible
+result['artifact_stability'] = ('UNVERIFIED_WRITERS_OR_GROUPS' if remaining or writers or inaccessible or uninspectable_fds
                                 else 'NO_VISIBLE_WRITERS_AFTER_GROUP_SHUTDOWN')
 path.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
 subprocess.run([sys.executable, str(Path(__file__).with_name('finalize.py')), str(out)], check=True)
