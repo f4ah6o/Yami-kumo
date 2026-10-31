@@ -93,6 +93,7 @@ pub fn Mounted::handle_event(Self, @platform.Event) -> Result[Bool, @diagnostics
 pub fn Mounted::has_pending_actions(Self) -> Bool
 pub fn Mounted::held_text_input(Self, UInt64, @text_host.TextInputEvent) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn Mounted::held_text_receipt(Self, UInt64, Int64) -> HeldTextReceipt?
+pub fn Mounted::inspect_staged_text_geometry(Self, TerminalTextOwner, Prepared) -> Result[StagedTextGeometry, @diagnostics.FrameworkError]
 pub fn Mounted::invalidate_layout(Self) -> Unit
 pub fn Mounted::is_disposed(Self) -> Bool
 pub fn Mounted::last_dispatched_input_sequence(Self) -> Int64
@@ -116,6 +117,7 @@ pub fn Mounted::reserve_owned_edit_key(Self, TerminalTextOwner, @platform.Event,
 pub fn Mounted::reserve_owned_text(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[OwnedTextDelivery, @diagnostics.FrameworkError]
 pub fn Mounted::set_theme(Self, @theme.Theme?) -> Bool
 pub fn Mounted::stage(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Prepared, @diagnostics.FrameworkError]
+pub fn Mounted::stage_owned_text_geometry(Self, TerminalTextOwner, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Prepared, @diagnostics.FrameworkError]
 pub fn Mounted::terminal_field_can_cutoff(Self, TerminalTextOwner) -> Bool
 pub fn Mounted::terminal_owner_is_current(Self, TerminalTextOwner) -> Bool
 pub fn Mounted::text_caret(Self, @core.NodeKey) -> @primitives.Rect?
@@ -159,6 +161,17 @@ pub struct PasteRequest {
 pub struct Prepared {
   // private fields
 }
+
+pub struct StagedTextGeometry {
+  // private fields
+}
+pub fn StagedTextGeometry::caret(Self) -> @primitives.Rect
+pub fn StagedTextGeometry::committed(Self) -> @text.TextDocument
+pub fn StagedTextGeometry::composing(Self) -> Bool
+pub fn StagedTextGeometry::identity(Self) -> (@platform.WindowId, UInt64, UInt64, UInt64)
+pub fn StagedTextGeometry::preview(Self) -> @text.TextDocument
+pub fn StagedTextGeometry::revisions(Self) -> (Int, Int)
+pub fn StagedTextGeometry::scene_revision(Self) -> UInt64
 
 pub struct TerminalTextOwner {
   // private fields
