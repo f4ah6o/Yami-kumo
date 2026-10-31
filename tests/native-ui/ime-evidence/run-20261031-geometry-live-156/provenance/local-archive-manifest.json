@@ -1,0 +1,121 @@
+{
+  "files": [
+    {
+      "path": "REPORT.md",
+      "sha256": "94fe5d7ce0e8c776dcab1e5df9404291d66fab24dab2117c0e0f90aa8775894d"
+    },
+    {
+      "path": "capture-provenance.py",
+      "sha256": "1e7a5610dfe722714b36958018f0f8fce7bdb952148f814c99c02400831c33ac"
+    },
+    {
+      "path": "env.sh",
+      "sha256": "3464716e4c0069a7f2830c10161abc3c9d14d5409c6eaa68fa4f355167ad3144"
+    },
+    {
+      "path": "launch-after-confirmation.sh",
+      "sha256": "9010345c94d1a496fc37ba8fbd3727df807043d2242a75c31a9483f9e284c140"
+    },
+    {
+      "path": "launch-gate-check.log",
+      "sha256": "158fc809de75d70f0d4d44316cdbf46b7e19faa0b052b32e88ddbef997a28139"
+    },
+    {
+      "path": "live/app.exe",
+      "sha256": "333f6faf7ba449b8aa6e24a3c06df5465c964725b654f06a99da9c8b32ba52c5"
+    },
+    {
+      "path": "live/app.log",
+      "sha256": "e4cf5b4c8f7cadb14c00a473c72ad388674242d1a8ba790d20532f9be8a6d5d8"
+    },
+    {
+      "path": "live/artifact-manifest.json",
+      "sha256": "bf2e92b8b9d1988c00ba121b7a9128c5703f15f02e07e2c09e58a577a13a652c"
+    },
+    {
+      "path": "live/build.json",
+      "sha256": "81dcc30fdf67dbd97d7d5c4d9121d40a1620e5c561581ef121b3c99f770f4da8"
+    },
+    {
+      "path": "live/build.log",
+      "sha256": "586ce84aa3a555de831a74b210ce6cf8b9c39a519ca5e679f46bb8fbf818ecef"
+    },
+    {
+      "path": "live/engine.log",
+      "sha256": "7b2be77df2274ba8ffeff3948afd6e7514bf2fe1142759ada3656b5ada1a5310"
+    },
+    {
+      "path": "live/ibus-daemon.log",
+      "sha256": "d026b7e68a95353f3d655811d4b46ea192c548336804468992907d0787b9958b"
+    },
+    {
+      "path": "live/ibus-ui-dbus.log",
+      "sha256": "59a2050a55451fa752ea2d76d668cc730c5b414f436476156b81de9ecd10ea75"
+    },
+    {
+      "path": "live/ibus-ui-wayland.log",
+      "sha256": "861e910f65d68a6167c6c336ce46572a2e14db2b98c9affa15d0c4ba7cc4cc74"
+    },
+    {
+      "path": "live/mozc-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "live/pid",
+      "sha256": "222d01d88e4325b0dbc8fa99a98c513b7aae6ab2a6d7f3160a567eb1ba012630"
+    },
+    {
+      "path": "live/result.json",
+      "sha256": "42dfea108def46fff3394023b4cac3e8babdcabf1c862cb00eb501c6081fb125"
+    },
+    {
+      "path": "live/weston-stdio.log",
+      "sha256": "47f23fdb9ba3fdf0841f595ff270e77b5bd19ffff874c81f114d44a5a9a86c2e"
+    },
+    {
+      "path": "live/weston.log",
+      "sha256": "551eacca534f52156ffa7769df14c1d2b58df236a8f1b7ca538fc2d27a901a99"
+    },
+    {
+      "path": "live-launch.log",
+      "sha256": "45a6a730805e4da310825a284c9cddb865becac54ab981dc3b96d2f42270e095"
+    },
+    {
+      "path": "postflight-artifact-verification.json",
+      "sha256": "1becada2ff78984d4929cb2f7ed18e2c14bc0a948db7bed273d6be8c901c0f30"
+    },
+    {
+      "path": "postflight-cleanup-observation.json",
+      "sha256": "cbb2c9068aa9d6782c913a38926da471ab059f8840a46251205b019073b5a245"
+    },
+    {
+      "path": "postflight-source-verification.log",
+      "sha256": "de7e8b6782669210760f683439546d2886a36bb48af32518fa0e09564fa3d8e4"
+    },
+    {
+      "path": "preflight.log",
+      "sha256": "a65646ae5339ddda174a398773ef18c56358b4977d3a43319358a261bbcae6c3"
+    },
+    {
+      "path": "preparation-provenance.json",
+      "sha256": "97b0bbb723ebb16f5d56ddae8949a1658234a29a60008fe29ac34eb045af0f80"
+    },
+    {
+      "path": "prepare-framework.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "run-authorization.json",
+      "sha256": "e72b9a765fc996fa2528f73de526e08e1994a86948d9629dfc243be3886d453a"
+    },
+    {
+      "path": "verify-live-artifacts.py",
+      "sha256": "a629efac8ed215fb076fedfd9c418d90afa9fa6f12d40ef6f95303ed6f4643bf"
+    },
+    {
+      "path": "verify-preparation.py",
+      "sha256": "ce4d29566b284511dec558ca4b2db58429cefdd3f1961a7befa8633336ecab64"
+    }
+  ],
+  "scope": "Raw live artifacts plus preparation, launcher, authorization and postflight records; excludes source worktrees, tmp and this archive manifest; observed hashes do not establish writer cessation."
+}

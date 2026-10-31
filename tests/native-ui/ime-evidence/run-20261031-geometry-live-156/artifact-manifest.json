@@ -1,0 +1,52 @@
+{
+  "files": [
+    {
+      "path": "app.exe",
+      "sha256": "333f6faf7ba449b8aa6e24a3c06df5465c964725b654f06a99da9c8b32ba52c5"
+    },
+    {
+      "path": "app.log",
+      "sha256": "e4cf5b4c8f7cadb14c00a473c72ad388674242d1a8ba790d20532f9be8a6d5d8"
+    },
+    {
+      "path": "build.json",
+      "sha256": "81dcc30fdf67dbd97d7d5c4d9121d40a1620e5c561581ef121b3c99f770f4da8"
+    },
+    {
+      "path": "build.log",
+      "sha256": "586ce84aa3a555de831a74b210ce6cf8b9c39a519ca5e679f46bb8fbf818ecef"
+    },
+    {
+      "path": "engine.log",
+      "sha256": "7b2be77df2274ba8ffeff3948afd6e7514bf2fe1142759ada3656b5ada1a5310"
+    },
+    {
+      "path": "ibus-daemon.log",
+      "sha256": "d026b7e68a95353f3d655811d4b46ea192c548336804468992907d0787b9958b"
+    },
+    {
+      "path": "ibus-ui-dbus.log",
+      "sha256": "59a2050a55451fa752ea2d76d668cc730c5b414f436476156b81de9ecd10ea75"
+    },
+    {
+      "path": "ibus-ui-wayland.log",
+      "sha256": "861e910f65d68a6167c6c336ce46572a2e14db2b98c9affa15d0c4ba7cc4cc74"
+    },
+    {
+      "path": "mozc-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "pid",
+      "sha256": "222d01d88e4325b0dbc8fa99a98c513b7aae6ab2a6d7f3160a567eb1ba012630"
+    },
+    {
+      "path": "weston-stdio.log",
+      "sha256": "47f23fdb9ba3fdf0841f595ff270e77b5bd19ffff874c81f114d44a5a9a86c2e"
+    },
+    {
+      "path": "weston.log",
+      "sha256": "551eacca534f52156ffa7769df14c1d2b58df236a8f1b7ca538fc2d27a901a99"
+    }
+  ]
+}

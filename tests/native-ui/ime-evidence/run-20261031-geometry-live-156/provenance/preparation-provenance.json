@@ -1,0 +1,350 @@
+{
+  "prepared_utc": "2026-10-31T03:44:32.342528+00:00",
+  "purpose": "diagnose next live blocker; #142 app does not include #154 P1 fix; no acceptance claim",
+  "live_started": false,
+  "review": {
+    "parent_reported": "scoped independent review passed",
+    "url": "https://github.com/f4ah6o/Yami-kumo/pull/156#pullrequestreview-5720980913"
+  },
+  "ci_at_authorization": "Parent explicitly confirmed exact #156 review complete and CI 7/7 SUCCESS; diagnostic live launch authorized",
+  "profile": "Linux-6.18.57-x86_64-with-glibc2.41",
+  "sources": {
+    "app": {
+      "path": "/workspace/review156-live-prep-agent/app",
+      "head": "1a59626cf67910917c4d660dd6db8bedae55a722",
+      "tree": "0bd3e840e8da2d4f4989bd7ea636c1fe386c934e",
+      "status": ""
+    },
+    "framework": {
+      "path": "/workspace/review156-live-prep-agent/framework",
+      "head": "35b9041dfb3642b43ca37c604834942614eb50fb",
+      "tree": "257ce63860dab56ae2f67fcbd996f8946860ceba",
+      "status": ""
+    },
+    "harness": {
+      "path": "/workspace/review156-live-prep-agent/harness",
+      "head": "acd14b8788e7ece8ce5100348bfd6703186d2e75",
+      "tree": "3cb7d2629dd49a4703abf9d2069493c5ed32a7df",
+      "status": ""
+    }
+  },
+  "protocol_generation": {
+    "command": [
+      "sh",
+      "/workspace/review156-live-prep-agent/framework/scripts/prepare_ubuntu.sh"
+    ],
+    "inputs": {
+      "/workspace/review156-live-prep-agent/framework/scripts/prepare_ubuntu.sh": "8762b81df5d87c62233ee475c9989627ea20c1de6fff92139f48efc104497708",
+      "/workspace/linux-user-apt/root/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml": "9d9e27038ca722f159a361293f8c6cd270dab907ab52de5b8ecfbb8d6b9651c2",
+      "/workspace/linux-user-apt/root/usr/share/wayland-protocols/unstable/text-input/text-input-unstable-v1.xml": "a3671b8e50ebe04f4d114c7b982763ae2964e44be163fb3e9eb30efca8a111b1"
+    },
+    "outputs": {
+      "/workspace/review156-live-prep-agent/framework/ubuntu/xdg-shell-client-protocol.h": "1fa7e6cdfd0adafe3a2d9870af6fbc7d36de500ca7ad09f3fd51130a8dfa450e",
+      "/workspace/review156-live-prep-agent/framework/ubuntu/xdg-shell-protocol.c": "1ffea71e9cbe07758b437a7e43a60ee6f93c406d020eca568df220e9488ae999",
+      "/workspace/review156-live-prep-agent/framework/ubuntu/text-input-v1-client-protocol.h": "9c90f9b29bd85a68bec63658d78a2e07aa15e622b01382cc04861935824bf370",
+      "/workspace/review156-live-prep-agent/framework/ubuntu/text-input-v1-protocol.c": "95387edb6409150aed47ec940f8321c5f6f54e10161f46ebd62fce4a80ae0873"
+    },
+    "scanner": {
+      "command": [
+        "wayland-scanner",
+        "--version"
+      ],
+      "rc": 0,
+      "stdout": "",
+      "stderr": "wayland-scanner 1.23.1"
+    }
+  },
+  "tools": {
+    "moon": {
+      "path": "/workspace/yami-tools/bin/moon",
+      "sha256": "a31026b83410607909ebae469fa19e46c32201cfe403be6099e1da961a5ebf0f",
+      "version": {
+        "command": [
+          "/workspace/yami-tools/bin/moon",
+          "version",
+          "--all"
+        ],
+        "rc": 0,
+        "stdout": "moon 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moon\nmoonc v0.10.15+943464bfa (2026-10-12) /workspace/yami-tools/bin/moonc\nmoonrun 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg",
+        "stderr": ""
+      }
+    },
+    "wayland-scanner": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/wayland-scanner",
+      "sha256": "0f7477063779fe135b34219e38329da40a4a0b0710e139edfc531d1d61792439",
+      "version": {
+        "command": [
+          "/workspace/gpui-locked-profile/prefix/usr/bin/wayland-scanner",
+          "--version"
+        ],
+        "rc": 0,
+        "stdout": "",
+        "stderr": "wayland-scanner 1.23.1"
+      }
+    },
+    "weston": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/weston",
+      "sha256": "5e7b342da0d38508b3001c291f080fbe35c4101f32ade0babc8458915f87352a",
+      "version": {
+        "command": [
+          "/workspace/gpui-locked-profile/prefix/usr/bin/weston",
+          "--version"
+        ],
+        "rc": 0,
+        "stdout": "weston 14.0.2",
+        "stderr": ""
+      },
+      "ldd": {
+        "command": [
+          "ldd",
+          "/workspace/gpui-locked-profile/prefix/usr/bin/weston"
+        ],
+        "rc": 0,
+        "stdout": "linux-vdso.so.1 (0x00007efc5293b000)\n\tlibexec_weston.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/weston/libexec_weston.so.0 (0x00007efc5290f000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007efc526f8000)\n\tlibweston-14.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libweston-14.so.0 (0x00007efc52681000)\n\tlibwayland-client.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libwayland-client.so.0 (0x00007efc5266c000)\n\tlibwayland-server.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libwayland-server.so.0 (0x00007efc52654000)\n\tlibinput.so.10 => /lib/x86_64-linux-gnu/libinput.so.10 (0x00007efc525f2000)\n\tlibevdev.so.2 => /lib/x86_64-linux-gnu/libevdev.so.2 (0x00007efc525d4000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007efc5293d000)\n\tlibpixman-1.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libpixman-1.so.0 (0x00007efc52527000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007efc52435000)\n\tlibdrm.so.2 => /lib/x86_64-linux-gnu/libdrm.so.2 (0x00007efc5241e000)\n\tlibxkbcommon.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 (0x00007efc523d3000)\n\tlibpam.so.0 => /lib/x86_64-linux-gnu/libpam.so.0 (0x00007efc523c1000)\n\tlibffi.so.8 => /lib/x86_64-linux-gnu/libffi.so.8 (0x00007efc523b4000)\n\tlibmtdev.so.1 => /lib/x86_64-linux-gnu/libmtdev.so.1 (0x00007efc523ab000)\n\tlibudev.so.1 => /lib/x86_64-linux-gnu/libudev.so.1 (0x00007efc52366000)\n\tlibwacom.so.9 => /lib/x86_64-linux-gnu/libwacom.so.9 (0x00007efc52356000)\n\tlibaudit.so.1 => /lib/x86_64-linux-gnu/libaudit.so.1 (0x00007efc5231f000)\n\tlibcap.so.2 => /lib/x86_64-linux-gnu/libcap.so.2 (0x00007efc52313000)\n\tlibgudev-1.0.so.0 => /lib/x86_64-linux-gnu/libgudev-1.0.so.0 (0x00007efc52304000)\n\tlibgobject-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0 (0x00007efc522a1000)\n\tlibglib-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libglib-2.0.so.0 (0x00007efc52148000)\n\tlibcap-ng.so.0 => /lib/x86_64-linux-gnu/libcap-ng.so.0 (0x00007efc52140000)\n\tlibatomic.so.1 => /lib/x86_64-linux-gnu/libatomic.so.1 (0x00007efc52136000)\n\tlibpcre2-8.so.0 => /lib/x86_64-linux-gnu/libpcre2-8.so.0 (0x00007efc52085000)",
+        "stderr": ""
+      }
+    },
+    "ibus": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/ibus",
+      "sha256": "5549c204050c9c99e3af7df7089e7d41fe43474a57c0aec86b91e628243ba19e",
+      "version": {
+        "command": [
+          "/workspace/gpui-locked-profile/prefix/usr/bin/ibus",
+          "version"
+        ],
+        "rc": 0,
+        "stdout": "IBus 1.5.32",
+        "stderr": ""
+      },
+      "ldd": {
+        "command": [
+          "ldd",
+          "/workspace/gpui-locked-profile/prefix/usr/bin/ibus"
+        ],
+        "rc": 0,
+        "stdout": "linux-vdso.so.1 (0x00007f54ee6c2000)\n\tlibgio-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgio-2.0.so.0 (0x00007f54ee4aa000)\n\tlibgobject-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0 (0x00007f54ee447000)\n\tlibibus-1.0.so.5 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libibus-1.0.so.5 (0x00007f54ee3be000)\n\tlibglib-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libglib-2.0.so.0 (0x00007f54ee263000)\n\tlibwayland-client.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libwayland-client.so.0 (0x00007f54ee250000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f54ee039000)\n\tlibgmodule-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgmodule-2.0.so.0 (0x00007f54ee032000)\n\tlibz.so.1 => /lib/x86_64-linux-gnu/libz.so.1 (0x00007f54ee012000)\n\tlibmount.so.1 => /lib/x86_64-linux-gnu/libmount.so.1 (0x00007f54edf94000)\n\tlibselinux.so.1 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libselinux.so.1 (0x00007f54edf60000)\n\tlibffi.so.8 => /lib/x86_64-linux-gnu/libffi.so.8 (0x00007f54edf53000)\n\tlibatomic.so.1 => /lib/x86_64-linux-gnu/libatomic.so.1 (0x00007f54edf49000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007f54ede59000)\n\tlibpcre2-8.so.0 => /lib/x86_64-linux-gnu/libpcre2-8.so.0 (0x00007f54eddaa000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f54ee6c4000)\n\tlibblkid.so.1 => /lib/x86_64-linux-gnu/libblkid.so.1 (0x00007f54edd47000)",
+        "stderr": ""
+      }
+    },
+    "xdotool": {
+      "path": "/workspace/linux-user-apt/root/usr/bin/xdotool",
+      "sha256": "2fcee924be08b180f4b1bea93eddedbaa8b0ea4b0886f6cbf77a113e8b8a130f",
+      "version": {
+        "command": [
+          "/workspace/linux-user-apt/root/usr/bin/xdotool",
+          "--version"
+        ],
+        "rc": 0,
+        "stdout": "xdotool version 3.20160805.1",
+        "stderr": ""
+      },
+      "ldd": {
+        "command": [
+          "ldd",
+          "/workspace/linux-user-apt/root/usr/bin/xdotool"
+        ],
+        "rc": 0,
+        "stdout": "linux-vdso.so.1 (0x00007f492f0d3000)\n\tlibxdo.so.3 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libxdo.so.3 (0x00007f492f0a8000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007f492ef95000)\n\tlibX11.so.6 => /lib/x86_64-linux-gnu/libX11.so.6 (0x00007f492ee4d000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f492ec59000)\n\tlibXtst.so.6 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libXtst.so.6 (0x00007f492ec4f000)\n\tlibXinerama.so.1 => /lib/x86_64-linux-gnu/libXinerama.so.1 (0x00007f492ec4a000)\n\tlibxkbcommon.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 (0x00007f492ebff000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f492f0d5000)\n\tlibxcb.so.1 => /lib/x86_64-linux-gnu/libxcb.so.1 (0x00007f492ebd4000)\n\tlibXext.so.6 => /lib/x86_64-linux-gnu/libXext.so.6 (0x00007f492ebbf000)\n\tlibXau.so.6 => /lib/x86_64-linux-gnu/libXau.so.6 (0x00007f492ebb8000)\n\tlibXdmcp.so.6 => /lib/x86_64-linux-gnu/libXdmcp.so.6 (0x00007f492ebb0000)",
+        "stderr": ""
+      }
+    },
+    "Xvfb": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/Xvfb",
+      "sha256": "14e8ec7d8209bbaf105f9ade27a80b65f01709346690d18fbadb6116ada34912",
+      "ldd": {
+        "command": [
+          "ldd",
+          "/workspace/gpui-locked-profile/prefix/usr/bin/Xvfb"
+        ],
+        "rc": 0,
+        "stdout": "linux-vdso.so.1 (0x00007f9be1098000)\n\tlibselinux.so.1 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libselinux.so.1 (0x00007f9be0e18000)\n\tlibnettle.so.8 => /lib/x86_64-linux-gnu/libnettle.so.8 (0x00007f9be0d9f000)\n\tlibunwind.so.8 => /lib/x86_64-linux-gnu/libunwind.so.8 (0x00007f9be0d82000)\n\tlibGL.so.1 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libGL.so.1 (0x00007f9be0cf9000)\n\tlibpixman-1.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libpixman-1.so.0 (0x00007f9be0c4c000)\n\tlibXfont2.so.2 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libXfont2.so.2 (0x00007f9be0c1c000)\n\tlibXau.so.6 => /lib/x86_64-linux-gnu/libXau.so.6 (0x00007f9be0c17000)\n\tlibsystemd.so.0 => /lib/x86_64-linux-gnu/libsystemd.so.0 (0x00007f9be0b01000)\n\tlibXdmcp.so.6 => /lib/x86_64-linux-gnu/libXdmcp.so.6 (0x00007f9be0af9000)\n\tlibaudit.so.1 => /lib/x86_64-linux-gnu/libaudit.so.1 (0x00007f9be0ac0000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007f9be09d0000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f9be07dc000)\n\tlibpcre2-8.so.0 => /lib/x86_64-linux-gnu/libpcre2-8.so.0 (0x00007f9be072d000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f9be109a000)\n\tliblzma.so.5 => /lib/x86_64-linux-gnu/liblzma.so.5 (0x00007f9be06fc000)\n\tlibGLdispatch.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libGLdispatch.so.0 (0x00007f9be0641000)\n\tlibGLX.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libGLX.so.0 (0x00007f9be060d000)\n\tlibz.so.1 => /lib/x86_64-linux-gnu/libz.so.1 (0x00007f9be05ed000)\n\tlibbz2.so.1.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libbz2.so.1.0 (0x00007f9be05da000)\n\tlibfontenc.so.1 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libfontenc.so.1 (0x00007f9be05d0000)\n\tlibfreetype.so.6 => /lib/x86_64-linux-gnu/libfreetype.so.6 (0x00007f9be04fe000)\n\tlibcap.so.2 => /lib/x86_64-linux-gnu/libcap.so.2 (0x00007f9be04f2000)\n\tlibcap-ng.so.0 => /lib/x86_64-linux-gnu/libcap-ng.so.0 (0x00007f9be04ea000)\n\tlibX11.so.6 => /lib/x86_64-linux-gnu/libX11.so.6 (0x00007f9be03a2000)\n\tlibpng16.so.16 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libpng16.so.16 (0x00007f9be0369000)\n\tlibbrotlidec.so.1 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libbrotlidec.so.1 (0x00007f9be0359000)\n\tlibxcb.so.1 => /lib/x86_64-linux-gnu/libxcb.so.1 (0x00007f9be032e000)\n\tlibbrotlicommon.so.1 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libbrotlicommon.so.1 (0x00007f9be030b000)",
+        "stderr": ""
+      }
+    },
+    "xvfb-run": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/xvfb-run",
+      "sha256": "97e86a102eee7212bfa3bf87d452b27dd4f16ef6e68658eeae20bca63db2ceee"
+    },
+    "dbus-run-session": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/dbus-run-session",
+      "sha256": "0730cc8281a0e03613d8311c9e7e14443eb6e5c96f5d71a440fbe1024f0d6463",
+      "version": {
+        "command": [
+          "/workspace/gpui-locked-profile/prefix/usr/bin/dbus-run-session",
+          "--version"
+        ],
+        "rc": 0,
+        "stdout": "dbus-run-session 1.16.2\nCopyright (C) 2003-2006 Red Hat, Inc.\nCopyright (C) 2006 Thiago Macieira\nCopyright \u00a9 2011-2012 Nokia Corporation\nCopyright \u00a9 2018, 2021 Ralf Habacker\n\nThis is free software; see the source for copying conditions.\nThere is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+        "stderr": ""
+      }
+    },
+    "glib-compile-schemas": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/glib-compile-schemas",
+      "sha256": "613c5b6ed8c95bb9d3b4055299a9e2a77422841b5e974711dd91562b6fb0d32e",
+      "version": {
+        "command": [
+          "/workspace/gpui-locked-profile/prefix/usr/bin/glib-compile-schemas",
+          "--version"
+        ],
+        "rc": 0,
+        "stdout": "2.84.4",
+        "stderr": ""
+      }
+    },
+    "cc": {
+      "path": "/usr/bin/cc",
+      "sha256": "a23ecab8ff08f09ad8c80602c2c5df7f49e09c25905cb8975902e101bf72635f",
+      "version": {
+        "command": [
+          "/usr/bin/cc",
+          "--version"
+        ],
+        "rc": 0,
+        "stdout": "cc (Debian 14.2.0-19) 14.2.0\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+        "stderr": ""
+      }
+    },
+    "pkg-config": {
+      "path": "/usr/bin/pkg-config",
+      "sha256": "37fdaa317c00805da16bc9c4c8de2300ad1e34511c33bf5e5170bf52c0e3a48e",
+      "version": {
+        "command": [
+          "/usr/bin/pkg-config",
+          "--version"
+        ],
+        "rc": 0,
+        "stdout": "1.8.1",
+        "stderr": ""
+      }
+    },
+    "python3": {
+      "path": "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+      "sha256": "fa67443527ed9647f760d807e2a38f26340757123e643c4639cf273ed15d5ea7",
+      "version": {
+        "command": [
+          "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3",
+          "--version"
+        ],
+        "rc": 0,
+        "stdout": "Python 3.12.14",
+        "stderr": ""
+      }
+    },
+    "xauth": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/xauth",
+      "sha256": "39e89b8530af1402b6b6f845309fc5a578c9ef9105412fa7198927ce92e7199d"
+    }
+  },
+  "static_files": {
+    "/workspace/gpui-locked-profile/prefix/usr/lib/mozc/mozc_server": {
+      "exists": true,
+      "sha256": "020f50a6cd53b3a0a5e6c66a30f698b05d5c68df4b5be73e663c1435bc8c432e",
+      "ldd": {
+        "command": [
+          "ldd",
+          "/workspace/gpui-locked-profile/prefix/usr/lib/mozc/mozc_server"
+        ],
+        "rc": 0,
+        "stdout": "linux-vdso.so.1 (0x00007f0539e62000)\n\tlibabsl_hash.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_hash.so.20240722 (0x00007f0538ad0000)\n\tlibabsl_flags_reflection.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_reflection.so.20240722 (0x00007f0538abf000)\n\tlibabsl_raw_hash_set.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_raw_hash_set.so.20240722 (0x00007f0538ab7000)\n\tlibabsl_str_format_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_str_format_internal.so.20240722 (0x00007f0538a97000)\n\tlibabsl_throw_delegate.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_throw_delegate.so.20240722 (0x00007f0538a91000)\n\tlibabsl_time_zone.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_time_zone.so.20240722 (0x00007f0538a76000)\n\tlibabsl_synchronization.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_synchronization.so.20240722 (0x00007f0538a62000)\n\tlibabsl_time.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_time.so.20240722 (0x00007f0538a4f000)\n\tlibabsl_strings.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_strings.so.20240722 (0x00007f0538a2b000)\n\tlibabsl_spinlock_wait.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_spinlock_wait.so.20240722 (0x00007f0538a26000)\n\tlibabsl_status.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_status.so.20240722 (0x00007f0538a1b000)\n\tlibabsl_statusor.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_statusor.so.20240722 (0x00007f0538a15000)\n\tlibabsl_flags_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_internal.so.20240722 (0x00007f0538a09000)\n\tlibabsl_flags_marshalling.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_marshalling.so.20240722 (0x00007f05389fc000)\n\tlibabsl_flags_parse.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_parse.so.20240722 (0x00007f05389ea000)\n\tlibabsl_string_view.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_string_view.so.20240722 (0x00007f05389e5000)\n\tlibabsl_raw_logging_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_raw_logging_internal.so.20240722 (0x00007f05389e0000)\n\tlibabsl_random_internal_randen.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_randen.so.20240722 (0x00007f05389db000)\n\tlibabsl_random_internal_randen_slow.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_randen_slow.so.20240722 (0x00007f05389d3000)\n\tlibabsl_random_internal_randen_hwaes_impl.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_randen_hwaes_impl.so.20240722 (0x00007f05389ce000)\n\tlibabsl_random_internal_pool_urbg.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_pool_urbg.so.20240722 (0x00007f05389c8000)\n\tlibprotobuf.so.32 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libprotobuf.so.32 (0x00007f053866b000)\n\tlibstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007f05383e2000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007f05382f0000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007f05382c3000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f05380cf000)\n\tlibabsl_city.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_city.so.20240722 (0x00007f05380ca000)\n\tlibabsl_low_level_hash.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_low_level_hash.so.20240722 (0x00007f05380c5000)\n\tlibabsl_flags_private_handle_accessor.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_private_handle_accessor.so.20240722 (0x00007f05380be000)\n\tlibabsl_flags_config.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_config.so.20240722 (0x00007f05380b7000)\n\tlibabsl_flags_commandlineflag.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_commandlineflag.so.20240722 (0x00007f05380b2000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f0539e64000)\n\tlibabsl_int128.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_int128.so.20240722 (0x00007f05380ab000)\n\tlibabsl_graphcycles_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_graphcycles_internal.so.20240722 (0x00007f05380a3000)\n\tlibabsl_kernel_timeout_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_kernel_timeout_internal.so.20240722 (0x00007f053809c000)\n\tlibabsl_stacktrace.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_stacktrace.so.20240722 (0x00007f0538097000)\n\tlibabsl_symbolize.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_symbolize.so.20240722 (0x00007f053808e000)\n\tlibabsl_malloc_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_malloc_internal.so.20240722 (0x00007f0538088000)\n\tlibabsl_base.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_base.so.20240722 (0x00007f0538080000)\n\tlibabsl_strings_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_strings_internal.so.20240722 (0x00007f0538078000)\n\tlibabsl_cord.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_cord.so.20240722 (0x00007f0538058000)\n\tlibabsl_strerror.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_strerror.so.20240722 (0x00007f0538053000)\n\tlibabsl_cordz_info.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_cordz_info.so.20240722 (0x00007f053804b000)\n\tlibabsl_flags_commandlineflag_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_commandlineflag_internal.so.20240722 (0x00007f0538046000)\n\tlibabsl_flags_usage.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_usage.so.20240722 (0x00007f053803f000)\n\tlibabsl_flags_usage_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_usage_internal.so.20240722 (0x00007f0538032000)\n\tlibabsl_flags_program_name.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_program_name.so.20240722 (0x00007f053802d000)\n\tlibabsl_random_internal_randen_hwaes.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_randen_hwaes.so.20240722 (0x00007f0538028000)\n\tlibabsl_random_internal_platform.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_platform.so.20240722 (0x00007f0538022000)\n\tlibabsl_random_internal_seed_material.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_seed_material.so.20240722 (0x00007f053801b000)\n\tlibabsl_random_seed_gen_exception.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_seed_gen_exception.so.20240722 (0x00007f0538016000)\n\tlibz.so.1 => /lib/x86_64-linux-gnu/libz.so.1 (0x00007f0537ff6000)\n\tlibabsl_debugging_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_debugging_internal.so.20240722 (0x00007f0537fef000)\n\tlibabsl_demangle_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_demangle_internal.so.20240722 (0x00007f0537fdf000)\n\tlibabsl_cord_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_cord_internal.so.20240722 (0x00007f0537fcc000)\n\tlibabsl_crc_cord_state.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_crc_cord_state.so.20240722 (0x00007f0537fc4000)\n\tlibabsl_cordz_functions.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_cordz_functions.so.20240722 (0x00007f0537fbf000)\n\tlibabsl_cordz_handle.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_cordz_handle.so.20240722 (0x00007f0537fb7000)\n\tlibabsl_demangle_rust.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_demangle_rust.so.20240722 (0x00007f0537fb0000)\n\tlibabsl_crc32c.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_crc32c.so.20240722 (0x00007f0537faa000)\n\tlibabsl_exponential_biased.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_exponential_biased.so.20240722 (0x00007f0537fa5000)\n\tlibabsl_decode_rust_punycode.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_decode_rust_punycode.so.20240722 (0x00007f0537fa0000)\n\tlibabsl_crc_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_crc_internal.so.20240722 (0x00007f0537f98000)\n\tlibabsl_utf8_for_code_point.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_utf8_for_code_point.so.20240722 (0x00007f0537f93000)",
+        "stderr": ""
+      }
+    },
+    "/workspace/gpui-locked-profile/prefix/usr/libexec/ibus-ui-gtk3": {
+      "exists": true,
+      "sha256": "14ba497c9d61f7b69d359d41be5d522c6cdfbf3c35af79f9c1d7d1827f3b1f30",
+      "ldd": {
+        "command": [
+          "ldd",
+          "/workspace/gpui-locked-profile/prefix/usr/libexec/ibus-ui-gtk3"
+        ],
+        "rc": 0,
+        "stdout": "linux-vdso.so.1 (0x00007f1dc6b33000)\n\tlibibus-1.0.so.5 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libibus-1.0.so.5 (0x00007f1dc6a3f000)\n\tlibX11.so.6 => /lib/x86_64-linux-gnu/libX11.so.6 (0x00007f1dc68d4000)\n\tlibXi.so.6 => /lib/x86_64-linux-gnu/libXi.so.6 (0x00007f1dc68c0000)\n\tlibnotify.so.4 => /lib/x86_64-linux-gnu/libnotify.so.4 (0x00007f1dc68b2000)\n\tlibdbusmenu-gtk3.so.4 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libdbusmenu-gtk3.so.4 (0x00007f1dc689b000)\n\tlibdbusmenu-glib.so.4 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libdbusmenu-glib.so.4 (0x00007f1dc687e000)\n\tlibgtk-3.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgtk-3.so.0 (0x00007f1dc6080000)\n\tlibgdk-3.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgdk-3.so.0 (0x00007f1dc5f70000)\n\tlibpangocairo-1.0.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libpangocairo-1.0.so.0 (0x00007f1dc5f5f000)\n\tlibpango-1.0.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libpango-1.0.so.0 (0x00007f1dc5eec000)\n\tlibatk-1.0.so.0 => /lib/x86_64-linux-gnu/libatk-1.0.so.0 (0x00007f1dc5ec2000)\n\tlibcairo.so.2 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libcairo.so.2 (0x00007f1dc5d74000)\n\tlibgdk_pixbuf-2.0.so.0 => /lib/x86_64-linux-gnu/libgdk_pixbuf-2.0.so.0 (0x00007f1dc5d46000)\n\tlibwayland-client.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libwayland-client.so.0 (0x00007f1dc5d33000)\n\tlibxkbcommon.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 (0x00007f1dc5ce6000)\n\tlibgio-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgio-2.0.so.0 (0x00007f1dc5aee000)\n\tlibgobject-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0 (0x00007f1dc5a8b000)\n\tlibglib-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libglib-2.0.so.0 (0x00007f1dc5932000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007f1dc573e000)\n\tlibxcb.so.1 => /lib/x86_64-linux-gnu/libxcb.so.1 (0x00007f1dc5711000)\n\tlibXext.so.6 => /lib/x86_64-linux-gnu/libXext.so.6 (0x00007f1dc56fc000)\n\tlibgmodule-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgmodule-2.0.so.0 (0x00007f1dc56f5000)\n\tlibharfbuzz.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libharfbuzz.so.0 (0x00007f1dc55b4000)\n\tlibpangoft2-1.0.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libpangoft2-1.0.so.0 (0x00007f1dc5597000)\n\tlibfontconfig.so.1 => /lib/x86_64-linux-gnu/libfontconfig.so.1 (0x00007f1dc5547000)\n\tlibfribidi.so.0 => /lib/x86_64-linux-gnu/libfribidi.so.0 (0x00007f1dc5528000)\n\tlibcairo-gobject.so.2 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libcairo-gobject.so.2 (0x00007f1dc551d000)\n\tlibepoxy.so.0 => /lib/x86_64-linux-gnu/libepoxy.so.0 (0x00007f1dc53ed000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007f1dc52fd000)\n\tlibatk-bridge-2.0.so.0 => /lib/x86_64-linux-gnu/libatk-bridge-2.0.so.0 (0x00007f1dc52bf000)\n\tlibcloudproviders.so.0 => /lib/x86_64-linux-gnu/libcloudproviders.so.0 (0x00007f1dc52a5000)\n\tlibXfixes.so.3 => /lib/x86_64-linux-gnu/libXfixes.so.3 (0x00007f1dc529d000)\n\tlibwayland-cursor.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libwayland-cursor.so.0 (0x00007f1dc5293000)\n\tlibwayland-egl.so.1 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libwayland-egl.so.1 (0x00007f1dc528e000)\n\tlibXcursor.so.1 => /lib/x86_64-linux-gnu/libXcursor.so.1 (0x00007f1dc5281000)\n\tlibXdamage.so.1 => /lib/x86_64-linux-gnu/libXdamage.so.1 (0x00007f1dc527a000)\n\tlibXcomposite.so.1 => /lib/x86_64-linux-gnu/libXcomposite.so.1 (0x00007f1dc5275000)\n\tlibXrandr.so.2 => /lib/x86_64-linux-gnu/libXrandr.so.2 (0x00007f1dc5268000)\n\tlibXinerama.so.1 => /lib/x86_64-linux-gnu/libXinerama.so.1 (0x00007f1dc5263000)\n\tlibthai.so.0 => /lib/x86_64-linux-gnu/libthai.so.0 (0x00007f1dc5258000)\n\tlibz.so.1 => /lib/x86_64-linux-gnu/libz.so.1 (0x00007f1dc5236000)\n\tlibpng16.so.16 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libpng16.so.16 (0x00007f1dc51fd000)\n\tlibfreetype.so.6 => /lib/x86_64-linux-gnu/libfreetype.so.6 (0x00007f1dc512d000)\n\tlibXrender.so.1 => /lib/x86_64-linux-gnu/libXrender.so.1 (0x00007f1dc5120000)\n\tlibxcb-render.so.0 => /lib/x86_64-linux-gnu/libxcb-render.so.0 (0x00007f1dc5111000)\n\tlibxcb-shm.so.0 => /lib/x86_64-linux-gnu/libxcb-shm.so.0 (0x00007f1dc510c000)\n\tlibpixman-1.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libpixman-1.so.0 (0x00007f1dc505d000)\n\tlibjpeg.so.62 => /lib/x86_64-linux-gnu/libjpeg.so.62 (0x00007f1dc4fc6000)\n\tlibffi.so.8 => /lib/x86_64-linux-gnu/libffi.so.8 (0x00007f1dc4fb9000)\n\tlibmount.so.1 => /lib/x86_64-linux-gnu/libmount.so.1 (0x00007f1dc4f3d000)\n\tlibselinux.so.1 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libselinux.so.1 (0x00007f1dc4f09000)\n\tlibatomic.so.1 => /lib/x86_64-linux-gnu/libatomic.so.1 (0x00007f1dc4efd000)\n\tlibpcre2-8.so.0 => /lib/x86_64-linux-gnu/libpcre2-8.so.0 (0x00007f1dc4e4e000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007f1dc6b35000)\n\tlibXau.so.6 => /lib/x86_64-linux-gnu/libXau.so.6 (0x00007f1dc4e49000)\n\tlibXdmcp.so.6 => /lib/x86_64-linux-gnu/libXdmcp.so.6 (0x00007f1dc4e41000)\n\tlibgraphite2.so.3 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libgraphite2.so.3 (0x00007f1dc4e17000)\n\tlibexpat.so.1 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libexpat.so.1 (0x00007f1dc4de7000)\n\tlibatspi.so.0 => /lib/x86_64-linux-gnu/libatspi.so.0 (0x00007f1dc4da9000)\n\tlibdbus-1.so.3 => /lib/x86_64-linux-gnu/libdbus-1.so.3 (0x00007f1dc4d52000)\n\tlibdatrie.so.1 => /lib/x86_64-linux-gnu/libdatrie.so.1 (0x00007f1dc4d48000)\n\tlibbz2.so.1.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libbz2.so.1.0 (0x00007f1dc4d35000)\n\tlibbrotlidec.so.1 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libbrotlidec.so.1 (0x00007f1dc4d25000)\n\tlibblkid.so.1 => /lib/x86_64-linux-gnu/libblkid.so.1 (0x00007f1dc4cc4000)\n\tlibsystemd.so.0 => /lib/x86_64-linux-gnu/libsystemd.so.0 (0x00007f1dc4bae000)\n\tlibbrotlicommon.so.1 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libbrotlicommon.so.1 (0x00007f1dc4b8b000)\n\tlibcap.so.2 => /lib/x86_64-linux-gnu/libcap.so.2 (0x00007f1dc4b7d000)",
+        "stderr": ""
+      }
+    },
+    "/workspace/gpui-locked-profile/prefix/usr/libexec/ibus-dconf": {
+      "exists": true,
+      "sha256": "c9bd600abc7c7cf28a8698ed07273df8fce7354c8bb32198341883783fc9ab6e",
+      "ldd": {
+        "command": [
+          "ldd",
+          "/workspace/gpui-locked-profile/prefix/usr/libexec/ibus-dconf"
+        ],
+        "rc": 0,
+        "stdout": "linux-vdso.so.1 (0x00007fcbcf48f000)\n\tlibdconf.so.1 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libdconf.so.1 (0x00007fcbcf46c000)\n\tlibgio-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgio-2.0.so.0 (0x00007fcbcf274000)\n\tlibgobject-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0 (0x00007fcbcf211000)\n\tlibglib-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libglib-2.0.so.0 (0x00007fcbcf0b6000)\n\tlibibus-1.0.so.5 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libibus-1.0.so.5 (0x00007fcbcf02d000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fcbcee16000)\n\tlibgmodule-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgmodule-2.0.so.0 (0x00007fcbcee0f000)\n\tlibz.so.1 => /lib/x86_64-linux-gnu/libz.so.1 (0x00007fcbcedef000)\n\tlibmount.so.1 => /lib/x86_64-linux-gnu/libmount.so.1 (0x00007fcbced71000)\n\tlibselinux.so.1 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libselinux.so.1 (0x00007fcbced3d000)\n\tlibffi.so.8 => /lib/x86_64-linux-gnu/libffi.so.8 (0x00007fcbced30000)\n\tlibatomic.so.1 => /lib/x86_64-linux-gnu/libatomic.so.1 (0x00007fcbced26000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fcbcec36000)\n\tlibpcre2-8.so.0 => /lib/x86_64-linux-gnu/libpcre2-8.so.0 (0x00007fcbceb85000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fcbcf491000)\n\tlibblkid.so.1 => /lib/x86_64-linux-gnu/libblkid.so.1 (0x00007fcbceb24000)",
+        "stderr": ""
+      }
+    },
+    "/workspace/mozc-client-build/artifacts/mozc.xml": {
+      "exists": true,
+      "sha256": "dc18f3a3885856f4a17d0f4fe18197ddd9887d6725ae8659398625d6e17d7186"
+    },
+    "/workspace/mozc-client-build/artifacts/ibus-engine-mozc": {
+      "exists": true,
+      "sha256": "a600632241547d5e45afbbf23289fcd0b88bb101696df078aa32f1c74e1e5cda",
+      "ldd": {
+        "command": [
+          "ldd",
+          "/workspace/mozc-client-build/artifacts/ibus-engine-mozc"
+        ],
+        "rc": 0,
+        "stdout": "linux-vdso.so.1 (0x00007fb7d03c4000)\n\tlibibus-1.0.so.5 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libibus-1.0.so.5 (0x00007fb7d024b000)\n\tlibgio-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgio-2.0.so.0 (0x00007fb7d0053000)\n\tlibgobject-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0 (0x00007fb7cfff0000)\n\tlibglib-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libglib-2.0.so.0 (0x00007fb7cfe95000)\n\tlibxcb.so.1 => /lib/x86_64-linux-gnu/libxcb.so.1 (0x00007fb7cfe47000)\n\tlibxcb-xfixes.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libxcb-xfixes.so.0 (0x00007fb7cfe3e000)\n\tlibabsl_hash.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_hash.so.20240722 (0x00007fb7cfe39000)\n\tlibabsl_flags_reflection.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_reflection.so.20240722 (0x00007fb7cfe28000)\n\tlibabsl_raw_hash_set.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_raw_hash_set.so.20240722 (0x00007fb7cfe1e000)\n\tlibabsl_str_format_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_str_format_internal.so.20240722 (0x00007fb7cfe00000)\n\tlibabsl_throw_delegate.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_throw_delegate.so.20240722 (0x00007fb7cfdfa000)\n\tlibabsl_time_zone.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_time_zone.so.20240722 (0x00007fb7cfddf000)\n\tlibabsl_synchronization.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_synchronization.so.20240722 (0x00007fb7cfdcb000)\n\tlibabsl_time.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_time.so.20240722 (0x00007fb7cfdb6000)\n\tlibabsl_strings.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_strings.so.20240722 (0x00007fb7cfd94000)\n\tlibabsl_spinlock_wait.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_spinlock_wait.so.20240722 (0x00007fb7cfd8f000)\n\tlibabsl_status.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_status.so.20240722 (0x00007fb7cfd84000)\n\tlibabsl_statusor.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_statusor.so.20240722 (0x00007fb7cfd7e000)\n\tlibabsl_flags_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_internal.so.20240722 (0x00007fb7cfd70000)\n\tlibabsl_flags_marshalling.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_marshalling.so.20240722 (0x00007fb7cfd65000)\n\tlibabsl_flags_parse.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_parse.so.20240722 (0x00007fb7cfd53000)\n\tlibabsl_string_view.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_string_view.so.20240722 (0x00007fb7cfd4e000)\n\tlibabsl_raw_logging_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_raw_logging_internal.so.20240722 (0x00007fb7cfd49000)\n\tlibabsl_random_internal_randen.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_randen.so.20240722 (0x00007fb7cfd42000)\n\tlibabsl_random_internal_randen_slow.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_randen_slow.so.20240722 (0x00007fb7cfd3c000)\n\tlibabsl_random_internal_randen_hwaes_impl.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_randen_hwaes_impl.so.20240722 (0x00007fb7cfd37000)\n\tlibabsl_random_internal_pool_urbg.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_pool_urbg.so.20240722 (0x00007fb7cfd31000)\n\tlibprotobuf.so.32 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libprotobuf.so.32 (0x00007fb7cf9d4000)\n\tlibstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x00007fb7cf76c000)\n\tlibgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x00007fb7cf73f000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fb7cf54b000)\n\tlibgmodule-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgmodule-2.0.so.0 (0x00007fb7cf544000)\n\tlibz.so.1 => /lib/x86_64-linux-gnu/libz.so.1 (0x00007fb7cf524000)\n\tlibmount.so.1 => /lib/x86_64-linux-gnu/libmount.so.1 (0x00007fb7cf4a6000)\n\tlibselinux.so.1 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libselinux.so.1 (0x00007fb7cf472000)\n\tlibffi.so.8 => /lib/x86_64-linux-gnu/libffi.so.8 (0x00007fb7cf465000)\n\tlibatomic.so.1 => /lib/x86_64-linux-gnu/libatomic.so.1 (0x00007fb7cf45b000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fb7cf36b000)\n\tlibpcre2-8.so.0 => /lib/x86_64-linux-gnu/libpcre2-8.so.0 (0x00007fb7cf2bc000)\n\tlibXau.so.6 => /lib/x86_64-linux-gnu/libXau.so.6 (0x00007fb7cf2b5000)\n\tlibXdmcp.so.6 => /lib/x86_64-linux-gnu/libXdmcp.so.6 (0x00007fb7cf2ad000)\n\tlibabsl_city.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_city.so.20240722 (0x00007fb7cf2a8000)\n\tlibabsl_low_level_hash.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_low_level_hash.so.20240722 (0x00007fb7cf2a3000)\n\tlibabsl_flags_private_handle_accessor.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_private_handle_accessor.so.20240722 (0x00007fb7cf29e000)\n\tlibabsl_flags_config.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_config.so.20240722 (0x00007fb7cf295000)\n\tlibabsl_flags_commandlineflag.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_commandlineflag.so.20240722 (0x00007fb7cf290000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fb7d03c6000)\n\tlibabsl_int128.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_int128.so.20240722 (0x00007fb7cf289000)\n\tlibabsl_graphcycles_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_graphcycles_internal.so.20240722 (0x00007fb7cf281000)\n\tlibabsl_kernel_timeout_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_kernel_timeout_internal.so.20240722 (0x00007fb7cf27c000)\n\tlibabsl_stacktrace.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_stacktrace.so.20240722 (0x00007fb7cf275000)\n\tlibabsl_symbolize.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_symbolize.so.20240722 (0x00007fb7cf26c000)\n\tlibabsl_malloc_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_malloc_internal.so.20240722 (0x00007fb7cf266000)\n\tlibabsl_base.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_base.so.20240722 (0x00007fb7cf25e000)\n\tlibabsl_strings_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_strings_internal.so.20240722 (0x00007fb7cf258000)\n\tlibabsl_cord.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_cord.so.20240722 (0x00007fb7cf236000)\n\tlibabsl_strerror.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_strerror.so.20240722 (0x00007fb7cf231000)\n\tlibabsl_cordz_info.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_cordz_info.so.20240722 (0x00007fb7cf229000)\n\tlibabsl_flags_commandlineflag_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_commandlineflag_internal.so.20240722 (0x00007fb7cf224000)\n\tlibabsl_flags_usage.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_usage.so.20240722 (0x00007fb7cf21f000)\n\tlibabsl_flags_usage_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_usage_internal.so.20240722 (0x00007fb7cf210000)\n\tlibabsl_flags_program_name.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_flags_program_name.so.20240722 (0x00007fb7cf20b000)\n\tlibabsl_random_internal_randen_hwaes.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_randen_hwaes.so.20240722 (0x00007fb7cf206000)\n\tlibabsl_random_internal_platform.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_platform.so.20240722 (0x00007fb7cf200000)\n\tlibabsl_random_internal_seed_material.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_internal_seed_material.so.20240722 (0x00007fb7cf1fb000)\n\tlibabsl_random_seed_gen_exception.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_random_seed_gen_exception.so.20240722 (0x00007fb7cf1f4000)\n\tlibblkid.so.1 => /lib/x86_64-linux-gnu/libblkid.so.1 (0x00007fb7cf193000)\n\tlibabsl_debugging_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_debugging_internal.so.20240722 (0x00007fb7cf18c000)\n\tlibabsl_demangle_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_demangle_internal.so.20240722 (0x00007fb7cf17e000)\n\tlibabsl_cord_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_cord_internal.so.20240722 (0x00007fb7cf169000)\n\tlibabsl_crc_cord_state.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_crc_cord_state.so.20240722 (0x00007fb7cf161000)\n\tlibabsl_cordz_functions.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_cordz_functions.so.20240722 (0x00007fb7cf15c000)\n\tlibabsl_cordz_handle.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_cordz_handle.so.20240722 (0x00007fb7cf156000)\n\tlibabsl_demangle_rust.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_demangle_rust.so.20240722 (0x00007fb7cf14d000)\n\tlibabsl_crc32c.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_crc32c.so.20240722 (0x00007fb7cf147000)\n\tlibabsl_exponential_biased.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_exponential_biased.so.20240722 (0x00007fb7cf142000)\n\tlibabsl_decode_rust_punycode.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_decode_rust_punycode.so.20240722 (0x00007fb7cf13d000)\n\tlibabsl_crc_internal.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_crc_internal.so.20240722 (0x00007fb7cf137000)\n\tlibabsl_utf8_for_code_point.so.20240722 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libabsl_utf8_for_code_point.so.20240722 (0x00007fb7cf130000)",
+        "stderr": ""
+      }
+    },
+    "/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/weston/desktop-shell.so": {
+      "exists": true,
+      "sha256": "d45b6ded74379a7926a660497ee5b4a893caae72cb73e6c0683b99234862c738",
+      "ldd": {
+        "command": [
+          "ldd",
+          "/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/weston/desktop-shell.so"
+        ],
+        "rc": 0,
+        "stdout": "linux-vdso.so.1 (0x00007fdd49373000)\n\tlibexec_weston.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/weston/libexec_weston.so.0 (0x00007fdd49338000)\n\tlibweston-14.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libweston-14.so.0 (0x00007fdd492c1000)\n\tlibwayland-server.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libwayland-server.so.0 (0x00007fdd492a9000)\n\tlibpixman-1.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libpixman-1.so.0 (0x00007fdd491fa000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fdd48fe3000)\n\tlibwayland-client.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libwayland-client.so.0 (0x00007fdd48fd0000)\n\tlibinput.so.10 => /lib/x86_64-linux-gnu/libinput.so.10 (0x00007fdd48f6e000)\n\tlibevdev.so.2 => /lib/x86_64-linux-gnu/libevdev.so.2 (0x00007fdd48f50000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fdd48e5e000)\n\tlibdrm.so.2 => /lib/x86_64-linux-gnu/libdrm.so.2 (0x00007fdd48e47000)\n\tlibxkbcommon.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 (0x00007fdd48dfc000)\n\tlibpam.so.0 => /lib/x86_64-linux-gnu/libpam.so.0 (0x00007fdd48dea000)\n\tlibffi.so.8 => /lib/x86_64-linux-gnu/libffi.so.8 (0x00007fdd48ddd000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fdd49375000)\n\tlibmtdev.so.1 => /lib/x86_64-linux-gnu/libmtdev.so.1 (0x00007fdd48dd4000)\n\tlibudev.so.1 => /lib/x86_64-linux-gnu/libudev.so.1 (0x00007fdd48d8f000)\n\tlibwacom.so.9 => /lib/x86_64-linux-gnu/libwacom.so.9 (0x00007fdd48d7f000)\n\tlibaudit.so.1 => /lib/x86_64-linux-gnu/libaudit.so.1 (0x00007fdd48d48000)\n\tlibcap.so.2 => /lib/x86_64-linux-gnu/libcap.so.2 (0x00007fdd48d3c000)\n\tlibgudev-1.0.so.0 => /lib/x86_64-linux-gnu/libgudev-1.0.so.0 (0x00007fdd48d2d000)\n\tlibgobject-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libgobject-2.0.so.0 (0x00007fdd48cca000)\n\tlibglib-2.0.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libglib-2.0.so.0 (0x00007fdd48b71000)\n\tlibcap-ng.so.0 => /lib/x86_64-linux-gnu/libcap-ng.so.0 (0x00007fdd48b69000)\n\tlibatomic.so.1 => /lib/x86_64-linux-gnu/libatomic.so.1 (0x00007fdd48b5f000)\n\tlibpcre2-8.so.0 => /lib/x86_64-linux-gnu/libpcre2-8.so.0 (0x00007fdd48aae000)",
+        "stderr": ""
+      }
+    },
+    "/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libweston-14/x11-backend.so": {
+      "exists": true,
+      "sha256": "bb8a562dbf512ea5424f38f23b9c7dbf51b97ce2b34941bc12099f2fc4dc9bbf",
+      "ldd": {
+        "command": [
+          "ldd",
+          "/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libweston-14/x11-backend.so"
+        ],
+        "rc": 0,
+        "stdout": "linux-vdso.so.1 (0x00007fb8519b4000)\n\tlibweston-14.so.0 => /workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libweston-14.so.0 (0x00007fb851926000)\n\tlibwayland-server.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libwayland-server.so.0 (0x00007fb85190e000)\n\tlibpixman-1.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libpixman-1.so.0 (0x00007fb851861000)\n\tlibxkbcommon.so.0 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libxkbcommon.so.0 (0x00007fb851814000)\n\tlibxcb.so.1 => /lib/x86_64-linux-gnu/libxcb.so.1 (0x00007fb8517c6000)\n\tlibpng16.so.16 => /workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/libpng16.so.16 (0x00007fb85178d000)\n\tlibjpeg.so.62 => /lib/x86_64-linux-gnu/libjpeg.so.62 (0x00007fb8516f6000)\n\tlibwebp.so.7 => /lib/x86_64-linux-gnu/libwebp.so.7 (0x00007fb851674000)\n\tlibxcb-shm.so.0 => /lib/x86_64-linux-gnu/libxcb-shm.so.0 (0x00007fb85166d000)\n\tlibX11.so.6 => /lib/x86_64-linux-gnu/libX11.so.6 (0x00007fb851525000)\n\tlibX11-xcb.so.1 => /lib/x86_64-linux-gnu/libX11-xcb.so.1 (0x00007fb851520000)\n\tlibxcb-xkb.so.1 => /lib/x86_64-linux-gnu/libxcb-xkb.so.1 (0x00007fb851501000)\n\tlibc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x00007fb85130d000)\n\tlibm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x00007fb85121d000)\n\tlibdrm.so.2 => /lib/x86_64-linux-gnu/libdrm.so.2 (0x00007fb851206000)\n\tlibpam.so.0 => /lib/x86_64-linux-gnu/libpam.so.0 (0x00007fb8511f2000)\n\tlibffi.so.8 => /lib/x86_64-linux-gnu/libffi.so.8 (0x00007fb8511e5000)\n\t/lib64/ld-linux-x86-64.so.2 (0x00007fb8519b6000)\n\tlibXau.so.6 => /lib/x86_64-linux-gnu/libXau.so.6 (0x00007fb8511e0000)\n\tlibXdmcp.so.6 => /lib/x86_64-linux-gnu/libXdmcp.so.6 (0x00007fb8511d8000)\n\tlibz.so.1 => /lib/x86_64-linux-gnu/libz.so.1 (0x00007fb8511b8000)\n\tlibsharpyuv.so.0 => /lib/x86_64-linux-gnu/libsharpyuv.so.0 (0x00007fb8511ad000)\n\tlibaudit.so.1 => /lib/x86_64-linux-gnu/libaudit.so.1 (0x00007fb851176000)\n\tlibcap-ng.so.0 => /lib/x86_64-linux-gnu/libcap-ng.so.0 (0x00007fb85116e000)",
+        "stderr": ""
+      }
+    }
+  },
+  "environment": {
+    "PATH": "/workspace/gpui-locked-profile/prefix/usr/bin:/workspace/linux-user-apt/root/usr/bin:/workspace/yami-tools/bin:/home/agent/.local/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/override:/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/node/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin:/opt/codex/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/agent/.local/bin:/opt/codex/runtimes/codex-primary-runtime/dependencies/bin/fallback",
+    "MOON_HOME": "/workspace/yami-tools",
+    "PKG_CONFIG_SYSROOT_DIR": "/workspace/linux-user-apt/root",
+    "PKG_CONFIG_LIBDIR": "/workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu/pkgconfig:/workspace/linux-user-apt/root/usr/share/pkgconfig",
+    "WAYLAND_PROTOCOLS_DIR": "/workspace/linux-user-apt/root/usr/share/wayland-protocols",
+    "LD_LIBRARY_PATH": "/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/weston:/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu:/workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu",
+    "XKB_CONFIG_ROOT": "/workspace/gpui-locked-profile/prefix/usr/share/X11/xkb",
+    "LIBGL_DRIVERS_PATH": "/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/dri",
+    "WESTON_MODULE_MAP": "x11-backend.so=/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libweston-14/x11-backend.so;gl-renderer.so=/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libweston-14/gl-renderer.so",
+    "TMPDIR": "/workspace/review156-live-prep-agent/tmp",
+    "YAMI_RELEASE_APP_TREE": "/workspace/review156-live-prep-agent/app",
+    "YAMI_RELEASE_FRAMEWORK_TREE": "/workspace/review156-live-prep-agent/framework"
+  },
+  "proc_visibility_preflight": {
+    "accessible_process_fd_dirs": 6,
+    "inaccessible_process_fd_dirs": 708,
+    "implication": "If visibility is incomplete at teardown, writer cessation/artifact stability stays UNVERIFIED."
+  },
+  "prepared_files_sha256": {
+    "prepare-framework.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "verify-preparation.py": "ce4d29566b284511dec558ca4b2db58429cefdd3f1961a7befa8633336ecab64",
+    "preflight.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "env.sh": "3464716e4c0069a7f2830c10161abc3c9d14d5409c6eaa68fa4f355167ad3144",
+    "launch-after-confirmation.sh": "9010345c94d1a496fc37ba8fbd3727df807043d2242a75c31a9483f9e284c140",
+    "verify-live-artifacts.py": "a629efac8ed215fb076fedfd9c418d90afa9fa6f12d40ef6f95303ed6f4643bf",
+    "capture-provenance.py": "1e7a5610dfe722714b36958018f0f8fce7bdb952148f814c99c02400831c33ac"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "raw_artifact_hashes": "MATCH",
+  "fresh_binary_provenance": "MATCH",
+  "build": "PASS",
+  "preedit_probe": {
+    "result": "OBSERVED_CONSUMER_PREEDIT",
+    "expected": "\u306b",
+    "attempts": [
+      {
+        "generation": {
+          "command": "generation",
+          "sequence": null,
+          "status": "RETURNED",
+          "rc": 0,
+          "stdout": "suspended; owner and host retained\ncontinuation generation: 1\n",
+          "stderr": ""
+        },
+        "advance": {
+          "command": "advance",
+          "sequence": 1,
+          "status": "RETURNED",
+          "rc": 0,
+          "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+          "stderr": ""
+        }
+      },
+      {
+        "generation": {
+          "command": "generation",
+          "sequence": null,
+          "status": "RETURNED",
+          "rc": 0,
+          "stdout": "suspended; owner and host retained\ncontinuation generation: 2\n",
+          "stderr": ""
+        },
+        "advance": {
+          "command": "advance",
+          "sequence": 2,
+          "status": "RETURNED",
+          "rc": 0,
+          "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+          "stderr": ""
+        }
+      }
+    ],
+    "markers": [
+      {
+        "phase": "preedit",
+        "text": "\u306b",
+        "cursor": 1,
+        "epoch": 1
+      }
+    ]
+  },
+  "geometry_race": "BLOCKED_INITIAL_OR_HANDOFF_ERROR",
+  "cleanup_result": "FAIL_FORCED_TERMINATION_OWNER_NOT_PERSISTED",
+  "artifact_stability": "UNVERIFIED_WRITERS_OR_GROUPS",
+  "full_live_acceptance": "NOT_RUN"
+}
