@@ -21,7 +21,7 @@ def sha(path):
 
 try:
     for label, tree, expected in [
-        ('app', app_tree, 'cfa87adb6214f7ba50fa3a91075ca6e4eafddb9d'),
+        ('app', app_tree, 'e9fe5fe06111dce33be20f3f93d8be819194486f'),
         ('framework', framework_tree, '35b9041dfb3642b43ca37c604834942614eb50fb'),
         ('harness', harness_tree, None),
     ]:

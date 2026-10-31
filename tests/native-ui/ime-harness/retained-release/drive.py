@@ -44,7 +44,7 @@ if git(app_tree, 'status', '--porcelain') or git(framework_tree, 'status', '--po
 actual_binary = hashlib.sha256(app.read_bytes()).hexdigest()
 if actual_binary != expected_binary:
     raise SystemExit('binary digest differs from the independently captured build digest')
-if app_sha != 'cfa87adb6214f7ba50fa3a91075ca6e4eafddb9d' or framework_sha != '35b9041dfb3642b43ca37c604834942614eb50fb':
+if app_sha != 'e9fe5fe06111dce33be20f3f93d8be819194486f' or framework_sha != '35b9041dfb3642b43ca37c604834942614eb50fb':
     raise SystemExit('source revisions differ from the reviewed candidate pair')
 
 result = {
@@ -131,7 +131,10 @@ try:
     initial_receipt = send_command(socket_path, 'receipt')
     seq = value(initial_receipt, 'native receipt sequence')
     if seq is None:
-        raise RuntimeError('original unsupported receipt was not observable')
+        # This is a distinct, read-only snapshot of the native route; the
+        # runner's missing receipt does not establish an empty native FIFO.
+        result['native_head_inspection'] = send_command(socket_path, 'inspect-native')
+        raise RuntimeError('original unsupported receipt was not observable; native head inspection only')
     result['initial_receipt_sequence'] = seq
     result['initial_resolve'] = send_command(socket_path, 'resolve-release', seq)
     if result['initial_resolve']['rc'] != 0:
@@ -207,10 +210,16 @@ finally:
     # Guard flags are observations from this diagnostic app, not a stage or
     # host acceptance. Keep malformed markers in the raw log only.
     result['geometry_guard_markers'] = []
+    result['native_head_markers'] = []
     for line in text.splitlines():
         if line.startswith('YAMI_SETTINGS_GEOMETRY_GUARD '):
             try:
                 result['geometry_guard_markers'].append(json.loads(line.split(' ', 1)[1]))
+            except json.JSONDecodeError:
+                pass
+        if line.startswith('YAMI_SETTINGS_RETAINED_HEAD '):
+            try:
+                result['native_head_markers'].append(json.loads(line.split(' ', 1)[1]))
             except json.JSONDecodeError:
                 pass
     match = re.search(r'YAMI_SETTINGS_CONTROL \{"path":"(/tmp/yami-settings-[^"/]+/control.sock)"', text)

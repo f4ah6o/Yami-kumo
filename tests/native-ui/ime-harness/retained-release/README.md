@@ -1,7 +1,7 @@
 # Pinned intent / handoff exploratory harness
 
 This prepares a bounded live IBus/Mozc probe for Yami source
-`cfa87adb6214f7ba50fa3a91075ca6e4eafddb9d` (#160 diagnostic app, based on #142) and GPUI source
+`e9fe5fe06111dce33be20f3f93d8be819194486f` (#166 diagnostic app, based on #160) and GPUI source
 `35b9041dfb3642b43ca37c604834942614eb50fb` (#211). The app binary must be
 built by the harness in a new temporary workspace from that exact source pair.
 The harness rejects dirty app/framework/harness trees, mismatched source SHAs,
@@ -56,3 +56,5 @@ and stop is not requested after any timeout. Forced teardown remains a cleanup
 failure, not a successful owner release.
 
 This app only adds a rejected-stage guard marker. The new app and harness revisions require their own binary, CI, review and live result; prior #142 evidence does not carry over.
+
+If the runner has no unsupported receipt, this diagnostic queries the native head once without dispatch or ACK and then stops; it does not infer that Busy was caused by the observed head.
