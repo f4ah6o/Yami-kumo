@@ -50,6 +50,7 @@ pub(all) enum NativeReceiptStage {
   ReceiptAcknowledgedOnly
   ReceiptOwnerEntered
   ReceiptPlatformHandled
+  ReceiptPointerMovedHandled
   ReceiptSessionApplied
   ReceiptNoModelAction
   ReceiptActionRequired
@@ -67,7 +68,7 @@ struct NativeReceiptEntry {
 fn receipt_stage_rank(stage : NativeReceiptStage) -> Int {
   match stage {
     ReceiptAcknowledgedOnly => 0
-    ReceiptOwnerEntered | ReceiptPlatformHandled => 1
+    ReceiptOwnerEntered | ReceiptPlatformHandled | ReceiptPointerMovedHandled => 1
     ReceiptSessionApplied => 1
     ReceiptNoModelAction => 2
     ReceiptActionRequired => 2
@@ -89,13 +90,15 @@ fn same_text_observation_kind(
 }
 
 ///|
-/// Only the non-input events whose local effects are explicitly handled by
-/// this runner qualify; this does not certify scene or host geometry.
+/// Only the explicitly handled non-input events and an independently checked
+/// pointer move qualify; this does not certify scene or host geometry.
 fn same_handled_platform_kind(left : @platform.EventKind, right : @platform.EventKind) -> Bool {
   match (left, right) {
     (@platform.Resized(width=a, height=b), @platform.Resized(width=x, height=y)) => a == x && b == y
     (@platform.ScaleChanged, @platform.ScaleChanged) | (@platform.FrameCompleted, @platform.FrameCompleted) => true
     (@platform.FocusChanged(true), @platform.FocusChanged(true)) => true
+    (@platform.Input(@primitives.PointerMoved(position=a)), @platform.Input(@primitives.PointerMoved(position=b))) =>
+      a.x() == b.x() && a.y() == b.y()
     _ => false
   }
 }
@@ -822,6 +825,66 @@ pub fn SettingsRunOwner::receipt_stage_for_sequence(
 }
 
 ///|
+/// A read-only snapshot of the locally recorded prefix before an unsupported
+/// receipt. It is not native key provenance, a scene/geometry receipt, an ACK
+/// capability, or a guarantee about another consumer or an earlier focus.
+/// Callers must not use it alone to discard or acknowledge an event.
+pub fn SettingsRunOwner::unsupported_prefix_has_observed_stages(
+  self : SettingsRunOwner,
+) -> Bool {
+  if !self.suspended || self.running || self.destroyed || self.cutoff_done ||
+    !self.host_epoch_verified || !self.buffered.is_empty() ||
+    !self.held_platform.is_empty() || self.held_tab is Some(_) ||
+    self.inflight is Some(_) || self.owned_delivery is Some(_) ||
+    self.mounted.has_pending_actions() {
+    return false
+  }
+  let receipt = match self.pending_host_receipt {
+    Some(value) if value.event is None && value.entered is None => value
+    _ => return false
+  }
+  let pre_dispatch = match self.receipt_pre_dispatch {
+    Some(value) => value
+    None => return false
+  }
+  let current = match self.session { Some(value) => value; None => return false }
+  let owner = match self.terminal_owner { Some(value) => value; None => return false }
+  let field = match self.mounted.focused_text() { Some(value) => value; None => return false }
+  if receipt.sequence <= 0 || receipt.window != self.window ||
+    receipt.root != current.binding || receipt.epoch != current.epoch ||
+    pre_dispatch.sequence != receipt.sequence || pre_dispatch.window != receipt.window ||
+    pre_dispatch.root != receipt.root || pre_dispatch.epoch != receipt.epoch ||
+    self.host_epoch != Some(current.epoch) || field.binding_id() != current.binding ||
+    !owner.matches_session(self.window, current.epoch, current.binding) ||
+    !self.mounted.terminal_owner_is_current(owner) ||
+    self.entered_target is None ||
+    receipt.sequence.to_int64() != self.acknowledged_receipts.length().to_int64() + 1L {
+    return false
+  }
+  let mut entered = false
+  for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
+    let entry = self.acknowledged_receipts[i]
+    if entry.receipt.window != self.window || entry.receipt.sequence.to_int64() != i.to_int64() + 1L {
+      return false
+    }
+    match (entry.receipt.event, entry.stage) {
+      (None, ReceiptOwnerEntered) if !entered && entry.receipt.entered == self.entered_target &&
+        entry.receipt.root == current.binding && entry.receipt.epoch == current.epoch => entered = true
+      (Some(OrderedPlatform(event)), ReceiptPlatformHandled | ReceiptPointerMovedHandled) if
+        event.window() == self.window && event.sequence() == entry.receipt.sequence.to_int64() &&
+        (if entered {
+          entry.receipt.root == current.binding && entry.receipt.epoch == current.epoch
+        } else { entry.receipt.root == 0UL && entry.receipt.epoch == 0UL }) => ()
+      (Some(OrderedText(event)), ReceiptNoModelAction | ReceiptModelApplied) if entered &&
+        entry.receipt.root == current.binding && entry.receipt.epoch == current.epoch &&
+        event.window() == self.window && event.epoch() == current.epoch => ()
+      _ => return false
+    }
+  }
+  entered
+}
+
+///|
 /// Resolve only an already ACKed Destroyed observation for the original
 /// field. This is a terminal policy, not a host cutoff or permission to stop.
 pub fn SettingsRunOwner::resolve_destroyed_receipt(
@@ -967,8 +1030,12 @@ fn SettingsRunOwner::note_handled_platform(
   match entry.receipt.event {
     Some(OrderedPlatform(value)) if entry.receipt.window == event.window() &&
       value.window() == event.window() && value.sequence() == event.sequence() &&
+      value.scale() == event.scale() &&
       same_handled_platform_kind(value.kind(), event.kind()) &&
-      entry.stage is ReceiptAcknowledgedOnly => entry.stage = ReceiptPlatformHandled
+      entry.stage is ReceiptAcknowledgedOnly => entry.stage = match value.kind() {
+        @platform.Input(@primitives.PointerMoved(..)) => ReceiptPointerMovedHandled
+        _ => ReceiptPlatformHandled
+      }
     _ => ()
   }
 }
@@ -2057,7 +2124,23 @@ fn SettingsRunOwner::drive_inner(
               }
               _ => ()
             }
-            ignore(mounted.handle_event(value))
+            let pointer_move = input is @primitives.PointerMoved(..)
+            let prior_input_sequence = mounted.last_dispatched_input_sequence()
+            if ordered_text is Some(_) && pointer_move && mounted.has_pending_actions() {
+              return Err(runner_error("ordered_text", "pointer move cannot overtake a pending action"))
+            }
+            let handled = mounted.handle_event(value)
+            if ordered_text is Some(_) && pointer_move {
+              match handled {
+                Err(error) => return Err(error)
+                Ok(_) => ()
+              }
+              if prior_input_sequence >= value.sequence() ||
+                mounted.last_dispatched_input_sequence() != value.sequence() ||
+                mounted.has_pending_actions() {
+                return Err(runner_error("ordered_text", "pointer move dispatch is unresolved"))
+              }
+            }
             self.dirty = true
           }
           @platform.Composition(_) => {
