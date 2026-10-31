@@ -503,7 +503,9 @@ fn main {
       ordered_text=Some(retained_ordered),
     )
     if !entry.suspended() && entry.error() is None {
-      match entry.try_stop() {
+      let stopped = entry.try_stop()
+      control_close()
+      match stopped {
         Ok(_) => return
         Err(error) => abort(@common.format_framework_error(error))
       }
