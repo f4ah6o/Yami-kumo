@@ -265,6 +265,24 @@ pub type NativeDirectText = (@platform.WindowId, Bool) -> Result[
 ]
 
 ///|
+fn settings_transport_label(
+  platform : NativeSamplePlatform, port : NativeTextInputPort,
+) -> String {
+  match platform {
+    Windows => "imm32"
+    Macos => "appkit"
+    Linux => match port.linux_transport {
+      Some(probe) => match probe() {
+        WaylandIme => "text-input-v1"
+        DirectKeyboard => "direct-keyboard"
+        UnknownLinuxTransport => "unknown"
+      }
+      None => "unknown"
+    }
+  }
+}
+
+///|
 pub type NativeDialogAXPublish = (
   @platform.WindowId,
   Int64,
@@ -1720,6 +1738,9 @@ fn SettingsRunOwner::complete_pending_direct(
     }
     None => return Err(runner_error("ordered_text", "direct model requirement is unknown"))
   }
+  emit_native_marker(
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"direct-insert\",\"sequence\":\{direct.native_sequence()}}",
+  )
   self.pending_direct = None
   self.pending_direct_model = None
   self.pending_direct_fence = None
@@ -2957,11 +2978,7 @@ fn SettingsRunOwner::drive_inner(
                         })
                         self.last_document = state.document().text()
                         self.last_caret = settings_caret(state.caret())
-                        let transport = match platform {
-                          Windows => "imm32"
-                          Linux => "text-input-v1"
-                          Macos => "appkit"
-                        }
+                        let transport = settings_transport_label(platform, port)
                         emit_native_marker(
                           "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"text\",\"status\":\"started\",\"transport\":\"\{transport}\",\"epoch\":\{updated_epoch}}",
                         )
