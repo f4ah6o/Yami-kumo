@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from probe import preedit_markers, advance_until_preedit
 
 out = Path(os.environ['YAMI_RELEASE_OUT'])
 app = Path(os.environ['YAMI_RELEASE_BINARY'])
@@ -132,27 +133,30 @@ try:
     if 'native adapter acknowledged' not in result['initial_ack_stage']['stdout']:
         raise RuntimeError('successful ACK was not independently observed in owner ledger')
     result['release_policy'] = 'PASS_SCOPED'
-    # Probe only one candidate race. The previously applied preedit makes the
-    # scene dirty; native queue contents and result remain explicitly observed.
+    # Do not infer a dirty scene from the first bounded continuation: it may
+    # complete a prior frame while the next preedit remains queued.
+    baseline_count = len(preedit_markers(app_data()))
     subprocess.run(['xdotool', 'key', '--clearmodifiers', 'i'], check=True)
     time.sleep(.10)
-    generation = value(send_command(socket_path, 'generation'), 'continuation generation')
-    if generation is not None:
-        result['probe_advance'] = send_command(socket_path, 'advance', generation)
-    result['geometry_initial'] = send_command(socket_path, 'geometry-submit')
-    result['geometry_race'] = 'NOT_ESTABLISHED'
-    if result['geometry_initial']['rc'] != 0:
-        result['handoff'] = send_command(socket_path, 'geometry-handoff')
-        if result['handoff']['rc'] == 0:
-            result['geometry_retry'] = send_command(socket_path, 'geometry-submit')
-            if result['geometry_retry']['rc'] == 0:
-                result['geometry_race'] = 'OBSERVED_HANDOFF_AND_RETRY_RESPONSES_CAUSE_UNVERIFIED'
+    result['preedit_probe'] = advance_until_preedit(
+        app_data, lambda command, sequence=None: send_command(socket_path, command, sequence),
+        baseline_count, 'に', limit=8)
+    result['geometry_race'] = 'NOT_RUN_CONSUMER_PREEDIT_NOT_OBSERVED'
+    if result['preedit_probe']['result'] == 'OBSERVED_CONSUMER_PREEDIT':
+        result['geometry_initial'] = send_command(socket_path, 'geometry-submit')
+        result['geometry_race'] = 'NOT_ESTABLISHED'
+        if result['geometry_initial']['rc'] != 0:
+            result['handoff'] = send_command(socket_path, 'geometry-handoff')
+            if result['handoff']['rc'] == 0:
+                result['geometry_retry'] = send_command(socket_path, 'geometry-submit')
+                if result['geometry_retry']['rc'] == 0:
+                    result['geometry_race'] = 'OBSERVED_HANDOFF_AND_RETRY_RESPONSES_CAUSE_UNVERIFIED'
+                else:
+                    result['geometry_race'] = 'FAIL_RETRY_RETAINED'
             else:
-                result['geometry_race'] = 'FAIL_RETRY_RETAINED'
+                result['geometry_race'] = 'BLOCKED_INITIAL_OR_HANDOFF_ERROR'
         else:
-            result['geometry_race'] = 'BLOCKED_INITIAL_OR_HANDOFF_ERROR'
-    else:
-        result['geometry_race'] = 'NOT_RUN_NO_BUSY_OBSERVED'
+            result['geometry_race'] = 'NOT_RUN_NO_BUSY_OBSERVED'
     result['preedit_markers'] = re.findall(r'^YAMI_NATIVE_UI_SETTINGS .*"phase":"preedit".*$', app_data(), re.M)
     result['commit_markers'] = re.findall(r'^YAMI_NATIVE_UI_SETTINGS .*"phase":"commit".*$', app_data(), re.M)
     result['scene_and_caret'] = 'NOT_RUN'
