@@ -1049,7 +1049,7 @@ test "owned delivery retains extracted action until model application" {
 }
 
 ///|
-test "applied owned commit survives focus change without reapplication" {
+test "applied owned commit delays focus until its model action is retained" {
   let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
   let port = NativeTextInputPort::new(
     fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
@@ -1068,20 +1068,20 @@ test "applied owned commit survives focus change without reapplication" {
   assert_true(receipt.applied())
   assert_true(receipt.action_required() is Some(true))
   assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日本")))
-  assert_true(owner.mounted.focus(@shared_settings.settings_save()))
-  assert_true(owner.mounted.note_owned_text(receipt) is Err(_))
+  assert_false(owner.mounted.focus(@shared_settings.settings_save()))
   assert_true(owner.mounted.apply_owned_text(receipt) is Err(_))
-  assert_true(owner.mounted.mark_owned_text_model_applied(receipt) is Err(_))
   assert_true(owner.owned_text_delivery() is Some(_))
   assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日本")))
   assert_eq(owner.model().name(), "")
-  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
-  assert_true(owner.mounted.note_owned_text(receipt) is Err(_))
-  assert_true(owner.mounted.owned_text_action(receipt) is Err(_))
-  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "日本")
+  owner.mounted.note_owned_text(receipt).unwrap()
+  let action = owner.mounted.owned_text_action(receipt).unwrap().unwrap()
+  let next = owner.settings.update(@shared_settings.Ui(action))
+  owner.mounted.mark_owned_text_model_applied(receipt).unwrap()
+  owner.settings = next
+  assert_eq(owner.model().name(), "日本")
+  assert_true(owner.mounted.focus(@shared_settings.settings_save()))
   assert_eq(host.stop_count(), 0)
 }
-
 ///|
 test "suspended applied delivery reconciles retained action once" {
   let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
@@ -1144,7 +1144,7 @@ test "suspended applied delivery reconciles retained action once" {
 }
 
 ///|
-test "focus change after action extraction retains the original action" {
+test "extracted action resolves before focus changes" {
   let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
   let port = NativeTextInputPort::new(
     fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
@@ -1166,19 +1166,20 @@ test "focus change after action extraction retains the original action" {
   owner.mounted.apply_owned_text(receipt).unwrap()
   owner.mounted.note_owned_text(receipt).unwrap()
   assert_true(owner.mounted.owned_text_action(receipt).unwrap() is Some(@view.TextChanged(_, "日本")))
-  assert_true(owner.mounted.focus(@shared_settings.settings_save()))
+  assert_false(owner.mounted.focus(@shared_settings.settings_save()))
   owner.suspended = true
-  assert_true(owner.mounted.mark_owned_text_model_applied(receipt) is Err(_))
-  assert_true(owner.reconcile_owned_delivery() is Err(_))
   assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日本")))
   assert_true(owner.owned_text_delivery() is Some(_))
   assert_true(owner.inflight_record() is Some(OrderedText(_)))
   assert_eq(owner.model().name(), "")
+  owner.reconcile_owned_delivery().unwrap()
+  assert_eq(owner.model().name(), "日本")
+  assert_true(receipt.model_applied())
   assert_true(owner.mounted.apply_owned_text(receipt) is Err(_))
+  assert_true(owner.mounted.focus(@shared_settings.settings_save()))
   assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
 }
-
 ///|
 test "owned recovery rejects model ABA while retaining the original action" {
   let (owner, _) = publication_fixture()

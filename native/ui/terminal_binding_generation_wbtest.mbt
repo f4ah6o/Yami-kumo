@@ -88,13 +88,18 @@ test "matching original field still applies ordered preedit and commit once" {
   let second = mounted.reserve_owned_text(owner, commit).unwrap()
   mounted.apply_owned_text(second).unwrap()
   mounted.note_owned_text(second).unwrap()
-  assert_true(
-    mounted.owned_text_action(second).unwrap()
-    is Some(@view.TextChanged(_, "日本")),
-  )
+  let action = mounted.owned_text_action(second).unwrap().unwrap()
+  let model_name = match action {
+    @view.TextChanged(_, value) => value
+    _ => abort("unexpected model action")
+  }
+  assert_eq(model_name, "日本")
   assert_eq(mounted.focused_text().unwrap().document().text(), "日本")
   assert_true(mounted.reserve_owned_text(owner, commit) is Err(_))
   assert_true(mounted.apply_owned_text(second) is Err(_))
+  assert_true(mounted.text_input(7UL, commit) is Err(_))
+  // The test-owned model has now accepted the extracted action.
+  mounted.mark_owned_text_model_applied(second).unwrap()
   assert_true(mounted.text_input(7UL, commit) is Ok(false))
   assert_eq(mounted.focused_text().unwrap().document().text(), "日本")
 }
