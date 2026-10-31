@@ -2631,6 +2631,28 @@ test "publication retirement refuses stale owner and ambiguous records" {
 }
 
 ///|
+test "publication and retirement refuse a replaced entered target" {
+  let (owner, frame) = publication_fixture()
+  owner.present_with_frame_publication(frame, fn(_, _) { Ok(()) }).unwrap()
+  assert_eq(owner.pending_frame_publication().unwrap().native_entered_identity(), (5, 11L, 4))
+  owner.entered_target = Some((5, 12L, 4))
+  owner.complete_frame_publication()
+  assert_eq(owner.completed_publication_count(), 0)
+  assert_true(owner.pending_frame_publication() is Some(_))
+  assert_eq(owner.acknowledged_receipt_count(), 1)
+  assert_false(owner.can_stop())
+  let (other, other_frame) = publication_fixture()
+  other.present_with_frame_publication(other_frame, fn(_, _) { Ok(()) }).unwrap()
+  other.complete_frame_publication()
+  other.suspended = true
+  other.entered_target = Some((5, 12L, 4))
+  assert_true(other.retire_completed_publication(0) is Err(_))
+  assert_eq(other.retired_native_watermark(), 0)
+  assert_eq(other.acknowledged_receipt_count(), 1)
+  assert_false(other.can_stop())
+}
+
+///|
 test "unsupported ACK is never retired solely by a frame" {
   let (owner, frame) = publication_fixture()
   let binding = owner.session.unwrap().binding
@@ -2723,7 +2745,11 @@ test "a later frame can retire the next consecutive prefix only" {
   owner.present_with_frame_publication(frame, fn(_, _) { Ok(()) }).unwrap()
   owner.complete_frame_publication()
   owner.suspended = true
-  assert_eq(owner.retire_completed_publication(0).unwrap(), 1)
+  let entry : SettingsEntryController = {
+    host: owner.host, outcome: Suspended(owner, runner_error("test", "interrupted")),
+    stop_attempted: false, stopped: false,
+  }
+  assert_eq(entry.retire_publication_watermark(1L).unwrap(), 1)
   let binding = owner.session.unwrap().binding
   let next = @platform.Event::new(owner.window, 2L, 1.0, @platform.FrameCompleted)
   owner.acknowledged_receipts.push({
@@ -2735,7 +2761,10 @@ test "a later frame can retire the next consecutive prefix only" {
   owner.complete_frame_publication()
   assert_eq(owner.completed_publication_count(), 1)
   assert_eq(owner.completed_publication(0).unwrap().watermark(), 2)
-  assert_eq(owner.retire_completed_publication(0).unwrap(), 2)
+  // A client retrying the old watermark cannot retire this later frame.
+  assert_true(entry.retire_publication_watermark(1L) is Err(_))
+  assert_eq(owner.acknowledged_receipt_count(), 1)
+  assert_eq(entry.retire_publication_watermark(2L).unwrap(), 2)
   assert_eq(owner.retired_native_watermark(), 2)
   assert_eq(owner.acknowledged_receipt_count(), 0)
   assert_false(owner.can_stop())

@@ -73,6 +73,7 @@ pub struct SettingsFramePublication {
   priv window : @platform.WindowId
   priv binding : UInt64
   priv epoch : UInt64
+  priv entered : (Int32, Int64, Int32)
   priv field_progress : (UInt64, Int32, Int64)
   priv caret : @primitives.Rect
   priv watermark : Int32
@@ -107,6 +108,11 @@ pub fn SettingsFramePublication::presented(self : SettingsFramePublication) -> B
 
 ///|
 pub fn SettingsFramePublication::frame_completed(self : SettingsFramePublication) -> Bool { self.frame_completed }
+
+///|
+pub fn SettingsFramePublication::native_entered_identity(
+  self : SettingsFramePublication,
+) -> (Int32, Int64, Int32) { self.entered }
 
 ///|
 pub fn SettingsFramePublication::owner_identity(
@@ -1081,6 +1087,7 @@ fn SettingsRunOwner::prepare_frame_publication(
   let current = match self.session { Some(value) => value; None => return None }
   let owner = match self.terminal_owner { Some(value) => value; None => return None }
   let field = match self.mounted.focused_text() { Some(value) => value; None => return None }
+  let entered_target = match self.entered_target { Some(value) => value; None => return None }
   if self.host_epoch != Some(current.epoch) ||
     !owner.matches_session(self.window, current.epoch, current.binding) ||
     !self.mounted.terminal_owner_is_current(owner) ||
@@ -1102,7 +1109,7 @@ fn SettingsRunOwner::prepare_frame_publication(
       None => break
     }
     let valid = match (entry.receipt.event, stage) {
-      (None, ReceiptOwnerEntered) if !entered && entry.receipt.entered == self.entered_target &&
+      (None, ReceiptOwnerEntered) if !entered && entry.receipt.entered == Some(entered_target) &&
         entry.receipt.root == current.binding && entry.receipt.epoch == current.epoch => {
           entered = true
           true
@@ -1124,7 +1131,7 @@ fn SettingsRunOwner::prepare_frame_publication(
   }
   if !entered || watermark == 0 || prefix.is_empty() { return None }
   Some({
-    frame, window: self.window, binding: current.binding, epoch: current.epoch,
+    frame, window: self.window, binding: current.binding, epoch: current.epoch, entered: entered_target,
     field_progress: owner.observed_progress(), caret: self.last_caret, watermark,
     base_watermark: retired, prefix,
     presented: false, frame_completed: false,
@@ -1175,6 +1182,7 @@ fn SettingsRunOwner::complete_frame_publication(self : SettingsRunOwner) -> Unit
   }
   if candidate.presented && candidate.window == self.window &&
     candidate.binding == current.binding && candidate.epoch == current.epoch &&
+    self.entered_target == Some(candidate.entered) &&
     self.host_epoch_verified && self.host_epoch == Some(current.epoch) &&
     owner.matches_session(self.window, current.epoch, current.binding) &&
     self.mounted.terminal_owner_is_current(owner) &&
@@ -1222,7 +1230,7 @@ pub fn SettingsRunOwner::retired_native_watermark(self : SettingsRunOwner) -> In
 /// Unsupported records and any unresolved model/owner/geometry stage stay
 /// owned. The compact summary preserves the original lease and a monotonic
 /// native sequence fence; it neither ends IME nor stops the host.
-pub fn SettingsRunOwner::retire_completed_publication(
+fn SettingsRunOwner::retire_completed_publication(
   self : SettingsRunOwner, index : Int,
 ) -> Result[Int32, @diagnostics.FrameworkError] {
   if !self.suspended || self.running || self.destroyed || self.cutoff_done ||
@@ -1242,6 +1250,7 @@ pub fn SettingsRunOwner::retire_completed_publication(
   let (generation, _, _) = owner.observed_progress()
   if base < 0 || candidate.base_watermark != base || !candidate.presented || !candidate.frame_completed ||
     candidate.window != self.window || candidate.binding != current.binding || candidate.epoch != current.epoch ||
+    candidate.entered != entered ||
     self.host_epoch != Some(current.epoch) || !self.mounted.terminal_owner_is_current(owner) ||
     candidate.field_progress != owner.observed_progress() || candidate.frame.revision() != frame.revision() ||
     candidate.caret != self.last_caret || candidate.prefix.is_empty() ||

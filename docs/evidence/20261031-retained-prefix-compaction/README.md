@@ -38,3 +38,14 @@ and native host updates atomic. It does not prove general live IME, candidate
 lookup, cleanup, the normal entry's automatic recovery, or a source-override-
 free registry consumer. Native/UI integration, exact-head independent review,
 CI and live revalidation are outstanding.
+
+The first candidate's independent review found the public index-based helper
+could retire a later frame after index reuse. The helper is now package-private;
+external callers use only the exact-watermark controller method, and a retry of
+an old watermark after the next frame is rejected. The reviewed head also had
+a white-box hardening opportunity where the captured native Entered tuple could
+be replaced before completion/retirement. The frame candidate now captures and
+rechecks that tuple at both points, preserving receipts on mismatch. The updated
+UI/common suite passed 170/170 against the same source override; the saved
+`entered-fence.log` SHA-256 is
+`70a61b753a08e72eabd9d4378ebb4dd9e6fcfe605942b867fad7b856676ad62d`.
