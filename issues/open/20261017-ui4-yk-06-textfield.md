@@ -60,6 +60,18 @@ guard は旧 session の記録を別 field に適用しないが、focus loss �
 epoch / target は拒否する。空の一回の poll だけを排他 barrier と扱わず、host が
 提供する順序・quiescence の保証を調査して必要な契約変更から着手する。
 
+### 2026-10-31: Shared Settings の部分 live 観測と残る owner 境界
+
+上の「OS IME NOT RUN」は以前の対象 revision の記録であり、後続の独立した部分実行を消さない。現在の本ゴールは **未達**。
+
+- **実装の所在**：Yami [#117](https://github.com/f4ah6o/Yami-kumo/pull/117) `585ff82109df0fa006f3031258476257d0b9cc86` と gpui [#200](https://github.com/gpui-mbt/gpui.mbt/pull/200) `53e42a5888167fd9203b27f6558deabaf5c54e4b` は作業時点では PR-only。same-HEAD の独立レビューと必要な CI は実施済みだが、公開 registry だけの依存解決ではない。現行 package の不足は [#90](https://github.com/f4ah6o/Yami-kumo/pull/90) の clean fixture を参照。
+- **Linux live の実行結果**：[#119](https://github.com/f4ah6o/Yami-kumo/pull/119) の独立監査済み raw 記録は、同じ #117 source から build した binary SHA-256 `8355c8c861faa784fe3c0a94ae663caad04c41a5d7fb2b35354f4c29f0f5b7f6`、harness `b6e77fb61a38b3ca763b4bc7729ad837e2182fc2`、nested Weston／live IBus-Mozc／X11 注入の組を使用した。preedit 8件と `Commit("日本")` 1件を記録し、native sequence 24 の独立した local receipt stage は `ModelApplied`。raw manifest SHA-256 `e31640497f7ba99151df07cd018420e741e061f4f05892bb7eebcf42f9d89563`。これはその receipt の stage 証拠であり、scene／caret、undo 履歴全般、候補 UI、物理 keyboard の合格ではない。
+- **候補・操作・終了**：IBus log は `日本` 等の lookup state と後続 hidden state を含むが、候補行／選択／画面の同期照合は **NOT_RUN**。Dialog、focus 復帰、再open、resize／blur／close 競合もこの run では **NOT_RUN**。stop は拒否され、隔離テスト process の SIGTERM により in-memory owner は保存されなかったため cleanup は **FAIL**。
+- **bounded scene の blocker**：suspended `advance_once` は field/model 適用後に戻り dirty scene／caret を present しない（再現 fixture branch `aafa76977033c453b14e9598db16901215a767cd`）。[Yami #120](https://github.com/f4ah6o/Yami-kumo/pull/120)、[#121](https://github.com/f4ah6o/Yami-kumo/pull/121)、[#122](https://github.com/f4ah6o/Yami-kumo/pull/122) は元 owner の preview／rollback を再測定し local candidate を保持する PR-only 作業で、host geometry receipt、runtime/focus・scene の coordinated publication、失敗後の rollback／reconcile は未実装。候補は publish を拒否し、実アプリ resize 回復の証拠ではない。
+- **旧 owner／直接入力の blocker**：Tab cutoff 後も元 terminal owner と direct receipt は残り、次 epoch は旧 owner の明示解決まで拒否される。direct receipt の frame prefix／retirement は [#118](https://github.com/f4ah6o/Yami-kumo/pull/118) でも通常の未分類 key が先行すると保留される。gpui #200 の inherited XKB compose は Ctrl／Meta press で未解決 composition を破棄し得る P1 が独立 fixture で発見され、[gpui #203](https://github.com/gpui-mbt/gpui.mbt/pull/203) は fail-closed 候補にすぎず recovery として未受入。これを IBus/Mozc の #119 観測と混同しない。
+
+次は同一 owner の accepted record／action／model、host cutoff、geometry、scene を段階別に保持し、失敗後も再適用や新 epoch への付替えをせず復旧できる transaction を実装・検証する。候補 UI、Dialog 再open、race、cleanup、公開依存、macOS 実機は別 gate のまま残す。
+
 ## 5. 非対象
 
 inputのふりをしたCanvas編集、全キーからの文字列自作、Rich text、古い文字モデルの複製。
