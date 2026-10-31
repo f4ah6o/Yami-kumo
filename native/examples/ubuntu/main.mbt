@@ -140,7 +140,10 @@ fn control_receipt_sequence(entry : @common.SettingsEntryController) -> Int64 {
 ///|
 /// Each request is bounded. Idle or a disconnected client never releases an
 /// unresolved owner; this experimental service does not claim completion.
-fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
+fn run_settings_control(
+  entry : @common.SettingsEntryController,
+  release_policy : (Int64) -> Result[Unit, @diagnostics.FrameworkError],
+) -> Unit {
   println("YAMI_SETTINGS_CONTROL {\"state\":\"active\",\"scene_published\":false}")
   match entry.error() {
     Some(error) => println("YAMI_SETTINGS_CONTROL reason: " + @common.format_framework_error(error))
@@ -168,6 +171,11 @@ fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
       98 => match entry.owner() {
         Some(owner) if owner.unsupported_prefix_has_observed_stages() => control_reply(88)
         _ => control_reply(81)
+      }
+      // k: the Ubuntu adapter must validate its original native receipt.
+      107 => match release_policy(control_sequence()) {
+        Ok(_) => control_reply(65)
+        Err(error) => control_step_error(error, 69)
       }
       // r: retry ACK only for the inspected native sequence.
       114 => match entry.retry_receipt_sequence(control_sequence()) {
@@ -205,6 +213,7 @@ fn run_settings_control(entry : @common.SettingsEntryController) -> Unit {
           Some(@common.ReceiptOwnerEntered) => control_reply(89)
           Some(@common.ReceiptPlatformHandled) => control_reply(80)
           Some(@common.ReceiptPointerMovedHandled) => control_reply(72)
+          Some(@common.ReceiptUnsupportedAcknowledged) => control_reply(71)
           Some(@common.ReceiptSessionApplied) => control_reply(74)
           Some(@common.ReceiptNoModelAction) => control_reply(90)
           Some(@common.ReceiptActionRequired) => control_reply(76)
@@ -318,6 +327,10 @@ fn main {
       fn(_) { Err(@diagnostics.FrameworkError::new(@diagnostics.InvalidInput, "retained_end_policy")) },
       fn(_) { Ok(None) },
     )
+    // The opt-in entry owns this host, claims the retained route before
+    // creating the first window, and uses no other input reader. A captured
+    // native receipt is meaningful only within that closed ownership scope.
+    let unsupported_native : Ref[@ubuntu_host.RetainedOrderedReceipt?] = Ref(None)
     let retained_ordered = @common.NativeOrderedTextPort::with_retained_receipts(
       fn(timeout) {
         let observed = match retained.peek() {
@@ -334,6 +347,10 @@ fn main {
           Err(error) => Err(error)
           Ok(None) => Ok(None)
           Ok(Some(receipt)) => {
+            match receipt.event() {
+              @ubuntu_host.Unhandled(_) => unsupported_native.val = Some(receipt)
+              _ => ()
+            }
             match receipt.event() {
               @ubuntu_host.Lifecycle(target, @ubuntu_host.Entered) if
                 target.window == receipt.native_window() &&
@@ -416,7 +433,47 @@ fn main {
       direct_text=Some(fn(window, enabled) { host.set_direct_keyboard_text(window, enabled) }),
       ordered_text=Some(retained_ordered),
     )
-    run_settings_control(entry)
+    run_settings_control(entry, fn(sequence) {
+      let owner = match entry.owner() {
+        Some(value) => value
+        None => return Err(@diagnostics.FrameworkError::new(@diagnostics.InvalidInput, "release_owner_unavailable"))
+      }
+      let receipt = match unsupported_native.val {
+        Some(value) => value
+        None => return Err(@diagnostics.FrameworkError::new(@diagnostics.InvalidInput, "release_native_receipt_unavailable"))
+      }
+      match owner.pending_receipt_identity() {
+        Some((window, native_sequence, root, epoch)) if sequence > 0L &&
+          native_sequence.to_int64() == sequence && receipt.native_sequence() == native_sequence &&
+          receipt.native_window() == window && receipt.root() == root && receipt.epoch() == epoch => ()
+        _ => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "release_native_receipt_changed"))
+      }
+      let result = owner.with_unsupported_native_policy(sequence, fn(entered, ack) {
+        let (native_epoch, native_seat, native_proxy) = entered
+        // GPUI returns evidence only for this exact raw, printable release.
+        // First host window/focus and no observed press are necessary here,
+        // but are not a policy for any other consumer, host or focus owner.
+        let evidence = match receipt.physical_release_evidence() {
+          Err(error) => return Err(error)
+          Ok(None) => return Err(@diagnostics.FrameworkError::new(@diagnostics.InvalidInput, "release_native_evidence_unavailable"))
+          Ok(Some(value)) => value
+        }
+        let target = evidence.target()
+        if !evidence.claim_before_any_window() || evidence.host_window_generation() != Some(1) ||
+          evidence.focus_generation() != 1 || !(evidence.prior() is @ubuntu_host.NoPressObservedSinceFocus) ||
+          target.window != receipt.native_window() ||
+          target.sequence != receipt.native_sequence().to_int64() ||
+          target.epoch != native_epoch || target.seat != native_seat ||
+          target.proxy_generation != native_proxy || retained.native_epoch() != Some(target.epoch) {
+          return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "release_native_policy_unproven"))
+        }
+        // The common continuation rechecks the same owner/prefix; the GPUI
+        // route ACK rechecks the exact native head and focus/epoch identity.
+        ack()
+      })
+      if result is Ok(_) { unsupported_native.val = None }
+      result
+    })
     return
   }
   let legacy = @ubuntu_host.TextHostRoute::new(host)

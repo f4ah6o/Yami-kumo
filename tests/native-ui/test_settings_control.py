@@ -119,6 +119,24 @@ class ControlSocketTests(unittest.TestCase):
             self.assertEqual(self.lib.gpui_settings_control_next(2000), 0)
             self.assertEqual(peer.recv(1), b"")
 
+    def test_release_policy_requires_exact_positive_native_sequence(self) -> None:
+        script = Path(__file__).resolve().parents[2] / "scripts/settings_retained_control.py"
+        request = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "resolve-release", "--sequence", "11"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("k"))
+        self.assertEqual(self.lib.gpui_settings_control_sequence(), 11)
+        self.lib.gpui_settings_control_reply(ord("E"))
+        stdout, stderr = request.communicate(timeout=3)
+        self.assertNotEqual(request.returncode, 0, stderr)
+        self.assertIn("owner and host remain retained", stdout)
+        with socket.socket(socket.AF_UNIX) as peer:
+            peer.connect(str(self.path))
+            peer.sendall(b"k" + struct.pack("!q", 0))
+            self.assertEqual(self.lib.gpui_settings_control_next(2000), 0)
+            self.assertEqual(peer.recv(1), b"")
+
     def test_receipt_query_and_retry_use_native_sequence(self) -> None:
         script = Path(__file__).resolve().parents[2] / "scripts/settings_retained_control.py"
         query = subprocess.Popen(

@@ -7,7 +7,7 @@ import socket
 import struct
 import sys
 
-COMMANDS = {"status": b"s", "receipt": b"t", "prefix": b"b", "stage": b"j", "owned": b"o", "reconcile": b"d", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resume": b"u", "cutoff": b"c", "stop": b"q"}
+COMMANDS = {"status": b"s", "receipt": b"t", "prefix": b"b", "stage": b"j", "owned": b"o", "reconcile": b"d", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resolve-release": b"k", "resume": b"u", "cutoff": b"c", "stop": b"q"}
 REPLIES = {
     b"S": "suspended; owner and host retained",
     b"N": "no suspended owner; inspect the application's reason log",
@@ -23,6 +23,7 @@ REPLIES = {
     b"Y": "entered target recorded and acknowledged; scene and shutdown are not implied",
     b"P": "non-input platform event handled locally; geometry and shutdown are not implied",
     b"H": "pointer move passed local dispatch without a pending action; scene and geometry are not implied",
+    b"G": "native adapter acknowledged an unsupported record under its own policy; scene and shutdown are not implied",
     b"Z": "owned text observation applied without a model action; geometry is not implied",
     b"X": "local retained prefix resolved; this is not native proof or permission to ACK",
     b"Q": "local retained prefix unresolved or unavailable; owner remains retained",
@@ -42,16 +43,16 @@ def main() -> int:
     parser.add_argument("command", choices=COMMANDS)
     parser.add_argument("--sequence", type=int, help="positive record sequence or continuation generation")
     args = parser.parse_args()
-    if args.command in ("apply", "retry-ack", "resume", "advance", "stage", "reconcile") and (args.sequence is None or not 0 < args.sequence < 2**63):
-        parser.error("apply, retry-ack, resume, advance, stage and reconcile require a positive --sequence")
-    if args.command not in ("apply", "retry-ack", "resume", "advance", "stage", "reconcile") and args.sequence is not None:
+    if args.command in ("apply", "retry-ack", "resolve-release", "resume", "advance", "stage", "reconcile") and (args.sequence is None or not 0 < args.sequence < 2**63):
+        parser.error("apply, retry-ack, resolve-release, resume, advance, stage and reconcile require a positive --sequence")
+    if args.command not in ("apply", "retry-ack", "resolve-release", "resume", "advance", "stage", "reconcile") and args.sequence is not None:
         parser.error("--sequence is not valid for this command")
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as peer:
             peer.settimeout(3.0)
             peer.connect(args.path)
             payload = COMMANDS[args.command]
-            if args.command in ("apply", "retry-ack", "resume", "advance", "stage", "reconcile"):
+            if args.command in ("apply", "retry-ack", "resolve-release", "resume", "advance", "stage", "reconcile"):
                 payload += struct.pack("!q", args.sequence)
             peer.sendall(payload)
             result = peer.recv(1)
