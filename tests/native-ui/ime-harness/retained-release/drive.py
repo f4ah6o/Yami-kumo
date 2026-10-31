@@ -44,7 +44,7 @@ if git(app_tree, 'status', '--porcelain') or git(framework_tree, 'status', '--po
 actual_binary = hashlib.sha256(app.read_bytes()).hexdigest()
 if actual_binary != expected_binary:
     raise SystemExit('binary digest differs from the independently captured build digest')
-if app_sha != '1a59626cf67910917c4d660dd6db8bedae55a722' or framework_sha != '35b9041dfb3642b43ca37c604834942614eb50fb':
+if app_sha != 'cfa87adb6214f7ba50fa3a91075ca6e4eafddb9d' or framework_sha != '35b9041dfb3642b43ca37c604834942614eb50fb':
     raise SystemExit('source revisions differ from the reviewed candidate pair')
 
 result = {
@@ -204,6 +204,15 @@ finally:
         result['forced_sigkill'] = True
     log.close()
     text = app_data()
+    # Guard flags are observations from this diagnostic app, not a stage or
+    # host acceptance. Keep malformed markers in the raw log only.
+    result['geometry_guard_markers'] = []
+    for line in text.splitlines():
+        if line.startswith('YAMI_SETTINGS_GEOMETRY_GUARD '):
+            try:
+                result['geometry_guard_markers'].append(json.loads(line.split(' ', 1)[1]))
+            except json.JSONDecodeError:
+                pass
     match = re.search(r'YAMI_SETTINGS_CONTROL \{"path":"(/tmp/yami-settings-[^"/]+/control.sock)"', text)
     if match:
         path = Path(match.group(1))

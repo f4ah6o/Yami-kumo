@@ -1,7 +1,7 @@
 # Pinned intent / handoff exploratory harness
 
 This prepares a bounded live IBus/Mozc probe for Yami source
-`1a59626cf67910917c4d660dd6db8bedae55a722` (#142) and GPUI source
+`cfa87adb6214f7ba50fa3a91075ca6e4eafddb9d` (#160 diagnostic app, based on #142) and GPUI source
 `35b9041dfb3642b43ca37c604834942614eb50fb` (#211). The app binary must be
 built by the harness in a new temporary workspace from that exact source pair.
 The harness rejects dirty app/framework/harness trees, mismatched source SHAs,
@@ -54,3 +54,5 @@ or advance stops the preedit probe without retry; geometry remains NOT_RUN.
 A timed-out geometry command similarly prevents dependent handoff or retry,
 and stop is not requested after any timeout. Forced teardown remains a cleanup
 failure, not a successful owner release.
+
+This app only adds a rejected-stage guard marker. The new app and harness revisions require their own binary, CI, review and live result; prior #142 evidence does not carry over.
