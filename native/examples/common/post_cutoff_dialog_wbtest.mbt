@@ -45,6 +45,22 @@ test "delivered post-cutoff Enter opens Settings dialog while old receipt stays 
   assert_true(owner.model().dialog_open())
   let dialog = owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap()
   assert_true(dialog.focused(@shared_settings.settings_confirm()))
+  let escape = @platform.Event::new(owner.window, 4L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.Escape, repeat=false, modifiers=@primitives.Modifiers::none())))
+  assert_true(owner.mounted.handle_event(escape).unwrap())
+  let dismiss = owner.mounted.next_action().unwrap()
+  owner.replace_settings(owner.settings.update(@shared_settings.Ui(dismiss)))
+  assert_false(owner.model().dialog_open())
+  let restored = owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap()
+  assert_true(restored.focused(@shared_settings.settings_save()))
+  let shift = @primitives.Modifiers::new(shift=true, control=false, alt=false, meta=false)
+  let back = @platform.Event::new(owner.window, 5L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.Tab, repeat=false, modifiers=shift)))
+  assert_true(owner.mounted.handle_event(back).unwrap())
+  assert_true(owner.mounted.focused_text() is Some(_))
+  // The next host epoch is intentionally rejected until the earlier owner
+  // and receipt have an explicit resolution/retirement policy.
+  assert_true(owner.mounted.capture_terminal_text_owner(8UL) is Err(_))
   // Neither local observation nor native cutoff releases the original owner.
   assert_true(owner.terminal_owner is Some(_))
   assert_eq(owner.direct_receipts.length(), 1)
