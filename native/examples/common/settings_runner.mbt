@@ -880,6 +880,9 @@ pub fn SettingsRunOwner::stage_dirty_scene(
     self.held_tab is Some(_) || !self.buffered.is_empty() || !self.held_platform.is_empty() ||
     self.pending_frame is Some(_) || self.pending_publication is Some(_) || self.mounted.has_pending_actions() ||
     !self.host_epoch_verified {
+    // Diagnostic observation only. Do not alter owner, native queue, or the
+    // stage guard; this marker does not attest safety or host geometry.
+    emit_native_marker("YAMI_SETTINGS_GEOMETRY_GUARD {\"suspended\":\{self.suspended},\"running\":\{self.running},\"dirty\":\{self.dirty},\"staged\":\{self.pending_dirty_stage is Some(_)},\"cutoff\":\{self.cutoff_done},\"host_receipt\":\{self.pending_host_receipt is Some(_)},\"predispatch\":\{self.receipt_pre_dispatch is Some(_)},\"inflight\":\{self.inflight is Some(_)},\"delivery\":\{self.owned_delivery is Some(_)},\"direct\":\{self.pending_direct is Some(_)},\"tab\":\{self.held_tab is Some(_)},\"buffered_count\":\{self.buffered.length()},\"held_platform_count\":\{self.held_platform.length()},\"frame\":\{self.pending_frame is Some(_)},\"publication\":\{self.pending_publication is Some(_)},\"actions\":\{self.mounted.has_pending_actions()},\"epoch_verified\":\{self.host_epoch_verified}}")
     return Err(runner_error("dirty_scene", "original owner is not ready to stage"))
   }
   self.running = true
