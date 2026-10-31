@@ -1,0 +1,225 @@
+{
+  "profile": "local nested Xvfb/Weston x11 + IBus/Mozc; exploratory bounded control",
+  "OS_arch": "Linux-6.18.57-x86_64-with-glibc2.41 / x86_64",
+  "framework_sha": "35b9041dfb3642b43ca37c604834942614eb50fb",
+  "consumer_sha": "1a59626cf67910917c4d660dd6db8bedae55a722",
+  "app_source_sha": "1a59626cf67910917c4d660dd6db8bedae55a722",
+  "harness_sha": "f8022d251a52a198a5af01cc2ec9f7b757e277c1",
+  "app_binary_sha256": "1e6d5050e5605b0415df978a07493ce5cb52a75749c46c9d0ce6d2ce88547b8c",
+  "dependency_pin_native": "35b9041dfb3642b43ca37c604834942614eb50fb",
+  "dependency_pin_shared": "35b9041dfb3642b43ca37c604834942614eb50fb",
+  "dependency_lock": {
+    "kind": "source-override; no package lockfile",
+    "native_moon_mod_sha256": "b595be30e056da48775543ef1aa430d7e2ec93cbd9974d95c93d255628994b62",
+    "root_moon_mod_sha256": "922ca99baf05f1be96567b06097486b2ea24a919397ab7e0c5e7c69723893e6f"
+  },
+  "toolchain": "moon 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moon\nmoonc v0.10.15+943464bfa (2026-10-12) /workspace/yami-tools/bin/moonc\nmoonrun 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg\n",
+  "host_tools": {
+    "weston": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/weston",
+      "version": "weston 14.0.2",
+      "sha256": "5e7b342da0d38508b3001c291f080fbe35c4101f32ade0babc8458915f87352a"
+    },
+    "ibus": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/ibus",
+      "version": "IBus 1.5.32",
+      "sha256": "5549c204050c9c99e3af7df7089e7d41fe43474a57c0aec86b91e628243ba19e"
+    },
+    "xdotool": {
+      "path": "/workspace/linux-user-apt/root/usr/bin/xdotool",
+      "version": "xdotool version 3.20160805.1",
+      "sha256": "2fcee924be08b180f4b1bea93eddedbaa8b0ea4b0886f6cbf77a113e8b8a130f"
+    },
+    "mozc_server_sha256": "020f50a6cd53b3a0a5e6c66a30f698b05d5c68df4b5be73e663c1435bc8c432e"
+  },
+  "command": "dbus-run-session -- xvfb-run -a <harness>/session.sh",
+  "run_url": null,
+  "full_live_acceptance": "NOT_RUN",
+  "release_policy": "PASS_SCOPED",
+  "consumer_commit": "NOT_RUN",
+  "model_reflection": "NOT_RUN",
+  "candidate_table_oracle": "NOT_RUN",
+  "dialog_and_focus": "NOT_RUN",
+  "resize_blur_close_races": "NOT_RUN",
+  "forced_process_termination": true,
+  "steps": [
+    {
+      "command": "status",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "prefix",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "local retained prefix resolved; this is not native proof or permission to ACK\n",
+      "stderr": ""
+    },
+    {
+      "command": "receipt",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnative receipt sequence: 11\n",
+      "stderr": ""
+    },
+    {
+      "command": "resolve-release",
+      "sequence": 11,
+      "rc": 0,
+      "stdout": "receipt acknowledged; application and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "stage",
+      "sequence": 11,
+      "rc": 0,
+      "stdout": "native adapter acknowledged an unsupported record under its own policy; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 1\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 1,
+      "rc": 0,
+      "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "geometry-submit",
+      "sequence": null,
+      "rc": 2,
+      "stdout": "step refused or failed; owner and host remain retained\n",
+      "stderr": ""
+    },
+    {
+      "command": "geometry-handoff",
+      "sequence": null,
+      "rc": 2,
+      "stdout": "step refused or failed; owner and host remain retained\n",
+      "stderr": ""
+    },
+    {
+      "command": "status",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "receipt",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnative receipt sequence: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "stop",
+      "sequence": null,
+      "rc": 2,
+      "stdout": "stop refused; owner and host remain retained\n",
+      "stderr": ""
+    }
+  ],
+  "initial_status": {
+    "command": "status",
+    "sequence": null,
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+    "stderr": ""
+  },
+  "initial_prefix": {
+    "command": "prefix",
+    "sequence": null,
+    "rc": 0,
+    "stdout": "local retained prefix resolved; this is not native proof or permission to ACK\n",
+    "stderr": ""
+  },
+  "initial_receipt_sequence": 11,
+  "initial_resolve": {
+    "command": "resolve-release",
+    "sequence": 11,
+    "rc": 0,
+    "stdout": "receipt acknowledged; application and shutdown are not implied\n",
+    "stderr": ""
+  },
+  "initial_ack_stage": {
+    "command": "stage",
+    "sequence": 11,
+    "rc": 0,
+    "stdout": "native adapter acknowledged an unsupported record under its own policy; scene and shutdown are not implied\n",
+    "stderr": ""
+  },
+  "probe_advance": {
+    "command": "advance",
+    "sequence": 1,
+    "rc": 0,
+    "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+    "stderr": ""
+  },
+  "geometry_initial": {
+    "command": "geometry-submit",
+    "sequence": null,
+    "rc": 2,
+    "stdout": "step refused or failed; owner and host remain retained\n",
+    "stderr": ""
+  },
+  "geometry_race": "BLOCKED_INITIAL_OR_HANDOFF_ERROR",
+  "handoff": {
+    "command": "geometry-handoff",
+    "sequence": null,
+    "rc": 2,
+    "stdout": "step refused or failed; owner and host remain retained\n",
+    "stderr": ""
+  },
+  "preedit_markers": [
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"\",\"cursor\":-1,\"epoch\":1}",
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"ｎ\",\"cursor\":1,\"epoch\":1}"
+  ],
+  "commit_markers": [],
+  "scene_and_caret": "NOT_RUN",
+  "retained_record_model_application": "NOT_RUN",
+  "final_status": {
+    "command": "status",
+    "sequence": null,
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+    "stderr": ""
+  },
+  "final_receipt": {
+    "command": "receipt",
+    "sequence": null,
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nnative receipt sequence: none or non-text prefix\n",
+    "stderr": ""
+  },
+  "final_stop": {
+    "command": "stop",
+    "sequence": null,
+    "rc": 2,
+    "stdout": "stop refused; owner and host remain retained\n",
+    "stderr": ""
+  },
+  "cleanup_result": "FAIL_FORCED_TERMINATION_OWNER_NOT_PERSISTED",
+  "app_exit_code": -15,
+  "test_socket_cleanup": "removed after process exit",
+  "session_exit_code": 0,
+  "session_exit_phase": "drive",
+  "log_shutdown": {
+    "tracked_groups_remaining": [],
+    "visible_open_writers": [],
+    "inaccessible_processes": 669,
+    "uninspectable_fds": 0,
+    "scope": "local /proc observation, not proof against escaped or inaccessible writers"
+  },
+  "artifact_stability": "UNVERIFIED_WRITERS_OR_GROUPS",
+  "artifact_digest": "sha256:b4778105c885f4d9142cfd18d5b8e6782abffb0fa23506614637dc6d7ae3b7dd",
+  "artifact_digest_scope": "artifact-manifest.json lists raw files; excludes result and manifest"
+}
