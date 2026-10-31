@@ -2923,6 +2923,8 @@ pub struct TerminalTextOwner {
   priv mut revision : Int32
   priv token : @runtime.InstanceToken
   priv mut sequence : Int64
+  priv mut direct_sequence : Int64
+  priv mut direct_native_sequence : Int32
   priv mut busy : Bool
 }
 
@@ -2965,6 +2967,71 @@ pub struct OwnedTextDelivery {
   priv mut action_claimed : Bool
   priv mut model_applied : Bool
   priv mut busy : Bool
+}
+
+///|
+/// One platform direct TextInput reserved for its original text owner. Native
+/// host provenance/root/epoch must be verified by the caller's retained
+/// receipt before reservation; this object is not such native evidence.
+/// The caller must keep this delivery and the host receipt across every error;
+/// its model marker is a trusted caller assertion, not independent proof.
+pub struct OwnedDirectDelivery {
+  priv identity : Epoch
+  priv owner : TerminalTextOwner
+  priv event : @platform.Event
+  priv native_sequence : Int32
+  priv ordinal : Int64
+  priv before : String
+  priv reserved_change : Epoch
+  priv reserved_progress : (UInt64, Int32, Int64)
+  priv mut attempted : Bool
+  priv mut applied : Bool
+  priv mut after_change : Epoch?
+  priv mut expected : String?
+  priv mut action_required : Bool?
+  priv mut action : @view.SemanticAction?
+  priv mut owner_noted : Bool
+  priv mut action_claimed : Bool
+  priv mut model_applied : Bool
+}
+
+///|
+pub fn OwnedDirectDelivery::attempted(self : OwnedDirectDelivery) -> Bool { self.attempted }
+
+///|
+pub fn OwnedDirectDelivery::applied(self : OwnedDirectDelivery) -> Bool { self.applied }
+
+///|
+pub fn OwnedDirectDelivery::owner_noted(self : OwnedDirectDelivery) -> Bool { self.owner_noted }
+
+///|
+pub fn OwnedDirectDelivery::model_applied(self : OwnedDirectDelivery) -> Bool { self.model_applied }
+
+///|
+pub fn OwnedDirectDelivery::ordinal(self : OwnedDirectDelivery) -> Int64 { self.ordinal }
+
+///|
+pub fn OwnedDirectDelivery::native_sequence(self : OwnedDirectDelivery) -> Int32 { self.native_sequence }
+
+///|
+pub fn OwnedDirectDelivery::event(self : OwnedDirectDelivery) -> @platform.Event { self.event }
+
+///|
+pub fn OwnedDirectDelivery::before_document(self : OwnedDirectDelivery) -> String { self.before }
+
+///|
+pub fn OwnedDirectDelivery::action_required(self : OwnedDirectDelivery) -> Bool? { self.action_required }
+
+///|
+pub fn OwnedDirectDelivery::identity(
+  self : OwnedDirectDelivery,
+) -> (@platform.WindowId, UInt64, UInt64, UInt64, Int64) {
+  (self.owner.window, self.owner.epoch, self.owner.binding, self.owner.generation, self.event.sequence())
+}
+
+///|
+pub fn OwnedDirectDelivery::pending_action(self : OwnedDirectDelivery) -> @view.SemanticAction? {
+  if self.model_applied { None } else { self.action }
 }
 
 ///|
@@ -3025,6 +3092,175 @@ fn Mounted::owned_text_document(
     }
   }
   None
+}
+
+///|
+/// Reserve a direct platform TextInput for the current owner before any field
+/// mutation. The caller must separately prove that its retained native record
+/// has this same window/root/epoch/sequence/ordinal/text, is a direct-keyboard
+/// record, and is not also placed in the ordinary platform dispatch path.
+pub fn Mounted::reserve_owned_direct_text(
+  self : Mounted, owner : TerminalTextOwner, event : @platform.Event, native_sequence : Int32, ordinal : Int64,
+) -> Result[OwnedDirectDelivery, @diagnostics.FrameworkError] {
+  if !self.terminal_owner_is_current(owner) || event.window() != self.window ||
+    event.sequence() <= self.last_sequence || event.sequence() <= 0L ||
+    native_sequence <= owner.direct_native_sequence || event.sequence() != native_sequence.to_int64() ||
+    owner.direct_sequence == 9223372036854775807L || ordinal != owner.direct_sequence + 1L {
+    return Err(adapter_error("direct text owner or sequence is stale"))
+  }
+  match event.kind() {
+    @platform.Input(@primitives.TextInput(text~)) if !text.is_empty() => ()
+    _ => return Err(adapter_error("direct record is not a nonempty TextInput"))
+  }
+  let field = match self.focused_text() {
+    Some(value) => value
+    None => return Err(adapter_error("direct text field is unavailable"))
+  }
+  if field.composing() {
+    return Err(adapter_error("direct Insert cannot replace active preedit"))
+  }
+  let before = match self.owned_text_document(owner) {
+    Some(value) => value
+    None => return Err(adapter_error("direct text binding is unavailable"))
+  }
+  Ok({
+    identity: self.identity, owner, event, native_sequence, ordinal, before,
+    reserved_change: self.change, reserved_progress: owner.observed_progress(), attempted: false,
+    applied: false, after_change: None, expected: None, action_required: None,
+    action: None, owner_noted: false, action_claimed: false, model_applied: false,
+  })
+}
+
+///|
+/// Apply once through the existing GPUI TextField dispatch and its existing
+/// undo history. If the dispatch returns an uncertain error, `attempted`
+/// stays true and the caller retains this object and owner without replay.
+pub fn Mounted::apply_owned_direct_text(
+  self : Mounted, receipt : OwnedDirectDelivery,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if receipt.attempted || self.busy || !same_epoch(self.identity, receipt.identity) ||
+    !same_epoch(self.change, receipt.reserved_change) ||
+    receipt.owner.observed_progress() != receipt.reserved_progress ||
+    receipt.native_sequence <= receipt.owner.direct_native_sequence ||
+    receipt.owner.direct_sequence == 9223372036854775807L || receipt.ordinal != receipt.owner.direct_sequence + 1L ||
+    !self.terminal_owner_is_current(receipt.owner) {
+    return Err(adapter_error("direct text delivery is stale, busy or already attempted"))
+  }
+  receipt.attempted = true
+  self.busy = true
+  let outcome = self.handle_event_internal(receipt.event, true)
+  self.busy = false
+  match outcome {
+    Err(error) => return Err(error)
+    Ok(false) => return Err(adapter_error("direct text dispatch was not consumed"))
+    Ok(true) => ()
+  }
+  if self.last_dispatched_input != receipt.event.sequence() {
+    return Err(adapter_error("direct text dispatch identity is unavailable"))
+  }
+  receipt.applied = true
+  receipt.after_change = Some(self.change)
+  self.complete_owned_direct_text(receipt)
+}
+
+///|
+/// Complete the evidence/action step without applying the event again. On
+/// error, the original owner and any queued/extracted action remain retained.
+pub fn Mounted::complete_owned_direct_text(
+  self : Mounted, receipt : OwnedDirectDelivery,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let owner = receipt.owner
+  if !receipt.applied || receipt.owner_noted || self.is_disposed() || self.busy || owner.busy ||
+    !self.identity.live || !owner.identity.live || !owner.session_identity.live ||
+    !same_epoch(self.identity, receipt.identity) || !same_epoch(self.identity, owner.identity) ||
+    !(self.terminal_identity is Some(active) && same_epoch(active, owner.session_identity)) ||
+    !(receipt.after_change is Some(change) && same_epoch(change, self.change)) ||
+    self.text_epoch != owner.epoch || self.last_text_sequence != owner.sequence ||
+    self.last_dispatched_input != receipt.event.sequence() || !self.runtime.is_current(owner.token) {
+    return Err(adapter_error("direct text evidence or owner is stale"))
+  }
+  let scope = match self.scope { Some(value) => value; None => return Err(adapter_error("direct text focus is unavailable")) }
+  if scope.focused() != Some(owner.binding) {
+    return Err(adapter_error("direct text focus changed"))
+  }
+  let mut revision : Int32? = None
+  for binding in self.bindings {
+    if binding.id == owner.binding && binding.field_generation == owner.generation && binding.token == Some(owner.token) {
+      match binding.field {
+        Some(field) if !field.is_composing() => revision = Some(field.revision())
+        _ => ()
+      }
+    }
+  }
+  let next_revision = match revision { Some(value) => value; None => return Err(adapter_error("direct text field changed")) }
+  let after = match self.owned_text_document(owner) {
+    Some(value) => value
+    None => return Err(adapter_error("direct text document unavailable"))
+  }
+  if receipt.expected is None {
+    receipt.expected = Some(after)
+    receipt.action_required = Some(after != receipt.before)
+  } else if receipt.expected != Some(after) {
+    return Err(adapter_error("direct text result changed"))
+  }
+  if receipt.action_required is Some(true) && receipt.action is None {
+    match self.next_terminal_text_action(owner) {
+      Ok(Some(value)) => receipt.action = Some(value)
+      Ok(None) => return Err(adapter_error("direct text action is missing"))
+      Err(error) => return Err(error)
+    }
+  }
+  if receipt.action_required is Some(true) {
+    match (receipt.action, receipt.expected) {
+      (Some(@view.TextChanged(key, value)), Some(expected)) if key == owner.token.key() && value == expected => ()
+      _ => return Err(adapter_error("direct text action does not match its receipt"))
+    }
+  }
+  owner.revision = next_revision
+  owner.direct_sequence = receipt.ordinal
+  owner.direct_native_sequence = receipt.native_sequence
+  receipt.owner_noted = true
+  Ok(())
+}
+
+///|
+/// Claim only this original owner's extracted action, leaving it in the
+/// receipt until the caller records model application.
+pub fn Mounted::owned_direct_text_action(
+  self : Mounted, receipt : OwnedDirectDelivery,
+) -> Result[@view.SemanticAction?, @diagnostics.FrameworkError] {
+  if !receipt.applied || !receipt.owner_noted || receipt.model_applied ||
+    !self.terminal_owner_is_current(receipt.owner) ||
+    !(receipt.after_change is Some(change) && same_epoch(change, self.change)) {
+    return Err(adapter_error("direct text action is unavailable"))
+  }
+  if receipt.action_required is Some(false) { return Ok(None) }
+  match (receipt.action, receipt.expected) {
+    (Some(@view.TextChanged(key, value) as action), Some(expected)) if
+      key == receipt.owner.token.key() && value == expected => {
+        receipt.action_claimed = true
+        Ok(Some(action))
+      }
+    _ => Err(adapter_error("direct text action does not match its receipt"))
+  }
+}
+
+///|
+/// Record only an action already claimed and applied by the original model.
+pub fn Mounted::mark_owned_direct_text_model_applied(
+  self : Mounted, receipt : OwnedDirectDelivery,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !receipt.applied || !receipt.owner_noted || !receipt.action_claimed || receipt.model_applied ||
+    !(receipt.action_required is Some(true)) || !self.terminal_owner_is_current(receipt.owner) ||
+    !(receipt.after_change is Some(change) && same_epoch(change, self.change)) {
+    return Err(adapter_error("direct text model action is unavailable"))
+  }
+  match (receipt.action, receipt.expected) {
+    (Some(@view.TextChanged(key, value)), Some(expected)) if key == receipt.owner.token.key() && value == expected => ()
+    _ => return Err(adapter_error("direct text model action does not match receipt"))
+  }
+  receipt.model_applied = true
+  Ok(())
 }
 
 ///|
@@ -3247,6 +3483,8 @@ pub fn Mounted::capture_terminal_text_owner(
           binding: binding.id, generation: binding.field_generation,
           revision: field.revision(), token,
           sequence: 0L,
+          direct_sequence: 0L,
+          direct_native_sequence: 0,
           busy: false,
         })
       }
@@ -4172,11 +4410,22 @@ pub fn Mounted::handle_event(
   self : Mounted,
   event : @platform.Event,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
+  self.handle_event_internal(event, false)
+}
+
+///|
+/// `locked` is reserved for the owner-bound direct delivery. It holds `busy`
+/// around measurement and dispatch so callbacks cannot mutate this mount.
+fn Mounted::handle_event_internal(
+  self : Mounted,
+  event : @platform.Event,
+  locked : Bool,
+) -> Result[Bool, @diagnostics.FrameworkError] {
   if self.held_text is Some(_) {
     return Err(adapter_error("input is held for text transition"))
   }
   if self.is_disposed() ||
-    self.busy ||
+    (self.busy && !locked) ||
     event.window() != self.window ||
     event.sequence() <= self.last_sequence ||
     event.sequence() <= 0L {

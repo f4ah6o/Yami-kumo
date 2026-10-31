@@ -73,6 +73,7 @@ pub struct Mounted {
   // private fields
 }
 pub fn Mounted::activate(Self, Activation) -> Bool
+pub fn Mounted::apply_owned_direct_text(Self, OwnedDirectDelivery) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::apply_owned_text(Self, OwnedTextDelivery) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::apply_terminal_commit(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[Bool, @diagnostics.FrameworkError]
 pub fn Mounted::apply_terminal_observation(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[Bool, @diagnostics.FrameworkError]
@@ -80,6 +81,7 @@ pub fn Mounted::begin_held_text(Self, UInt64) -> Result[Bool, @diagnostics.Frame
 pub fn Mounted::callback(Self, @core.NodeKey) -> Activation?
 pub fn Mounted::capture_terminal_text_owner(Self, UInt64) -> Result[TerminalTextOwner, @diagnostics.FrameworkError]
 pub fn Mounted::commit(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Frame, @diagnostics.FrameworkError]
+pub fn Mounted::complete_owned_direct_text(Self, OwnedDirectDelivery) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::complete_owned_text_evidence(Self, OwnedTextDelivery) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::dispose(Self) -> Unit
 pub fn Mounted::finish_held_text(Self, UInt64) -> Result[Unit, @diagnostics.FrameworkError]
@@ -93,6 +95,7 @@ pub fn Mounted::held_text_receipt(Self, UInt64, Int64) -> HeldTextReceipt?
 pub fn Mounted::invalidate_layout(Self) -> Unit
 pub fn Mounted::is_disposed(Self) -> Bool
 pub fn Mounted::last_dispatched_input_sequence(Self) -> Int64
+pub fn Mounted::mark_owned_direct_text_model_applied(Self, OwnedDirectDelivery) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::mark_owned_text_model_applied(Self, OwnedTextDelivery) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::new(@platform.WindowId, theme? : @theme.Theme?) -> Self
 pub fn Mounted::next_action(Self) -> @core.SemanticAction?
@@ -102,10 +105,12 @@ pub fn Mounted::next_held_text_action(Self, UInt64) -> Result[@core.SemanticActi
 pub fn Mounted::next_terminal_text_action(Self, TerminalTextOwner) -> Result[@core.SemanticAction?, @diagnostics.FrameworkError]
 pub fn Mounted::note_owned_text(Self, OwnedTextDelivery) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::note_terminal_text_delivery(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[Unit, @diagnostics.FrameworkError]
+pub fn Mounted::owned_direct_text_action(Self, OwnedDirectDelivery) -> Result[@core.SemanticAction?, @diagnostics.FrameworkError]
 pub fn Mounted::owned_text_action(Self, OwnedTextDelivery) -> Result[@core.SemanticAction?, @diagnostics.FrameworkError]
 pub fn Mounted::paste(Self, PasteRequest, String) -> Bool
 pub fn Mounted::publish(Self, Prepared) -> Result[Frame, @diagnostics.FrameworkError]
 pub fn Mounted::release_held_text_for_retry(Self, UInt64) -> Result[Unit, @diagnostics.FrameworkError]
+pub fn Mounted::reserve_owned_direct_text(Self, TerminalTextOwner, @platform.Event, Int, Int64) -> Result[OwnedDirectDelivery, @diagnostics.FrameworkError]
 pub fn Mounted::reserve_owned_text(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[OwnedTextDelivery, @diagnostics.FrameworkError]
 pub fn Mounted::set_theme(Self, @theme.Theme?) -> Bool
 pub fn Mounted::stage(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Prepared, @diagnostics.FrameworkError]
@@ -116,6 +121,21 @@ pub fn Mounted::text_input(Self, UInt64, @text_host.TextInputEvent) -> Result[Bo
 pub fn Mounted::theme(Self) -> @theme.Theme?
 pub fn Mounted::validate_terminal_text_delivery(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::view(Self) -> @core.View?
+
+pub struct OwnedDirectDelivery {
+  // private fields
+}
+pub fn OwnedDirectDelivery::action_required(Self) -> Bool?
+pub fn OwnedDirectDelivery::applied(Self) -> Bool
+pub fn OwnedDirectDelivery::attempted(Self) -> Bool
+pub fn OwnedDirectDelivery::before_document(Self) -> String
+pub fn OwnedDirectDelivery::event(Self) -> @platform.Event
+pub fn OwnedDirectDelivery::identity(Self) -> (@platform.WindowId, UInt64, UInt64, UInt64, Int64)
+pub fn OwnedDirectDelivery::model_applied(Self) -> Bool
+pub fn OwnedDirectDelivery::native_sequence(Self) -> Int
+pub fn OwnedDirectDelivery::ordinal(Self) -> Int64
+pub fn OwnedDirectDelivery::owner_noted(Self) -> Bool
+pub fn OwnedDirectDelivery::pending_action(Self) -> @core.SemanticAction?
 
 pub struct OwnedTextDelivery {
   // private fields
