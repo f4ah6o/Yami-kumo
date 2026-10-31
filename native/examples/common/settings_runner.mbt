@@ -1117,6 +1117,51 @@ pub fn SettingsRunOwner::transfer_geometry_arrival(
 }
 
 ///|
+/// Reinspect a transfer whose callback returned an uncertain result. The
+/// trusted platform adapter must perform a read-only, exact-route slot check;
+/// this callback's return is not itself a native receipt or authority to
+/// apply the record. The original receipt and local candidate stay retained.
+pub fn SettingsRunOwner::reconcile_geometry_arrival(
+  self : SettingsRunOwner,
+  inspect : () -> Result[Unit, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.cutoff_done || self.host_epoch_verified {
+    return Err(runner_error("geometry_handoff", "arrival reconciliation unavailable"))
+  }
+  let staged = match self.pending_dirty_stage { Some(value) if value.host_attempted => value; _ => return Err(runner_error("geometry_handoff", "original stage unavailable")) }
+  let held = match self.geometry_arrival { Some(value) if value.state is GeometryArrivalAttempted => value; _ => return Err(runner_error("geometry_handoff", "no uncertain arrival")) }
+  if !self.geometry_arrival_owner_current(staged, held) {
+    return Err(runner_error("geometry_handoff", "original owner changed"))
+  }
+  self.running = true
+  let observed = inspect()
+  self.running = false
+  match observed { Err(error) => return Err(error); Ok(_) => () }
+  if !self.geometry_arrival_owner_current(staged, held) {
+    return Err(runner_error("geometry_handoff", "original owner changed during inspection"))
+  }
+  held.state = GeometryArrivalCallbackSucceeded
+  Ok(())
+}
+
+///|
+fn SettingsRunOwner::geometry_arrival_owner_current(
+  self : SettingsRunOwner, staged : SettingsDirtyStage, held : SettingsGeometryArrival,
+) -> Bool {
+  let owner = match self.terminal_owner { Some(value) => value; None => return false }
+  let session = match self.session { Some(value) => value; None => return false }
+  self.suspended && !self.running && !self.cutoff_done && !self.host_epoch_verified &&
+    staged.fence.live && self.settings == staged.model && self.window == staged.window &&
+    self.host_epoch == Some(staged.epoch) && session.epoch == staged.epoch && session.binding == staged.binding &&
+    self.entered_target == Some(held.native_target) &&
+    self.pending_host_receipt is None && self.receipt_pre_dispatch is None && self.inflight is None &&
+    self.owned_delivery is None && self.pending_direct is None && self.held_tab is None &&
+    self.buffered.is_empty() && self.held_platform.is_empty() && !self.mounted.has_pending_actions() &&
+    owner.matches_session(staged.window, staged.epoch, staged.binding) &&
+    self.mounted.terminal_owner_is_current(owner) && owner.observed_progress() == held.owner_progress
+}
+
+///|
 /// Inspect local transfer bookkeeping, not native ACK or application proof.
 pub fn SettingsRunOwner::geometry_arrival_state(self : SettingsRunOwner) -> (Int32, Int)? {
   match self.geometry_arrival {

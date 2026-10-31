@@ -75,6 +75,18 @@ test "geometry handoff failure remains uncertain and unsupported events stay at 
   assert_true(owner.attempt_staged_host_geometry(fn(_, _) { Ok(()) }) is Err(_))
   assert_true(owner.transfer_geometry_arrival() is Err(_))
   assert_eq(calls.val, 1)
+  let queries = Ref(0)
+  assert_true(owner.reconcile_geometry_arrival(fn() {
+    queries.val += 1
+    Err(runner_error("fixture", "route slot unavailable"))
+  }) is Err(_))
+  assert_true(owner.geometry_arrival.unwrap().state is GeometryArrivalAttempted)
+  owner.reconcile_geometry_arrival(fn() { queries.val += 1; Ok(()) }).unwrap()
+  assert_eq(queries.val, 2)
+  assert_true(owner.geometry_arrival.unwrap().state is GeometryArrivalCallbackSucceeded)
+  assert_true(owner.reconcile_geometry_arrival(fn() { Ok(()) }) is Err(_))
+  assert_eq(calls.val, 1)
+  assert_false(owner.host_epoch_verified())
   assert_eq(owner.model().name(), "")
   assert_true(owner.pending_dirty_stage is Some(_))
 }
@@ -91,6 +103,7 @@ test "owner loss during callback retains the attempted original receipt" {
   assert_true(owner.transfer_geometry_arrival() is Err(_))
   assert_true(owner.geometry_arrival.unwrap().state is GeometryArrivalAttempted)
   assert_true(owner.geometry_arrival.unwrap().receipt.event is Some(OrderedText(_)))
+  assert_true(owner.reconcile_geometry_arrival(fn() { Ok(()) }) is Err(_))
   assert_true(owner.transfer_geometry_arrival() is Err(_))
   assert_true(owner.pending_dirty_stage is Some(_))
   assert_eq(owner.model().name(), "")
@@ -134,4 +147,23 @@ test "handoff preserves active preedit and the later commit as separate stages" 
   }
   assert_true(owner.pending_dirty_stage is Some(_))
   assert_true(owner.try_terminal_text_cutoff() is Err(_))
+}
+
+///|
+test "reentrant owner loss during slot query does not release the receipt" {
+  let (owner, _, binding) = geometry_handoff_owner()
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  let receipt = NativeRetainedReceipt::new(Some(OrderedText(event)), owner.window, 1, binding, 7UL, fn() {
+    Err(runner_error("fixture", "native outcome unknown"))
+  })
+  owner.reserve_geometry_arrival(receipt, (7, 11L, 4)).unwrap()
+  assert_true(owner.transfer_geometry_arrival() is Err(_))
+  assert_true(owner.reconcile_geometry_arrival(fn() {
+    owner.mounted.dispose()
+    Ok(())
+  }) is Err(_))
+  assert_true(owner.geometry_arrival.unwrap().state is GeometryArrivalAttempted)
+  assert_true(owner.geometry_arrival.unwrap().receipt.event is Some(OrderedText(_)))
+  assert_true(owner.pending_dirty_stage is Some(_))
+  assert_false(owner.can_stop())
 }
