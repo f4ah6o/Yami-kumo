@@ -1,0 +1,138 @@
+{
+  "profile": "local nested Xvfb/Weston x11 + IBus/Mozc; exploratory bounded control",
+  "OS_arch": "Linux-6.18.57-x86_64-with-glibc2.41 / x86_64",
+  "framework_sha": "35b9041dfb3642b43ca37c604834942614eb50fb",
+  "consumer_sha": "e9fe5fe06111dce33be20f3f93d8be819194486f",
+  "app_source_sha": "e9fe5fe06111dce33be20f3f93d8be819194486f",
+  "harness_sha": "aa7c81288b81617a5e8a346347fe355e38d5b834",
+  "app_binary_sha256": "d2950bb778e939dce9ad89d3e02a370de070a784726a769033e6c6f03becfb2c",
+  "dependency_pin_native": "35b9041dfb3642b43ca37c604834942614eb50fb",
+  "dependency_pin_shared": "35b9041dfb3642b43ca37c604834942614eb50fb",
+  "dependency_lock": {
+    "kind": "source-override; no package lockfile",
+    "native_moon_mod_sha256": "b595be30e056da48775543ef1aa430d7e2ec93cbd9974d95c93d255628994b62",
+    "root_moon_mod_sha256": "922ca99baf05f1be96567b06097486b2ea24a919397ab7e0c5e7c69723893e6f"
+  },
+  "toolchain": "moon 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moon\nmoonc v0.10.15+943464bfa (2026-10-12) /workspace/yami-tools/bin/moonc\nmoonrun 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg\n",
+  "host_tools": {
+    "weston": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/weston",
+      "version": "weston 14.0.2",
+      "sha256": "5e7b342da0d38508b3001c291f080fbe35c4101f32ade0babc8458915f87352a"
+    },
+    "ibus": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/ibus",
+      "version": "IBus 1.5.32",
+      "sha256": "5549c204050c9c99e3af7df7089e7d41fe43474a57c0aec86b91e628243ba19e"
+    },
+    "xdotool": {
+      "path": "/workspace/linux-user-apt/root/usr/bin/xdotool",
+      "version": "xdotool version 3.20160805.1",
+      "sha256": "2fcee924be08b180f4b1bea93eddedbaa8b0ea4b0886f6cbf77a113e8b8a130f"
+    },
+    "mozc_server_sha256": "020f50a6cd53b3a0a5e6c66a30f698b05d5c68df4b5be73e663c1435bc8c432e"
+  },
+  "command": "dbus-run-session -- xvfb-run -a <harness>/session.sh",
+  "run_url": null,
+  "full_live_acceptance": "NOT_RUN",
+  "release_policy": "NOT_RUN",
+  "consumer_commit": "NOT_RUN",
+  "model_reflection": "NOT_RUN",
+  "candidate_table_oracle": "NOT_RUN",
+  "dialog_and_focus": "NOT_RUN",
+  "resize_blur_close_races": "NOT_RUN",
+  "preedit_probe": {
+    "result": "NOT_RUN"
+  },
+  "geometry_race": "NOT_RUN",
+  "scene_and_caret": "NOT_RUN",
+  "retained_record_model_application": "NOT_RUN",
+  "forced_process_termination": true,
+  "steps": [
+    {
+      "command": "status",
+      "sequence": null,
+      "status": "RETURNED",
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "prefix",
+      "sequence": null,
+      "status": "RETURNED",
+      "rc": 0,
+      "stdout": "local retained prefix unresolved or unavailable; owner remains retained\n",
+      "stderr": ""
+    },
+    {
+      "command": "receipt",
+      "sequence": null,
+      "status": "RETURNED",
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnative receipt sequence: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "inspect-native",
+      "sequence": null,
+      "status": "RETURNED",
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nobserved native head sequence: none observed; not a quiescence proof\n",
+      "stderr": ""
+    }
+  ],
+  "initial_status": {
+    "command": "status",
+    "sequence": null,
+    "status": "RETURNED",
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+    "stderr": ""
+  },
+  "initial_prefix": {
+    "command": "prefix",
+    "sequence": null,
+    "status": "RETURNED",
+    "rc": 0,
+    "stdout": "local retained prefix unresolved or unavailable; owner remains retained\n",
+    "stderr": ""
+  },
+  "native_head_inspection": {
+    "command": "inspect-native",
+    "sequence": null,
+    "status": "RETURNED",
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nobserved native head sequence: none observed; not a quiescence proof\n",
+    "stderr": ""
+  },
+  "error": "RuntimeError('original unsupported receipt was not observable; native head inspection only')",
+  "cleanup_result": "FAIL_FORCED_TERMINATION_OWNER_NOT_PERSISTED",
+  "app_exit_code": -15,
+  "geometry_guard_markers": [],
+  "native_head_markers": [
+    {
+      "present": false,
+      "pending_geometry": false,
+      "handoff": false,
+      "owned": false,
+      "reserved": false,
+      "portable_epoch": 1,
+      "native_epoch": 1,
+      "owner_host_verified": true
+    }
+  ],
+  "test_socket_cleanup": "removed after process exit",
+  "session_exit_code": 0,
+  "session_exit_phase": "drive",
+  "log_shutdown": {
+    "tracked_groups_remaining": [],
+    "visible_open_writers": [],
+    "inaccessible_processes": 757,
+    "uninspectable_fds": 0,
+    "scope": "local /proc observation, not proof against escaped or inaccessible writers"
+  },
+  "artifact_stability": "UNVERIFIED_WRITERS_OR_GROUPS",
+  "artifact_digest": "sha256:a7457076e9b0a83b0a716e57efa14a965b63ee16326588d0c5cedb46d7d6fc9e",
+  "artifact_digest_scope": "artifact-manifest.json lists raw files; excludes result and manifest"
+}

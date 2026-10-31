@@ -1,0 +1,14 @@
+{
+  "authorization": "Parent explicitly instructed the fresh-build live IBus/Mozc diagnostic after confirming app #166 and harness #167 exact independent reviews and both CI 7/7 SUCCESS.",
+  "app_review_url": "https://github.com/f4ah6o/Yami-kumo/pull/166#pullrequestreview-5721110038",
+  "harness_review_url": "https://github.com/f4ah6o/Yami-kumo/pull/167#pullrequestreview-5721097939",
+  "app_sha": "e9fe5fe06111dce33be20f3f93d8be819194486f",
+  "framework_sha": "35b9041dfb3642b43ca37c604834942614eb50fb",
+  "harness_sha": "aa7c81288b81617a5e8a346347fe355e38d5b834",
+  "scope": "Diagnostic observation only, possibly native FIFO head only. Read-only head inspection does not ACK, dispatch or recover ownership and does not establish an empty FIFO when the runner receipt is absent. No post-fix, model/scene/caret, safe shutdown or full IME acceptance claim.",
+  "command": "YAMI_166_167_REVIEW_CI_CONFIRMED=aa7c81288b81617a5e8a346347fe355e38d5b834 bash /workspace/review167-live-prep-agent/launch-after-confirmation.sh > /workspace/review167-live-prep-agent/live-launch.log 2>&1",
+  "fresh_build": "Exact session build.py uses a new temporary Moon workspace and retains app.exe/build.json/build.log in its fresh empty live directory before starting IBus, Mozc, Weston or the app.",
+  "old_binary_reused": false,
+  "unrelated_process_termination_authorized": false,
+  "dependency_resolution": "source override; both exact checked-in GPUI pins; no registry consumer or package lock"
+}

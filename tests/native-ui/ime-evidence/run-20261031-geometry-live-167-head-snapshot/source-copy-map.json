@@ -1,0 +1,279 @@
+{
+  "source_directory": "/workspace/review167-live-prep-agent",
+  "raw_originals_edited": false,
+  "files": [
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/app.exe",
+      "archive_path": "app.exe.gz",
+      "original_sha256": "d2950bb778e939dce9ad89d3e02a370de070a784726a769033e6c6f03becfb2c",
+      "archive_sha256": "d37a583131e8c7ae68e99c419e4f8dd7508314663c69d5c40e89ff6b0bb40c52",
+      "representation": "gzip; original executable hash verified after decompression"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/app.log",
+      "archive_path": "app.log",
+      "original_sha256": "9838188824eed0fe075ed4ac4d50d918972ca5a2099cfd1b85ae1bc4a14f97e6",
+      "archive_sha256": "9838188824eed0fe075ed4ac4d50d918972ca5a2099cfd1b85ae1bc4a14f97e6",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/artifact-manifest.json",
+      "archive_path": "artifact-manifest.json",
+      "original_sha256": "a7457076e9b0a83b0a716e57efa14a965b63ee16326588d0c5cedb46d7d6fc9e",
+      "archive_sha256": "a7457076e9b0a83b0a716e57efa14a965b63ee16326588d0c5cedb46d7d6fc9e",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/build.json",
+      "archive_path": "build.json",
+      "original_sha256": "edf2237e584ba5bb3c0c159f01a0153ee64f03bd571cb74402dca23627961206",
+      "archive_sha256": "edf2237e584ba5bb3c0c159f01a0153ee64f03bd571cb74402dca23627961206",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/build.log",
+      "archive_path": "build.log",
+      "original_sha256": "846921203ec92b0acbae152701b0a538f43798b1c40b93b6d56f418ef7fea1f0",
+      "archive_sha256": "846921203ec92b0acbae152701b0a538f43798b1c40b93b6d56f418ef7fea1f0",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/engine.log",
+      "archive_path": "engine.log",
+      "original_sha256": "7b2be77df2274ba8ffeff3948afd6e7514bf2fe1142759ada3656b5ada1a5310",
+      "archive_sha256": "7b2be77df2274ba8ffeff3948afd6e7514bf2fe1142759ada3656b5ada1a5310",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/ibus-daemon.log",
+      "archive_path": "ibus-daemon.log",
+      "original_sha256": "10fed1866072eeaf8b3b50f8d6f7f10527cd7db0f852915aaddb8a9e736c8c96",
+      "archive_sha256": "10fed1866072eeaf8b3b50f8d6f7f10527cd7db0f852915aaddb8a9e736c8c96",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/ibus-ui-dbus.log",
+      "archive_path": "ibus-ui-dbus.log",
+      "original_sha256": "c7568f0858a12c3727cdee6c2cd41523840c7088e0cd3781a05ae187b05a92df",
+      "archive_sha256": "c7568f0858a12c3727cdee6c2cd41523840c7088e0cd3781a05ae187b05a92df",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/ibus-ui-wayland.log",
+      "archive_path": "ibus-ui-wayland.log",
+      "original_sha256": "cd6fdf1ace1a668e2f95285cdce59ba829a0eeafce1bc8cf86001346ab86c522",
+      "archive_sha256": "cd6fdf1ace1a668e2f95285cdce59ba829a0eeafce1bc8cf86001346ab86c522",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/mozc-server.log",
+      "archive_path": "mozc-server.log",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/pid",
+      "archive_path": "pid",
+      "original_sha256": "9cf9d75e9350205d482948c673d837433bbffd33fc26c2350c818c83ab63f0d9",
+      "archive_sha256": "9cf9d75e9350205d482948c673d837433bbffd33fc26c2350c818c83ab63f0d9",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/result.json",
+      "archive_path": "result.json",
+      "original_sha256": "c5a0184e71638f1ea58484249f8935880445267881fa1d53884d8709d9352c0f",
+      "archive_sha256": "c5a0184e71638f1ea58484249f8935880445267881fa1d53884d8709d9352c0f",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/weston-stdio.log",
+      "archive_path": "weston-stdio.log",
+      "original_sha256": "47f23fdb9ba3fdf0841f595ff270e77b5bd19ffff874c81f114d44a5a9a86c2e",
+      "archive_sha256": "47f23fdb9ba3fdf0841f595ff270e77b5bd19ffff874c81f114d44a5a9a86c2e",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live/weston.log",
+      "archive_path": "weston.log",
+      "original_sha256": "aeba88412778aa878dcda2a498a4bcdb8313ee6633c8c22ae88d7754e7f05551",
+      "archive_sha256": "aeba88412778aa878dcda2a498a4bcdb8313ee6633c8c22ae88d7754e7f05551",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/REPORT.md",
+      "archive_path": "provenance/REPORT.md",
+      "original_sha256": "854f697045c91a18426b0d549c6846d1a4bbfeeaec76cdd2bc634bc3a15232f1",
+      "archive_sha256": "854f697045c91a18426b0d549c6846d1a4bbfeeaec76cdd2bc634bc3a15232f1",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/env.sh",
+      "archive_path": "provenance/env.sh",
+      "original_sha256": "012bc568f27393c0a2e0edd46165cdb4e4e51cb7a31227d45976c8d89a044687",
+      "archive_sha256": "012bc568f27393c0a2e0edd46165cdb4e4e51cb7a31227d45976c8d89a044687",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/launch-after-confirmation.sh",
+      "archive_path": "provenance/launch-after-confirmation.sh",
+      "original_sha256": "2d1fef052ff5dc9495db993359fd617b8ec22562e0ff8141b3f4ede6f170ae32",
+      "archive_sha256": "2d1fef052ff5dc9495db993359fd617b8ec22562e0ff8141b3f4ede6f170ae32",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/capture-provenance.py",
+      "archive_path": "provenance/capture-provenance.py",
+      "original_sha256": "faaa27c786b442e50f8fb72921d15392243d5c983f3555bd31604e3ca79f0cb2",
+      "archive_sha256": "faaa27c786b442e50f8fb72921d15392243d5c983f3555bd31604e3ca79f0cb2",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/verify-preparation.py",
+      "archive_path": "provenance/verify-preparation.py",
+      "original_sha256": "61f262de42b3345bf097ef864c86b94163d4a32469385c745cf5178a0d3ce35b",
+      "archive_sha256": "61f262de42b3345bf097ef864c86b94163d4a32469385c745cf5178a0d3ce35b",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/verify-live-artifacts.py",
+      "archive_path": "provenance/verify-live-artifacts.py",
+      "original_sha256": "3146cf75abf23cbbb7db24e76effe3864cc1a075c91efcb7cbbcca7f71bb3720",
+      "archive_sha256": "3146cf75abf23cbbb7db24e76effe3864cc1a075c91efcb7cbbcca7f71bb3720",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/observe-cleanup.py",
+      "archive_path": "provenance/observe-cleanup.py",
+      "original_sha256": "945586d7ff28b9e290059f267b04d80da80efd727fbc4feee511af9c63c4f922",
+      "archive_sha256": "945586d7ff28b9e290059f267b04d80da80efd727fbc4feee511af9c63c4f922",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/preparation-provenance.json",
+      "archive_path": "provenance/preparation-provenance.json",
+      "original_sha256": "d3962ff4bd41df17e7c76f318dd14fcb4f0c262bcb4e46018b3a73928a9a5736",
+      "archive_sha256": "d3962ff4bd41df17e7c76f318dd14fcb4f0c262bcb4e46018b3a73928a9a5736",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/run-authorization.json",
+      "archive_path": "provenance/run-authorization.json",
+      "original_sha256": "1775563d974a1ef7d6821c2c0eddbd9eb7e651ebfe692e5370e3496b21101f60",
+      "archive_sha256": "1775563d974a1ef7d6821c2c0eddbd9eb7e651ebfe692e5370e3496b21101f60",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/preflight.log",
+      "archive_path": "provenance/preflight.log",
+      "original_sha256": "f3720639f6e5d2db3cfc8fbc6ce99f59e838c0afbaf711c9cdb4aff57bc58a3d",
+      "archive_sha256": "f3720639f6e5d2db3cfc8fbc6ce99f59e838c0afbaf711c9cdb4aff57bc58a3d",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/launch-gate-check.log",
+      "archive_path": "provenance/launch-gate-check.log",
+      "original_sha256": "bb73d92f35e7f6a90f89e1f02f817ed2454ae151b0226a2974d191437b587851",
+      "archive_sha256": "bb73d92f35e7f6a90f89e1f02f817ed2454ae151b0226a2974d191437b587851",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/live-launch.log",
+      "archive_path": "provenance/live-launch.log",
+      "original_sha256": "cb747773270adc338eb4a1b4d8546e548e9ae3ce6e1c85e1833d1f8db3df9f6a",
+      "archive_sha256": "cb747773270adc338eb4a1b4d8546e548e9ae3ce6e1c85e1833d1f8db3df9f6a",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/postflight-artifact-verification.json",
+      "archive_path": "provenance/postflight-artifact-verification.json",
+      "original_sha256": "65707313dfc98393084909112a55c7feeb4393ddbf458f59306bab2f32677f86",
+      "archive_sha256": "65707313dfc98393084909112a55c7feeb4393ddbf458f59306bab2f32677f86",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/postflight-source-verification.log",
+      "archive_path": "provenance/postflight-source-verification.log",
+      "original_sha256": "de7e8b6782669210760f683439546d2886a36bb48af32518fa0e09564fa3d8e4",
+      "archive_sha256": "de7e8b6782669210760f683439546d2886a36bb48af32518fa0e09564fa3d8e4",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/postflight-cleanup-observation.json",
+      "archive_path": "provenance/postflight-cleanup-observation.json",
+      "original_sha256": "83eb99fcd349316caca1ee6ec1aef1e0e9cca0a12438c2306896fdb121d14326",
+      "archive_sha256": "83eb99fcd349316caca1ee6ec1aef1e0e9cca0a12438c2306896fdb121d14326",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/prepare-framework.log",
+      "archive_path": "provenance/prepare-framework.log",
+      "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archive_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/archive-manifest.json",
+      "archive_path": "provenance/local-archive-manifest.json",
+      "original_sha256": "6dd2bc29df56fadfa1eae7c40982e33fe0cc61540e7b3a519ead8a6e4e3c9e8a",
+      "archive_sha256": "6dd2bc29df56fadfa1eae7c40982e33fe0cc61540e7b3a519ead8a6e4e3c9e8a",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/archive-manifest.sha256",
+      "archive_path": "provenance/local-archive-manifest.sha256",
+      "original_sha256": "5c56d80cc9aa3b7993d8f191dd1d458279df78095b2c88bfd243f51b3fe40489",
+      "archive_sha256": "5c56d80cc9aa3b7993d8f191dd1d458279df78095b2c88bfd243f51b3fe40489",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/framework/scripts/prepare_ubuntu.sh",
+      "archive_path": "provenance/protocol/inputs/prepare_ubuntu.sh",
+      "original_sha256": "8762b81df5d87c62233ee475c9989627ea20c1de6fff92139f48efc104497708",
+      "archive_sha256": "8762b81df5d87c62233ee475c9989627ea20c1de6fff92139f48efc104497708",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/linux-user-apt/root/usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml",
+      "archive_path": "provenance/protocol/inputs/xdg-shell.xml",
+      "original_sha256": "9d9e27038ca722f159a361293f8c6cd270dab907ab52de5b8ecfbb8d6b9651c2",
+      "archive_sha256": "9d9e27038ca722f159a361293f8c6cd270dab907ab52de5b8ecfbb8d6b9651c2",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/linux-user-apt/root/usr/share/wayland-protocols/unstable/text-input/text-input-unstable-v1.xml",
+      "archive_path": "provenance/protocol/inputs/text-input-unstable-v1.xml",
+      "original_sha256": "a3671b8e50ebe04f4d114c7b982763ae2964e44be163fb3e9eb30efca8a111b1",
+      "archive_sha256": "a3671b8e50ebe04f4d114c7b982763ae2964e44be163fb3e9eb30efca8a111b1",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/framework/ubuntu/xdg-shell-client-protocol.h",
+      "archive_path": "provenance/protocol/generated/xdg-shell-client-protocol.h",
+      "original_sha256": "1fa7e6cdfd0adafe3a2d9870af6fbc7d36de500ca7ad09f3fd51130a8dfa450e",
+      "archive_sha256": "1fa7e6cdfd0adafe3a2d9870af6fbc7d36de500ca7ad09f3fd51130a8dfa450e",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/framework/ubuntu/xdg-shell-protocol.c",
+      "archive_path": "provenance/protocol/generated/xdg-shell-protocol.c",
+      "original_sha256": "1ffea71e9cbe07758b437a7e43a60ee6f93c406d020eca568df220e9488ae999",
+      "archive_sha256": "1ffea71e9cbe07758b437a7e43a60ee6f93c406d020eca568df220e9488ae999",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/framework/ubuntu/text-input-v1-client-protocol.h",
+      "archive_path": "provenance/protocol/generated/text-input-v1-client-protocol.h",
+      "original_sha256": "9c90f9b29bd85a68bec63658d78a2e07aa15e622b01382cc04861935824bf370",
+      "archive_sha256": "9c90f9b29bd85a68bec63658d78a2e07aa15e622b01382cc04861935824bf370",
+      "representation": "byte-identical"
+    },
+    {
+      "original_path": "/workspace/review167-live-prep-agent/framework/ubuntu/text-input-v1-protocol.c",
+      "archive_path": "provenance/protocol/generated/text-input-v1-protocol.c",
+      "original_sha256": "95387edb6409150aed47ec940f8321c5f6f54e10161f46ebd62fce4a80ae0873",
+      "archive_sha256": "95387edb6409150aed47ec940f8321c5f6f54e10161f46ebd62fce4a80ae0873",
+      "representation": "byte-identical"
+    }
+  ]
+}
