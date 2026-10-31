@@ -105,6 +105,53 @@ class ControlSocketTests(unittest.TestCase):
         self.assertIn("owner and host retained", stdout)
         self.assertIn("next text sequence: 12", stdout)
 
+    def test_native_inspection_reports_only_one_snapshot_and_rejects_wrong_reply(self) -> None:
+        script = Path(__file__).resolve().parents[2] / "scripts/settings_retained_control.py"
+        for sequence in (37, 0):
+            proc = subprocess.Popen(
+                [sys.executable, str(script), str(self.path), "inspect-native"],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("z"))
+            self.lib.gpui_settings_control_reply_sequence(ord("S"), sequence)
+            stdout, stderr = proc.communicate(timeout=3)
+            self.assertEqual(proc.returncode, 0, stderr)
+            self.assertIn("owner and host retained", stdout)
+            self.assertIn("observed native head sequence: " + (str(sequence) if sequence else "none observed; not a quiescence proof"), stdout)
+        proc = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "inspect-native"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("z"))
+        self.lib.gpui_settings_control_reply(ord("I"))
+        stdout, stderr = proc.communicate(timeout=3)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("unexpected response", stderr)
+
+    def test_native_inspection_timeout_does_not_reuse_or_ack_a_record(self) -> None:
+        script = Path(__file__).resolve().parents[2] / "scripts/settings_retained_control.py"
+        timed = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "inspect-native"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("z"))
+        stdout, stderr = timed.communicate(timeout=5)
+        self.assertNotEqual(timed.returncode, 0)
+        self.assertIn("outcome may be unknown", stderr)
+        # A late response closes only that disconnected request. A second
+        # query is a fresh read-only operation and carries no ACK sequence.
+        self.lib.gpui_settings_control_reply_sequence(ord("S"), 37)
+        again = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "inspect-native"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("z"))
+        self.assertEqual(self.lib.gpui_settings_control_sequence(), 0)
+        self.lib.gpui_settings_control_reply_sequence(ord("S"), 37)
+        stdout, stderr = again.communicate(timeout=3)
+        self.assertEqual(again.returncode, 0, stderr)
+        self.assertIn("observed native head sequence: 37", stdout)
+
     def test_apply_request_carries_exact_positive_sequence(self) -> None:
         with socket.socket(socket.AF_UNIX) as peer:
             peer.connect(str(self.path))

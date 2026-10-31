@@ -296,3 +296,17 @@ See [the shared UI guide](../docs/shared-ui.md#native-appentity-host) for the
 single App Entity, controller reuse, lifetime bounds, fixture commands and
 exact-source evidence policy. The separate shared-native CI profile preserves
 legacy pins and default runners. macOS runtime/AX are explicitly not run by CI.
+# Retained route observation
+
+The experimental Ubuntu Settings control command `inspect-native` peeks once
+at the current native FIFO head while the original controller is suspended.
+The `YAMI_SETTINGS_RETAINED_HEAD` log records the native and portable identity,
+head kind, stale/revoked state, route geometry slots, and the owner's host
+verification flag. Text payloads are not printed. A zero target field is only
+meaningful when `has_target` is true. The command neither pumps host callbacks
+nor acknowledges, dispatches, applies, or discards the record.
+
+An empty head is only an instantaneous observation and cannot prove IME
+quiescence; a missing pending geometry alone cannot prove which step returned
+Busy or that an earlier host update had no effect. Inspection grants no
+permission to resume input, publish geometry, close a session, or stop a host.

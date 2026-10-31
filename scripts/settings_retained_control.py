@@ -7,7 +7,7 @@ import socket
 import struct
 import sys
 
-COMMANDS = {"status": b"s", "receipt": b"t", "prefix": b"b", "stage": b"j", "owned": b"o", "reconcile": b"d", "watermark": b"w", "retire": b"e", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resolve-release": b"k", "resume": b"u", "cutoff": b"c", "stop": b"q", "geometry-submit": b"v", "geometry-handoff": b"h"}
+COMMANDS = {"status": b"s", "receipt": b"t", "inspect-native": b"z", "prefix": b"b", "stage": b"j", "owned": b"o", "reconcile": b"d", "watermark": b"w", "retire": b"e", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resolve-release": b"k", "resume": b"u", "cutoff": b"c", "stop": b"q", "geometry-submit": b"v", "geometry-handoff": b"h"}
 GEOMETRY_REPLIES = {
     "geometry-submit": (b"G", "native geometry receipt checked for this step; scene, record application and shutdown are not implied"),
     "geometry-handoff": (b"H", "original text receipt retained by the route and owner; application, scene and shutdown are not implied"),
@@ -62,7 +62,7 @@ def main() -> int:
             peer.sendall(payload)
             result = peer.recv(1)
             sequence = None
-            if args.command in ("status", "receipt", "generation", "owned", "watermark") and result in (b"S", b"N"):
+            if args.command in ("status", "receipt", "inspect-native", "generation", "owned", "watermark") and result in (b"S", b"N"):
                 data = b""
                 while len(data) < 8:
                     chunk = peer.recv(8 - len(data))
@@ -76,6 +76,9 @@ def main() -> int:
     if args.command in GEOMETRY_REPLIES and result not in (GEOMETRY_REPLIES[args.command][0], b"E"):
         print("geometry control returned an unexpected response; owner and host remain unresolved", file=sys.stderr)
         return 2
+    if args.command == "inspect-native" and result not in (b"S", b"E"):
+        print("native inspection returned an unexpected response; owner and host remain unresolved", file=sys.stderr)
+        return 2
     message = (GEOMETRY_REPLIES[args.command][1]
                if args.command in GEOMETRY_REPLIES and result == GEOMETRY_REPLIES[args.command][0]
                else REPLIES.get(result))
@@ -84,8 +87,9 @@ def main() -> int:
         return 2
     print(message)
     if sequence is not None:
-        label = {"receipt": "native receipt sequence", "owned": "owned delivery sequence", "generation": "continuation generation", "watermark": "completed frame candidate watermark"}.get(args.command, "next text sequence")
-        print(f"{label}: {sequence or 'none or non-text prefix'}")
+        label = {"receipt": "native receipt sequence", "inspect-native": "observed native head sequence", "owned": "owned delivery sequence", "generation": "continuation generation", "watermark": "completed frame candidate watermark"}.get(args.command, "next text sequence")
+        missing = 'none observed; not a quiescence proof' if args.command == 'inspect-native' else 'none or non-text prefix'
+        print(f"{label}: {sequence or missing}")
     return 2 if result in (b"E", b"R") else 0
 
 
