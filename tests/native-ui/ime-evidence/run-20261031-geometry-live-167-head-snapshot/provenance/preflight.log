@@ -1,0 +1,15 @@
+{
+  "missing_tools": [],
+  "unresolved_dynamic_libraries": [],
+  "source_heads": {
+    "app": "e9fe5fe06111dce33be20f3f93d8be819194486f",
+    "framework": "35b9041dfb3642b43ca37c604834942614eb50fb",
+    "harness": "aa7c81288b81617a5e8a346347fe355e38d5b834"
+  },
+  "live_started": false,
+  "proc_visibility": {
+    "accessible_process_fd_dirs": 11,
+    "inaccessible_process_fd_dirs": 753,
+    "implication": "If visibility is incomplete at teardown, writer cessation/artifact stability stays UNVERIFIED."
+  }
+}

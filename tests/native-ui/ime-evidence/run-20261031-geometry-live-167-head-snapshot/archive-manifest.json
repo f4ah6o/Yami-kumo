@@ -1,0 +1,173 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "ae52c4886f66791cd875cd1188d28fc68cd33fa0b1c85284eeb1f0c8018d6f90"
+    },
+    {
+      "path": "app.exe.gz",
+      "sha256": "d37a583131e8c7ae68e99c419e4f8dd7508314663c69d5c40e89ff6b0bb40c52"
+    },
+    {
+      "path": "app.log",
+      "sha256": "9838188824eed0fe075ed4ac4d50d918972ca5a2099cfd1b85ae1bc4a14f97e6"
+    },
+    {
+      "path": "artifact-manifest.json",
+      "sha256": "a7457076e9b0a83b0a716e57efa14a965b63ee16326588d0c5cedb46d7d6fc9e"
+    },
+    {
+      "path": "build.json",
+      "sha256": "edf2237e584ba5bb3c0c159f01a0153ee64f03bd571cb74402dca23627961206"
+    },
+    {
+      "path": "build.log",
+      "sha256": "846921203ec92b0acbae152701b0a538f43798b1c40b93b6d56f418ef7fea1f0"
+    },
+    {
+      "path": "engine.log",
+      "sha256": "7b2be77df2274ba8ffeff3948afd6e7514bf2fe1142759ada3656b5ada1a5310"
+    },
+    {
+      "path": "ibus-daemon.log",
+      "sha256": "10fed1866072eeaf8b3b50f8d6f7f10527cd7db0f852915aaddb8a9e736c8c96"
+    },
+    {
+      "path": "ibus-ui-dbus.log",
+      "sha256": "c7568f0858a12c3727cdee6c2cd41523840c7088e0cd3781a05ae187b05a92df"
+    },
+    {
+      "path": "ibus-ui-wayland.log",
+      "sha256": "cd6fdf1ace1a668e2f95285cdce59ba829a0eeafce1bc8cf86001346ab86c522"
+    },
+    {
+      "path": "mozc-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "pid",
+      "sha256": "9cf9d75e9350205d482948c673d837433bbffd33fc26c2350c818c83ab63f0d9"
+    },
+    {
+      "path": "provenance/REPORT.md",
+      "sha256": "854f697045c91a18426b0d549c6846d1a4bbfeeaec76cdd2bc634bc3a15232f1"
+    },
+    {
+      "path": "provenance/capture-provenance.py",
+      "sha256": "faaa27c786b442e50f8fb72921d15392243d5c983f3555bd31604e3ca79f0cb2"
+    },
+    {
+      "path": "provenance/env.sh",
+      "sha256": "012bc568f27393c0a2e0edd46165cdb4e4e51cb7a31227d45976c8d89a044687"
+    },
+    {
+      "path": "provenance/launch-after-confirmation.sh",
+      "sha256": "2d1fef052ff5dc9495db993359fd617b8ec22562e0ff8141b3f4ede6f170ae32"
+    },
+    {
+      "path": "provenance/launch-gate-check.log",
+      "sha256": "bb73d92f35e7f6a90f89e1f02f817ed2454ae151b0226a2974d191437b587851"
+    },
+    {
+      "path": "provenance/live-launch.log",
+      "sha256": "cb747773270adc338eb4a1b4d8546e548e9ae3ce6e1c85e1833d1f8db3df9f6a"
+    },
+    {
+      "path": "provenance/local-archive-manifest.json",
+      "sha256": "6dd2bc29df56fadfa1eae7c40982e33fe0cc61540e7b3a519ead8a6e4e3c9e8a"
+    },
+    {
+      "path": "provenance/local-archive-manifest.sha256",
+      "sha256": "5c56d80cc9aa3b7993d8f191dd1d458279df78095b2c88bfd243f51b3fe40489"
+    },
+    {
+      "path": "provenance/observe-cleanup.py",
+      "sha256": "945586d7ff28b9e290059f267b04d80da80efd727fbc4feee511af9c63c4f922"
+    },
+    {
+      "path": "provenance/postflight-artifact-verification.json",
+      "sha256": "65707313dfc98393084909112a55c7feeb4393ddbf458f59306bab2f32677f86"
+    },
+    {
+      "path": "provenance/postflight-cleanup-observation.json",
+      "sha256": "83eb99fcd349316caca1ee6ec1aef1e0e9cca0a12438c2306896fdb121d14326"
+    },
+    {
+      "path": "provenance/postflight-source-verification.log",
+      "sha256": "de7e8b6782669210760f683439546d2886a36bb48af32518fa0e09564fa3d8e4"
+    },
+    {
+      "path": "provenance/preflight.log",
+      "sha256": "f3720639f6e5d2db3cfc8fbc6ce99f59e838c0afbaf711c9cdb4aff57bc58a3d"
+    },
+    {
+      "path": "provenance/preparation-provenance.json",
+      "sha256": "d3962ff4bd41df17e7c76f318dd14fcb4f0c262bcb4e46018b3a73928a9a5736"
+    },
+    {
+      "path": "provenance/prepare-framework.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "provenance/protocol/generated/text-input-v1-client-protocol.h",
+      "sha256": "9c90f9b29bd85a68bec63658d78a2e07aa15e622b01382cc04861935824bf370"
+    },
+    {
+      "path": "provenance/protocol/generated/text-input-v1-protocol.c",
+      "sha256": "95387edb6409150aed47ec940f8321c5f6f54e10161f46ebd62fce4a80ae0873"
+    },
+    {
+      "path": "provenance/protocol/generated/xdg-shell-client-protocol.h",
+      "sha256": "1fa7e6cdfd0adafe3a2d9870af6fbc7d36de500ca7ad09f3fd51130a8dfa450e"
+    },
+    {
+      "path": "provenance/protocol/generated/xdg-shell-protocol.c",
+      "sha256": "1ffea71e9cbe07758b437a7e43a60ee6f93c406d020eca568df220e9488ae999"
+    },
+    {
+      "path": "provenance/protocol/inputs/prepare_ubuntu.sh",
+      "sha256": "8762b81df5d87c62233ee475c9989627ea20c1de6fff92139f48efc104497708"
+    },
+    {
+      "path": "provenance/protocol/inputs/text-input-unstable-v1.xml",
+      "sha256": "a3671b8e50ebe04f4d114c7b982763ae2964e44be163fb3e9eb30efca8a111b1"
+    },
+    {
+      "path": "provenance/protocol/inputs/xdg-shell.xml",
+      "sha256": "9d9e27038ca722f159a361293f8c6cd270dab907ab52de5b8ecfbb8d6b9651c2"
+    },
+    {
+      "path": "provenance/run-authorization.json",
+      "sha256": "1775563d974a1ef7d6821c2c0eddbd9eb7e651ebfe692e5370e3496b21101f60"
+    },
+    {
+      "path": "provenance/verify-live-artifacts.py",
+      "sha256": "3146cf75abf23cbbb7db24e76effe3864cc1a075c91efcb7cbbcca7f71bb3720"
+    },
+    {
+      "path": "provenance/verify-preparation.py",
+      "sha256": "61f262de42b3345bf097ef864c86b94163d4a32469385c745cf5178a0d3ce35b"
+    },
+    {
+      "path": "result.json",
+      "sha256": "c5a0184e71638f1ea58484249f8935880445267881fa1d53884d8709d9352c0f"
+    },
+    {
+      "path": "source-copy-map.json",
+      "sha256": "e97248ff8ad90bc953c506634670027044f7a7da994978b373142461df531d37"
+    },
+    {
+      "path": "verify_archive.py",
+      "sha256": "1ea87d8ea64f51b54777e093e48905513c8c834c820c749eae4f437aa180de5d"
+    },
+    {
+      "path": "weston-stdio.log",
+      "sha256": "47f23fdb9ba3fdf0841f595ff270e77b5bd19ffff874c81f114d44a5a9a86c2e"
+    },
+    {
+      "path": "weston.log",
+      "sha256": "aeba88412778aa878dcda2a498a4bcdb8313ee6633c8c22ae88d7754e7f05551"
+    }
+  ],
+  "scope": "Committed evidence representations excluding this manifest; original raw manifest/copy map preserve gzip mapping. Matching local hashes do not prove writer cessation."
+}
