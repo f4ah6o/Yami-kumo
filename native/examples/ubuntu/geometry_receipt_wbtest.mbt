@@ -14,3 +14,16 @@ test "geometry candidate comparison includes selection caret and preedit" {
   assert_false(same_geometry_state(base.with_preedit(Some(one)), base.with_preedit(Some(two))))
   assert_true(same_geometry_state(base.with_preedit(Some(one)), base.with_preedit(Some(one))))
 }
+
+///|
+test "direct geometry is rejected before any staged or native attempt" {
+  let calls = Ref(0)
+  let action = fn() { calls.val += 1; Ok(()) }
+  match with_ime_geometry_only(true, action) {
+    Err(error) => assert_true(error.code() is @diagnostics.UnsupportedCapability)
+    Ok(_) => fail("direct route has no native IME geometry")
+  }
+  assert_eq(calls.val, 0)
+  with_ime_geometry_only(false, action).unwrap()
+  assert_eq(calls.val, 1)
+}

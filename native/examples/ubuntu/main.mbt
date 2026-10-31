@@ -535,7 +535,7 @@ fn main {
       })
       if result is Ok(_) { unsupported_native.val = None }
       result
-    }, fn() {
+    }, fn() { with_ime_geometry_only(direct_mode.val, fn() {
       let owner = match entry.owner() {
         Some(value) => value
         None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_owner_unavailable"))
@@ -564,7 +564,7 @@ fn main {
         }
         adapter.attempt(retry, state)
       })
-    })
+    }) })
     return
   }
   let legacy = @ubuntu_host.TextHostRoute::new(host)
