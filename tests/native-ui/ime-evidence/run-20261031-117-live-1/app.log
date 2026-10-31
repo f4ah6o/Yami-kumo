@@ -1,0 +1,288 @@
+YAMI_SETTINGS_CONTROL {"path":"/tmp/yami-settings-MWJYAe/control.sock","state":"open"}
+[3684527.492] {Default Queue}  -> wl_display#1.get_registry(new id wl_registry#2)
+[3684527.504] {Default Queue}  -> wl_display#1.sync(new id wl_callback#3)
+[3684527.601] {Display Queue} wl_display#1.delete_id(3)
+[3684527.611] {Default Queue} wl_registry#2.global(1, "wl_compositor", 5)
+[3684527.615] {Default Queue}  -> wl_registry#2.bind(1, "wl_compositor", 3, new id [unknown]#4)
+[3684527.618] {Default Queue} wl_registry#2.global(2, "wl_subcompositor", 1)
+[3684527.619] {Default Queue} wl_registry#2.global(3, "wp_viewporter", 1)
+[3684527.621] {Default Queue} wl_registry#2.global(4, "zxdg_output_manager_v1", 2)
+[3684527.623] {Default Queue} wl_registry#2.global(5, "wp_presentation", 1)
+[3684527.624] {Default Queue} wl_registry#2.global(6, "wp_single_pixel_buffer_manager_v1", 1)
+[3684527.626] {Default Queue} wl_registry#2.global(7, "wp_tearing_control_manager_v1", 1)
+[3684527.627] {Default Queue} wl_registry#2.global(8, "zwp_relative_pointer_manager_v1", 1)
+[3684527.628] {Default Queue} wl_registry#2.global(9, "zwp_pointer_constraints_v1", 1)
+[3684527.630] {Default Queue} wl_registry#2.global(10, "zwp_input_timestamps_manager_v1", 1)
+[3684527.632] {Default Queue} wl_registry#2.global(11, "weston_capture_v1", 1)
+[3684527.633] {Default Queue} wl_registry#2.global(12, "wl_data_device_manager", 3)
+[3684527.635] {Default Queue}  -> wl_registry#2.bind(12, "wl_data_device_manager", 1, new id [unknown]#5)
+[3684527.637] {Default Queue} wl_registry#2.global(13, "wl_shm", 2)
+[3684527.639] {Default Queue}  -> wl_registry#2.bind(13, "wl_shm", 1, new id [unknown]#6)
+[3684527.640] {Default Queue} wl_registry#2.global(14, "wl_seat", 7)
+[3684527.642] {Default Queue}  -> wl_registry#2.bind(14, "wl_seat", 4, new id [unknown]#7)
+[3684527.644] {Default Queue}  -> wl_data_device_manager#5.get_data_device(new id wl_data_device#8, wl_seat#7)
+[3684527.646] {Default Queue} wl_registry#2.global(15, "wl_output", 4)
+[3684527.648] {Default Queue}  -> wl_registry#2.bind(15, "wl_output", 2, new id [unknown]#9)
+[3684527.650] {Default Queue} wl_registry#2.global(16, "zwp_input_panel_v1", 1)
+[3684527.651] {Default Queue} wl_registry#2.global(17, "zwp_input_method_v1", 1)
+[3684527.653] {Default Queue} wl_registry#2.global(18, "zwp_text_input_manager_v1", 1)
+[3684527.656] {Default Queue}  -> wl_registry#2.bind(18, "zwp_text_input_manager_v1", 1, new id [unknown]#10)
+[3684527.661] {Default Queue} wl_registry#2.global(19, "xdg_wm_base", 5)
+[3684527.663] {Default Queue}  -> wl_registry#2.bind(19, "xdg_wm_base", 1, new id [unknown]#11)
+[3684527.666] {Default Queue} wl_registry#2.global(20, "weston_desktop_shell", 1)
+[3684527.668] {Default Queue} wl_callback#3.done(3)
+[3684527.670] {Default Queue}  -> wl_display#1.sync(new id wl_callback#3)
+[3684527.754] {Display Queue} wl_display#1.delete_id(3)
+[3684527.757] {Default Queue} discarded wl_shm#6.format(0)
+[3684527.759] {Default Queue} discarded wl_shm#6.format(1)
+[3684527.760] {Default Queue} discarded wl_shm#6.format(909199186)
+[3684527.761] {Default Queue} discarded wl_shm#6.format(875709016)
+[3684527.762] {Default Queue} discarded wl_shm#6.format(875708993)
+[3684527.763] {Default Queue} discarded wl_shm#6.format(875714642)
+[3684527.764] {Default Queue} discarded wl_shm#6.format(875708754)
+[3684527.765] {Default Queue} discarded wl_shm#6.format(875714626)
+[3684527.767] {Default Queue} discarded wl_shm#6.format(875708738)
+[3684527.768] {Default Queue} discarded wl_shm#6.format(808669784)
+[3684527.769] {Default Queue} discarded wl_shm#6.format(808669761)
+[3684527.770] {Default Queue} discarded wl_shm#6.format(808665688)
+[3684527.771] {Default Queue} discarded wl_shm#6.format(808665665)
+[3684527.772] {Default Queue} wl_seat#7.name("default")
+[3684527.774] {Default Queue} wl_seat#7.capabilities(3)
+[3684527.776] {Default Queue}  -> wl_seat#7.get_pointer(new id wl_pointer#12)
+[3684527.777] {Default Queue}  -> wl_seat#7.get_keyboard(new id wl_keyboard#13)
+[3684527.779] {Default Queue} wl_output#9.geometry(0, 0, 244, 163, 0, "weston-X11", "none", 0)
+[3684527.786] {Default Queue} wl_output#9.scale(1)
+[3684527.788] {Default Queue} wl_output#9.mode(3, 960, 640, 60000)
+[3684527.790] {Default Queue} wl_output#9.done()
+[3684527.791] {Default Queue} wl_callback#3.done(3)
+[3684527.820] {Default Queue}  -> wl_shm#6.create_pool(new id wl_shm_pool#3, fd 7, 2304)
+[3684527.922] {Default Queue}  -> wl_shm_pool#3.resize(6912)
+[3684527.958] {Default Queue}  -> wl_shm_pool#3.resize(16128)
+[3684528.020] {Default Queue}  -> wl_shm_pool#3.resize(34560)
+[3684528.128] {Default Queue}  -> wl_shm_pool#3.resize(71424)
+[3684528.342] {Default Queue}  -> wl_shm_pool#3.resize(145152)
+[3684529.014] {Default Queue}  -> wl_shm_pool#3.resize(292608)
+[3684529.864] {Default Queue}  -> wl_shm_pool#3.resize(587520)
+[3684532.582] {Default Queue}  -> wl_compositor#4.create_surface(new id wl_surface#14)
+[3684532.606] {Default Queue}  -> wl_compositor#4.create_surface(new id wl_surface#15)
+[3684532.609] {Default Queue}  -> xdg_wm_base#11.get_xdg_surface(new id xdg_surface#16, wl_surface#15)
+[3684532.611] {Default Queue}  -> xdg_surface#16.get_toplevel(new id xdg_toplevel#17)
+[3684532.613] {Default Queue}  -> xdg_toplevel#17.set_title("Yami-kumo Shared Settings")
+[3684532.615] {Default Queue}  -> xdg_toplevel#17.set_app_id("gpui.mbt")
+[3684532.616] {Default Queue}  -> wl_surface#15.commit()
+[3684532.618] {Default Queue}  -> wl_display#1.sync(new id wl_callback#18)
+[3684532.804] {Display Queue} wl_display#1.delete_id(18)
+[3684532.810] {Default Queue} wl_keyboard#13.repeat_info(40, 400)
+[3684532.812] {Default Queue} wl_keyboard#13.keymap(1, fd 7, 64754)
+[3684534.176] {Default Queue} wl_callback#18.done(3)
+[3684534.182] {Default Queue} xdg_toplevel#17.configure(0, 0, array[0])
+[3684534.184] {Default Queue} xdg_surface#16.configure(4)
+[3684534.186] {Default Queue}  -> xdg_surface#16.ack_configure(4)
+[3684534.188] {Default Queue}  -> wl_surface#15.set_buffer_scale(1)
+[3684558.544] {mesa egl swrast display queue}  -> wl_display#1.get_registry(new id wl_registry#18)
+[3684558.575] {mesa egl swrast display queue}  -> wl_display#1.sync(new id wl_callback#19)
+[3684558.695] {Display Queue} wl_display#1.delete_id(19)
+[3684558.700] {mesa egl swrast display queue} wl_registry#18.global(1, "wl_compositor", 5)
+[3684558.706] {mesa egl swrast display queue} wl_registry#18.global(2, "wl_subcompositor", 1)
+[3684558.707] {mesa egl swrast display queue} wl_registry#18.global(3, "wp_viewporter", 1)
+[3684558.709] {mesa egl swrast display queue} wl_registry#18.global(4, "zxdg_output_manager_v1", 2)
+[3684558.710] {mesa egl swrast display queue} wl_registry#18.global(5, "wp_presentation", 1)
+[3684558.712] {mesa egl swrast display queue} wl_registry#18.global(6, "wp_single_pixel_buffer_manager_v1", 1)
+[3684558.713] {mesa egl swrast display queue} wl_registry#18.global(7, "wp_tearing_control_manager_v1", 1)
+[3684558.715] {mesa egl swrast display queue} wl_registry#18.global(8, "zwp_relative_pointer_manager_v1", 1)
+[3684558.716] {mesa egl swrast display queue} wl_registry#18.global(9, "zwp_pointer_constraints_v1", 1)
+[3684558.718] {mesa egl swrast display queue} wl_registry#18.global(10, "zwp_input_timestamps_manager_v1", 1)
+[3684558.719] {mesa egl swrast display queue} wl_registry#18.global(11, "weston_capture_v1", 1)
+[3684558.721] {mesa egl swrast display queue} wl_registry#18.global(12, "wl_data_device_manager", 3)
+[3684558.722] {mesa egl swrast display queue} wl_registry#18.global(13, "wl_shm", 2)
+[3684558.724] {mesa egl swrast display queue}  -> wl_registry#18.bind(13, "wl_shm", 1, new id [unknown]#20)
+[3684558.726] {mesa egl swrast display queue} wl_registry#18.global(14, "wl_seat", 7)
+[3684558.727] {mesa egl swrast display queue} wl_registry#18.global(15, "wl_output", 4)
+[3684558.729] {mesa egl swrast display queue} wl_registry#18.global(16, "zwp_input_panel_v1", 1)
+[3684558.730] {mesa egl swrast display queue} wl_registry#18.global(17, "zwp_input_method_v1", 1)
+[3684558.732] {mesa egl swrast display queue} wl_registry#18.global(18, "zwp_text_input_manager_v1", 1)
+[3684558.733] {mesa egl swrast display queue} wl_registry#18.global(19, "xdg_wm_base", 5)
+[3684558.740] {mesa egl swrast display queue} wl_registry#18.global(20, "weston_desktop_shell", 1)
+[3684558.742] {mesa egl swrast display queue} wl_callback#19.done(4)
+[3684558.744] {mesa egl swrast display queue}  -> wl_display#1.sync(new id wl_callback#19)
+[3684558.782] {Display Queue} wl_display#1.delete_id(19)
+[3684558.784] {mesa egl swrast display queue} wl_shm#20.format(0)
+[3684558.785] {mesa egl swrast display queue} wl_shm#20.format(1)
+[3684558.787] {mesa egl swrast display queue} wl_shm#20.format(909199186)
+[3684558.788] {mesa egl swrast display queue} wl_shm#20.format(875709016)
+[3684558.789] {mesa egl swrast display queue} wl_shm#20.format(875708993)
+[3684558.790] {mesa egl swrast display queue} wl_shm#20.format(875714642)
+[3684558.791] {mesa egl swrast display queue} wl_shm#20.format(875708754)
+[3684558.793] {mesa egl swrast display queue} wl_shm#20.format(875714626)
+[3684558.794] {mesa egl swrast display queue} wl_shm#20.format(875708738)
+[3684558.795] {mesa egl swrast display queue} wl_shm#20.format(808669784)
+[3684558.797] {mesa egl swrast display queue} wl_shm#20.format(808669761)
+[3684558.798] {mesa egl swrast display queue} wl_shm#20.format(808665688)
+[3684558.799] {mesa egl swrast display queue} wl_shm#20.format(808665665)
+[3684558.800] {mesa egl swrast display queue} wl_callback#19.done(4)
+[3684584.779] {mesa egl swrast display queue}  -> wl_shm#20.create_pool(new id wl_shm_pool#19, fd 9, 1228800)
+[3684584.794] {mesa egl surface queue}  -> wl_shm_pool#19.create_buffer(new id wl_buffer#21, 0, 640, 480, 2560, 0)
+[3684584.797] {mesa egl surface queue}  -> wl_shm_pool#19.destroy()
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"resize","native_sequence":1,"portable_epoch":0}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"resize","native_sequence":1}
+[3684743.812] {Default Queue}  -> wl_surface#15.frame(new id wl_callback#22)
+[3684743.869] {mesa egl surface queue}  -> wl_surface#15.frame(new id wl_callback#23)
+[3684743.872] {mesa egl surface queue}  -> wl_surface#15.attach(wl_buffer#21, 0, 0)
+[3684743.875] {mesa egl surface queue}  -> wl_surface#15.damage(0, 0, 2147483647, 2147483647)
+[3684746.444] {mesa egl surface queue}  -> wl_surface#15.commit()
+[3684746.611] {Display Queue} wl_display#1.delete_id(19)
+[3684746.616] {Default Queue} wl_surface#15.enter(wl_output#9)
+[3684746.619] {Default Queue} wl_keyboard#13.enter(5, wl_surface#15, array[0])
+[3684746.628] {Default Queue} wl_keyboard#13.modifiers(5, 0, 0, 0, 0)
+[3684746.645] {Default Queue} wl_data_device#8.selection(nil)
+[3684746.647] {Default Queue} xdg_toplevel#17.configure(0, 0, array[4])
+[3684746.649] {Default Queue} xdg_surface#16.configure(6)
+[3684746.651] {Default Queue}  -> xdg_surface#16.ack_configure(6)
+[3684746.653] {Default Queue}  -> wl_surface#15.set_buffer_scale(1)
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"platform","native_sequence":2,"portable_epoch":0}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"platform","native_sequence":2}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"resize","native_sequence":3,"portable_epoch":0}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"resize","native_sequence":3}
+[3684756.649] {Display Queue} wl_display#1.delete_id(22)
+[3684756.660] {Display Queue} wl_display#1.delete_id(23)
+[3684756.662] {Default Queue} wl_pointer#12.enter(8, wl_surface#15, 377.00000000, 314.00000000)
+[3684756.670] {Default Queue}  -> wl_shm_pool#3.create_buffer(new id wl_buffer#19, 64512, 24, 24, 96, 0)
+[3684756.674] {Default Queue}  -> wl_pointer#12.set_cursor(8, wl_surface#14, 3, 1)
+[3684756.676] {Default Queue}  -> wl_surface#14.attach(wl_buffer#19, 0, 0)
+[3684756.678] {Default Queue}  -> wl_surface#14.damage(0, 0, 24, 24)
+[3684756.680] {Default Queue}  -> wl_surface#14.commit()
+[3684756.681] {Default Queue} xdg_wm_base#11.ping(9)
+[3684756.683] {Default Queue}  -> xdg_wm_base#11.pong(9)
+[3684756.684] {Default Queue} wl_callback#22.done(42368008)
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"platform","native_sequence":4,"portable_epoch":0}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"platform","native_sequence":4}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"platform","native_sequence":5,"portable_epoch":0}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"platform","native_sequence":5}
+[3684771.915] {Default Queue}  -> zwp_text_input_manager_v1#10.create_text_input(new id zwp_text_input_v1#22)
+[3684771.939] {Default Queue}  -> zwp_text_input_v1#22.activate(wl_seat#7, wl_surface#15)
+[3684771.942] {Default Queue}  -> zwp_text_input_v1#22.show_input_panel()
+[3684771.944] {Default Queue}  -> zwp_text_input_v1#22.set_surrounding_text("", 0, 0)
+[3684771.947] {Default Queue}  -> zwp_text_input_v1#22.set_cursor_rectangle(36, 180, 1, 22)
+[3684771.949] {Default Queue}  -> zwp_text_input_v1#22.set_content_type(0, 0)
+[3684771.950] {Default Queue}  -> zwp_text_input_v1#22.commit_state(1)
+YAMI_NATIVE_UI_SETTINGS {"phase":"text","status":"started","transport":"text-input-v1","epoch":1}
+[3684772.061] {Default Queue} discarded wl_surface#14.enter(wl_output#9)
+[3684772.064] {Default Queue} zwp_text_input_v1#22.enter(wl_surface#15)
+[3684790.464] {mesa egl surface queue} wl_callback#23.done(42368008)
+[3684790.494] {mesa egl swrast display queue}  -> wl_shm#20.create_pool(new id wl_shm_pool#23, fd 9, 1228800)
+[3684790.498] {mesa egl surface queue}  -> wl_shm_pool#23.create_buffer(new id wl_buffer#24, 0, 640, 480, 2560, 0)
+[3684790.501] {mesa egl surface queue}  -> wl_shm_pool#23.destroy()
+[3684790.683] {Default Queue}  -> wl_surface#15.frame(new id wl_callback#25)
+[3684790.691] {mesa egl surface queue}  -> wl_surface#15.frame(new id wl_callback#26)
+[3684790.693] {mesa egl surface queue}  -> wl_surface#15.attach(wl_buffer#24, 0, 0)
+[3684790.695] {mesa egl surface queue}  -> wl_surface#15.damage(0, 0, 2147483647, 2147483647)
+[3684792.727] {mesa egl surface queue}  -> wl_surface#15.commit()
+YAMI_SETTINGS_IME {"stage":"entered_peek","native_sequence":6,"portable_epoch":1,"native_epoch":1,"seat":14,"proxy":1}
+YAMI_SETTINGS_IME {"stage":"entered_ack","native_sequence":6}
+[3684792.784] {Default Queue} zwp_text_input_v1#22.preedit_string(1, "", "")
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"preedit","native_sequence":7,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"preedit","native_sequence":7}
+YAMI_NATIVE_UI_SETTINGS {"phase":"preedit","text":"","cursor":-1,"epoch":1}
+[3684802.700] {Display Queue} wl_display#1.delete_id(23)
+[3684802.711] {Display Queue} wl_display#1.delete_id(25)
+[3684802.713] {Display Queue} wl_display#1.delete_id(26)
+[3684802.715] {Default Queue} wl_callback#25.done(42368054)
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"platform","native_sequence":8,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"platform","native_sequence":8}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"","status":"editing","dialog":false,"focus":"name","error":""}
+[3684836.631] {mesa egl surface queue} wl_buffer#21.release()
+[3684836.644] {mesa egl surface queue} wl_callback#26.done(42368054)
+[3684836.792] {Default Queue}  -> wl_surface#15.frame(new id wl_callback#26)
+[3684836.801] {mesa egl surface queue}  -> wl_surface#15.frame(new id wl_callback#25)
+[3684836.803] {mesa egl surface queue}  -> wl_surface#15.attach(wl_buffer#21, 0, 0)
+[3684836.805] {mesa egl surface queue}  -> wl_surface#15.damage(0, 0, 2147483647, 2147483647)
+[3684838.216] {mesa egl surface queue}  -> wl_surface#15.commit()
+[3684838.270] {Default Queue} zwp_text_input_v1#22.preedit_cursor(3)
+[3684838.274] {Default Queue} zwp_text_input_v1#22.preedit_styling(0, 3, 5)
+[3684838.276] {Default Queue} zwp_text_input_v1#22.preedit_string(1, "ｎ", "ｎ")
+[3684838.282] {Default Queue} wl_keyboard#13.key(12, 2408866518, 49, 0)
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"preedit","native_sequence":9,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"preedit","native_sequence":9}
+YAMI_NATIVE_UI_SETTINGS {"phase":"preedit","text":"ｎ","cursor":1,"epoch":1}
+YAMI_SETTINGS_IME {"stage":"unhandled_native","kind":"forwarded_release","native_sequence":10,"native_epoch":1,"seat":14,"proxy":1,"keysym":110,"known_key":false,"stale":false}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"unhandled_forwarded_release","native_sequence":10,"portable_epoch":1}
+YAMI_SETTINGS_CONTROL {"state":"active","scene_published":false}
+YAMI_SETTINGS_CONTROL reason: ordered_text: native_failure: unsupported receipt requires an explicit policy
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"unhandled_forwarded_release","native_sequence":10}
+[3685904.423] {Display Queue} wl_display#1.delete_id(26)
+[3685904.442] {Display Queue} wl_display#1.delete_id(25)
+[3685904.444] {Default Queue} wl_callback#26.done(42368099)
+[3685904.448] {Default Queue} zwp_text_input_v1#22.preedit_cursor(3)
+[3685904.451] {Default Queue} zwp_text_input_v1#22.preedit_styling(0, 3, 5)
+[3685904.453] {Default Queue} zwp_text_input_v1#22.preedit_string(1, "に", "に")
+[3685904.459] {Default Queue} wl_keyboard#13.key(15, 2408866747, 23, 0)
+[3685904.469] {Default Queue} zwp_text_input_v1#22.preedit_cursor(6)
+[3685904.470] {Default Queue} zwp_text_input_v1#22.preedit_styling(0, 6, 5)
+[3685904.472] {Default Queue} zwp_text_input_v1#22.preedit_string(1, "にｈ", "にｈ")
+[3685904.475] {Default Queue} wl_keyboard#13.key(18, 2408866863, 35, 0)
+[3685904.477] {Default Queue} zwp_text_input_v1#22.preedit_cursor(6)
+[3685904.479] {Default Queue} zwp_text_input_v1#22.preedit_styling(0, 6, 5)
+[3685904.481] {Default Queue} zwp_text_input_v1#22.preedit_string(1, "にほ", "にほ")
+[3685904.483] {Default Queue} wl_keyboard#13.key(21, 2408866979, 24, 0)
+[3685904.513] {Default Queue} zwp_text_input_v1#22.preedit_cursor(9)
+[3685904.514] {Default Queue} zwp_text_input_v1#22.preedit_styling(0, 9, 5)
+[3685904.555] {Default Queue} zwp_text_input_v1#22.preedit_string(1, "にほｎ", "にほｎ")
+[3685904.558] {Default Queue} wl_keyboard#13.key(24, 2408867095, 49, 0)
+[3685904.561] {Default Queue} zwp_text_input_v1#22.preedit_cursor(9)
+[3685904.562] {Default Queue} zwp_text_input_v1#22.preedit_styling(0, 9, 5)
+[3685904.564] {Default Queue} zwp_text_input_v1#22.preedit_string(1, "にほん", "にほん")
+[3685904.567] {Default Queue} wl_keyboard#13.key(27, 2408867210, 49, 0)
+[3685904.569] {Default Queue} zwp_text_input_v1#22.preedit_cursor(0)
+[3685904.570] {Default Queue} zwp_text_input_v1#22.preedit_styling(0, 6, 5)
+[3685904.572] {Default Queue} zwp_text_input_v1#22.preedit_string(1, "日本", "日本")
+[3685904.574] {Default Queue} wl_keyboard#13.key(30, 2408867326, 57, 0)
+[3685904.578] {Default Queue} zwp_text_input_v1#22.commit_string(1, "日本")
+[3685904.581] {Default Queue} zwp_text_input_v1#22.preedit_string(1, "", "")
+[3685904.585] {Default Queue} wl_keyboard#13.key(33, 2408867441, 28, 0)
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"platform","native_sequence":11,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"platform","native_sequence":11}
+YAMI_NATIVE_UI_SETTINGS {"phase":"frame","name":"","status":"editing","dialog":false,"focus":"name","error":""}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"preedit","native_sequence":12,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"preedit","native_sequence":12}
+YAMI_NATIVE_UI_SETTINGS {"phase":"preedit","text":"に","cursor":1,"epoch":1}
+YAMI_SETTINGS_IME {"stage":"unhandled_native","kind":"forwarded_release","native_sequence":13,"native_epoch":1,"seat":14,"proxy":1,"keysym":105,"known_key":false,"stale":false}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"unhandled_forwarded_release","native_sequence":13,"portable_epoch":1}
+YAMI_SETTINGS_CONTROL step: ordered_text: native_failure: unsupported receipt requires an explicit policy
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"unhandled_forwarded_release","native_sequence":13}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"preedit","native_sequence":14,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"preedit","native_sequence":14}
+YAMI_NATIVE_UI_SETTINGS {"phase":"preedit","text":"にｈ","cursor":2,"epoch":1}
+YAMI_SETTINGS_IME {"stage":"unhandled_native","kind":"forwarded_release","native_sequence":15,"native_epoch":1,"seat":14,"proxy":1,"keysym":104,"known_key":false,"stale":false}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"unhandled_forwarded_release","native_sequence":15,"portable_epoch":1}
+YAMI_SETTINGS_CONTROL step: ordered_text: native_failure: unsupported receipt requires an explicit policy
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"unhandled_forwarded_release","native_sequence":15}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"preedit","native_sequence":16,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"preedit","native_sequence":16}
+YAMI_NATIVE_UI_SETTINGS {"phase":"preedit","text":"にほ","cursor":2,"epoch":1}
+YAMI_SETTINGS_IME {"stage":"unhandled_native","kind":"forwarded_release","native_sequence":17,"native_epoch":1,"seat":14,"proxy":1,"keysym":111,"known_key":false,"stale":false}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"unhandled_forwarded_release","native_sequence":17,"portable_epoch":1}
+YAMI_SETTINGS_CONTROL step: ordered_text: native_failure: unsupported receipt requires an explicit policy
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"unhandled_forwarded_release","native_sequence":17}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"preedit","native_sequence":18,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"preedit","native_sequence":18}
+YAMI_NATIVE_UI_SETTINGS {"phase":"preedit","text":"にほｎ","cursor":3,"epoch":1}
+YAMI_SETTINGS_IME {"stage":"unhandled_native","kind":"forwarded_release","native_sequence":19,"native_epoch":1,"seat":14,"proxy":1,"keysym":110,"known_key":false,"stale":false}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"unhandled_forwarded_release","native_sequence":19,"portable_epoch":1}
+YAMI_SETTINGS_CONTROL step: ordered_text: native_failure: unsupported receipt requires an explicit policy
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"unhandled_forwarded_release","native_sequence":19}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"preedit","native_sequence":20,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"preedit","native_sequence":20}
+YAMI_NATIVE_UI_SETTINGS {"phase":"preedit","text":"にほん","cursor":3,"epoch":1}
+YAMI_SETTINGS_IME {"stage":"unhandled_native","kind":"forwarded_release","native_sequence":21,"native_epoch":1,"seat":14,"proxy":1,"keysym":110,"known_key":false,"stale":false}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"unhandled_forwarded_release","native_sequence":21,"portable_epoch":1}
+YAMI_SETTINGS_CONTROL step: ordered_text: native_failure: unsupported receipt requires an explicit policy
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"unhandled_forwarded_release","native_sequence":21}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"preedit","native_sequence":22,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"preedit","native_sequence":22}
+YAMI_NATIVE_UI_SETTINGS {"phase":"preedit","text":"日本","cursor":0,"epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"platform","native_sequence":23,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"platform","native_sequence":23}
+YAMI_SETTINGS_IME {"stage":"record_peek","kind":"commit","native_sequence":24,"portable_epoch":1}
+YAMI_SETTINGS_IME {"stage":"record_ack","kind":"commit","native_sequence":24}
+YAMI_NATIVE_UI_SETTINGS {"phase":"commit","text":"日本","epoch":1}
+YAMI_SETTINGS_CONTROL step: settings_entry: native_failure: host ownership is unresolved

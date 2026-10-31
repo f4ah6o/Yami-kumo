@@ -1,0 +1,487 @@
+{
+  "profile": "local nested Xvfb/Weston x11 + IBus/Mozc; exploratory bounded control",
+  "OS_arch": "Linux-6.18.57-x86_64-with-glibc2.41 / x86_64",
+  "framework_sha": "53e42a5888167fd9203b27f6558deabaf5c54e4b",
+  "consumer_sha": "585ff82109df0fa006f3031258476257d0b9cc86",
+  "app_source_sha": "585ff82109df0fa006f3031258476257d0b9cc86",
+  "harness_sha": "b6e77fb61a38b3ca763b4bc7729ad837e2182fc2",
+  "app_binary_sha256": "8355c8c861faa784fe3c0a94ae663caad04c41a5d7fb2b35354f4c29f0f5b7f6",
+  "dependency_pin_native": "53e42a5888167fd9203b27f6558deabaf5c54e4b",
+  "dependency_pin_shared": "53e42a5888167fd9203b27f6558deabaf5c54e4b",
+  "dependency_lock": {
+    "kind": "source-override; no package lockfile",
+    "native_moon_mod_sha256": "b595be30e056da48775543ef1aa430d7e2ec93cbd9974d95c93d255628994b62",
+    "root_moon_mod_sha256": "922ca99baf05f1be96567b06097486b2ea24a919397ab7e0c5e7c69723893e6f"
+  },
+  "toolchain": "moon 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moon\nmoonc v0.10.15+943464bfa (2026-10-12) /workspace/yami-tools/bin/moonc\nmoonrun 0.1.20261012 (748b63c 2026-10-12) /workspace/yami-tools/bin/moonrun\n\nFeature flags enabled: rr_moon_mod,rr_moon_pkg\n",
+  "host_tools": {
+    "weston": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/weston",
+      "version": "weston 14.0.2",
+      "sha256": "5e7b342da0d38508b3001c291f080fbe35c4101f32ade0babc8458915f87352a"
+    },
+    "ibus": {
+      "path": "/workspace/gpui-locked-profile/prefix/usr/bin/ibus",
+      "version": "IBus 1.5.32",
+      "sha256": "5549c204050c9c99e3af7df7089e7d41fe43474a57c0aec86b91e628243ba19e"
+    },
+    "xdotool": {
+      "path": "/workspace/linux-user-apt/root/usr/bin/xdotool",
+      "version": "xdotool version 3.20160805.1",
+      "sha256": "2fcee924be08b180f4b1bea93eddedbaa8b0ea4b0886f6cbf77a113e8b8a130f"
+    },
+    "mozc_server_sha256": "020f50a6cd53b3a0a5e6c66a30f698b05d5c68df4b5be73e663c1435bc8c432e"
+  },
+  "command": "dbus-run-session -- xvfb-run -a <harness>/session.sh",
+  "run_url": null,
+  "full_live_acceptance": "NOT_RUN",
+  "release_policy": "PASS_SCOPED",
+  "consumer_commit": "OBSERVED_LOG_ONLY",
+  "model_reflection": "PASS_RECEIPT_STAGE_ONLY",
+  "candidate_table_oracle": "NOT_RUN",
+  "dialog_and_focus": "NOT_RUN",
+  "resize_blur_close_races": "NOT_RUN",
+  "forced_process_termination": true,
+  "steps": [
+    {
+      "command": "status",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "prefix",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "local retained prefix resolved; this is not native proof or permission to ACK\n",
+      "stderr": ""
+    },
+    {
+      "command": "receipt",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnative receipt sequence: 10\n",
+      "stderr": ""
+    },
+    {
+      "command": "resolve-release",
+      "sequence": 10,
+      "rc": 0,
+      "stdout": "receipt acknowledged; application and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "stage",
+      "sequence": 10,
+      "rc": 0,
+      "stdout": "native adapter acknowledged an unsupported record under its own policy; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 1\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 1,
+      "rc": 0,
+      "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 2\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 2,
+      "rc": 0,
+      "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 3\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 3,
+      "rc": 2,
+      "stdout": "step refused or failed; owner and host remain retained\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "receipt",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnative receipt sequence: 13\n",
+      "stderr": ""
+    },
+    {
+      "command": "resolve-release",
+      "sequence": 13,
+      "rc": 0,
+      "stdout": "receipt acknowledged; application and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 4\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 4,
+      "rc": 0,
+      "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 5\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 5,
+      "rc": 2,
+      "stdout": "step refused or failed; owner and host remain retained\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "receipt",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnative receipt sequence: 15\n",
+      "stderr": ""
+    },
+    {
+      "command": "resolve-release",
+      "sequence": 15,
+      "rc": 0,
+      "stdout": "receipt acknowledged; application and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 6\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 6,
+      "rc": 0,
+      "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 7\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 7,
+      "rc": 2,
+      "stdout": "step refused or failed; owner and host remain retained\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "receipt",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnative receipt sequence: 17\n",
+      "stderr": ""
+    },
+    {
+      "command": "resolve-release",
+      "sequence": 17,
+      "rc": 0,
+      "stdout": "receipt acknowledged; application and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 8\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 8,
+      "rc": 0,
+      "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 9\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 9,
+      "rc": 2,
+      "stdout": "step refused or failed; owner and host remain retained\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "receipt",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnative receipt sequence: 19\n",
+      "stderr": ""
+    },
+    {
+      "command": "resolve-release",
+      "sequence": 19,
+      "rc": 0,
+      "stdout": "receipt acknowledged; application and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 10\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 10,
+      "rc": 0,
+      "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 11\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 11,
+      "rc": 2,
+      "stdout": "step refused or failed; owner and host remain retained\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "receipt",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnative receipt sequence: 21\n",
+      "stderr": ""
+    },
+    {
+      "command": "resolve-release",
+      "sequence": 21,
+      "rc": 0,
+      "stdout": "receipt acknowledged; application and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 12\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 12,
+      "rc": 0,
+      "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 13\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 13,
+      "rc": 0,
+      "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "generation",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\ncontinuation generation: 14\n",
+      "stderr": ""
+    },
+    {
+      "command": "advance",
+      "sequence": 14,
+      "rc": 0,
+      "stdout": "one bounded step completed; scene and shutdown are not implied\n",
+      "stderr": ""
+    },
+    {
+      "command": "stage",
+      "sequence": 24,
+      "rc": 0,
+      "stdout": "one commit reflected in the model; scene and caret not published\n",
+      "stderr": ""
+    },
+    {
+      "command": "status",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "receipt",
+      "sequence": null,
+      "rc": 0,
+      "stdout": "suspended; owner and host retained\nnative receipt sequence: none or non-text prefix\n",
+      "stderr": ""
+    },
+    {
+      "command": "stop",
+      "sequence": null,
+      "rc": 2,
+      "stdout": "stop refused; owner and host remain retained\n",
+      "stderr": ""
+    }
+  ],
+  "initial_status": {
+    "command": "status",
+    "sequence": null,
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+    "stderr": ""
+  },
+  "initial_prefix": {
+    "command": "prefix",
+    "sequence": null,
+    "rc": 0,
+    "stdout": "local retained prefix resolved; this is not native proof or permission to ACK\n",
+    "stderr": ""
+  },
+  "initial_receipt_sequence": 10,
+  "initial_resolve": {
+    "command": "resolve-release",
+    "sequence": 10,
+    "rc": 0,
+    "stdout": "receipt acknowledged; application and shutdown are not implied\n",
+    "stderr": ""
+  },
+  "initial_ack_stage": {
+    "command": "stage",
+    "sequence": 10,
+    "rc": 0,
+    "stdout": "native adapter acknowledged an unsupported record under its own policy; scene and shutdown are not implied\n",
+    "stderr": ""
+  },
+  "preedit_markers": [
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"\",\"cursor\":-1,\"epoch\":1}",
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"ｎ\",\"cursor\":1,\"epoch\":1}",
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"に\",\"cursor\":1,\"epoch\":1}",
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"にｈ\",\"cursor\":2,\"epoch\":1}",
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"にほ\",\"cursor\":2,\"epoch\":1}",
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"にほｎ\",\"cursor\":3,\"epoch\":1}",
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"にほん\",\"cursor\":3,\"epoch\":1}",
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"preedit\",\"text\":\"日本\",\"cursor\":0,\"epoch\":1}"
+  ],
+  "commit_markers": [
+    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"commit\",\"text\":\"日本\",\"epoch\":1}"
+  ],
+  "commit_native_sequence": 24,
+  "commit_stage": {
+    "command": "stage",
+    "sequence": 24,
+    "rc": 0,
+    "stdout": "one commit reflected in the model; scene and caret not published\n",
+    "stderr": ""
+  },
+  "final_status": {
+    "command": "status",
+    "sequence": null,
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nnext text sequence: none or non-text prefix\n",
+    "stderr": ""
+  },
+  "final_receipt": {
+    "command": "receipt",
+    "sequence": null,
+    "rc": 0,
+    "stdout": "suspended; owner and host retained\nnative receipt sequence: none or non-text prefix\n",
+    "stderr": ""
+  },
+  "final_stop": {
+    "command": "stop",
+    "sequence": null,
+    "rc": 2,
+    "stdout": "stop refused; owner and host remain retained\n",
+    "stderr": ""
+  },
+  "cleanup_result": "FAIL_FORCED_TERMINATION_OWNER_NOT_PERSISTED",
+  "app_exit_code": -15,
+  "test_socket_cleanup": "removed after process exit",
+  "artifact_digest": "sha256:e31640497f7ba99151df07cd018420e741e061f4f05892bb7eebcf42f9d89563",
+  "artifact_digest_scope": "artifact-manifest.json lists raw files; excludes result and manifest"
+}
