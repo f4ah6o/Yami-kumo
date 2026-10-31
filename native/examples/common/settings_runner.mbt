@@ -692,7 +692,6 @@ pub struct SettingsRunOwner {
   priv mut pending_direct : @ui.OwnedDirectDelivery?
   priv mut pending_direct_model : @shared_settings.Model?
   priv mut pending_direct_fence : SettingsModelFence?
-  priv mut pending_direct_after : (@shared_settings.Model, SettingsModelFence)?
   // Kept together with the bounded native ledger until a direct-specific
   // publication/retirement contract exists.
   priv direct_receipts : Array[(NativeRetainedReceipt, @ui.OwnedDirectDelivery)]
@@ -1568,7 +1567,7 @@ fn SettingsRunOwner::ack_owned_receipt(
       if receipt.direct is Some(_) {
         let direct = match self.pending_direct {
           Some(value) => value
-          None => return Err(runner_error("ordered_text", "direct receipt has not been applied"))
+          None => return Err(runner_error("ordered_text", "direct receipt has not been reserved"))
         }
         let (window, epoch, binding, _, _) = direct.identity()
         let matches = match (receipt.direct, receipt.event) {
@@ -1577,13 +1576,13 @@ fn SettingsRunOwner::ack_owned_receipt(
           _ => false
         }
         if !matches || window != receipt.window || epoch != receipt.epoch || binding != receipt.root ||
-          direct.native_sequence() != receipt.sequence || !direct.applied() || !direct.owner_noted() ||
-          !(direct.action_required() is Some(false) || direct.model_applied()) {
-          return Err(runner_error("ordered_text", "direct receipt model stage is unresolved"))
+          direct.native_sequence() != receipt.sequence || direct.attempted() ||
+          !(self.inflight is Some(OrderedPlatform(event)) && same_direct_event(event, direct.event())) {
+          return Err(runner_error("ordered_text", "direct receipt reservation changed"))
         }
-        match (direct.action_required(), self.pending_direct_model, self.pending_direct_fence, self.pending_direct_after) {
-          (Some(false), Some(before), Some(fence), None) if fence.live && before == self.settings => ()
-          (Some(true), Some(_), Some(_), Some((after, fence))) if fence.live && after == self.settings => ()
+        match (self.pending_direct_model, self.pending_direct_fence, self.terminal_owner) {
+          (Some(before), Some(fence), Some(owner)) if fence.live && before == self.settings &&
+            self.mounted.terminal_owner_is_current(owner) => ()
           _ => return Err(runner_error("ordered_text", "direct model proof is stale"))
         }
       }
@@ -1603,12 +1602,6 @@ fn SettingsRunOwner::ack_owned_receipt(
           match (receipt.direct, self.pending_direct) {
             (Some(_), Some(direct)) => {
               self.direct_receipts.push((receipt, direct))
-              self.pending_direct = None
-              self.pending_direct_model = None
-              self.pending_direct_fence = None
-              self.pending_direct_after = None
-              self.inflight = None
-              self.receipt_pre_dispatch = None
             }
             _ => ()
           }
@@ -1621,10 +1614,10 @@ fn SettingsRunOwner::ack_owned_receipt(
 }
 
 ///|
-/// Reserve and apply the exact direct head while the native receipt is still
-/// held. The Ubuntu adapter must already have validated the opaque native
-/// direct-insert evidence; this common layer cannot establish provenance.
-fn SettingsRunOwner::apply_pending_direct(
+/// Reserve the exact direct head while the native receipt is still held.
+/// The trusted Ubuntu adapter validates opaque native provenance; ACK checks
+/// the current native head before the reserved event may mutate the field.
+fn SettingsRunOwner::reserve_pending_direct(
   self : SettingsRunOwner, receipt : NativeRetainedReceipt,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   if self.pending_direct is Some(_) || self.owned_delivery is Some(_) ||
@@ -1664,9 +1657,44 @@ fn SettingsRunOwner::apply_pending_direct(
   self.pending_direct = Some(direct)
   self.pending_direct_model = Some(before)
   self.pending_direct_fence = Some(fence)
-  match self.mounted.apply_owned_direct_text(direct) {
-    Err(error) => return Err(error)
-    Ok(_) => ()
+  Ok(())
+}
+
+///|
+/// Apply only an already-ACKed original receipt. Any failure retains the
+/// original event, owner, model fence and application/action stage.
+fn SettingsRunOwner::complete_pending_direct(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.pending_host_receipt is Some(_) { return Err(runner_error("ordered_text", "direct head is not acknowledged")) }
+  let direct = match self.pending_direct { Some(value) => value; None => return Err(runner_error("ordered_text", "direct reservation is missing")) }
+  let (native, owned) = match self.direct_receipts.last() {
+    Some(value) => value
+    None => return Err(runner_error("ordered_text", "acknowledged direct receipt is missing"))
+  }
+  if owned.native_sequence() != direct.native_sequence() || owned.ordinal() != direct.ordinal() ||
+    owned.identity() != direct.identity() || !same_direct_event(owned.event(), direct.event()) ||
+    native.sequence != direct.native_sequence() ||
+    !(native.event is Some(OrderedPlatform(event)) && same_direct_event(event, direct.event())) ||
+    !(self.inflight is Some(OrderedPlatform(event)) && same_direct_event(event, direct.event())) {
+    return Err(runner_error("ordered_text", "acknowledged direct owner changed"))
+  }
+  let before = match self.pending_direct_model { Some(value) => value; None => return Err(runner_error("ordered_text", "direct model is missing")) }
+  let fence = match self.pending_direct_fence { Some(value) => value; None => return Err(runner_error("ordered_text", "direct model fence is missing")) }
+  if !fence.live || self.settings != before {
+    return Err(runner_error("ordered_text", "direct model changed before application"))
+  }
+  if !direct.applied() {
+    if direct.attempted() { return Err(runner_error("ordered_text", "direct application outcome is uncertain")) }
+    match self.mounted.apply_owned_direct_text(direct) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+  } else if !direct.owner_noted() {
+    match self.mounted.complete_owned_direct_text(direct) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
   }
   if !fence.live || self.settings != before {
     return Err(runner_error("ordered_text", "direct model changed during application"))
@@ -1689,9 +1717,17 @@ fn SettingsRunOwner::apply_pending_direct(
         Ok(_) => ()
       }
       self.replace_settings(next)
-      self.pending_direct_after = Some((self.settings, self.model_fence))
     }
     None => return Err(runner_error("ordered_text", "direct model requirement is unknown"))
+  }
+  self.pending_direct = None
+  self.pending_direct_model = None
+  self.pending_direct_fence = None
+  self.inflight = None
+  self.receipt_pre_dispatch = None
+  if self.suspended {
+    self.live_step_ready = true
+    if self.live_step_generation == 0L { self.live_step_generation = 1L }
   }
   Ok(())
 }
@@ -1776,7 +1812,10 @@ pub fn SettingsRunOwner::terminal_step(
   match command {
     RetryReceiptAck => {
       self.running = true
-      let result = self.ack_owned_receipt()
+      let result = match self.ack_owned_receipt() {
+        Ok(_) if self.pending_direct is Some(_) => self.complete_pending_direct()
+        result => result
+      }
       self.running = false
       match result {
         Ok(_) => Ok(ReceiptAcknowledged)
@@ -1860,6 +1899,22 @@ pub fn SettingsRunOwner::terminal_step(
         Ok(_) => Ok(TextCutoffCompleted)
       }
   }
+}
+
+///|
+/// Retry only the post-ACK direct stage on the same retained owner; an
+/// uncertain field application is never invoked again.
+pub fn SettingsRunOwner::reconcile_direct_delivery(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.pending_host_receipt is Some(_) ||
+    self.pending_direct is None || self.cutoff_done {
+    return Err(runner_error("ordered_text", "direct recovery is unavailable"))
+  }
+  self.running = true
+  let result = self.complete_pending_direct()
+  self.running = false
+  result
 }
 
 ///|
@@ -2082,7 +2137,6 @@ pub fn SettingsRunOwner::new(
     pending_direct: None,
     pending_direct_model: None,
     pending_direct_fence: None,
-    pending_direct_after: None,
     direct_receipts: [],
     owned_model_before: None,
     owned_model_fence: None,
@@ -2447,7 +2501,7 @@ fn SettingsRunOwner::drive_inner(
                       !self.buffered.is_empty() || !self.held_platform.is_empty() {
                       return Err(runner_error("ordered_text", "direct head awaits the original presented prefix"))
                     }
-                    match self.apply_pending_direct(receipt) {
+                    match self.reserve_pending_direct(receipt) {
                       Err(error) => return Err(error)
                       Ok(_) => self.dirty = true
                     }
@@ -2469,7 +2523,12 @@ fn SettingsRunOwner::drive_inner(
                     Err(error) => return Err(error)
                     Ok(_) => {
                       self.receipt_pre_dispatch = None
-                      if receipt.direct is Some(_) { None } else { receipt.event }
+                      if receipt.direct is Some(_) {
+                        match self.complete_pending_direct() {
+                          Err(error) => return Err(error)
+                          Ok(_) => None
+                        }
+                      } else { receipt.event }
                     }
                   }
                 }
