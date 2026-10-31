@@ -2360,7 +2360,7 @@ test "direct platform text is rejected while the original preedit is active" {
 }
 
 ///|
-test "runner leaves rejected direct text at ACK-only when destruction follows" {
+test "runner retains direct text before applying it or reading destruction" {
   let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
   let window = @platform.WindowId::new(1L)
   let native_sequence = Ref(1)
@@ -2399,12 +2399,54 @@ test "runner leaves rejected direct text at ACK-only when destruction follows" {
   owner.dirty = false
   assert_true(owner.drive() is Err(_))
   assert_true(owner.receipt_stage_for_sequence(1L) is Some(ReceiptAcknowledgedOnly))
-  assert_true(owner.inflight_record() is Some(OrderedPlatform(event)) && event.kind() is @platform.Destroyed)
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(event)) && event.kind() is @platform.Input(@primitives.TextInput(text="a")))
+  assert_eq(native_sequence.val, 2)
   assert_eq(owner.model().name(), "")
-  // Invalidation makes the focused field unavailable for public observation;
-  // do not infer its contents from the absent frame.
-  assert_true(owner.mounted.focused_text() is None)
+  assert_true(owner.mounted.focused_text().unwrap().composing())
   assert_true(owner.terminal_owner is Some(_))
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "uncomposed direct text is held before changing the original model" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let window = @platform.WindowId::new(1L)
+  let native_acks = Ref(0)
+  let binding_ref = Ref(0UL)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) {
+      let event = @platform.Event::new(window, 1L, 1.0, @platform.Input(@primitives.TextInput(text="a")))
+      Ok(Some(NativeRetainedReceipt::new(Some(OrderedPlatform(event)), window, 1, binding_ref.val, 7UL, fn() {
+        native_acks.val += 1
+        Ok(())
+      })))
+    }, fn(_) { Ok(()) },
+  )
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  binding_ref.val = binding
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  owner.terminal_owner = Some(lease)
+  owner.gate.rendered = true
+  owner.pending_frame = Some("fixture")
+  owner.dirty = false
+  assert_true(owner.drive() is Err(_))
+  assert_eq(native_acks.val, 1)
+  assert_true(owner.inflight_record() is Some(OrderedPlatform(event)) && event.kind() is @platform.Input(@primitives.TextInput(text="a")))
+  assert_true(owner.receipt_stage_for_sequence(1L) is Some(ReceiptAcknowledgedOnly))
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  assert_eq(owner.model().name(), "")
+  assert_false(owner.mounted.has_pending_actions())
   assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
 }
