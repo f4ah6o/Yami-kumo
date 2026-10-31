@@ -758,6 +758,8 @@ pub struct SettingsRunOwner {
   priv mut pending_publication : SettingsFramePublication?
   priv completed_publications : Array[SettingsFramePublication]
   priv mut dirty : Bool
+  // Staging is local only; no host update or scene present has occurred.
+  priv mut pending_dirty_stage : SettingsDirtyStage?
   priv mut focus_initialized : Bool
   priv mut text_suspended : Bool
   priv mut text_transport_failed : Bool
@@ -809,6 +811,17 @@ pub struct SettingsRunOwner {
 }
 
 ///|
+priv struct SettingsDirtyStage {
+  prepared : @ui.Prepared
+  model : @shared_settings.Model
+  fence : SettingsModelFence
+  window : @platform.WindowId
+  epoch : UInt64
+  binding : UInt64
+  metrics : (Double, Double, Double)
+}
+
+///|
 /// An owner-thread fence invalidated by every Settings model transition,
 /// including a transition whose resulting value happens to equal an old one.
 priv struct SettingsModelFence {
@@ -831,6 +844,103 @@ pub fn SettingsRunOwner::model(
   self : SettingsRunOwner,
 ) -> @shared_settings.Model {
   self.settings
+}
+
+///|
+/// Stage one dirty scene for the same text owner. This performs no host text
+/// update, runtime publication, presentation or native queue operation.
+pub fn SettingsRunOwner::stage_dirty_scene(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || !self.dirty || self.pending_dirty_stage is Some(_) ||
+    self.cutoff_done || self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) ||
+    self.inflight is Some(_) || self.owned_delivery is Some(_) || self.pending_direct is Some(_) ||
+    self.held_tab is Some(_) || !self.buffered.is_empty() || !self.held_platform.is_empty() ||
+    self.pending_frame is Some(_) || self.pending_publication is Some(_) || self.mounted.has_pending_actions() ||
+    !self.host_epoch_verified {
+    return Err(runner_error("dirty_scene", "original owner is not ready to stage"))
+  }
+  self.running = true
+  let result = self.stage_dirty_scene_inner()
+  self.running = false
+  result
+}
+
+///|
+fn SettingsRunOwner::stage_dirty_scene_inner(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let session = match self.session { Some(value) => value; None => return Err(runner_error("dirty_scene", "original session is unavailable")) }
+  let owner = match self.terminal_owner { Some(value) => value; None => return Err(runner_error("dirty_scene", "original field is unavailable")) }
+  if self.host_epoch != Some(session.epoch) || !owner.matches_session(self.window, session.epoch, session.binding) {
+    return Err(runner_error("dirty_scene", "original host owner changed"))
+  }
+  let metrics = match self.host.window_metrics(self.window) { Ok(value) => value; Err(error) => return Err(error) }
+  let (width, height, scale) = metrics
+  let model = self.settings
+  let fence = self.model_fence
+  let prepared = match self.mounted.stage_owned_text_geometry(owner, model.view(), width, height, scale, self.measure) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  let geometry = match self.mounted.inspect_staged_text_geometry(owner, prepared) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  let (window, epoch, binding, _) = geometry.identity()
+  if !fence.live || self.settings != model || window != self.window || epoch != session.epoch ||
+    binding != session.binding || geometry.committed().text() != model.name() {
+    return Err(runner_error("dirty_scene", "staged model or owner changed"))
+  }
+  self.pending_dirty_stage = Some({ prepared, model, fence, window, epoch, binding, metrics })
+  Ok(())
+}
+
+///|
+/// Inspect a still-current local candidate. No publication is implied.
+pub fn SettingsRunOwner::staged_dirty_geometry(
+  self : SettingsRunOwner,
+) -> Result[@ui.StagedTextGeometry, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.cutoff_done {
+    return Err(runner_error("dirty_scene", "staged inspection unavailable"))
+  }
+  self.running = true
+  let result = self.staged_dirty_geometry_inner()
+  self.running = false
+  result
+}
+
+///|
+fn SettingsRunOwner::staged_dirty_geometry_inner(
+  self : SettingsRunOwner,
+) -> Result[@ui.StagedTextGeometry, @diagnostics.FrameworkError] {
+  let staged = match self.pending_dirty_stage { Some(value) => value; None => return Err(runner_error("dirty_scene", "no staged candidate")) }
+  let owner = match self.terminal_owner { Some(value) => value; None => return Err(runner_error("dirty_scene", "original field is unavailable")) }
+  let session = match self.session { Some(value) => value; None => return Err(runner_error("dirty_scene", "original session is unavailable")) }
+  if !staged.fence.live || self.settings != staged.model || self.window != staged.window ||
+    session.epoch != staged.epoch || session.binding != staged.binding ||
+    self.host_epoch != Some(staged.epoch) || !self.host_epoch_verified {
+    return Err(runner_error("dirty_scene", "staged model or host owner changed"))
+  }
+  let metrics = match self.host.window_metrics(self.window) { Ok(value) => value; Err(error) => return Err(error) }
+  if metrics != staged.metrics || !staged.fence.live || self.settings != staged.model ||
+    self.host_epoch != Some(staged.epoch) || !self.host_epoch_verified {
+    return Err(runner_error("dirty_scene", "window metrics or owner changed"))
+  }
+  self.mounted.inspect_staged_text_geometry(owner, staged.prepared)
+}
+
+///|
+/// Discard only the unpublished derived scene candidate. The original field,
+/// preedit, model, host and accepted records are not discarded or ended.
+pub fn SettingsRunOwner::discard_staged_dirty_scene(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.pending_dirty_stage is None {
+    return Err(runner_error("dirty_scene", "no discardable local candidate"))
+  }
+  self.pending_dirty_stage = None
+  Ok(())
 }
 
 ///|
@@ -884,7 +994,7 @@ pub fn SettingsRunOwner::reconcile_terminal_commit(
 pub fn SettingsRunOwner::reconcile_terminal_observation(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.cutoff_done || self.held_tab is Some(_) ||
+  if !self.suspended || self.running || self.pending_dirty_stage is Some(_) || self.cutoff_done || self.held_tab is Some(_) ||
     !self.held_platform.is_empty() ||
     self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) || self.owned_delivery is Some(_) || self.pending_direct is Some(_) {
     return Err(runner_error("terminal_recovery", "terminal owner is unavailable"))
@@ -1315,7 +1425,7 @@ pub fn SettingsRunOwner::retired_native_watermark(self : SettingsRunOwner) -> In
 fn SettingsRunOwner::retire_completed_publication(
   self : SettingsRunOwner, index : Int,
 ) -> Result[Int32, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.destroyed || self.cutoff_done ||
+  if !self.suspended || self.running || self.pending_dirty_stage is Some(_) || self.destroyed || self.cutoff_done ||
     self.pending_publication is Some(_) || self.inflight is Some(_) ||
     self.owned_delivery is Some(_) || self.held_tab is Some(_) ||
     !self.buffered.is_empty() || !self.held_platform.is_empty() ||
@@ -1544,7 +1654,7 @@ pub fn SettingsRunOwner::with_unsupported_native_policy(
 pub fn SettingsRunOwner::resolve_destroyed_receipt(
   self : SettingsRunOwner, sequence : Int64,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.cutoff_done || sequence <= 0L ||
+  if !self.suspended || self.running || self.pending_dirty_stage is Some(_) || self.cutoff_done || sequence <= 0L ||
     self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) || self.owned_delivery is Some(_) || self.pending_direct is Some(_) ||
     self.terminal_destroyed_sequence is Some(_) || self.terminal_applied is Some(_) ||
     !self.held_platform.is_empty() || self.held_tab is Some(_) ||
@@ -1595,7 +1705,7 @@ pub fn SettingsRunOwner::resolve_destroyed_receipt(
 pub fn SettingsRunOwner::retire_destroyed_model_receipt(
   self : SettingsRunOwner, sequence : Int64,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.cutoff_done || sequence <= 0L ||
+  if !self.suspended || self.running || self.pending_dirty_stage is Some(_) || self.cutoff_done || sequence <= 0L ||
     self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) || self.owned_delivery is Some(_) || self.pending_direct is Some(_) ||
     self.terminal_applied is Some(_) || !self.held_platform.is_empty() ||
     self.held_tab is Some(_) || !(self.retained_destroyed_prefix is Some(0)) {
@@ -1700,7 +1810,7 @@ fn SettingsRunOwner::note_handled_platform(
 pub fn SettingsRunOwner::resume_after_receipt_ack(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.owned_delivery is Some(_) || self.pending_direct is Some(_) || self.receipt_pre_dispatch is None ||
+  if !self.suspended || self.running || self.pending_dirty_stage is Some(_) || self.owned_delivery is Some(_) || self.pending_direct is Some(_) || self.receipt_pre_dispatch is None ||
     self.pending_host_receipt is Some(_) || self.cutoff_done {
     return Err(runner_error("ordered_text", "no acknowledged pre-dispatch interruption"))
   }
@@ -1720,7 +1830,7 @@ pub fn SettingsRunOwner::resume_after_receipt_ack(
 ///|
 /// A generation changes before every admitted step, including an empty poll.
 pub fn SettingsRunOwner::advance_generation(self : SettingsRunOwner) -> Int64? {
-  if self.suspended && !self.running && self.live_step_ready &&
+  if self.suspended && !self.running && self.pending_dirty_stage is None && self.live_step_ready &&
     self.pending_host_receipt is None && self.inflight is None && self.owned_delivery is None && self.pending_direct is None &&
     self.held_tab is None && self.receipt_pre_dispatch is None && !self.cutoff_done {
     Some(self.live_step_generation)
@@ -2019,7 +2129,7 @@ pub fn SettingsRunOwner::terminal_step(
   self : SettingsRunOwner,
   command : SettingsTerminalCommand,
 ) -> Result[SettingsTerminalProgress, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.cutoff_done {
+  if !self.suspended || self.running || self.pending_dirty_stage is Some(_) || self.cutoff_done {
     return Err(runner_error("terminal_step", "owner is not suspended or is busy"))
   }
   if self.pending_host_receipt is Some(_) && !(command is RetryReceiptAck) {
@@ -2129,7 +2239,7 @@ pub fn SettingsRunOwner::terminal_step(
 pub fn SettingsRunOwner::reconcile_direct_delivery(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.pending_host_receipt is Some(_) ||
+  if !self.suspended || self.running || self.pending_dirty_stage is Some(_) || self.pending_host_receipt is Some(_) ||
     self.pending_direct is None || self.cutoff_done {
     return Err(runner_error("ordered_text", "direct recovery is unavailable"))
   }
@@ -2146,7 +2256,7 @@ pub fn SettingsRunOwner::reconcile_direct_delivery(
 pub fn SettingsRunOwner::try_terminal_text_cutoff(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.cutoff_done ||
+  if !self.suspended || self.running || self.pending_dirty_stage is Some(_) || self.cutoff_done ||
     self.held_tab is Some(_) || self.owned_delivery is Some(_) || self.pending_direct is Some(_) || self.pending_host_receipt is Some(_) ||
     self.receipt_pre_dispatch is Some(_) || !self.buffered.is_empty() ||
     !self.held_platform.is_empty() || self.terminal_applied is Some(_) {
@@ -2344,6 +2454,7 @@ pub fn SettingsRunOwner::new(
     pending_publication: None,
     completed_publications: [],
     dirty: true,
+    pending_dirty_stage: None,
     focus_initialized: false,
     text_suspended: false,
     text_transport_failed: false,
@@ -2387,7 +2498,7 @@ pub fn SettingsRunOwner::new(
 pub fn SettingsRunOwner::drive(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if self.running ||
+  if self.running || self.pending_dirty_stage is Some(_) ||
     self.completed ||
     self.suspended ||
     (self.inflight is Some(_) && !self.resume_pre_dispatch) || self.owned_delivery is Some(_) || self.pending_direct is Some(_) || self.pending_host_receipt is Some(_) ||
@@ -2506,7 +2617,7 @@ fn SettingsRunOwner::complete_owned_delivery(
 pub fn SettingsRunOwner::reconcile_owned_delivery(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.cutoff_done ||
+  if !self.suspended || self.running || self.pending_dirty_stage is Some(_) || self.cutoff_done ||
     self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) {
     return Err(runner_error("ordered_text", "owned delivery is unavailable"))
   }
