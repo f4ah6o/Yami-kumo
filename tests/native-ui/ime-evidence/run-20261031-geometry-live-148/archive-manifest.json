@@ -1,0 +1,72 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "eabed5a36c3dd4a4f69f66927cd0ad6d5c9be98059df7840c04a4ffdc2e7b0b6"
+    },
+    {
+      "path": "app.exe.gz",
+      "sha256": "feea4800b20d4c3489fbf33247102a134e52e0a462b08c7cb381aaa26c1888d7"
+    },
+    {
+      "path": "app.log",
+      "sha256": "8c676b85b03326300ca7e95a610fafc4593dc664d5002e0de3233f09914b2319"
+    },
+    {
+      "path": "artifact-manifest.json",
+      "sha256": "b4778105c885f4d9142cfd18d5b8e6782abffb0fa23506614637dc6d7ae3b7dd"
+    },
+    {
+      "path": "build.json",
+      "sha256": "4cd03afcdfa14a8b6c4af79e2ca6e707bd9b845c0fa353faf51cb12bd75db9e4"
+    },
+    {
+      "path": "build.log",
+      "sha256": "0ab447b1b65bb2897ef7ffeca7ac54af45bd2b2c33504f4d717574c9eab8f13c"
+    },
+    {
+      "path": "engine.log",
+      "sha256": "7b2be77df2274ba8ffeff3948afd6e7514bf2fe1142759ada3656b5ada1a5310"
+    },
+    {
+      "path": "ibus-daemon.log",
+      "sha256": "0c832f542b90193ddfa02110b53c2776b22435e453d27220ca6f050a4af60c53"
+    },
+    {
+      "path": "ibus-ui-dbus.log",
+      "sha256": "fbe04d55c91999a2dad5a487613ec0fd2f6cf286f06c07639a40f16942d036fb"
+    },
+    {
+      "path": "ibus-ui-wayland.log",
+      "sha256": "d16b6285ee80747227d3bf2dff4f6df73d4d74f98a542e21d28bfeff68119753"
+    },
+    {
+      "path": "launch.log",
+      "sha256": "1239ab0ffb3e4fde65c12a292c53403c789ff54f0f6d2232b829efabc96c0266"
+    },
+    {
+      "path": "launch.sh",
+      "sha256": "81b0307f76a92899246bfd6b5c0dc0cbcc21a5a82142550952fc75aeadea8e67"
+    },
+    {
+      "path": "mozc-server.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "pid",
+      "sha256": "291bc1c6aa7907affb098e28b623fd2ddd3e0804072282a1e5e6057645f9e438"
+    },
+    {
+      "path": "result.json",
+      "sha256": "0d9c379d3fd69ad0a0646cea08ea7765dcf87325869868ad277cef914bd6a2f6"
+    },
+    {
+      "path": "weston-stdio.log",
+      "sha256": "47f23fdb9ba3fdf0841f595ff270e77b5bd19ffff874c81f114d44a5a9a86c2e"
+    },
+    {
+      "path": "weston.log",
+      "sha256": "3e05051fb488494726532fc44dc3dd8a1f546501d964ba4f3adb648e76fd1674"
+    }
+  ]
+}
