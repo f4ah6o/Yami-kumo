@@ -370,6 +370,19 @@ fn main {
           Err(error) => Err(error)
           Ok(None) => Ok(None)
           Ok(Some(receipt)) => {
+            match receipt.event() {
+              @ubuntu_host.Platform(event) if direct_mode.val && @ui.is_owned_edit_key(event) &&
+                receipt.is_direct_origin() && !receipt.is_native_stale() && !receipt.is_native_revoked() &&
+                event.window() == receipt.native_window() &&
+                event.sequence() == receipt.native_sequence().to_int64() &&
+                retained.native_epoch() == Some(receipt.direct_epoch()) => {
+                  return Ok(Some(@common.NativeRetainedReceipt::edit_key(
+                    event, receipt.native_sequence(), receipt.root(), receipt.epoch(),
+                    receipt.direct_epoch(), fn() { receipt.ack() },
+                  )))
+                }
+              _ => ()
+            }
             match (receipt.direct_insert(), receipt.native_event()) {
               (Some(direct), Some(@ubuntu_host.Platform(event))) if
                 receipt.event() is @ubuntu_host.Unhandled(_) &&

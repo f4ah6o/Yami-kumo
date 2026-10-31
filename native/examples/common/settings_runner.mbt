@@ -37,6 +37,7 @@ pub struct NativeRetainedReceipt {
   event : NativeOrderedEvent?
   entered : (Int32, Int64, Int32)?
   direct : (Int32, Int64)?
+  edit_key_epoch : Int32?
   window : @platform.WindowId
   sequence : Int32
   root : UInt64
@@ -164,7 +165,7 @@ fn same_publication_stage(a : NativeReceiptStage, b : NativeReceiptStage) -> Boo
 ///|
 fn same_publication_receipt(a : NativeRetainedReceipt, b : NativeRetainedReceipt) -> Bool {
   if a.window != b.window || a.sequence != b.sequence || a.root != b.root ||
-    a.epoch != b.epoch || a.entered != b.entered || a.direct != b.direct {
+    a.epoch != b.epoch || a.entered != b.entered || a.direct != b.direct || a.edit_key_epoch != b.edit_key_epoch {
     return false
   }
   match (a.event, b.event) {
@@ -200,6 +201,8 @@ fn same_direct_event(left : @platform.Event, right : @platform.Event) -> Bool {
   }
   match (left.kind(), right.kind()) {
     (@platform.Input(@primitives.TextInput(text=a)), @platform.Input(@primitives.TextInput(text=b))) => a == b
+    (@platform.Input(@primitives.KeyPressed(key=a, modifiers=b, repeat=c)),
+     @platform.Input(@primitives.KeyPressed(key=x, modifiers=y, repeat=z))) => a == x && b == y && c == z
     _ => false
   }
 }
@@ -220,7 +223,7 @@ fn same_prefix_stage(a : NativeReceiptStage, b : NativeReceiptStage) -> Bool {
 ///|
 fn same_prefix_receipt(a : NativeRetainedReceipt, b : NativeRetainedReceipt) -> Bool {
   if a.window != b.window || a.sequence != b.sequence || a.root != b.root ||
-    a.epoch != b.epoch || a.entered != b.entered || a.direct != b.direct {
+    a.epoch != b.epoch || a.entered != b.entered || a.direct != b.direct || a.edit_key_epoch != b.edit_key_epoch {
     return false
   }
   match (a.event, b.event) {
@@ -241,7 +244,7 @@ pub fn NativeRetainedReceipt::new(
   root : UInt64, epoch : UInt64,
   ack : () -> Result[Unit, @diagnostics.FrameworkError],
 ) -> NativeRetainedReceipt {
-  { event, entered: None, direct: None, window, sequence, root, epoch, ack }
+  { event, entered: None, direct: None, edit_key_epoch: None, window, sequence, root, epoch, ack }
 }
 
 ///|
@@ -252,7 +255,7 @@ pub fn NativeRetainedReceipt::entered(
   native_epoch : Int32, seat : Int64, proxy : Int32,
   ack : () -> Result[Unit, @diagnostics.FrameworkError],
 ) -> NativeRetainedReceipt {
-  { event: None, entered: Some((native_epoch, seat, proxy)), direct: None, window, sequence, root, epoch, ack }
+  { event: None, entered: Some((native_epoch, seat, proxy)), direct: None, edit_key_epoch: None, window, sequence, root, epoch, ack }
 }
 
 ///|
@@ -263,8 +266,18 @@ pub fn NativeRetainedReceipt::direct(
   native_epoch : Int32, ordinal : Int64,
   ack : () -> Result[Unit, @diagnostics.FrameworkError],
 ) -> NativeRetainedReceipt {
-  { event: Some(OrderedPlatform(event)), entered: None,
+  { event: Some(OrderedPlatform(event)), entered: None, edit_key_epoch: None,
     direct: Some((native_epoch, ordinal)), window: event.window(), sequence, root, epoch, ack }
+}
+
+///|
+/// Trusted native adapter constructs this only for an exact owned key head.
+pub fn NativeRetainedReceipt::edit_key(
+  event : @platform.Event, sequence : Int32, root : UInt64, epoch : UInt64,
+  native_epoch : Int32, ack : () -> Result[Unit, @diagnostics.FrameworkError],
+) -> NativeRetainedReceipt {
+  { event: Some(OrderedPlatform(event)), entered: None, direct: None,
+    edit_key_epoch: Some(native_epoch), window: event.window(), sequence, root, epoch, ack }
 }
 
 ///|
@@ -1739,18 +1752,20 @@ fn SettingsRunOwner::ack_owned_receipt(
       Err(runner_error("ordered_text", "native sequence skipped the retained prefix"))
     Some(_) if self.acknowledged_receipts.length() >= 64 =>
       Err(runner_error("ordered_text", "receipt ledger is full"))
-    Some(receipt) if self.pending_direct is Some(_) && receipt.direct is None =>
+    Some(receipt) if self.pending_direct is Some(_) && receipt.direct is None && receipt.edit_key_epoch is None =>
       Err(runner_error("ordered_text", "a different direct receipt is pending"))
     Some(receipt) => {
-      if receipt.direct is Some(_) {
+      if receipt.direct is Some(_) || receipt.edit_key_epoch is Some(_) {
         let direct = match self.pending_direct {
           Some(value) => value
           None => return Err(runner_error("ordered_text", "direct receipt has not been reserved"))
         }
         let (window, epoch, binding, _, _) = direct.identity()
-        let matches = match (receipt.direct, receipt.event) {
-          (Some((native_epoch, ordinal)), Some(OrderedPlatform(event))) =>
-            native_epoch > 0 && ordinal == direct.ordinal() && same_direct_event(event, direct.event())
+        let matches = match (receipt.direct, receipt.edit_key_epoch, receipt.event) {
+          (Some((native_epoch, ordinal)), None, Some(OrderedPlatform(event))) =>
+            native_epoch > 0 && !direct.is_edit_key() && ordinal == direct.ordinal() && same_direct_event(event, direct.event())
+          (None, Some(native_epoch), Some(OrderedPlatform(event))) =>
+            native_epoch > 0 && direct.is_edit_key() && same_direct_event(event, direct.event())
           _ => false
         }
         if !matches || window != receipt.window || epoch != receipt.epoch || binding != receipt.root ||
@@ -1777,8 +1792,8 @@ fn SettingsRunOwner::ack_owned_receipt(
             receipt,
             stage: if receipt.entered is Some(_) { ReceiptOwnerEntered } else { ReceiptAcknowledgedOnly },
           })
-          match (receipt.direct, self.pending_direct) {
-            (Some(_), Some(direct)) => {
+          match (receipt.direct is Some(_) || receipt.edit_key_epoch is Some(_), self.pending_direct) {
+            (true, Some(direct)) => {
               self.direct_receipts.push((receipt, direct))
             }
             _ => ()
@@ -1802,13 +1817,13 @@ fn SettingsRunOwner::reserve_pending_direct(
     self.acknowledged_receipts.length() >= 64 {
     return Err(runner_error("ordered_text", "direct owner is blocked"))
   }
-  let (native_epoch, ordinal) = match receipt.direct {
-    Some(value) => value
-    None => return Err(runner_error("ordered_text", "not a direct receipt"))
+  let native_epoch = match (receipt.direct, receipt.edit_key_epoch) {
+    (Some((value, _)), None) | (None, Some(value)) => value
+    _ => return Err(runner_error("ordered_text", "not a single owned input receipt"))
   }
   let event = match receipt.event {
-    Some(OrderedPlatform(value)) if value.kind() is @platform.Input(@primitives.TextInput(..)) => value
-    _ => return Err(runner_error("ordered_text", "direct text event is unavailable"))
+    Some(OrderedPlatform(value)) => value
+    _ => return Err(runner_error("ordered_text", "owned input event is unavailable"))
   }
   let session = match self.session {
     Some(value) => value
@@ -1825,7 +1840,11 @@ fn SettingsRunOwner::reserve_pending_direct(
   }
   let before = self.settings
   let fence = self.model_fence
-  let direct = match self.mounted.reserve_owned_direct_text(owner, event, receipt.sequence, ordinal) {
+  let candidate = match receipt.direct {
+    Some((_, ordinal)) => self.mounted.reserve_owned_direct_text(owner, event, receipt.sequence, ordinal)
+    None => self.mounted.reserve_owned_edit_key(owner, event, receipt.sequence)
+  }
+  let direct = match candidate {
     Ok(value) => value
     Err(error) => return Err(error)
   }
@@ -2674,10 +2693,13 @@ fn SettingsRunOwner::drive_inner(
                 Err(error) => return Err(error)
                 Ok(None) => None
                 Ok(Some(receipt)) => {
+                  let receipt = if receipt.edit_key_epoch is Some(_) && self.session is None {
+                    { ..receipt, edit_key_epoch: None }
+                  } else { receipt }
                   self.pending_host_receipt = Some(receipt)
                   self.inflight = receipt.event
                   self.receipt_pre_dispatch = Some(receipt)
-                  if receipt.direct is Some(_) {
+                  if receipt.direct is Some(_) || receipt.edit_key_epoch is Some(_) {
                     if !gate.input_ready() || self.held_tab is Some(_) ||
                       !self.buffered.is_empty() || !self.held_platform.is_empty() {
                       return Err(runner_error("ordered_text", "direct head awaits the original presented prefix"))
@@ -2704,7 +2726,7 @@ fn SettingsRunOwner::drive_inner(
                     Err(error) => return Err(error)
                     Ok(_) => {
                       self.receipt_pre_dispatch = None
-                      if receipt.direct is Some(_) {
+                      if receipt.direct is Some(_) || receipt.edit_key_epoch is Some(_) {
                         match self.complete_pending_direct() {
                           Err(error) => return Err(error)
                           Ok(_) => None

@@ -2946,6 +2946,104 @@ test "owned edit key rejects active preedit and replaced focus" {
 }
 
 ///|
+test "owned edit key does not classify unsupported Meta Y as redo" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  let modifiers = @primitives.Modifiers::new(shift=false, control=false, alt=false, meta=true)
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.Character("y"), repeat=false, modifiers~)))
+  assert_false(@ui.is_owned_edit_key(event))
+  assert_true(owner.mounted.reserve_owned_edit_key(lease, event, 2) is Err(_))
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  assert_eq(owner.model().name(), "")
+}
+
+///|
+test "runner keeps same owner through direct insert backspace and next insert" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let head : Ref[NativeRetainedReceipt?] = Ref(None)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(fn(_) { Ok(head.val) }, fn(_) { Ok(()) })
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  owner.terminal_owner = Some(lease)
+  owner.gate.rendered = true
+  owner.bounded_resume = true
+  owner.entered_target = Some((5, 11L, 4))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::entered(owner.window, 1, binding, 7UL, 5, 11L, 4, fn() { Ok(()) }),
+    stage: ReceiptOwnerEntered,
+  })
+  let a = @platform.Event::new(owner.window, 2L, 1.0, @platform.Input(@primitives.TextInput(text="a")))
+  head.val = Some(NativeRetainedReceipt::direct(a, 2, binding, 7UL, 5, 1L, fn() { head.val = None; Ok(()) }))
+  owner.drive().unwrap()
+  assert_eq(owner.model().name(), "a")
+  let frame1 = @platform.Event::new(owner.window, 3L, 1.0, @platform.FrameCompleted)
+  head.val = Some(NativeRetainedReceipt::new(Some(OrderedPlatform(frame1)), owner.window, 3, binding, 7UL, fn() { head.val = None; Ok(()) }))
+  owner.drive().unwrap()
+  let backspace = @platform.Event::new(owner.window, 4L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.Backspace, repeat=false, modifiers=@primitives.Modifiers::none())))
+  head.val = Some(NativeRetainedReceipt::edit_key(backspace, 4, binding, 7UL, 5, fn() { head.val = None; Ok(()) }))
+  owner.drive().unwrap()
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  let frame2 = @platform.Event::new(owner.window, 5L, 1.0, @platform.FrameCompleted)
+  head.val = Some(NativeRetainedReceipt::new(Some(OrderedPlatform(frame2)), owner.window, 5, binding, 7UL, fn() { head.val = None; Ok(()) }))
+  owner.drive().unwrap()
+  let b = @platform.Event::new(owner.window, 6L, 1.0, @platform.Input(@primitives.TextInput(text="b")))
+  head.val = Some(NativeRetainedReceipt::direct(b, 6, binding, 7UL, 5, 2L, fn() { head.val = None; Ok(()) }))
+  owner.drive().unwrap()
+  assert_eq(owner.model().name(), "b")
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "b")
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  assert_true(owner.pending_host_receipt is None)
+  assert_eq(owner.direct_receipts.length(), 3)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "owned key ACK failure keeps the field unchanged until exact retry" {
+  let (owner, _) = publication_fixture()
+  let session = owner.session.unwrap()
+  let typed = @platform.Event::new(owner.window, 2L, 1.0, @platform.Input(@primitives.TextInput(text="a")))
+  let first = NativeRetainedReceipt::direct(typed, 2, session.binding, 7UL, 5, 1L, fn() { Ok(()) })
+  owner.pending_host_receipt = Some(first)
+  owner.inflight = Some(OrderedPlatform(typed))
+  owner.reserve_pending_direct(first).unwrap()
+  owner.ack_owned_receipt().unwrap()
+  owner.complete_pending_direct().unwrap()
+  let key = @platform.Event::new(owner.window, 3L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.Backspace, repeat=false, modifiers=@primitives.Modifiers::none())))
+  let attempts = Ref(0)
+  let native = NativeRetainedReceipt::edit_key(key, 3, session.binding, 7UL, 5, fn() {
+    attempts.val += 1
+    if attempts.val == 1 { Err(runner_error("fixture", "ACK failed")) } else { Ok(()) }
+  })
+  owner.pending_host_receipt = Some(native)
+  owner.inflight = Some(OrderedPlatform(key))
+  owner.reserve_pending_direct(native).unwrap()
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(owner.model().name(), "a")
+  assert_false(owner.pending_direct.unwrap().attempted())
+  owner.ack_owned_receipt().unwrap()
+  owner.complete_pending_direct().unwrap()
+  assert_eq(attempts.val, 2)
+  assert_eq(owner.model().name(), "")
+  assert_false(owner.mounted.handle_event(key).unwrap())
+  assert_true(owner.pending_direct is None)
+  assert_false(owner.can_stop())
+}
+
+///|
 test "direct platform text is rejected while the original preedit is active" {
   let (owner, _) = publication_fixture()
   let binding = owner.session.unwrap().binding

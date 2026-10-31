@@ -3012,6 +3012,9 @@ pub fn OwnedDirectDelivery::model_applied(self : OwnedDirectDelivery) -> Bool { 
 pub fn OwnedDirectDelivery::ordinal(self : OwnedDirectDelivery) -> Int64 { self.ordinal }
 
 ///|
+pub fn OwnedDirectDelivery::is_edit_key(self : OwnedDirectDelivery) -> Bool { self.is_edit_key }
+
+///|
 pub fn OwnedDirectDelivery::native_sequence(self : OwnedDirectDelivery) -> Int32 { self.native_sequence }
 
 ///|
@@ -3133,18 +3136,10 @@ pub fn Mounted::reserve_owned_direct_text(
 }
 
 ///|
-/// Reserve an editing key on the same owner. The caller retains and verifies
-/// its exact native receipt; this object is not host provenance. Clipboard,
-/// submit, focus and unrecognised shortcuts remain on their existing paths.
-pub fn Mounted::reserve_owned_edit_key(
-  self : Mounted, owner : TerminalTextOwner, event : @platform.Event, native_sequence : Int32,
-) -> Result[OwnedDirectDelivery, @diagnostics.FrameworkError] {
-  if !self.terminal_owner_is_current(owner) || event.window() != self.window ||
-    event.sequence() <= self.last_sequence || event.sequence() <= 0L ||
-    native_sequence <= owner.direct_native_sequence || event.sequence() != native_sequence.to_int64() {
-    return Err(adapter_error("edit key owner or sequence is stale"))
-  }
-  let allowed = match event.kind() {
+/// Classify only editing keys this adapter can retain. This says nothing about
+/// native origin, current focus, the host receipt or permission to ACK.
+pub fn is_owned_edit_key(event : @platform.Event) -> Bool {
+  match event.kind() {
     @platform.Input(@primitives.KeyPressed(key~, modifiers~, ..)) if !modifiers.alt() =>
       if modifiers.control() || modifiers.meta() {
         match key {
@@ -3161,7 +3156,21 @@ pub fn Mounted::reserve_owned_edit_key(
       }
     _ => false
   }
-  if !allowed { return Err(adapter_error("key is not an owned edit operation")) }
+}
+
+///|
+/// Reserve an editing key on the same owner. The caller retains and verifies
+/// its exact native receipt; this object is not host provenance. Clipboard,
+/// submit, focus and unrecognised shortcuts remain on their existing paths.
+pub fn Mounted::reserve_owned_edit_key(
+  self : Mounted, owner : TerminalTextOwner, event : @platform.Event, native_sequence : Int32,
+) -> Result[OwnedDirectDelivery, @diagnostics.FrameworkError] {
+  if !self.terminal_owner_is_current(owner) || event.window() != self.window ||
+    event.sequence() <= self.last_sequence || event.sequence() <= 0L ||
+    native_sequence <= owner.direct_native_sequence || event.sequence() != native_sequence.to_int64() {
+    return Err(adapter_error("edit key owner or sequence is stale"))
+  }
+  if !is_owned_edit_key(event) { return Err(adapter_error("key is not an owned edit operation")) }
   let field = match self.focused_text() { Some(value) => value; None => return Err(adapter_error("edit field is unavailable")) }
   if field.composing() { return Err(adapter_error("edit key cannot resolve active preedit")) }
   let before = match self.owned_text_document(owner) { Some(value) => value; None => return Err(adapter_error("edit binding is unavailable")) }

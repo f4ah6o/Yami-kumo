@@ -9,6 +9,7 @@ import {
   "f4ah6o/gpui/text_layout",
   "f4ah6o/gpui/ubuntu" @ubuntu_host,
   "f4ah6o/yami_kumo_native/examples/common",
+  "f4ah6o/yami_kumo_native/ui",
   "moonbitlang/core/env",
 }
 
