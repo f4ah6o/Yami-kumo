@@ -151,6 +151,25 @@ class ControlSocketTests(unittest.TestCase):
             self.assertEqual(self.lib.gpui_settings_control_next(2000), 0)
             self.assertEqual(peer.recv(1), b"")
 
+    def test_preflight_release_uses_sequence_and_scoped_reply(self) -> None:
+        script = Path(__file__).resolve().parents[2] / "scripts/settings_retained_control.py"
+        request = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "resolve-preflight-release", "--sequence", "23"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("l"))
+        self.assertEqual(self.lib.gpui_settings_control_sequence(), 23)
+        self.lib.gpui_settings_control_reply(ord("A"))
+        stdout, stderr = request.communicate(timeout=3)
+        self.assertEqual(request.returncode, 0, stderr)
+        self.assertIn("original release acknowledged under preflight", stdout)
+        self.assertIn("scene and shutdown are not implied", stdout)
+        with socket.socket(socket.AF_UNIX) as peer:
+            peer.connect(str(self.path))
+            peer.sendall(b"l" + struct.pack("!q", 0))
+            self.assertEqual(self.lib.gpui_settings_control_next(2000), 0)
+            self.assertEqual(peer.recv(1), b"")
+
     def test_geometry_commands_have_distinct_scoped_replies_and_reject_wrong_codes(self) -> None:
         script = Path(__file__).resolve().parents[2] / "scripts/settings_retained_control.py"
         for command, wire, response, expected in (

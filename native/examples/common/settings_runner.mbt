@@ -845,6 +845,8 @@ priv struct SettingsHostUpdatePending {
   frame_revision : UInt64
   metrics : (Double, Double, Double)
   composing : Bool
+  // An ACK error may be post-effect. Never blindly repeat the same attempt.
+  mut release_ack_attempted : Bool
 }
 
 ///|
@@ -1705,8 +1707,15 @@ pub fn SettingsRunOwner::unsupported_prefix_has_observed_stages(
 fn SettingsRunOwner::unsupported_prefix_matches_running(
   self : SettingsRunOwner, running : Bool,
 ) -> Bool {
+  self.unsupported_prefix_matches_mode(running, false)
+}
+
+///|
+fn SettingsRunOwner::unsupported_prefix_matches_mode(
+  self : SettingsRunOwner, running : Bool, preflight : Bool,
+) -> Bool {
   if !self.suspended || self.running != running || self.destroyed || self.cutoff_done ||
-    !self.host_epoch_verified || !self.buffered.is_empty() ||
+    ((!preflight && !self.host_epoch_verified) || (preflight && self.host_epoch_verified)) || !self.buffered.is_empty() ||
     !self.held_platform.is_empty() || self.held_tab is Some(_) ||
     self.inflight is Some(_) || self.owned_delivery is Some(_) || self.pending_direct is Some(_) ||
     self.mounted.has_pending_actions() {
@@ -2006,6 +2015,7 @@ pub struct UnsupportedPrefixSnapshot {
   priv field_progress : (UInt64, Int32, Int64)
   priv retired_watermark : Int32
   priv prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)]
+  priv preflight : Bool
 }
 
 ///|
@@ -2014,7 +2024,14 @@ pub struct UnsupportedPrefixSnapshot {
 pub fn SettingsRunOwner::capture_unsupported_prefix(
   self : SettingsRunOwner, sequence : Int64,
 ) -> Result[UnsupportedPrefixSnapshot, @diagnostics.FrameworkError] {
-  if !self.unsupported_prefix_has_observed_stages() {
+  self.capture_unsupported_prefix_mode(sequence, false)
+}
+
+///|
+fn SettingsRunOwner::capture_unsupported_prefix_mode(
+  self : SettingsRunOwner, sequence : Int64, preflight : Bool,
+) -> Result[UnsupportedPrefixSnapshot, @diagnostics.FrameworkError] {
+  if !self.unsupported_prefix_matches_mode(false, preflight) {
     return Err(runner_error("ordered_text", "unsupported prefix is not locally observable"))
   }
   let pending = self.pending_host_receipt.unwrap()
@@ -2034,7 +2051,7 @@ pub fn SettingsRunOwner::capture_unsupported_prefix(
   let current = self.session.unwrap()
   let retired_watermark = self.retired_watermark_for(current.binding, current.epoch, owner)
   if retired_watermark < 0 { return Err(runner_error("ordered_text", "retired prefix owner changed")) }
-  Ok({ owner: self, pending, entered: self.entered_target.unwrap(), field_progress: owner.observed_progress(), retired_watermark, prefix })
+  Ok({ owner: self, pending, entered: self.entered_target.unwrap(), field_progress: owner.observed_progress(), retired_watermark, prefix, preflight })
 }
 
 ///|
@@ -2059,7 +2076,7 @@ fn UnsupportedPrefixSnapshot::is_current_with_running(
   self : UnsupportedPrefixSnapshot, running : Bool,
 ) -> Bool {
   let owner = self.owner
-  if !owner.unsupported_prefix_matches_running(running) ||
+  if !owner.unsupported_prefix_matches_mode(running, self.preflight) ||
     owner.acknowledged_receipts.length() != self.prefix.length() {
     return false
   }
@@ -2837,9 +2854,17 @@ pub fn SettingsRunOwner::host_epoch_verified(self : SettingsRunOwner) -> Bool {
 fn SettingsRunOwner::host_update_owner_current(
   self : SettingsRunOwner, pending : SettingsHostUpdatePending,
 ) -> Bool {
-  if !self.suspended || self.running || self.cutoff_done || self.destroyed ||
+  self.host_update_owner_matches(pending, false, false)
+}
+
+///|
+fn SettingsRunOwner::host_update_owner_matches(
+  self : SettingsRunOwner, pending : SettingsHostUpdatePending,
+  running : Bool, allow_receipt : Bool,
+) -> Bool {
+  if !self.suspended || self.running != running || self.cutoff_done || self.destroyed ||
     self.host_epoch_verified || self.pending_dirty_stage is Some(_) || self.geometry_arrival is Some(_) ||
-    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) ||
+    (!allow_receipt && (self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_))) ||
     self.inflight is Some(_) || self.owned_delivery is Some(_) || self.pending_direct is Some(_) ||
     self.held_tab is Some(_) || !self.buffered.is_empty() || !self.held_platform.is_empty() ||
     self.pending_frame is Some(_) || self.pending_publication is Some(_) || self.mounted.has_pending_actions() ||
@@ -2857,6 +2882,106 @@ fn SettingsRunOwner::host_update_owner_current(
       field.document() == pending.state.document() && settings_caret(field.caret()) == pending.state.caret() &&
       field.composing() == pending.composing
     _ => false
+  }
+}
+
+///|
+/// Preserve one exact unsupported native head while the original host update
+/// has a trusted preflight proof. No ACK, event dispatch or host update occurs.
+/// The closed adapter's check must validate the opaque proof for this exact
+/// window/root/epoch and candidate; an arbitrary callback is not evidence.
+pub fn SettingsRunOwner::stage_preflight_unsupported(
+  self : SettingsRunOwner, receipt : NativeRetainedReceipt,
+  verify : (@platform.WindowId, UInt64, UInt64, @text_host.TextInputState) -> Result[Unit, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let pending = match self.pending_host_update { Some(value) => value; None => return Err(runner_error("preflight_release", "captured geometry unavailable")) }
+  if !self.host_update_owner_current(pending) || receipt.event is Some(_) || receipt.entered is Some(_) ||
+    receipt.direct is Some(_) || receipt.edit_key_epoch is Some(_) || receipt.sequence <= 0 ||
+    receipt.window != pending.window || receipt.root != pending.binding || receipt.epoch != pending.epoch ||
+    self.acknowledged_receipts.length() >= 64 || pending.release_ack_attempted {
+    return Err(runner_error("preflight_release", "head or original owner changed"))
+  }
+  self.running = true
+  let metrics = self.host.window_metrics(self.window)
+  let checked = if metrics is Ok(value) && value == pending.metrics {
+    verify(pending.window, pending.binding, pending.epoch, pending.state)
+  } else { Err(runner_error("preflight_release", "window metrics changed")) }
+  self.running = false
+  match checked { Err(error) => return Err(error); Ok(_) => () }
+  if !self.host_update_owner_current(pending) {
+    return Err(runner_error("preflight_release", "owner changed during proof inspection"))
+  }
+  self.pending_host_receipt = Some(receipt)
+  self.receipt_pre_dispatch = Some(receipt)
+  match self.capture_unsupported_prefix_mode(receipt.sequence.to_int64(), true) {
+    Ok(_) => Ok(())
+    Err(error) => {
+      // The host still owns this unacknowledged head. No input is discarded.
+      self.pending_host_receipt = None
+      self.receipt_pre_dispatch = None
+      Err(error)
+    }
+  }
+}
+
+///|
+/// Apply an existing closed native release policy to the preserved head while
+/// leaving the geometry unverified. Proof and prefix are rechecked immediately
+/// before the one-shot ACK. Unknown/stale/non-release heads stay retained.
+pub fn SettingsRunOwner::with_preflight_unsupported_policy(
+  self : SettingsRunOwner, sequence : Int64,
+  verify : (@platform.WindowId, UInt64, UInt64, @text_host.TextInputState) -> Result[Unit, @diagnostics.FrameworkError],
+  policy : ((Int32, Int64, Int32), () -> Result[Unit, @diagnostics.FrameworkError]) -> Result[Unit, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let pending = match self.pending_host_update { Some(value) => value; None => return Err(runner_error("preflight_release", "captured geometry unavailable")) }
+  if !self.host_update_owner_matches(pending, false, true) || self.acknowledged_receipts.length() >= 64 || pending.release_ack_attempted {
+    return Err(runner_error("preflight_release", "original owner unavailable"))
+  }
+  let snapshot = match self.capture_unsupported_prefix_mode(sequence, true) { Ok(value) => value; Err(error) => return Err(error) }
+  self.running = true
+  let active = Ref(true)
+  let attempted = Ref(false)
+  let acknowledged = Ref(false)
+  let result = policy(snapshot.entered, fn() {
+    if !active.val || attempted.val || !snapshot.is_current_with_running(true) ||
+      !self.host_update_owner_matches(pending, true, true) {
+      return Err(runner_error("preflight_release", "head capability is stale or consumed"))
+    }
+    let metrics = self.host.window_metrics(self.window)
+    if !(metrics is Ok(value) && value == pending.metrics) {
+      return Err(runner_error("preflight_release", "window metrics changed"))
+    }
+    match verify(pending.window, pending.binding, pending.epoch, pending.state) {
+      Err(error) => return Err(error)
+      Ok(_) => ()
+    }
+    if !snapshot.is_current_with_running(true) || !self.host_update_owner_matches(pending, true, true) {
+      return Err(runner_error("preflight_release", "owner changed during proof inspection"))
+    }
+    attempted.val = true
+    pending.release_ack_attempted = true
+    let receipt = match self.pending_host_receipt { Some(value) => value; None => return Err(runner_error("preflight_release", "head missing")) }
+    match (receipt.ack)() {
+      Err(error) => Err(error)
+      Ok(_) => {
+        self.acknowledged_receipts.push({ receipt, stage: ReceiptUnsupportedAcknowledged })
+        self.pending_host_receipt = None
+        self.receipt_pre_dispatch = None
+        self.inflight = None
+        // The old scene/geometry is still unresolved; no input generation.
+        self.live_step_ready = false
+        acknowledged.val = true
+        Ok(())
+      }
+    }
+  })
+  active.val = false
+  self.running = false
+  match result {
+    Err(error) => Err(error)
+    Ok(_) if !acknowledged.val => Err(runner_error("preflight_release", "native policy did not acknowledge"))
+    Ok(_) if !self.host_update_owner_current(pending) => Err(runner_error("preflight_release", "owner changed after acknowledgement"))
+    Ok(_) => Ok(())
   }
 }
 
@@ -3912,7 +4037,7 @@ fn SettingsRunOwner::drive_inner(
                           window, epoch: current.epoch, binding: current.binding,
                           entered: self.entered_target, progress: owner.observed_progress(),
                           frame_revision: frame.revision(), metrics: (width, height, scale),
-                          composing: state.composing(),
+                          composing: state.composing(), release_ack_attempted: false,
                         })
                       _ => ()
                     }

@@ -64,7 +64,7 @@ int gpui_settings_control_next(int timeout_ms) {
       !(p.revents & POLLIN) || read(client, &command, 1) != 1) {
     close(client); client = -1; return 0;
   }
-  if (command == 'a' || command == 'r' || command == 'u' || command == 'g' || command == 'j' || command == 'x' || command == 'd' || command == 'k' || command == 'e') {
+  if (command == 'a' || command == 'r' || command == 'u' || command == 'g' || command == 'j' || command == 'x' || command == 'd' || command == 'k' || command == 'e' || command == 'l') {
     /* Exactly one positive portable sequence prevents replay onto the next
      * record if the client loses the result and retries its request. */
     uint64_t value = 0;
