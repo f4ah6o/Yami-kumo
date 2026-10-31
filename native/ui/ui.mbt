@@ -2407,7 +2407,7 @@ pub fn Mounted::stage_owned_text_geometry(
   self : Mounted, owner : TerminalTextOwner, view : @view.View,
   width : Double, height : Double, scale : Double, measure : @components.TextMeasure,
 ) -> Result[Prepared, @diagnostics.FrameworkError] {
-  if !self.terminal_owner_is_current(owner) {
+  if !self.terminal_owner_can_stage(owner) {
     return Err(adapter_error("staged text owner is stale"))
   }
   let change = self.change
@@ -2416,7 +2416,7 @@ pub fn Mounted::stage_owned_text_geometry(
   let result = self.prepare(view, width, height, scale, measure, Some(owner.binding))
   self.busy = false
   if self.is_disposed() || !same_epoch(change, self.change) ||
-    !self.terminal_owner_is_current(owner) || owner.observed_progress() != progress {
+    !self.terminal_owner_can_stage(owner) || owner.observed_progress() != progress {
     return Err(adapter_error("staged text owner changed during measurement"))
   }
   let candidate = match result { Ok(value) => value; Err(error) => return Err(error) }
@@ -2477,7 +2477,7 @@ pub fn Mounted::inspect_staged_text_geometry(
   let original = match prepared.owned_text { Some(value) => value; None => return Err(adapter_error("not an owned text candidate")) }
   if !same_epoch(original.identity, owner.identity) ||
     !same_epoch(original.session_identity, owner.session_identity) ||
-    !same_epoch(prepared.change, self.change) || !self.terminal_owner_is_current(owner) ||
+    !same_epoch(prepared.change, self.change) || !self.terminal_owner_can_stage(owner) ||
     prepared.owned_progress != Some(owner.observed_progress()) ||
     prepared.candidate.focused != Some(owner.binding) {
     return Err(adapter_error("staged text candidate is stale"))
@@ -3752,7 +3752,18 @@ pub fn Mounted::terminal_owner_is_current(
   self : Mounted,
   owner : TerminalTextOwner,
 ) -> Bool {
-  if self.is_disposed() || self.busy || owner.busy || !self.ready ||
+  self.ready && self.terminal_owner_can_stage(owner)
+}
+
+///|
+/// A resize can invalidate the published frame while the original field,
+/// focus scope and text lease remain alive. This permits local staging only;
+/// it does not make the invalidated frame input-ready or authorize publish.
+fn Mounted::terminal_owner_can_stage(
+  self : Mounted,
+  owner : TerminalTextOwner,
+) -> Bool {
+  if self.is_disposed() || self.busy || owner.busy ||
     !self.window_focused || self.held_text is Some(_) ||
     !self.identity.live || !owner.session_identity.live ||
     !same_epoch(self.identity, owner.identity) ||
