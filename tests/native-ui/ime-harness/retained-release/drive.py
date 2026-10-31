@@ -10,7 +10,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
-from probe import preedit_markers, advance_until_preedit
+from probe import preedit_markers, advance_until_preedit, run_control_command
 
 out = Path(os.environ['YAMI_RELEASE_OUT'])
 app = Path(os.environ['YAMI_RELEASE_BINARY'])
@@ -68,6 +68,8 @@ result = {
     'release_policy': 'NOT_RUN', 'consumer_commit': 'NOT_RUN',
     'model_reflection': 'NOT_RUN', 'candidate_table_oracle': 'NOT_RUN',
     'dialog_and_focus': 'NOT_RUN', 'resize_blur_close_races': 'NOT_RUN',
+    'preedit_probe': {'result': 'NOT_RUN'}, 'geometry_race': 'NOT_RUN',
+    'scene_and_caret': 'NOT_RUN', 'retained_record_model_application': 'NOT_RUN',
     'forced_process_termination': False, 'steps': [],
 }
 log = (out / 'app.log').open('w', encoding='utf-8')
@@ -82,11 +84,7 @@ def send_command(socket_path: str, command: str, seq: int | None = None) -> dict
     args = ['python3', str(control), socket_path, command]
     if seq is not None:
         args.extend(['--sequence', str(seq)])
-    reply = subprocess.run(args, capture_output=True, text=True, timeout=5)
-    event = {'command': command, 'sequence': seq, 'rc': reply.returncode,
-             'stdout': reply.stdout, 'stderr': reply.stderr}
-    result['steps'].append(event)
-    return event
+    return run_control_command(args, result['steps'], command, seq)
 
 def value(reply: dict, name: str) -> int | None:
     found = re.search(re.escape(name) + r': (\d+)', reply['stdout'])
@@ -127,7 +125,8 @@ try:
     result['initial_receipt_sequence'] = seq
     result['initial_resolve'] = send_command(socket_path, 'resolve-release', seq)
     if result['initial_resolve']['rc'] != 0:
-        result['release_policy'] = 'FAIL'
+        result['release_policy'] = ('NOT_ESTABLISHED_TIMEOUT_OUTCOME_UNKNOWN'
+                                    if result['initial_resolve']['status'] == 'TIMEOUT_OUTCOME_UNKNOWN' else 'FAIL')
         raise RuntimeError('native release policy refused or failed; receipt stays owned')
     result['initial_ack_stage'] = send_command(socket_path, 'stage', seq)
     if 'native adapter acknowledged' not in result['initial_ack_stage']['stdout']:
@@ -145,12 +144,18 @@ try:
     if result['preedit_probe']['result'] == 'OBSERVED_CONSUMER_PREEDIT':
         result['geometry_initial'] = send_command(socket_path, 'geometry-submit')
         result['geometry_race'] = 'NOT_ESTABLISHED'
-        if result['geometry_initial']['rc'] != 0:
+        if result['geometry_initial']['status'] == 'TIMEOUT_OUTCOME_UNKNOWN':
+            result['geometry_race'] = 'BLOCKED_GEOMETRY_SUBMIT_TIMEOUT_OUTCOME_UNKNOWN'
+        elif result['geometry_initial']['rc'] != 0:
             result['handoff'] = send_command(socket_path, 'geometry-handoff')
-            if result['handoff']['rc'] == 0:
+            if result['handoff']['status'] == 'TIMEOUT_OUTCOME_UNKNOWN':
+                result['geometry_race'] = 'BLOCKED_HANDOFF_TIMEOUT_OUTCOME_UNKNOWN'
+            elif result['handoff']['rc'] == 0:
                 result['geometry_retry'] = send_command(socket_path, 'geometry-submit')
                 if result['geometry_retry']['rc'] == 0:
                     result['geometry_race'] = 'OBSERVED_HANDOFF_AND_RETRY_RESPONSES_CAUSE_UNVERIFIED'
+                elif result['geometry_retry']['status'] == 'TIMEOUT_OUTCOME_UNKNOWN':
+                    result['geometry_race'] = 'BLOCKED_GEOMETRY_RETRY_TIMEOUT_OUTCOME_UNKNOWN'
                 else:
                     result['geometry_race'] = 'FAIL_RETRY_RETAINED'
             else:
@@ -163,7 +168,10 @@ try:
     result['retained_record_model_application'] = 'NOT_RUN'
     result['final_status'] = send_command(socket_path, 'status')
     result['final_receipt'] = send_command(socket_path, 'receipt')
-    result['final_stop'] = send_command(socket_path, 'stop')
+    if any(step['status'] == 'TIMEOUT_OUTCOME_UNKNOWN' for step in result['steps']):
+        result['final_stop'] = {'result': 'NOT_RUN_COMMAND_OUTCOME_UNKNOWN'}
+    else:
+        result['final_stop'] = send_command(socket_path, 'stop')
 except Exception as exc:
     result['error'] = repr(exc)
 finally:
