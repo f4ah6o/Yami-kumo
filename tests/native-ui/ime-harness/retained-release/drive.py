@@ -43,7 +43,7 @@ if git(app_tree, 'status', '--porcelain') or git(framework_tree, 'status', '--po
 actual_binary = hashlib.sha256(app.read_bytes()).hexdigest()
 if actual_binary != expected_binary:
     raise SystemExit('binary digest differs from the independently captured build digest')
-if app_sha != '585ff82109df0fa006f3031258476257d0b9cc86' or framework_sha != '53e42a5888167fd9203b27f6558deabaf5c54e4b':
+if app_sha != '80c2acc08d203f23dde164e07ace4e8381f573c0' or framework_sha != '6f7fbd20c4e916e64f13aaeaf58aaa410a1e9d20':
     raise SystemExit('source revisions differ from the reviewed candidate pair')
 
 result = {
@@ -132,36 +132,31 @@ try:
     if 'native adapter acknowledged' not in result['initial_ack_stage']['stdout']:
         raise RuntimeError('successful ACK was not independently observed in owner ledger')
     result['release_policy'] = 'PASS_SCOPED'
-    for key in ('i', 'h', 'o', 'n', 'n', 'space', 'Return'):
-        subprocess.run(['xdotool', 'key', '--clearmodifiers', key], check=True)
-        time.sleep(.10)
-    # Each call is bounded and uses the currently reported generation. Native
-    # policy rejects unexpected/unknown input itself; no arbitrary ACK is made.
-    deadline = time.monotonic() + 45
-    for _ in range(160):
-        if time.monotonic() >= deadline or proc.poll() is not None:
-            break
-        if re.search(r'YAMI_NATIVE_UI_SETTINGS .*"phase":"commit".*"text":"日本"', app_data()):
-            result['consumer_commit'] = 'OBSERVED_LOG_ONLY'
-            break
-        generation = value(send_command(socket_path, 'generation'), 'continuation generation')
-        if generation is not None:
-            send_command(socket_path, 'advance', generation)
-            continue
-        pending = value(send_command(socket_path, 'receipt'), 'native receipt sequence')
-        if pending is None:
-            break
-        attempt = send_command(socket_path, 'resolve-release', pending)
-        if attempt['rc'] != 0:
-            break
+    # Probe only one candidate race. The previously applied preedit makes the
+    # scene dirty; native queue contents and result remain explicitly observed.
+    subprocess.run(['xdotool', 'key', '--clearmodifiers', 'i'], check=True)
+    time.sleep(.10)
+    generation = value(send_command(socket_path, 'generation'), 'continuation generation')
+    if generation is not None:
+        result['probe_advance'] = send_command(socket_path, 'advance', generation)
+    result['geometry_initial'] = send_command(socket_path, 'geometry-submit')
+    result['geometry_race'] = 'NOT_ESTABLISHED'
+    if result['geometry_initial']['rc'] != 0:
+        result['handoff'] = send_command(socket_path, 'geometry-handoff')
+        if result['handoff']['rc'] == 0:
+            result['geometry_retry'] = send_command(socket_path, 'geometry-submit')
+            if result['geometry_retry']['rc'] == 0:
+                result['geometry_race'] = 'PASS_SCOPED_HOST_RECEIPT_AND_HELD_RECORD'
+            else:
+                result['geometry_race'] = 'FAIL_RETRY_RETAINED'
+        else:
+            result['geometry_race'] = 'BLOCKED_INITIAL_OR_HANDOFF_ERROR'
+    else:
+        result['geometry_race'] = 'NOT_RUN_NO_BUSY_OBSERVED'
     result['preedit_markers'] = re.findall(r'^YAMI_NATIVE_UI_SETTINGS .*"phase":"preedit".*$', app_data(), re.M)
     result['commit_markers'] = re.findall(r'^YAMI_NATIVE_UI_SETTINGS .*"phase":"commit".*$', app_data(), re.M)
-    commits = re.findall(r'YAMI_SETTINGS_IME \{"stage":"record_peek","kind":"commit","native_sequence":(\d+)', app_data())
-    if result['consumer_commit'] == 'OBSERVED_LOG_ONLY' and len(commits) == 1:
-        result['commit_native_sequence'] = int(commits[0])
-        result['commit_stage'] = send_command(socket_path, 'stage', int(commits[0]))
-        if 'commit reflected in the model' in result['commit_stage']['stdout']:
-            result['model_reflection'] = 'PASS_RECEIPT_STAGE_ONLY'
+    result['scene_and_caret'] = 'NOT_RUN'
+    result['retained_record_model_application'] = 'NOT_RUN'
     result['final_status'] = send_command(socket_path, 'status')
     result['final_receipt'] = send_command(socket_path, 'receipt')
     result['final_stop'] = send_command(socket_path, 'stop')

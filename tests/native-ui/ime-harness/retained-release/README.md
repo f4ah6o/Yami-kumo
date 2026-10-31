@@ -1,44 +1,38 @@
-# Exploratory retained-release harness
+# Pinned intent / handoff exploratory harness
 
-This harness is for an exact separately reviewed app build. It checks the app,
-framework and harness checkouts are clean; requires app source
-`585ff82109df0fa006f3031258476257d0b9cc86`, GPUI source
-`53e42a5888167fd9203b27f6558deabaf5c54e4b`, and a caller-supplied binary
-SHA-256; then records all three source revisions separately. An empty output
-directory is mandatory. It drives synthetic X11 keys into a nested Weston and
-live IBus/Mozc and sends only sequence-bound, bounded control requests. The
-Ubuntu application's own native policy must reject unproven releases.
+This prepares a bounded live IBus/Mozc probe for Yami source
+`80c2acc08d203f23dde164e07ace4e8381f573c0` (#137) and GPUI source
+`6f7fbd20c4e916e64f13aaeaf58aaa410a1e9d20` (#210). The app binary must be
+built from that exact source pair and its digest supplied separately. The
+harness rejects dirty app/framework/harness trees, mismatched source SHAs and
+mismatched binary digest. A source override is used; this is not a registry
+consumer check.
 
-Example, after independently reviewing the exact app and GPUI source pair:
+Do not execute as an acceptance run until the same app and framework heads
+have required CI and independent review. No binary or result from an older
+revision may be substituted. The expected app source includes the experimental
+geometry control CLI from #137; updating that source requires repinning and
+rebuilding.
 
-```sh
-mkdir /workspace/evidence/yami-release-live-new
-export YAMI_RELEASE_OUT=/workspace/evidence/yami-release-live-new
-export YAMI_RELEASE_APP_TREE=/workspace/yami-transport-key-union
-export YAMI_RELEASE_FRAMEWORK_TREE=/workspace/gpui-post-cutoff
-export YAMI_RELEASE_BINARY=/workspace/yami-117-exact-build/_build/native/debug/build/f4ah6o/yami_kumo_native/examples/ubuntu/ubuntu.exe
-export YAMI_RELEASE_BINARY_SHA256=8355c8c861faa784fe3c0a94ae663caad04c41a5d7fb2b35354f4c29f0f5b7f6
-env PATH="/workspace/gpui-locked-profile/prefix/usr/bin:/workspace/linux-user-apt/root/usr/bin:/workspace/yami-tools/bin:$PATH" \
-  LD_LIBRARY_PATH="/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/weston:/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu:/workspace/linux-user-apt/root/usr/lib/x86_64-linux-gnu" \
-  XKB_CONFIG_ROOT=/workspace/gpui-locked-profile/prefix/usr/share/X11/xkb \
-  LIBGL_DRIVERS_PATH=/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/dri \
-  WESTON_MODULE_MAP='x11-backend.so=/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libweston-14/x11-backend.so;gl-renderer.so=/workspace/gpui-locked-profile/prefix/usr/lib/x86_64-linux-gnu/libweston-14/gl-renderer.so' \
-  dbus-run-session -- xvfb-run --auto-servernum \
-    --server-args='-screen 0 960x640x24 -nolisten tcp -ac +extension GLX +render' \
-    /workspace/yami-117-live-harness/tests/native-ui/ime-harness/retained-release/session.sh
-```
+The driver uses X11 synthetic keys through nested Weston and live IBus/Mozc. It
+observes the original release, applies the existing strict release policy,
+then sends one more key and one bounded continuation. It tries `geometry-submit`;
+if that is refused, it tries exactly one supported `geometry-handoff` and one
+retry. A successful handoff plus retry is a **scoped receipt and held-record
+observation**, not model/scene/caret, full IME, candidate table, physical
+keyboard, focus/dialog, resize/blur/close or safe shutdown acceptance. If the
+initial submit succeeds without Busy, the race is NOT_RUN. A refused handoff is
+recorded as blocked without claiming its cause from an error code alone.
 
-Any output is exploratory. An observed native release ACK or commit log is not
-by itself model/geometry/cutoff proof, nor the full Shared Settings acceptance.
-When exactly one native commit receipt accompanies the logged Japanese commit,
-the harness separately queries its retained model stage. It does not infer a
-model result from the picture or the commit marker. After compositor and IME
-logs close, `artifact-manifest.json` lists raw file digests and `result.json`
-records the manifest SHA-256; the manifest excludes itself and `result.json`.
-The script currently force-terminates an unresolved process after collecting
-status, and records cleanup FAIL because in-memory ownership is lost; it does
-not call that a safe host stop. A later result cannot be attributed to the app
-head without the separately recorded app and binary hashes. No physical-keyboard,
-accessibility, candidate-table oracle, clean registry, or macOS result is implied.
+Set `YAMI_RELEASE_OUT` to a new empty directory, `YAMI_RELEASE_APP_TREE` and
+`YAMI_RELEASE_FRAMEWORK_TREE` to the clean exact source trees, and
+`YAMI_RELEASE_BINARY` and `YAMI_RELEASE_BINARY_SHA256` to the independently
+built executable and its digest. Run `session.sh` with the local Xvfb, Weston,
+IBus/Mozc and library environment used for the profile. `result.json` records
+source revisions, binary hash, dependency manifests, commands, outcomes and
+scope; raw logs are listed in `artifact-manifest.json` after all child processes
+stop. Run URL is null for a local run.
 
-This pin prepares the #117 source pair only. Run only after exact-head review and required CI; it is an exploratory first Japanese commit, not the dialog, resize/blur/close race, candidate oracle, or safe cleanup acceptance. The local build log is `/workspace/evidence/yami-117-exact-build.log` (SHA-256 `e21fb73cc051452d5bdc2f8cae75946ccb387a622158e76af9c1bd1c2a288a8c`).
+The harness may force SIGTERM if the owner cannot stop. That teardown destroys
+in-process ownership and is recorded as cleanup **FAIL**, never as safe stop.
+No publication, app build or live run is implied by this harness branch.
