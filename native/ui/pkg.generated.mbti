@@ -111,6 +111,7 @@ pub fn Mounted::owned_text_action(Self, OwnedTextDelivery) -> Result[@core.Seman
 pub fn Mounted::paste(Self, PasteRequest, String) -> Bool
 pub fn Mounted::publish(Self, Prepared) -> Result[Frame, @diagnostics.FrameworkError]
 pub fn Mounted::release_held_text_for_retry(Self, UInt64) -> Result[Unit, @diagnostics.FrameworkError]
+pub fn Mounted::release_terminal_text_owner(Self, TerminalTextOwner) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::reserve_owned_direct_text(Self, TerminalTextOwner, @platform.Event, Int, Int64) -> Result[OwnedDirectDelivery, @diagnostics.FrameworkError]
 pub fn Mounted::reserve_owned_edit_key(Self, TerminalTextOwner, @platform.Event, Int) -> Result[OwnedDirectDelivery, @diagnostics.FrameworkError]
 pub fn Mounted::reserve_owned_text(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[OwnedTextDelivery, @diagnostics.FrameworkError]
@@ -128,12 +129,16 @@ pub struct OwnedDirectDelivery {
   // private fields
 }
 pub fn OwnedDirectDelivery::action_required(Self) -> Bool?
+pub fn OwnedDirectDelivery::after_document(Self) -> String?
+pub fn OwnedDirectDelivery::after_progress(Self) -> (UInt64, Int, Int64)?
 pub fn OwnedDirectDelivery::applied(Self) -> Bool
 pub fn OwnedDirectDelivery::attempted(Self) -> Bool
 pub fn OwnedDirectDelivery::before_document(Self) -> String
+pub fn OwnedDirectDelivery::before_progress(Self) -> (UInt64, Int, Int64)
 pub fn OwnedDirectDelivery::event(Self) -> @platform.Event
 pub fn OwnedDirectDelivery::identity(Self) -> (@platform.WindowId, UInt64, UInt64, UInt64, Int64)
 pub fn OwnedDirectDelivery::is_edit_key(Self) -> Bool
+pub fn OwnedDirectDelivery::matches_owner(Self, TerminalTextOwner) -> Bool
 pub fn OwnedDirectDelivery::model_applied(Self) -> Bool
 pub fn OwnedDirectDelivery::native_sequence(Self) -> Int
 pub fn OwnedDirectDelivery::ordinal(Self) -> Int64
@@ -163,6 +168,7 @@ pub struct Prepared {
 pub struct TerminalTextOwner {
   // private fields
 }
+pub fn TerminalTextOwner::direct_progress(Self) -> (Int64, Int)
 pub fn TerminalTextOwner::matches_session(Self, @platform.WindowId, UInt64, UInt64) -> Bool
 pub fn TerminalTextOwner::observed_progress(Self) -> (UInt64, Int, Int64)
 

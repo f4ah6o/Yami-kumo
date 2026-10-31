@@ -2950,6 +2950,14 @@ pub fn TerminalTextOwner::observed_progress(
 }
 
 ///|
+/// Direct input advances independently of the portable text-event sequence.
+pub fn TerminalTextOwner::direct_progress(
+  self : TerminalTextOwner,
+) -> (Int64, Int32) {
+  (self.direct_sequence, self.direct_native_sequence)
+}
+
+///|
 /// A single text delivery reserved for its original mounted owner. The
 /// receipt survives failures after field publication and owns any extracted
 /// action until the caller records model application.
@@ -2985,6 +2993,7 @@ pub struct OwnedDirectDelivery {
   priv before : String
   priv reserved_change : Epoch
   priv reserved_progress : (UInt64, Int32, Int64)
+  priv mut completed_progress : (UInt64, Int32, Int64)?
   priv mut attempted : Bool
   priv mut applied : Bool
   priv mut after_change : Epoch?
@@ -3022,6 +3031,36 @@ pub fn OwnedDirectDelivery::event(self : OwnedDirectDelivery) -> @platform.Event
 
 ///|
 pub fn OwnedDirectDelivery::before_document(self : OwnedDirectDelivery) -> String { self.before }
+
+///|
+/// A captured result is not evidence that its action reached the model.
+pub fn OwnedDirectDelivery::after_document(self : OwnedDirectDelivery) -> String? { self.expected }
+
+///|
+pub fn OwnedDirectDelivery::before_progress(
+  self : OwnedDirectDelivery,
+) -> (UInt64, Int32, Int64) { self.reserved_progress }
+
+///|
+/// Later edits cannot change this delivery's completed owner observation.
+pub fn OwnedDirectDelivery::after_progress(
+  self : OwnedDirectDelivery,
+) -> (UInt64, Int32, Int64)? { self.completed_progress }
+
+///|
+/// Matching visible IDs alone cannot recover a released or replaced lease.
+pub fn OwnedDirectDelivery::matches_owner(
+  self : OwnedDirectDelivery, owner : TerminalTextOwner,
+) -> Bool {
+  self.identity.live && self.owner.identity.live && owner.identity.live &&
+  self.owner.session_identity.live && owner.session_identity.live &&
+  same_epoch(self.identity, owner.identity) &&
+  same_epoch(self.owner.identity, owner.identity) &&
+  same_epoch(self.owner.session_identity, owner.session_identity) &&
+  self.owner.window == owner.window && self.owner.epoch == owner.epoch &&
+  self.owner.binding == owner.binding && self.owner.generation == owner.generation &&
+  self.owner.token == owner.token
+}
 
 ///|
 pub fn OwnedDirectDelivery::action_required(self : OwnedDirectDelivery) -> Bool? { self.action_required }
@@ -3129,7 +3168,7 @@ pub fn Mounted::reserve_owned_direct_text(
   }
   Ok({
     identity: self.identity, owner, event, native_sequence, ordinal, is_edit_key: false, before,
-    reserved_change: self.change, reserved_progress: owner.observed_progress(), attempted: false,
+    reserved_change: self.change, reserved_progress: owner.observed_progress(), completed_progress: None, attempted: false,
     applied: false, after_change: None, expected: None, action_required: None,
     action: None, owner_noted: false, action_claimed: false, model_applied: false,
   })
@@ -3176,7 +3215,7 @@ pub fn Mounted::reserve_owned_edit_key(
   let before = match self.owned_text_document(owner) { Some(value) => value; None => return Err(adapter_error("edit binding is unavailable")) }
   Ok({
     identity: self.identity, owner, event, native_sequence, ordinal: owner.direct_sequence, is_edit_key: true,
-    before, reserved_change: self.change, reserved_progress: owner.observed_progress(), attempted: false,
+    before, reserved_change: self.change, reserved_progress: owner.observed_progress(), completed_progress: None, attempted: false,
     applied: false, after_change: None, expected: None, action_required: None,
     action: None, owner_noted: false, action_claimed: false, model_applied: false,
   })
@@ -3271,6 +3310,7 @@ pub fn Mounted::complete_owned_direct_text(
   owner.revision = next_revision
   if !receipt.is_edit_key { owner.direct_sequence = receipt.ordinal }
   owner.direct_native_sequence = receipt.native_sequence
+  receipt.completed_progress = Some(owner.observed_progress())
   receipt.owner_noted = true
   Ok(())
 }
@@ -3688,6 +3728,24 @@ pub fn Mounted::terminal_field_can_cutoff(
     }
   }
   false
+}
+
+///|
+/// The caller must first prove host cutoff, host binding release and every
+/// retained record's completion; local field state cannot establish them.
+pub fn Mounted::release_terminal_text_owner(
+  self : Mounted, owner : TerminalTextOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.terminal_field_can_cutoff(owner) {
+    return Err(adapter_error("terminal text owner cannot be released"))
+  }
+  owner.session_identity.live = false
+  self.terminal_identity = None
+  // Returning to the unowned mode would admit late commits for the old epoch.
+  self.terminal_required = true
+  self.text_epoch = 0UL
+  self.last_text_sequence = 0L
+  Ok(())
 }
 
 ///|

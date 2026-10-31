@@ -481,12 +481,35 @@ fn main {
         }
       },
       fn(epoch) { retained.try_end_when_drained(epoch) },
+    ).with_direct_lifecycle(
+      fn(epoch) { retained.release(epoch) },
+      fn(window, root, released_epoch, retired_sequence) {
+        match retained.begin_after_resolved_cutoff(window, root, released_epoch, retired_sequence) {
+          Ok(epoch) => { direct_mode.val = true; first_update.val = true; Ok(epoch) }
+          Err(error) => Err(error)
+        }
+      },
+      fn(window, sequence) {
+        match retained.seal_destroyed(window, sequence) {
+          Ok(receipt) if receipt.window() == window && receipt.native_sequence() == sequence => Ok(())
+          Ok(_) => Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "terminal_seal_identity"))
+          Err(error) => Err(error)
+        }
+      },
     )
     let entry = @common.SettingsEntryController::start(
       host, @common.Linux, ubuntu_measure, text_port=Some(retained_port),
       direct_text=Some(fn(window, enabled) { host.set_direct_keyboard_text(window, enabled) }),
       ordered_text=Some(retained_ordered),
     )
+    if !entry.suspended() && entry.error() is None {
+      let stopped = entry.try_stop()
+      control_close()
+      match stopped {
+        Ok(_) => return
+        Err(error) => abort(@common.format_framework_error(error))
+      }
+    }
     run_settings_control(entry, fn(sequence) {
       let owner = match entry.owner() {
         Some(value) => value
