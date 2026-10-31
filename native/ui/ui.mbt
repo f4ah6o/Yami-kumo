@@ -2944,11 +2944,31 @@ pub fn Mounted::has_pending_actions(self : Mounted) -> Bool {
 }
 
 ///|
+/// A focus/close intent is not an observed composition cancellation. Keep the
+/// original field and any unprocessed platform event with its caller until the
+/// text owner observes Commit/Cancel or explicitly resolves the composition.
+fn Mounted::has_unresolved_preedit(self : Mounted) -> Bool {
+  // This policy is scoped to a retained owner; legacy unowned Dialog
+  // composition keeps its existing explicit dismissal behavior.
+  if self.terminal_identity is Some(active) && active.live {
+    let owner = match self.terminal_lease { Some(value) => value; None => return true }
+    for binding in self.bindings {
+      if binding.id == owner.binding && binding.field_generation == owner.generation &&
+        binding.token == Some(owner.token) {
+        return match binding.field { Some(field) => field.is_composing(); None => true }
+      }
+    }
+    return true
+  }
+  false
+}
+
+///|
 pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
   if self.busy ||
     self.held_text is Some(_) ||
     !self.ready ||
-    !self.window_focused {
+    !self.window_focused || self.has_unresolved_preedit() {
     return false
   }
   let binding = match binding_for(self.bindings, key) {
@@ -4739,6 +4759,21 @@ fn Mounted::handle_event_internal(
     event.sequence() <= self.last_sequence ||
     event.sequence() <= 0L {
     return Ok(false)
+  }
+  if self.has_unresolved_preedit() {
+    let deferred = match event.kind() {
+      @platform.FocusChanged(false) | @platform.CloseRequested | @platform.Destroyed | @platform.ExitRequested => true
+      @platform.Input(@primitives.KeyPressed(key=@primitives.Tab, ..)) |
+      @platform.Input(@primitives.KeyReleased(key=@primitives.Tab, ..)) |
+      @platform.Input(@primitives.KeyPressed(key=@primitives.Escape, ..)) |
+      @platform.Input(@primitives.KeyReleased(key=@primitives.Escape, ..)) |
+      @platform.Input(@primitives.PointerButtonPressed(..)) |
+      @platform.Input(@primitives.PointerButtonReleased(..)) => true
+      _ => false
+    }
+    if deferred {
+      return Err(adapter_error("platform event requires observed composition resolution"))
+    }
   }
   self.last_sequence = event.sequence()
   self.change = fresh_epoch()
