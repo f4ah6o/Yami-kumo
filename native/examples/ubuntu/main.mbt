@@ -301,6 +301,7 @@ fn main {
       Err(error) => abort(@common.format_framework_error(error))
     }
     let first_update = Ref(false)
+    let direct_mode = Ref(false)
     let retained_port = @common.NativeTextInputPort::with_initial_state(
       fn(window, root, state) {
         let normalized = match ubuntu_text_state(state) {
@@ -308,8 +309,13 @@ fn main {
           Err(error) => return Err(error)
         }
         match retained.begin(window, root, normalized) {
+          Err(error) if error.code() is @diagnostics.UnsupportedCapability && retained.binding_epoch() is None =>
+            match retained.begin_direct(window, root) {
+              Err(direct_error) => Err(direct_error)
+              Ok(epoch) => { direct_mode.val = true; first_update.val = true; Ok(epoch) }
+            }
           Err(error) => Err(error)
-          Ok(epoch) => { first_update.val = true; Ok(epoch) }
+          Ok(epoch) => { direct_mode.val = false; first_update.val = true; Ok(epoch) }
         }
       },
       fn(epoch, state) {
@@ -317,6 +323,7 @@ fn main {
           first_update.val = false
           return Ok(epoch)
         }
+        if direct_mode.val { return Ok(epoch) }
         let normalized = match ubuntu_text_state(state) {
           Ok(value) => value
           Err(error) => return Err(error)
@@ -357,6 +364,22 @@ fn main {
           Err(error) => Err(error)
           Ok(None) => Ok(None)
           Ok(Some(receipt)) => {
+            match (receipt.direct_insert(), receipt.native_event()) {
+              (Some(direct), Some(@ubuntu_host.Platform(event))) if
+                receipt.event() is @ubuntu_host.Unhandled(_) &&
+                direct.window() == receipt.native_window() && direct.window() == event.window() &&
+                direct.root() == receipt.root() && direct.epoch() == receipt.epoch() &&
+                direct.native_sequence() == receipt.native_sequence() &&
+                direct.native_sequence().to_int64() == event.sequence() &&
+                retained.native_epoch() == Some(direct.native_epoch()) &&
+                (event.kind() is @platform.Input(@primitives.TextInput(text~)) && text == direct.text()) => {
+                  return Ok(Some(@common.NativeRetainedReceipt::direct(
+                    event, receipt.native_sequence(), receipt.root(), receipt.epoch(),
+                    direct.native_epoch(), direct.ordinal(), fn() { receipt.ack() },
+                  )))
+                }
+              _ => ()
+            }
             match receipt.event() {
               @ubuntu_host.Unhandled(_) => unsupported_native.val = Some(receipt)
               _ => ()

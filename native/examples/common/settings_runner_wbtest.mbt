@@ -2582,6 +2582,65 @@ test "direct owner is applied once across native ACK failure" {
 }
 
 ///|
+test "runner owns direct model stage before ACK and retries ACK alone" {
+  let (owner, _) = publication_fixture()
+  let session = owner.session.unwrap()
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let calls = Ref(0)
+  let native = NativeRetainedReceipt::direct(event, 2, session.binding, 7UL, 5, 1L, fn() {
+    calls.val += 1
+    if calls.val == 1 { Err(runner_error("fixture", "ACK failed")) } else { Ok(()) }
+  })
+  owner.pending_host_receipt = Some(native)
+  owner.receipt_pre_dispatch = Some(native)
+  owner.inflight = Some(OrderedPlatform(event))
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(calls.val, 0)
+  owner.apply_pending_direct(native).unwrap()
+  assert_eq(owner.model().name(), "日")
+  assert_true(owner.pending_direct.unwrap().model_applied())
+  assert_true(owner.apply_pending_direct(native) is Err(_))
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(calls.val, 1)
+  assert_true(owner.pending_direct is Some(_))
+  assert_true(owner.pending_host_receipt is Some(_))
+  assert_eq(owner.model().name(), "日")
+  owner.ack_owned_receipt().unwrap()
+  assert_eq(calls.val, 2)
+  assert_true(owner.pending_direct is None)
+  assert_true(owner.inflight is None)
+  assert_true(owner.receipt_pre_dispatch is None)
+  assert_eq(owner.direct_receipts.length(), 1)
+  assert_false(owner.mounted.handle_event(event).unwrap())
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "日")
+  assert_eq(owner.model().name(), "日")
+  assert_false(owner.can_stop())
+}
+
+///|
+test "runner retains direct head when native owner is not the original" {
+  let (owner, _) = publication_fixture()
+  let session = owner.session.unwrap()
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let calls = Ref(0)
+  let native = NativeRetainedReceipt::direct(event, 2, session.binding + 1UL, 7UL, 5, 1L, fn() {
+    calls.val += 1
+    Ok(())
+  })
+  owner.pending_host_receipt = Some(native)
+  owner.inflight = Some(OrderedPlatform(event))
+  assert_true(owner.apply_pending_direct(native) is Err(_))
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(calls.val, 0)
+  assert_true(owner.pending_host_receipt is Some(_))
+  assert_true(owner.inflight is Some(_))
+  assert_eq(owner.model().name(), "")
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "")
+}
+
+///|
 test "direct platform text is rejected while the original preedit is active" {
   let (owner, _) = publication_fixture()
   let binding = owner.session.unwrap().binding
