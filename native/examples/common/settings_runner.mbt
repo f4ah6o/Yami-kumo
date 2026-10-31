@@ -760,6 +760,9 @@ pub struct SettingsRunOwner {
   priv mut dirty : Bool
   // Staging is local only; no host update or scene present has occurred.
   priv mut pending_dirty_stage : SettingsDirtyStage?
+  // Exact locally published frame and owner at a failed host update. This is
+  // retained until a closed native adapter proves and resolves its outcome.
+  priv mut pending_host_update : SettingsHostUpdatePending?
   // One bounded, original-owner arrival. It stays here across any ACK result;
   // no application, scene or cutoff is implied by the host handoff.
   priv mut geometry_arrival : SettingsGeometryArrival?
@@ -826,6 +829,22 @@ priv struct SettingsDirtyStage {
   // success, only a future publication transaction may release this stage.
   mut host_attempted : Bool
   mut callback_returned_success : Bool
+}
+
+///|
+priv struct SettingsHostUpdatePending {
+  owner : @ui.TerminalTextOwner
+  model : @shared_settings.Model
+  fence : SettingsModelFence
+  state : @text_host.TextInputState
+  window : @platform.WindowId
+  epoch : UInt64
+  binding : UInt64
+  entered : (Int32, Int64, Int32)?
+  progress : (UInt64, Int32, Int64)
+  frame_revision : UInt64
+  metrics : (Double, Double, Double)
+  composing : Bool
 }
 
 ///|
@@ -2815,6 +2834,78 @@ pub fn SettingsRunOwner::host_epoch_verified(self : SettingsRunOwner) -> Bool {
 }
 
 ///|
+fn SettingsRunOwner::host_update_owner_current(
+  self : SettingsRunOwner, pending : SettingsHostUpdatePending,
+) -> Bool {
+  if !self.suspended || self.running || self.cutoff_done || self.destroyed ||
+    self.host_epoch_verified || self.pending_dirty_stage is Some(_) || self.geometry_arrival is Some(_) ||
+    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) ||
+    self.inflight is Some(_) || self.owned_delivery is Some(_) || self.pending_direct is Some(_) ||
+    self.held_tab is Some(_) || !self.buffered.is_empty() || !self.held_platform.is_empty() ||
+    self.pending_frame is Some(_) || self.pending_publication is Some(_) || self.mounted.has_pending_actions() ||
+    !pending.fence.live || self.settings != pending.model || self.window != pending.window ||
+    self.host_epoch != Some(pending.epoch) || self.entered_target != pending.entered ||
+    !pending.owner.matches_session(pending.window, pending.epoch, pending.binding) ||
+    !self.mounted.terminal_owner_is_current(pending.owner) ||
+    pending.owner.observed_progress() != pending.progress {
+    return false
+  }
+  match (self.session, self.mounted.frame(), self.mounted.focused_text()) {
+    (Some(session), Some(frame), Some(field)) =>
+      session.epoch == pending.epoch && session.binding == pending.binding &&
+      frame.revision() == pending.frame_revision && field.binding_id() == pending.binding &&
+      field.document() == pending.state.document() && settings_caret(field.caret()) == pending.state.caret() &&
+      field.composing() == pending.composing
+    _ => false
+  }
+}
+
+///|
+/// Retry only the exact captured update under the same suspended owner. The
+/// callback is a trusted platform adapter: it must reject an uncertain native
+/// attempt, retain an accepted receipt before returning, and revalidate it on
+/// later calls rather than resubmitting it. A generic callback's success is
+/// not native evidence. This step publishes no scene and does not permit stop.
+pub fn SettingsRunOwner::retry_captured_host_update(
+  self : SettingsRunOwner,
+  retry : (@platform.WindowId, UInt64, UInt64, @text_host.TextInputState) -> Result[UInt64, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let pending = match self.pending_host_update {
+    Some(value) => value
+    None => return Err(runner_error("ordered_text", "captured host update unavailable"))
+  }
+  if !self.host_update_owner_current(pending) {
+    return Err(runner_error("ordered_text", "captured update owner or frame changed"))
+  }
+  self.running = true
+  let before = self.host.window_metrics(self.window)
+  self.running = false
+  if !(before is Ok(value) && value == pending.metrics) || !self.host_update_owner_current(pending) {
+    return Err(runner_error("ordered_text", "captured update metrics changed"))
+  }
+  self.running = true
+  let result = retry(pending.window, pending.binding, pending.epoch, pending.state)
+  self.running = false
+  let epoch = match result { Ok(value) => value; Err(error) => return Err(error) }
+  if epoch != pending.epoch || !self.host_update_owner_current(pending) {
+    return Err(runner_error("ordered_text", "captured update owner changed during retry"))
+  }
+  self.running = true
+  let after = self.host.window_metrics(self.window)
+  self.running = false
+  if !(after is Ok(value) && value == pending.metrics) || !self.host_update_owner_current(pending) {
+    return Err(runner_error("ordered_text", "captured update metrics changed during retry"))
+  }
+  self.host_epoch_verified = true
+  self.last_document = pending.state.document().text()
+  self.last_caret = pending.state.caret()
+  self.pending_host_update = None
+  self.dirty = true
+  self.live_step_ready = false
+  Ok(())
+}
+
+///|
 /// A copied receipt may prove that an inflight held record was applied even
 /// if its action could not be enqueued. It does not prove model publication.
 pub fn SettingsRunOwner::inflight_receipt(
@@ -2936,6 +3027,7 @@ pub fn SettingsRunOwner::new(
     completed_publications: [],
     dirty: true,
     pending_dirty_stage: None,
+    pending_host_update: None,
     geometry_arrival: None,
     focus_initialized: false,
     text_suspended: false,
@@ -3805,17 +3897,29 @@ fn SettingsRunOwner::drive_inner(
               Some(state) =>
                 if state.document().text() != self.last_document ||
                   settings_caret(state.caret()) != self.last_caret {
+                  let host_state = @text_host.TextInputState::new(
+                    state.document(), settings_caret(state.caret()),
+                  )
                   if ordered_text is Some(_) {
+                    if self.pending_host_update is Some(_) {
+                      return Err(runner_error("ordered_text", "previous host update remains unresolved"))
+                    }
+                    match self.terminal_owner {
+                      Some(owner) if owner.matches_session(window, current.epoch, current.binding) &&
+                        mounted.terminal_owner_is_current(owner) =>
+                        self.pending_host_update = Some({
+                          owner, model: self.settings, fence: self.model_fence, state: host_state,
+                          window, epoch: current.epoch, binding: current.binding,
+                          entered: self.entered_target, progress: owner.observed_progress(),
+                          frame_revision: frame.revision(), metrics: (width, height, scale),
+                          composing: state.composing(),
+                        })
+                      _ => ()
+                    }
                     self.host_epoch_verified = false
                   }
                   let epoch = match
-                    (port.update)(
-                      current.epoch,
-                      @text_host.TextInputState::new(
-                        state.document(),
-                        settings_caret(state.caret()),
-                      ),
-                    ) {
+                    (port.update)(current.epoch, host_state) {
                     Err(error) => return Err(error)
                     Ok(value) => value
                   }
@@ -3825,6 +3929,7 @@ fn SettingsRunOwner::drive_inner(
                     if epoch != current.epoch {
                       return Err(runner_error("ordered_text", "host replaced an unresolved owner epoch"))
                     }
+                    self.pending_host_update = None
                   }
                   self.session = Some({ epoch, binding: current.binding, })
                   self.last_document = state.document().text()

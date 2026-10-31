@@ -148,6 +148,7 @@ fn run_settings_control(
   geometry_inspection_policy : () -> Result[Unit, @diagnostics.FrameworkError],
   geometry_take_policy : () -> Result[Unit, @diagnostics.FrameworkError],
   geometry_apply_policy : () -> Result[Unit, @diagnostics.FrameworkError],
+  preflight_policy : () -> Result[Unit, @diagnostics.FrameworkError],
 ) -> Unit {
   println("YAMI_SETTINGS_CONTROL {\"state\":\"active\",\"scene_published\":false}")
   match entry.error() {
@@ -211,6 +212,11 @@ fn run_settings_control(
       // y: apply the exact retained native record once; scene remains pending.
       121 => match geometry_apply_policy() {
         Ok(_) => control_reply(89)
+        Err(error) => control_step_error(error, 69)
+      }
+      // f: retry only a route-proven unsubmitted geometry candidate.
+      102 => match preflight_policy() {
+        Ok(_) => control_reply(70)
         Err(error) => control_step_error(error, 69)
       }
       // r: retry ACK only for the inspected native sequence.
@@ -338,6 +344,7 @@ fn main {
     }
     let first_update = Ref(false)
     let direct_mode = Ref(false)
+    let preflight : SettingsPreflightAdapter = { route: retained, proof: None, accepted: None, uncertain: false }
     let retained_port = @common.NativeTextInputPort::with_initial_state(
       fn(window, root, state) {
         let normalized = match ubuntu_text_state(state) {
@@ -365,7 +372,7 @@ fn main {
           Err(error) => return Err(error)
         }
         println("YAMI_SETTINGS_IME {\"stage\":\"geometry_update_begin\",\"portable_epoch\":\{epoch}}")
-        match retained.update(epoch, normalized) {
+        match preflight.attempt(epoch, normalized) {
           Ok(_) => {
             println("YAMI_SETTINGS_IME {\"stage\":\"geometry_update_ok\",\"portable_epoch\":\{epoch}}")
             Ok(epoch)
@@ -698,6 +705,16 @@ fn main {
         }
         _ => Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "geometry_arrival_already_applied"))
       }
+    }, fn() {
+      let owner = match entry.owner() {
+        Some(value) => value
+        None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "preflight_owner_unavailable"))
+      }
+      let result = owner.retry_captured_host_update(fn(window, root, epoch, state) {
+        preflight.retry(window, root, epoch, state)
+      })
+      if result is Ok(_) { preflight.accepted = None }
+      result
     })
     return
   }

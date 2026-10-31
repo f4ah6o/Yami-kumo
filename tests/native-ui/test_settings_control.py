@@ -156,6 +156,7 @@ class ControlSocketTests(unittest.TestCase):
         for command, wire, response, expected in (
             ("geometry-submit", "v", "G", "native geometry receipt checked"),
             ("geometry-handoff", "h", "H", "original text receipt retained"),
+            ("retry-preflight", "f", "F", "same-owner native geometry receipt verified"),
         ):
             request = subprocess.Popen(
                 [sys.executable, str(script), str(self.path), command],

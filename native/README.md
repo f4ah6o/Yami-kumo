@@ -308,3 +308,12 @@ staged scene may differ while the owner remains suspended: a recoverable
 cross-layer publication transaction is still required before normal input,
 focus transitions, or shutdown can resume. This experiment is not the full
 resize-recovery contract and must not be treated as a production acceptance.
+
+The experimental `retry-preflight` Settings control retains the exact local
+owner, model fence, frame revision, metrics and text candidate from a failed
+normal geometry update. It may retry only an opaque route-issued preflight
+rejection proof. A native-entered error remains uncertain and is never retried
+through this control; an accepted receipt is retained and rechecked if a later
+owner or metrics validation fails. This bounded step does not consume FIFO
+records or publish a scene. A queued head can still prevent progress, and the
+current scene/host publication transaction and safe shutdown remain unresolved.
