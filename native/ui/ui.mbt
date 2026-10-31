@@ -307,6 +307,8 @@ pub struct Mounted {
   // The captured lease is retained with the mount so the public raw input
   // path can validate the exact field generation and revision too.
   priv mut terminal_lease : TerminalTextOwner?
+  // One delivery stays attached until its field/action/model stages settle.
+  priv mut pending_owned_text : OwnedTextDelivery?
   priv mut terminal_required : Bool
 }
 
@@ -438,6 +440,7 @@ pub fn Mounted::new(
     terminal_identity: None,
     terminal_focus_owner: None,
     terminal_lease: None,
+    pending_owned_text: None,
     terminal_required: false,
   }
 }
@@ -2597,7 +2600,7 @@ pub fn Mounted::publish(
         Some(value) => value
         None => return Err(adapter_error("owned focus scope is unavailable"))
       }
-      if self.runtime.has_pending_actions() {
+      if self.runtime.has_pending_actions() || self.pending_owned_text is Some(_) {
         return Err(adapter_error("owned focus has pending actions"))
       }
       // Until the original lease is explicitly resolved, preserve the field
@@ -2968,7 +2971,9 @@ pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
   if self.busy ||
     self.held_text is Some(_) ||
     !self.ready ||
-    !self.window_focused || self.has_unresolved_preedit() {
+    !self.window_focused || self.has_unresolved_preedit() ||
+    (self.terminal_identity is Some(active) && active.live &&
+     (self.runtime.has_pending_actions() || self.pending_owned_text is Some(_))) {
     return false
   }
   let binding = match binding_for(self.bindings, key) {
@@ -3207,6 +3212,7 @@ pub fn TerminalTextOwner::observed_progress(
 /// receipt survives failures after field publication and owns any extracted
 /// action until the caller records model application.
 pub struct OwnedTextDelivery {
+  priv receipt_identity : Epoch
   priv identity : Epoch
   priv owner : TerminalTextOwner
   priv event : @text_host.TextInputEvent
@@ -3574,7 +3580,7 @@ pub fn Mounted::mark_owned_direct_text_model_applied(
 pub fn Mounted::reserve_owned_text(
   self : Mounted, owner : TerminalTextOwner, event : @text_host.TextInputEvent,
 ) -> Result[OwnedTextDelivery, @diagnostics.FrameworkError] {
-  if !self.window_focused {
+  if !self.window_focused || self.pending_owned_text is Some(_) {
     return Err(adapter_error("owned text window is unfocused"))
   }
   match self.validate_terminal_text_delivery(owner, event) {
@@ -3589,7 +3595,7 @@ pub fn Mounted::reserve_owned_text(
     None => return Err(adapter_error("owned text field is unavailable"))
   }
   Ok({
-    identity: self.identity, owner, event, before, applied: false, after_change: None,
+    receipt_identity: fresh_epoch(), identity: self.identity, owner, event, before, applied: false, after_change: None,
     expected: None, action_required: None, owner_noted: false,
     action: None, action_claimed: false, model_applied: false, busy: false,
   })
@@ -3609,6 +3615,13 @@ pub fn Mounted::apply_owned_text(
     Err(error) => return Err(error)
     Ok(_) => ()
   }
+  match self.pending_owned_text {
+    Some(existing) if !same_epoch(existing.receipt_identity, receipt.receipt_identity) =>
+      return Err(adapter_error("another owned text delivery is unresolved"))
+    _ => ()
+  }
+  // Reserve before measurement or any other callback can fail or reenter.
+  self.pending_owned_text = Some(receipt)
   receipt.busy = true
   let outcome = self.text_input(receipt.owner.epoch, receipt.event)
   receipt.busy = false
@@ -3676,7 +3689,14 @@ pub fn Mounted::note_owned_text(
   }
   match self.note_terminal_text_delivery(receipt.owner, receipt.event) {
     Err(error) => Err(error)
-    Ok(_) => { receipt.owner_noted = true; Ok(()) }
+    Ok(_) => {
+      receipt.owner_noted = true
+      if receipt.action_required is Some(false) &&
+        self.pending_owned_text is Some(existing) && same_epoch(existing.receipt_identity, receipt.receipt_identity) {
+        self.pending_owned_text = None
+      }
+      Ok(())
+    }
   }
 }
 
@@ -3744,7 +3764,15 @@ pub fn Mounted::mark_owned_text_model_applied(
     !(receipt.after_change is Some(change) && same_epoch(change, self.change)) {
     return Err(adapter_error("owned text model owner is stale"))
   }
-  receipt.mark_model_applied()
+  match receipt.mark_model_applied() {
+    Err(error) => Err(error)
+    Ok(_) => {
+      if self.pending_owned_text is Some(existing) && same_epoch(existing.receipt_identity, receipt.receipt_identity) {
+        self.pending_owned_text = None
+      }
+      Ok(())
+    }
+  }
 }
 
 ///|
@@ -4775,6 +4803,25 @@ fn Mounted::handle_event_internal(
       return Err(adapter_error("platform event requires observed composition resolution"))
     }
   }
+  // A raw committed TextChanged may still be queued after composition has
+  // ended. Focus and teardown paths can drain or invalidate that action, so
+  // leave the original event with the caller until it takes the action.
+  if self.terminal_identity is Some(active) && active.live &&
+    (self.runtime.has_pending_actions() || self.pending_owned_text is Some(_)) {
+    let deferred = match event.kind() {
+      @platform.FocusChanged(false) | @platform.CloseRequested | @platform.Destroyed | @platform.ExitRequested => true
+      @platform.Input(@primitives.KeyPressed(key=@primitives.Tab, ..)) |
+      @platform.Input(@primitives.KeyReleased(key=@primitives.Tab, ..)) |
+      @platform.Input(@primitives.KeyPressed(key=@primitives.Escape, ..)) |
+      @platform.Input(@primitives.KeyReleased(key=@primitives.Escape, ..)) |
+      @platform.Input(@primitives.PointerButtonPressed(..)) |
+      @platform.Input(@primitives.PointerButtonReleased(..)) => true
+      _ => false
+    }
+    if deferred {
+      return Err(adapter_error("platform event requires pending action ownership"))
+    }
+  }
   self.last_sequence = event.sequence()
   self.change = fresh_epoch()
   match event.kind() {
@@ -5039,6 +5086,9 @@ fn Mounted::text_input_inner(
   epoch : UInt64,
   event : @text_host.TextInputEvent,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
+  if self.pending_owned_text is Some(receipt) && !receipt.busy {
+    return Err(adapter_error("owned text delivery requires reconciliation"))
+  }
   if self.terminal_required &&
     (self.terminal_identity is None || self.text_epoch != epoch) {
     return Ok(false)
