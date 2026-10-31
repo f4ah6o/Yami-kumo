@@ -27,6 +27,22 @@ class EvidenceTest(unittest.TestCase):
             self.assertEqual(json.loads((out / 'build.json').read_text())['result'], 'FAIL')
             self.assertTrue((out / 'artifact-manifest.json').exists())
 
+    def test_early_runtime_setup_failure_still_writes_evidence(self):
+        with tempfile.TemporaryDirectory() as name, tempfile.TemporaryDirectory() as tools:
+            fake = Path(tools) / 'mktemp'
+            fake.write_text('#!/bin/sh\nexit 1\n')
+            fake.chmod(0o755)
+            env = dict(os.environ, YAMI_RELEASE_OUT=name,
+                       PATH=tools + os.pathsep + os.environ['PATH'])
+            run = subprocess.run(['bash', str(HERE / 'session.sh')], env=env,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=15)
+            self.assertNotEqual(run.returncode, 0)
+            out = Path(name)
+            result = json.loads((out / 'result.json').read_text())
+            self.assertEqual(result['session_exit_phase'], 'environment_preflight')
+            self.assertEqual(result['full_live_acceptance'], 'NOT_RUN')
+            self.assertTrue(result['artifact_digest'].startswith('sha256:'))
+
     def test_group_and_child_writer_terminated_before_hash(self):
         with tempfile.TemporaryDirectory() as name:
             out = Path(name)
