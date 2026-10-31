@@ -2831,6 +2831,121 @@ test "full native ledger backpressures an unacknowledged direct head" {
 }
 
 ///|
+test "arrow input leaves the retained text lease stale before the next direct head" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let first = NativeRetainedReceipt::direct(event, 2, owner.session.unwrap().binding, 7UL, 5, 1L, fn() { Ok(()) })
+  owner.pending_host_receipt = Some(first)
+  owner.inflight = Some(OrderedPlatform(event))
+  owner.reserve_pending_direct(first).unwrap()
+  owner.ack_owned_receipt().unwrap()
+  owner.complete_pending_direct().unwrap()
+  assert_eq(owner.model().name(), "日")
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  let left = @platform.Event::new(owner.window, 3L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.ArrowLeft, repeat=false, modifiers=@primitives.Modifiers::none())))
+  assert_true(owner.mounted.handle_event(left).unwrap())
+  // This is a characterization of the existing gap, not successful recovery.
+  assert_false(owner.mounted.terminal_owner_is_current(lease))
+  let next = @platform.Event::new(owner.window, 4L, 1.0,
+    @platform.Input(@primitives.TextInput(text="本")))
+  let count = Ref(0)
+  let second = NativeRetainedReceipt::direct(next, 4, owner.session.unwrap().binding, 7UL, 5, 2L, fn() { count.val += 1; Ok(()) })
+  owner.pending_host_receipt = Some(second)
+  owner.inflight = Some(OrderedPlatform(next))
+  assert_true(owner.reserve_pending_direct(second) is Err(_))
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(count.val, 0)
+  assert_eq(owner.model().name(), "日")
+  assert_true(owner.pending_host_receipt is Some(_))
+  assert_true(owner.inflight is Some(_))
+  assert_false(owner.can_stop())
+}
+
+///|
+test "owned arrow retains the lease and the next direct insert uses the same field" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  let first = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let typed = owner.mounted.reserve_owned_direct_text(lease, first, 2, 1L).unwrap()
+  owner.mounted.apply_owned_direct_text(typed).unwrap()
+  let action = owner.mounted.owned_direct_text_action(typed).unwrap().unwrap()
+  owner.replace_settings(owner.settings.update(@shared_settings.Ui(action)))
+  owner.mounted.mark_owned_direct_text_model_applied(typed).unwrap()
+  let left = @platform.Event::new(owner.window, 3L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.ArrowLeft, repeat=false, modifiers=@primitives.Modifiers::none())))
+  let key = owner.mounted.reserve_owned_edit_key(lease, left, 3).unwrap()
+  owner.mounted.apply_owned_direct_text(key).unwrap()
+  assert_true(key.action_required() is Some(false))
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  assert_true(owner.mounted.apply_owned_direct_text(key) is Err(_))
+  assert_true(owner.mounted.reserve_owned_edit_key(lease, left, 3) is Err(_))
+  let next = @platform.Event::new(owner.window, 4L, 1.0,
+    @platform.Input(@primitives.TextInput(text="本")))
+  let next_receipt = owner.mounted.reserve_owned_direct_text(lease, next, 4, 2L).unwrap()
+  owner.mounted.apply_owned_direct_text(next_receipt).unwrap()
+  assert_true(next_receipt.pending_action() is Some(@view.TextChanged(_, "本日")))
+  assert_eq(owner.model().name(), "日")
+}
+
+///|
+test "owned undo and redo retain their original action and grouping" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  for (sequence, value) in [(1L, "a"), (2L, "b")] {
+    let event = @platform.Event::new(owner.window, sequence, 1.0,
+      @platform.Input(@primitives.TextInput(text=value)))
+    let receipt = owner.mounted.reserve_owned_direct_text(lease, event, sequence.to_int(), sequence).unwrap()
+    owner.mounted.apply_owned_direct_text(receipt).unwrap()
+    let action = owner.mounted.owned_direct_text_action(receipt).unwrap().unwrap()
+    owner.replace_settings(owner.settings.update(@shared_settings.Ui(action)))
+    owner.mounted.mark_owned_direct_text_model_applied(receipt).unwrap()
+  }
+  let control = @primitives.Modifiers::new(shift=false, control=true, alt=false, meta=false)
+  let undo = @platform.Event::new(owner.window, 3L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.Character("z"), repeat=false, modifiers=control)))
+  let receipt = owner.mounted.reserve_owned_edit_key(lease, undo, 3).unwrap()
+  owner.mounted.apply_owned_direct_text(receipt).unwrap()
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "")))
+  assert_eq(owner.model().name(), "ab")
+  let action = owner.mounted.owned_direct_text_action(receipt).unwrap().unwrap()
+  owner.replace_settings(owner.settings.update(@shared_settings.Ui(action)))
+  owner.mounted.mark_owned_direct_text_model_applied(receipt).unwrap()
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  let redo = @platform.Event::new(owner.window, 4L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.Character("y"), repeat=false, modifiers=control)))
+  let receipt = owner.mounted.reserve_owned_edit_key(lease, redo, 4).unwrap()
+  owner.mounted.apply_owned_direct_text(receipt).unwrap()
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "ab")))
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+}
+
+///|
+test "owned edit key rejects active preedit and replaced focus" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.ArrowLeft, repeat=false, modifiers=@primitives.Modifiers::none())))
+  let key = owner.mounted.reserve_owned_edit_key(lease, event, 2).unwrap()
+  assert_true(owner.mounted.focus(@shared_settings.settings_save()))
+  assert_true(owner.mounted.apply_owned_direct_text(key) is Err(_))
+  assert_false(key.attempted())
+  let (other, _) = publication_fixture()
+  let other_lease = other.terminal_owner.unwrap()
+  let preedit = @text_host.TextInputEvent::new(other.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  other.deliver_owned_observation(preedit).unwrap()
+  let other_event = @platform.Event::new(other.window, 2L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.ArrowLeft, repeat=false, modifiers=@primitives.Modifiers::none())))
+  assert_true(other.mounted.reserve_owned_edit_key(other_lease, other_event, 2) is Err(_))
+  assert_true(other.mounted.focused_text().unwrap().composing())
+  assert_eq(other.model().name(), "")
+}
+
+///|
 test "direct platform text is rejected while the original preedit is active" {
   let (owner, _) = publication_fixture()
   let binding = owner.session.unwrap().binding
