@@ -309,6 +309,9 @@ pub struct Mounted {
   priv mut terminal_lease : TerminalTextOwner?
   // One delivery stays attached until its field/action/model stages settle.
   priv mut pending_owned_text : OwnedTextDelivery?
+  // A single caller-owned platform event was refused before dispatch. Later
+  // platform events cannot pass it while the original is being resolved.
+  priv mut deferred_platform_event : @platform.Event?
   priv mut terminal_required : Bool
 }
 
@@ -441,6 +444,7 @@ pub fn Mounted::new(
     terminal_focus_owner: None,
     terminal_lease: None,
     pending_owned_text: None,
+    deferred_platform_event: None,
     terminal_required: false,
   }
 }
@@ -2967,11 +2971,26 @@ fn Mounted::has_unresolved_preedit(self : Mounted) -> Bool {
 }
 
 ///|
+fn same_deferred_platform_event(a : @platform.Event, b : @platform.Event) -> Bool {
+  if a.window() != b.window() || a.sequence() != b.sequence() || a.scale() != b.scale() {
+    return false
+  }
+  match (a.kind(), b.kind()) {
+    (@platform.Input(x), @platform.Input(y)) => x == y
+    (@platform.FocusChanged(false), @platform.FocusChanged(false)) |
+    (@platform.CloseRequested, @platform.CloseRequested) |
+    (@platform.Destroyed, @platform.Destroyed) |
+    (@platform.ExitRequested, @platform.ExitRequested) => true
+    _ => false
+  }
+}
+
+///|
 pub fn Mounted::focus(self : Mounted, key : @view.NodeKey) -> Bool {
   if self.busy ||
     self.held_text is Some(_) ||
     !self.ready ||
-    !self.window_focused || self.has_unresolved_preedit() ||
+    !self.window_focused || self.has_unresolved_preedit() || self.deferred_platform_event is Some(_) ||
     (self.terminal_identity is Some(active) && active.live &&
      (self.runtime.has_pending_actions() || self.pending_owned_text is Some(_))) {
     return false
@@ -4767,7 +4786,16 @@ pub fn Mounted::handle_event(
   self : Mounted,
   event : @platform.Event,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
-  self.handle_event_internal(event, false)
+  let result = self.handle_event_internal(event, false)
+  match self.deferred_platform_event {
+    Some(held) if same_deferred_platform_event(held, event) =>
+      match result {
+        Ok(true) => { self.deferred_platform_event = None; Ok(true) }
+        Ok(false) => Err(adapter_error("deferred platform event outcome is unresolved"))
+        Err(error) => Err(error)
+      }
+    _ => result
+  }
 }
 
 ///|
@@ -4788,6 +4816,9 @@ fn Mounted::handle_event_internal(
     event.sequence() <= 0L {
     return Ok(false)
   }
+  if self.deferred_platform_event is Some(held) && !same_deferred_platform_event(held, event) {
+    return Err(adapter_error("earlier platform event is still deferred"))
+  }
   if self.has_unresolved_preedit() {
     let deferred = match event.kind() {
       @platform.FocusChanged(false) | @platform.CloseRequested | @platform.Destroyed | @platform.ExitRequested => true
@@ -4800,6 +4831,7 @@ fn Mounted::handle_event_internal(
       _ => false
     }
     if deferred {
+      self.deferred_platform_event = Some(event)
       return Err(adapter_error("platform event requires observed composition resolution"))
     }
   }
@@ -4819,6 +4851,7 @@ fn Mounted::handle_event_internal(
       _ => false
     }
     if deferred {
+      self.deferred_platform_event = Some(event)
       return Err(adapter_error("platform event requires pending action ownership"))
     }
   }
