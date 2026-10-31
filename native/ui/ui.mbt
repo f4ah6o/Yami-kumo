@@ -304,6 +304,9 @@ pub struct Mounted {
   priv terminal_epochs : Array[UInt64]
   priv mut terminal_identity : Epoch?
   priv mut terminal_focus_owner : @element.FocusOwner?
+  // The captured lease is retained with the mount so the public raw input
+  // path can validate the exact field generation and revision too.
+  priv mut terminal_lease : TerminalTextOwner?
   priv mut terminal_required : Bool
 }
 
@@ -434,6 +437,7 @@ pub fn Mounted::new(
     terminal_epochs: [],
     terminal_identity: None,
     terminal_focus_owner: None,
+    terminal_lease: None,
     terminal_required: false,
   }
 }
@@ -3716,7 +3720,7 @@ pub fn Mounted::capture_terminal_text_owner(
         self.terminal_required = true
         self.text_epoch = epoch
         self.last_text_sequence = 0L
-        return Ok({
+        let owner : TerminalTextOwner = {
           identity: self.identity, session_identity, window: self.window, epoch,
           binding: binding.id, generation: binding.field_generation, focus_owner,
           revision: field.revision(), token,
@@ -3724,7 +3728,9 @@ pub fn Mounted::capture_terminal_text_owner(
           direct_sequence: 0L,
           direct_native_sequence: 0,
           busy: false,
-        })
+        }
+        self.terminal_lease = Some(owner)
+        return Ok(owner)
       }
       _ => ()
     }
@@ -4088,13 +4094,8 @@ pub fn Mounted::begin_held_text(
     return Err(adapter_error("text transition epoch is stale"))
   }
   if self.terminal_required {
-    let same_focus = match self.scope {
-      Some(scope) => self.terminal_focus_owner is Some(_) &&
-        scope.snapshot().focus_owner() == self.terminal_focus_owner
-      None => false
-    }
-    if !(self.terminal_identity is Some(active) && active.live) || !same_focus {
-      return Err(adapter_error("text transition focus acquisition changed"))
+    if !self.terminal_binding_matches_input() {
+      return Err(adapter_error("text transition owner or field generation changed"))
     }
   }
   if self.held_text is Some(_) {
@@ -4919,6 +4920,37 @@ pub fn Mounted::text_input(
 }
 
 ///|
+/// Validate the original lease without consulting the Mounted busy flag: the
+/// public text_input wrapper holds that flag while this check runs. This is a
+/// check of the actual field, not permission to rebind a retained event.
+fn Mounted::terminal_binding_matches_input(self : Mounted) -> Bool {
+  let owner = match self.terminal_lease { Some(value) => value; None => return false }
+  if self.is_disposed() || !self.ready || !self.window_focused ||
+    !self.identity.live || !owner.identity.live || !owner.session_identity.live ||
+    !same_epoch(self.identity, owner.identity) ||
+    !(self.terminal_identity is Some(active) && same_epoch(active, owner.session_identity)) ||
+    self.window != owner.window || self.text_epoch != owner.epoch ||
+    self.last_text_sequence != owner.sequence || !self.runtime.is_current(owner.token) {
+    return false
+  }
+  let scope = match self.scope { Some(value) => value; None => return false }
+  if scope.focused() != Some(owner.binding) ||
+    scope.snapshot().focus_owner() != Some(owner.focus_owner) {
+    return false
+  }
+  for binding in self.bindings {
+    if binding.id == owner.binding && binding.field_generation == owner.generation &&
+      binding.token == Some(owner.token) && field_editable(binding.view) && self.admits_binding(binding) {
+      match binding.field {
+        Some(field) => return field.revision() == owner.revision
+        None => return false
+      }
+    }
+  }
+  false
+}
+
+///|
 fn Mounted::text_input_inner(
   self : Mounted,
   epoch : UInt64,
@@ -4929,14 +4961,8 @@ fn Mounted::text_input_inner(
     return Ok(false)
   }
   if self.terminal_required {
-    let live = self.terminal_identity is Some(active) && active.live
-    let same_focus = match self.scope {
-      Some(scope) => self.terminal_focus_owner is Some(_) &&
-        scope.snapshot().focus_owner() == self.terminal_focus_owner
-      None => false
-    }
-    if !live || !same_focus {
-      return Err(adapter_error("text input focus acquisition changed"))
+    if !self.terminal_binding_matches_input() {
+      return Err(adapter_error("text input owner or field generation changed"))
     }
   }
   if self.held_text is Some(_) {
@@ -4989,12 +5015,7 @@ fn Mounted::text_input_inner(
         return false
       }
       if self.terminal_required {
-        let same_focus = match self.scope {
-          Some(scope) => self.terminal_focus_owner is Some(_) &&
-            scope.snapshot().focus_owner() == self.terminal_focus_owner
-          None => false
-        }
-        if !same_focus { return false }
+        if !self.terminal_binding_matches_input() { return false }
       }
       let current = self.bindings[index]
       if current.id != binding.id || current.field_generation != binding.field_generation ||
