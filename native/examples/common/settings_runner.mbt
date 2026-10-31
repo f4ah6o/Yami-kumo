@@ -170,6 +170,36 @@ fn same_handled_platform_kind(left : @platform.EventKind, right : @platform.Even
 }
 
 ///|
+fn same_prefix_stage(a : NativeReceiptStage, b : NativeReceiptStage) -> Bool {
+  match (a, b) {
+    (ReceiptOwnerEntered, ReceiptOwnerEntered)
+    | (ReceiptPlatformHandled, ReceiptPlatformHandled)
+    | (ReceiptPointerMovedHandled, ReceiptPointerMovedHandled)
+    | (ReceiptNoModelAction, ReceiptNoModelAction)
+    | (ReceiptModelApplied, ReceiptModelApplied) => true
+    _ => false
+  }
+}
+
+///|
+fn same_prefix_receipt(a : NativeRetainedReceipt, b : NativeRetainedReceipt) -> Bool {
+  if a.window != b.window || a.sequence != b.sequence || a.root != b.root ||
+    a.epoch != b.epoch || a.entered != b.entered {
+    return false
+  }
+  match (a.event, b.event) {
+    (None, None) => true
+    (Some(OrderedPlatform(x)), Some(OrderedPlatform(y))) =>
+      x.window() == y.window() && x.sequence() == y.sequence() &&
+      x.scale() == y.scale() && same_handled_platform_kind(x.kind(), y.kind())
+    (Some(OrderedText(x)), Some(OrderedText(y))) =>
+      x.window() == y.window() && x.sequence() == y.sequence() && x.epoch() == y.epoch() &&
+      same_text_observation_kind(x.kind(), y.kind())
+    _ => false
+  }
+}
+
+///|
 pub fn NativeRetainedReceipt::new(
   event : NativeOrderedEvent?, window : @platform.WindowId, sequence : Int32,
   root : UInt64, epoch : UInt64,
@@ -1091,6 +1121,72 @@ pub fn SettingsRunOwner::completed_publication(
 ) -> SettingsFramePublication? {
   if index < 0 || index >= self.completed_publications.length() { None }
   else { Some(self.completed_publications[index]) }
+}
+
+///|
+/// Opaque observation tied to one suspended owner and one exact unsupported
+/// receipt. It is not native input provenance and cannot acknowledge a record.
+pub struct UnsupportedPrefixSnapshot {
+  priv owner : SettingsRunOwner
+  priv pending : NativeRetainedReceipt
+  priv field_progress : (UInt64, Int32, Int64)
+  priv prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)]
+}
+
+///|
+/// Capture the original owner's local prefix, without accepting an external
+/// boolean as proof and without changing the native queue or pending record.
+pub fn SettingsRunOwner::capture_unsupported_prefix(
+  self : SettingsRunOwner, sequence : Int64,
+) -> Result[UnsupportedPrefixSnapshot, @diagnostics.FrameworkError] {
+  if !self.unsupported_prefix_has_observed_stages() {
+    return Err(runner_error("ordered_text", "unsupported prefix is not locally observable"))
+  }
+  let pending = self.pending_host_receipt.unwrap()
+  if sequence <= 0L || pending.sequence.to_int64() != sequence {
+    return Err(runner_error("ordered_text", "unsupported receipt identity changed"))
+  }
+  let owner = self.terminal_owner.unwrap()
+  let prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)] = []
+  for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
+    let entry = self.acknowledged_receipts[i]
+    let stage = match self.receipt_stage_for_sequence(entry.receipt.sequence.to_int64()) {
+      Some(value) => value
+      None => return Err(runner_error("ordered_text", "ambiguous prefix receipt"))
+    }
+    prefix.push((entry.receipt, stage))
+  }
+  Ok({ owner: self, pending, field_progress: owner.observed_progress(), prefix })
+}
+
+///|
+/// Recheck immediately before using an observation. This remains only a
+/// local owner/prefix check; native proof and the FIFO ACK must be performed
+/// by the backend adapter against the original opaque native receipt.
+pub fn UnsupportedPrefixSnapshot::is_current(self : UnsupportedPrefixSnapshot) -> Bool {
+  let owner = self.owner
+  if !owner.unsupported_prefix_has_observed_stages() ||
+    owner.acknowledged_receipts.length() != self.prefix.length() {
+    return false
+  }
+  let pending = match owner.pending_host_receipt { Some(value) => value; None => return false }
+  let field_owner = match owner.terminal_owner { Some(value) => value; None => return false }
+  if !same_prefix_receipt(self.pending, pending) ||
+    field_owner.observed_progress() != self.field_progress {
+    return false
+  }
+  for i = 0; i < self.prefix.length(); i = i + 1 {
+    let (receipt, stage) = self.prefix[i]
+    let current = owner.acknowledged_receipts[i]
+    let current_stage = match owner.receipt_stage_for_sequence(receipt.sequence.to_int64()) {
+      Some(value) => value
+      None => return false
+    }
+    if !same_prefix_receipt(receipt, current.receipt) || !same_prefix_stage(stage, current_stage) {
+      return false
+    }
+  }
+  true
 }
 
 ///|

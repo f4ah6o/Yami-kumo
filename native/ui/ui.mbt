@@ -2939,8 +2939,8 @@ pub fn TerminalTextOwner::matches_session(
 }
 
 ///|
-/// Read-only lease progress for correlating a later frame with this owner.
-/// These values alone are not a focus, publication, or ACK capability.
+/// Read-only field-lease progress for comparing a frame or prefix snapshot.
+/// This does not authorize event acknowledgement or resolve composition.
 pub fn TerminalTextOwner::observed_progress(
   self : TerminalTextOwner,
 ) -> (UInt64, Int32, Int64) {
