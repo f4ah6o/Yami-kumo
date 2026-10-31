@@ -80,11 +80,21 @@ proc = subprocess.Popen(['stdbuf', '-oL', '-eL', str(app), '--settings-retained-
 def app_data() -> str:
     return (out / 'app.log').read_text(errors='replace')
 
+class ControlOutcomeUnknown(Exception):
+    def __init__(self, event: dict):
+        self.event = event
+        super().__init__('control timeout: ' + event['command'])
+
 def send_command(socket_path: str, command: str, seq: int | None = None) -> dict:
     args = ['python3', str(control), socket_path, command]
     if seq is not None:
         args.extend(['--sequence', str(seq)])
-    return run_control_command(args, result['steps'], command, seq)
+    event = run_control_command(args, result['steps'], command, seq)
+    # The probe needs to record its partial bounded attempts before stopping;
+    # every other caller must stop before interpreting even partial stdout.
+    if event['status'] == 'TIMEOUT_OUTCOME_UNKNOWN' and command not in ('generation', 'advance'):
+        raise ControlOutcomeUnknown(event)
+    return event
 
 def value(reply: dict, name: str) -> int | None:
     found = re.search(re.escape(name) + r': (\d+)', reply['stdout'])
@@ -141,21 +151,18 @@ try:
         app_data, lambda command, sequence=None: send_command(socket_path, command, sequence),
         baseline_count, 'に', limit=8)
     result['geometry_race'] = 'NOT_RUN_CONSUMER_PREEDIT_NOT_OBSERVED'
+    if result['preedit_probe']['result'] in ('BLOCKED_GENERATION_TIMEOUT_OUTCOME_UNKNOWN',
+                                              'BLOCKED_ADVANCE_TIMEOUT_OUTCOME_UNKNOWN'):
+        raise ControlOutcomeUnknown(result['steps'][-1])
     if result['preedit_probe']['result'] == 'OBSERVED_CONSUMER_PREEDIT':
         result['geometry_initial'] = send_command(socket_path, 'geometry-submit')
         result['geometry_race'] = 'NOT_ESTABLISHED'
-        if result['geometry_initial']['status'] == 'TIMEOUT_OUTCOME_UNKNOWN':
-            result['geometry_race'] = 'BLOCKED_GEOMETRY_SUBMIT_TIMEOUT_OUTCOME_UNKNOWN'
-        elif result['geometry_initial']['rc'] != 0:
+        if result['geometry_initial']['rc'] != 0:
             result['handoff'] = send_command(socket_path, 'geometry-handoff')
-            if result['handoff']['status'] == 'TIMEOUT_OUTCOME_UNKNOWN':
-                result['geometry_race'] = 'BLOCKED_HANDOFF_TIMEOUT_OUTCOME_UNKNOWN'
-            elif result['handoff']['rc'] == 0:
+            if result['handoff']['rc'] == 0:
                 result['geometry_retry'] = send_command(socket_path, 'geometry-submit')
                 if result['geometry_retry']['rc'] == 0:
                     result['geometry_race'] = 'OBSERVED_HANDOFF_AND_RETRY_RESPONSES_CAUSE_UNVERIFIED'
-                elif result['geometry_retry']['status'] == 'TIMEOUT_OUTCOME_UNKNOWN':
-                    result['geometry_race'] = 'BLOCKED_GEOMETRY_RETRY_TIMEOUT_OUTCOME_UNKNOWN'
                 else:
                     result['geometry_race'] = 'FAIL_RETRY_RETAINED'
             else:
@@ -172,6 +179,14 @@ try:
         result['final_stop'] = {'result': 'NOT_RUN_COMMAND_OUTCOME_UNKNOWN'}
     else:
         result['final_stop'] = send_command(socket_path, 'stop')
+except ControlOutcomeUnknown as exc:
+    result['error'] = repr(exc)
+    if exc.event['command'] == 'resolve-release':
+        result['release_policy'] = 'NOT_ESTABLISHED_TIMEOUT_OUTCOME_UNKNOWN'
+    if exc.event['command'] in ('geometry-submit', 'geometry-handoff'):
+        result['geometry_race'] = 'BLOCKED_COMMAND_TIMEOUT_OUTCOME_UNKNOWN'
+    if exc.event['command'] != 'stop':
+        result['final_stop'] = {'result': 'NOT_RUN_COMMAND_OUTCOME_UNKNOWN'}
 except Exception as exc:
     result['error'] = repr(exc)
 finally:
