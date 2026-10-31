@@ -21,7 +21,7 @@ priv struct SettingsGeometryAdapter {
   epoch : UInt64
   native_epoch : Int32
   state : @text_host.TextInputState
-  mut pending_generation : UInt64?
+  mut intent : @ubuntu_host.RetainedGeometryIntent?
   mut receipt : @ubuntu_host.RetainedGeometryReceipt?
 }
 
@@ -50,7 +50,7 @@ fn SettingsGeometryAdapter::new(
     state.document() != geometry.committed() || state.preedit() is Some(_) {
     return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_original_owner"))
   }
-  Ok({ route, window, root, epoch, native_epoch, state, pending_generation: None, receipt: None })
+  Ok({ route, window, root, epoch, native_epoch, state, intent: None, receipt: None })
 }
 
 ///|
@@ -72,42 +72,42 @@ fn SettingsGeometryAdapter::attempt(
     self.route.binding_epoch() != Some(self.epoch) || self.route.native_epoch() != Some(self.native_epoch) {
     return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_candidate_changed"))
   }
-  let result = if retry {
-    let pending = match self.route.pending_geometry() {
+  let intent = if retry {
+    match self.intent {
       Some(value) => value
-      None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_pending_missing"))
+      None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_intent_missing"))
     }
-    if !self.matches(pending) || self.pending_generation != Some(pending.generation()) {
-      return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_pending_changed"))
-    }
-    self.route.retry_geometry(self.epoch)
   } else {
-    if self.pending_generation is Some(_) {
+    if self.intent is Some(_) {
       return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_duplicate_attempt"))
     }
-    self.route.update_with_receipt(self.epoch, normalized)
-  }
-  match result {
-    Err(error) => {
-      match self.route.pending_geometry() {
-        Some(pending) if self.matches(pending) => {
-          match self.pending_generation {
-            Some(generation) if generation != pending.generation() =>
-              return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_generation_changed"))
-            _ => self.pending_generation = Some(pending.generation())
-          }
-        }
-        _ => ()
-      }
-      Err(error)
+    let value = match self.route.reserve_geometry_intent(self.epoch, normalized) {
+      Err(error) => return Err(error)
+      Ok(value) => value
     }
+    // Retain the opaque owner-bound intent before any further checks or native
+    // submission. A later validation error must not lose it.
+    self.intent = Some(value)
+    value
+  }
+  let reserved = intent.pending()
+  let pending = match self.route.pending_geometry() {
+    Some(value) => value
+    None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_pending_missing"))
+  }
+  if !self.matches(reserved) || !self.matches(pending) || reserved.generation() != pending.generation() ||
+    self.route.geometry_intent_stage(intent) is None {
+    return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_intent_changed"))
+  }
+  let result = self.route.submit_geometry_intent(intent)
+  match result {
+    Err(error) => Err(error)
     Ok(receipt) => {
       // Retain even a receipt that fails the following checks. The host may
       // already have changed; validation failure is not permission to drop it.
       self.receipt = Some(receipt)
       let pending = receipt.pending()
-      if !self.matches(pending) ||
-        (retry && self.pending_generation != Some(pending.generation())) ||
+      if !self.matches(pending) || reserved.generation() != pending.generation() ||
         !self.route.geometry_receipt_is_current(receipt) {
         return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_receipt_changed"))
       }
