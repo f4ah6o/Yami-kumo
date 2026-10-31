@@ -1062,9 +1062,13 @@ pub fn SettingsRunOwner::reserve_geometry_arrival(
     receipt.direct is Some(_) || receipt.edit_key_epoch is Some(_) || receipt.entered is Some(_) {
     return Err(runner_error("geometry_handoff", "arrival owner changed"))
   }
+  let (_, _, last_text_sequence) = owner.observed_progress()
+  if last_text_sequence == 9223372036854775807L {
+    return Err(runner_error("geometry_handoff", "text sequence exhausted"))
+  }
   match receipt.event {
     Some(OrderedText(event)) if event.window() == receipt.window && event.epoch() == receipt.epoch &&
-      event.sequence() == receipt.sequence.to_int64() &&
+      event.sequence() == last_text_sequence + 1L &&
       (event.kind() is @text_host.Preedit(..) || event.kind() is @text_host.Commit(..) || event.kind() is @text_host.Cancel) => ()
     _ => return Err(runner_error("geometry_handoff", "unsupported arrival remains at host"))
   }

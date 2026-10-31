@@ -126,16 +126,29 @@ test "handoff preserves active preedit and the later commit as separate stages" 
   owner.host_epoch_verified = true
   owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
   owner.entered_target = Some((7, 11L, 4))
+  // Host sequence 1 is a platform record. Portable text numbering starts at 1
+  // independently when the preedit is admitted at native sequence 2.
+  let platform = @platform.Event::new(owner.window, 1L, 1.0, @platform.FocusChanged(true))
+  let first = NativeRetainedReceipt::new(Some(OrderedPlatform(platform)), owner.window, 1, binding, 7UL, fn() { Ok(()) })
+  owner.acknowledged_receipts.push({ receipt: first, stage: ReceiptPlatformHandled })
   let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
   owner.deliver_owned_observation(preedit).unwrap()
-  let prior = NativeRetainedReceipt::new(Some(OrderedText(preedit)), owner.window, 1, binding, 7UL, fn() { Ok(()) })
+  let prior = NativeRetainedReceipt::new(Some(OrderedText(preedit)), owner.window, 2, binding, 7UL, fn() { Ok(()) })
   owner.acknowledged_receipts.push({ receipt: prior, stage: ReceiptNoModelAction })
   owner.suspended = true
   owner.dirty = true
   owner.stage_dirty_scene().unwrap()
   assert_true(owner.attempt_staged_host_geometry(fn(_, _) { Err(runner_error("fixture", "uncertain")) }) is Err(_))
   let commit = @text_host.TextInputEvent::new(owner.window, 2L, 7UL, @text_host.Commit(text="日本"))
-  let next = NativeRetainedReceipt::new(Some(OrderedText(commit)), owner.window, 2, binding, 7UL, fn() { Ok(()) })
+  let stale = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="古"))
+  let stale_receipt = NativeRetainedReceipt::new(Some(OrderedText(stale)), owner.window, 3, binding, 7UL, fn() { Ok(()) })
+  assert_true(owner.reserve_geometry_arrival(stale_receipt, (7, 11L, 4)) is Err(_))
+  let skipped = @text_host.TextInputEvent::new(owner.window, 3L, 7UL, @text_host.Commit(text="先"))
+  let skipped_receipt = NativeRetainedReceipt::new(Some(OrderedText(skipped)), owner.window, 3, binding, 7UL, fn() { Ok(()) })
+  assert_true(owner.reserve_geometry_arrival(skipped_receipt, (7, 11L, 4)) is Err(_))
+  let replay = NativeRetainedReceipt::new(Some(OrderedText(commit)), owner.window, 2, binding, 7UL, fn() { Ok(()) })
+  assert_true(owner.reserve_geometry_arrival(replay, (7, 11L, 4)) is Err(_))
+  let next = NativeRetainedReceipt::new(Some(OrderedText(commit)), owner.window, 3, binding, 7UL, fn() { Ok(()) })
   owner.reserve_geometry_arrival(next, (7, 11L, 4)).unwrap()
   owner.transfer_geometry_arrival().unwrap()
   assert_true(owner.mounted.focused_text().unwrap().composing())
