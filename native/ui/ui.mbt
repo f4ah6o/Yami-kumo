@@ -2939,6 +2939,15 @@ pub fn TerminalTextOwner::matches_session(
 }
 
 ///|
+/// Read-only lease progress for correlating a later frame with this owner.
+/// These values alone are not a focus, publication, or ACK capability.
+pub fn TerminalTextOwner::observed_progress(
+  self : TerminalTextOwner,
+) -> (UInt64, Int32, Int64) {
+  (self.generation, self.revision, self.sequence)
+}
+
+///|
 /// A single text delivery reserved for its original mounted owner. The
 /// receipt survives failures after field publication and owns any extracted
 /// action until the caller records model application.

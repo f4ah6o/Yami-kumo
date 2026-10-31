@@ -2298,6 +2298,115 @@ test "local unsupported prefix snapshot requires consecutive resolved original o
 }
 
 ///|
+fn publication_fixture() -> (SettingsRunOwner, @ui.Frame) {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  if !owner.mounted.focus(@shared_settings.settings_name()) { abort("fixture focus failed") }
+  let frame = owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap()
+  let field = owner.mounted.focused_text().unwrap()
+  let binding = field.binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.entered_target = Some((5, 11L, 4))
+  owner.last_document = field.document().text()
+  owner.last_caret = settings_caret(field.caret())
+  owner.dirty = false
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::entered(owner.window, 1, binding, 7UL, 5, 11L, 4, fn() { Ok(()) }),
+    stage: ReceiptOwnerEntered,
+  })
+  (owner, frame)
+}
+
+///|
+test "frame completion covers only the prefix captured before present" {
+  let (owner, frame) = publication_fixture()
+  let present_count = Ref(0)
+  owner.present_with_frame_publication(frame, fn(_, _) { present_count.val += 1; Ok(()) }).unwrap()
+  let candidate = owner.pending_publication.unwrap()
+  assert_eq(candidate.watermark(), 1)
+  assert_eq(candidate.scene_revision(), frame.revision())
+  assert_true(candidate.presented())
+  assert_false(candidate.frame_completed())
+  // A later acknowledged event arrives while this frame is in flight. It is
+  // not retroactively included in the already captured scene watermark.
+  let later = @platform.Event::new(owner.window, 2L, 1.0, @platform.FrameCompleted)
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedPlatform(later)), owner.window, 2, candidate.binding, 7UL, fn() { Ok(()) }),
+    stage: ReceiptPlatformHandled,
+  })
+  owner.complete_frame_publication()
+  assert_eq(present_count.val, 1)
+  assert_eq(owner.completed_publication_count(), 1)
+  assert_eq(owner.completed_publication(0).unwrap().watermark(), 1)
+  assert_true(owner.completed_publication(0).unwrap().frame_completed())
+  assert_eq(owner.acknowledged_receipt_count(), 2)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "uncertain host geometry or present failure cannot publish a prefix" {
+  let (owner, frame) = publication_fixture()
+  owner.host_epoch_verified = false
+  assert_true(owner.prepare_frame_publication(frame) is None)
+  assert_eq(owner.acknowledged_receipt_count(), 1)
+  owner.host_epoch_verified = true
+  let side_effect = Ref(false)
+  let present = fn(_, _) { side_effect.val = true; Err(runner_error("test_present", "injected failure")) }
+  assert_true(owner.present_with_frame_publication(frame, present) is Err(_))
+  assert_true(side_effect.val)
+  assert_true(owner.pending_publication is Some(_))
+  assert_false(owner.pending_publication.unwrap().presented())
+  assert_eq(owner.completed_publication_count(), 0)
+  assert_eq(owner.acknowledged_receipt_count(), 1)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "later field change prevents completion of an earlier owner snapshot" {
+  let (owner, frame) = publication_fixture()
+  owner.present_with_frame_publication(frame, fn(_, _) { Ok(()) }).unwrap()
+  let binding = owner.session.unwrap().binding
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedText(preedit)), owner.window, 2, binding, 7UL, fn() { Ok(()) }),
+    stage: ReceiptAcknowledgedOnly,
+  })
+  owner.deliver_owned_observation(preedit).unwrap()
+  owner.complete_frame_publication()
+  assert_eq(owner.completed_publication_count(), 0)
+  assert_true(owner.pending_publication is Some(_))
+  assert_false(owner.pending_publication.unwrap().frame_completed())
+  assert_true(owner.present_with_frame_publication(frame, fn(_, _) { Ok(()) }) is Err(_))
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  assert_eq(owner.acknowledged_receipt_count(), 2)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "frame proof retains ambiguity after captured receipt changes" {
+  let (owner, frame) = publication_fixture()
+  owner.present_with_frame_publication(frame, fn(_, _) { Ok(()) }).unwrap()
+  let binding = owner.session.unwrap().binding
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::entered(owner.window, 1, binding, 7UL, 5, 11L, 4, fn() { Ok(()) }),
+    stage: ReceiptOwnerEntered,
+  })
+  owner.complete_frame_publication()
+  assert_eq(owner.completed_publication_count(), 0)
+  assert_true(owner.pending_frame_publication() is Some(_))
+  assert_eq(owner.acknowledged_receipt_count(), 2)
+  assert_false(owner.can_stop())
+}
+
+///|
 test "resize then failed ack retains commit across destroyed window" {
   let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
   let window = @platform.WindowId::new(1L)

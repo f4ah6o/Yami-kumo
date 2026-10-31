@@ -65,6 +65,42 @@ struct NativeReceiptEntry {
 }
 
 ///|
+/// One immutable scene/owner snapshot and the native prefix already applied
+/// before its present call. This is observational: it never retires a record.
+pub struct SettingsFramePublication {
+  priv frame : @ui.Frame
+  priv window : @platform.WindowId
+  priv binding : UInt64
+  priv epoch : UInt64
+  priv field_progress : (UInt64, Int32, Int64)
+  priv caret : @primitives.Rect
+  priv watermark : Int32
+  priv prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)]
+  priv mut presented : Bool
+  priv mut frame_completed : Bool
+}
+
+///|
+pub fn SettingsFramePublication::watermark(self : SettingsFramePublication) -> Int32 { self.watermark }
+
+///|
+pub fn SettingsFramePublication::scene_revision(self : SettingsFramePublication) -> UInt64 { self.frame.revision() }
+
+///|
+pub fn SettingsFramePublication::presented(self : SettingsFramePublication) -> Bool { self.presented }
+
+///|
+pub fn SettingsFramePublication::frame_completed(self : SettingsFramePublication) -> Bool { self.frame_completed }
+
+///|
+pub fn SettingsFramePublication::owner_identity(
+  self : SettingsFramePublication,
+) -> (@platform.WindowId, UInt64, UInt64, UInt64, Int32, Int64) {
+  let (generation, revision, sequence) = self.field_progress
+  (self.window, self.binding, self.epoch, generation, revision, sequence)
+}
+
+///|
 fn receipt_stage_rank(stage : NativeReceiptStage) -> Int {
   match stage {
     ReceiptAcknowledgedOnly => 0
@@ -85,6 +121,36 @@ fn same_text_observation_kind(
     (@text_host.Commit(text=a), @text_host.Commit(text=b)) => a == b
     (@text_host.Preedit(text=a, cursor=x), @text_host.Preedit(text=b, cursor=y)) => a == b && x == y
     (@text_host.Cancel, @text_host.Cancel) | (@text_host.FocusLost, @text_host.FocusLost) => true
+    _ => false
+  }
+}
+
+///|
+fn same_publication_stage(a : NativeReceiptStage, b : NativeReceiptStage) -> Bool {
+  match (a, b) {
+    (ReceiptOwnerEntered, ReceiptOwnerEntered)
+    | (ReceiptPlatformHandled, ReceiptPlatformHandled)
+    | (ReceiptPointerMovedHandled, ReceiptPointerMovedHandled)
+    | (ReceiptNoModelAction, ReceiptNoModelAction)
+    | (ReceiptModelApplied, ReceiptModelApplied) => true
+    _ => false
+  }
+}
+
+///|
+fn same_publication_receipt(a : NativeRetainedReceipt, b : NativeRetainedReceipt) -> Bool {
+  if a.window != b.window || a.sequence != b.sequence || a.root != b.root ||
+    a.epoch != b.epoch || a.entered != b.entered {
+    return false
+  }
+  match (a.event, b.event) {
+    (None, None) => true
+    (Some(OrderedPlatform(x)), Some(OrderedPlatform(y))) =>
+      x.window() == y.window() && x.sequence() == y.sequence() &&
+      x.scale() == y.scale() && same_handled_platform_kind(x.kind(), y.kind())
+    (Some(OrderedText(x)), Some(OrderedText(y))) =>
+      x.window() == y.window() && x.sequence() == y.sequence() && x.epoch() == y.epoch() &&
+      same_text_observation_kind(x.kind(), y.kind())
     _ => false
   }
 }
@@ -551,6 +617,8 @@ pub struct SettingsRunOwner {
   priv mut saving_frames : Int32
   priv gate : PresentationGate
   priv mut pending_frame : String?
+  priv mut pending_publication : SettingsFramePublication?
+  priv completed_publications : Array[SettingsFramePublication]
   priv mut dirty : Bool
   priv mut focus_initialized : Bool
   priv mut text_suspended : Bool
@@ -882,6 +950,147 @@ pub fn SettingsRunOwner::unsupported_prefix_has_observed_stages(
     }
   }
   entered
+}
+
+///|
+/// Prepare an observation only from the exact current field lease and
+/// contiguous, locally applied receipt prefix. It is deliberately optional:
+/// inability to prove this observation does not imply input was discarded.
+fn SettingsRunOwner::prepare_frame_publication(
+  self : SettingsRunOwner, frame : @ui.Frame,
+) -> SettingsFramePublication? {
+  if self.pending_publication is Some(_) || self.completed_publications.length() >= 64 ||
+    self.destroyed || self.dirty || !self.host_epoch_verified ||
+    self.pending_host_receipt is Some(_) || self.receipt_pre_dispatch is Some(_) ||
+    self.inflight is Some(_) || self.owned_delivery is Some(_) || self.held_tab is Some(_) ||
+    !self.buffered.is_empty() || !self.held_platform.is_empty() ||
+    self.mounted.has_pending_actions() {
+    return None
+  }
+  let current = match self.session { Some(value) => value; None => return None }
+  let owner = match self.terminal_owner { Some(value) => value; None => return None }
+  let field = match self.mounted.focused_text() { Some(value) => value; None => return None }
+  if self.host_epoch != Some(current.epoch) ||
+    !owner.matches_session(self.window, current.epoch, current.binding) ||
+    !self.mounted.terminal_owner_is_current(owner) ||
+    frame.binding_id(@shared_settings.settings_name()) != Some(current.binding) ||
+    !frame.focused(@shared_settings.settings_name()) ||
+    field.binding_id() != current.binding || field.document().text() != self.last_document ||
+    settings_caret(field.caret()) != self.last_caret {
+    return None
+  }
+  let mut watermark = 0
+  let mut entered = false
+  let prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)] = []
+  for entry in self.acknowledged_receipts {
+    if entry.receipt.window != self.window || entry.receipt.sequence != watermark + 1 { break }
+    let stage = match self.receipt_stage_for_sequence(entry.receipt.sequence.to_int64()) {
+      Some(value) => value
+      None => break
+    }
+    let valid = match (entry.receipt.event, stage) {
+      (None, ReceiptOwnerEntered) if !entered && entry.receipt.entered == self.entered_target &&
+        entry.receipt.root == current.binding && entry.receipt.epoch == current.epoch => {
+          entered = true
+          true
+        }
+      (Some(OrderedPlatform(event)), ReceiptPlatformHandled | ReceiptPointerMovedHandled) =>
+        event.window() == self.window && event.sequence() == entry.receipt.sequence.to_int64() &&
+        (if entered { entry.receipt.root == current.binding && entry.receipt.epoch == current.epoch }
+         else { entry.receipt.root == 0UL && entry.receipt.epoch == 0UL })
+      (Some(OrderedText(event)), ReceiptNoModelAction | ReceiptModelApplied) =>
+        entered && entry.receipt.root == current.binding && entry.receipt.epoch == current.epoch &&
+        event.window() == self.window && event.epoch() == current.epoch
+      _ => false
+    }
+    if !valid { break }
+    prefix.push((entry.receipt, stage))
+    watermark += 1
+  }
+  if !entered || watermark == 0 { return None }
+  Some({
+    frame, window: self.window, binding: current.binding, epoch: current.epoch,
+    field_progress: owner.observed_progress(), caret: self.last_caret, watermark, prefix,
+    presented: false, frame_completed: false,
+  })
+}
+
+///|
+/// Attempt presentation without upgrading the candidate on an error. If a
+/// backend fails after side effects the original candidate remains available,
+/// but neither presentation nor completion is asserted.
+fn SettingsRunOwner::present_with_frame_publication(
+  self : SettingsRunOwner, frame : @ui.Frame,
+  present : (@platform.WindowId, @scene.SceneSnapshot) -> Result[Unit, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.pending_publication is Some(_) {
+    return Err(runner_error("ordered_text", "previous frame publication remains unresolved"))
+  }
+  self.pending_publication = self.prepare_frame_publication(frame)
+  match present(self.window, frame.snapshot()) {
+    Err(error) => Err(error)
+    Ok(_) => {
+      match self.pending_publication { Some(candidate) => candidate.presented = true; None => () }
+      Ok(())
+    }
+  }
+}
+
+///|
+/// Complete only the captured prefix, never any record received after the
+/// present. A later owner/field/scene change invalidates this observation.
+fn SettingsRunOwner::complete_frame_publication(self : SettingsRunOwner) -> Unit {
+  let candidate = match self.pending_publication { Some(value) => value; None => return }
+  if self.destroyed || self.cutoff_done { return }
+  let current = match self.session { Some(value) => value; None => return }
+  let owner = match self.terminal_owner { Some(value) => value; None => return }
+  let field = match self.mounted.focused_text() { Some(value) => value; None => return }
+  let frame = match self.mounted.frame() { Some(value) => value; None => return }
+  if self.acknowledged_receipts.length() < candidate.prefix.length() { return }
+  for i = 0; i < candidate.prefix.length(); i = i + 1 {
+    let (receipt, stage) = candidate.prefix[i]
+    let now = self.acknowledged_receipts[i]
+    let observed = match self.receipt_stage_for_sequence(receipt.sequence.to_int64()) {
+      Some(value) => value
+      None => return
+    }
+    if !same_publication_receipt(receipt, now.receipt) || !same_publication_stage(stage, observed) { return }
+  }
+  if candidate.presented && candidate.window == self.window &&
+    candidate.binding == current.binding && candidate.epoch == current.epoch &&
+    self.host_epoch_verified && self.host_epoch == Some(current.epoch) &&
+    owner.matches_session(self.window, current.epoch, current.binding) &&
+    self.mounted.terminal_owner_is_current(owner) &&
+    owner.observed_progress() == candidate.field_progress &&
+    frame.revision() == candidate.frame.revision() &&
+    settings_caret(field.caret()) == candidate.caret &&
+    self.last_caret == candidate.caret {
+    candidate.frame_completed = true
+    self.completed_publications.push(candidate)
+    self.pending_publication = None
+  }
+}
+
+///|
+pub fn SettingsRunOwner::completed_publication_count(self : SettingsRunOwner) -> Int {
+  self.completed_publications.length()
+}
+
+///|
+/// An in-flight, failed or invalidated present remains retained here. It is
+/// not a completed publication or permission to stop.
+pub fn SettingsRunOwner::pending_frame_publication(
+  self : SettingsRunOwner,
+) -> SettingsFramePublication? {
+  self.pending_publication
+}
+
+///|
+pub fn SettingsRunOwner::completed_publication(
+  self : SettingsRunOwner, index : Int,
+) -> SettingsFramePublication? {
+  if index < 0 || index >= self.completed_publications.length() { None }
+  else { Some(self.completed_publications[index]) }
 }
 
 ///|
@@ -1501,6 +1710,8 @@ pub fn SettingsRunOwner::new(
     saving_frames: 0,
     gate: PresentationGate::{ rendered: false, pending_stale: false, },
     pending_frame: None,
+    pending_publication: None,
+    completed_publications: [],
     dirty: true,
     focus_initialized: false,
     text_suspended: false,
@@ -2026,6 +2237,7 @@ fn SettingsRunOwner::drive_inner(
               Some(marker) => {
                 self.pending_frame = None
                 if gate.completed_frame_is_current() {
+                  self.complete_frame_publication()
                   emit_native_marker(marker)
                 }
               }
@@ -2428,7 +2640,12 @@ fn SettingsRunOwner::drive_inner(
         "other"
       }
       let marker = "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"frame\",\"name\":\"\{json_escape(self.settings.name())}\",\"status\":\"\{settings_status(self.settings)}\",\"dialog\":\{self.settings.dialog_open()},\"focus\":\"\{focus}\",\"error\":\"\{json_escape(error_text)}\"}"
-      match host.present(window, frame.snapshot()) {
+      let presentation = match ordered_text {
+        Some(ordered) if ordered.peek is Some(_) && platform is Linux =>
+          self.present_with_frame_publication(frame, fn(w, snapshot) { host.present(w, snapshot) })
+        _ => host.present(window, frame.snapshot())
+      }
+      match presentation {
         Err(error) => return Err(error)
         Ok(_) => ()
       }
