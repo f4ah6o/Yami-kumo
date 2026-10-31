@@ -137,6 +137,43 @@ class ControlSocketTests(unittest.TestCase):
             self.assertEqual(self.lib.gpui_settings_control_next(2000), 0)
             self.assertEqual(peer.recv(1), b"")
 
+    def test_geometry_commands_have_distinct_scoped_replies_and_reject_wrong_codes(self) -> None:
+        script = Path(__file__).resolve().parents[2] / "scripts/settings_retained_control.py"
+        for command, wire, response, expected in (
+            ("geometry-submit", "v", "G", "native geometry receipt checked"),
+            ("geometry-handoff", "h", "H", "original text receipt retained"),
+        ):
+            request = subprocess.Popen(
+                [sys.executable, str(script), str(self.path), command],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            self.assertEqual(self.lib.gpui_settings_control_next(2000), ord(wire))
+            self.lib.gpui_settings_control_reply(ord(response))
+            stdout, stderr = request.communicate(timeout=3)
+            self.assertEqual(request.returncode, 0, stderr)
+            self.assertIn(expected, stdout)
+            self.assertIn("scene", stdout)
+            self.assertIn("shutdown are not implied", stdout)
+        request = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "geometry-submit"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("v"))
+        self.lib.gpui_settings_control_reply(ord("H"))
+        stdout, stderr = request.communicate(timeout=3)
+        self.assertNotEqual(request.returncode, 0)
+        self.assertIn("unexpected response", stderr)
+        self.assertNotIn("pointer move", stdout)
+        request = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "geometry-handoff"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("h"))
+        self.lib.gpui_settings_control_reply(ord("E"))
+        stdout, stderr = request.communicate(timeout=3)
+        self.assertNotEqual(request.returncode, 0, stderr)
+        self.assertIn("owner and host remain retained", stdout)
+
     def test_retirement_command_uses_exact_watermark(self) -> None:
         script = Path(__file__).resolve().parents[2] / "scripts/settings_retained_control.py"
         query = subprocess.Popen(

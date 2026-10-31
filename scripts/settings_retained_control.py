@@ -7,7 +7,11 @@ import socket
 import struct
 import sys
 
-COMMANDS = {"status": b"s", "receipt": b"t", "prefix": b"b", "stage": b"j", "owned": b"o", "reconcile": b"d", "watermark": b"w", "retire": b"e", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resolve-release": b"k", "resume": b"u", "cutoff": b"c", "stop": b"q"}
+COMMANDS = {"status": b"s", "receipt": b"t", "prefix": b"b", "stage": b"j", "owned": b"o", "reconcile": b"d", "watermark": b"w", "retire": b"e", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resolve-release": b"k", "resume": b"u", "cutoff": b"c", "stop": b"q", "geometry-submit": b"v", "geometry-handoff": b"h"}
+GEOMETRY_REPLIES = {
+    "geometry-submit": (b"G", "native geometry receipt checked for this step; scene, record application and shutdown are not implied"),
+    "geometry-handoff": (b"H", "original text receipt retained by the route and owner; application, scene and shutdown are not implied"),
+}
 REPLIES = {
     b"S": "suspended; owner and host retained",
     b"N": "no suspended owner; inspect the application's reason log",
@@ -69,7 +73,12 @@ def main() -> int:
     except OSError as error:
         print(f"control request failed: {error}; outcome may be unknown, inspect status before retry", file=sys.stderr)
         return 2
-    message = REPLIES.get(result)
+    if args.command in GEOMETRY_REPLIES and result not in (GEOMETRY_REPLIES[args.command][0], b"E"):
+        print("geometry control returned an unexpected response; owner and host remain unresolved", file=sys.stderr)
+        return 2
+    message = (GEOMETRY_REPLIES[args.command][1]
+               if args.command in GEOMETRY_REPLIES and result == GEOMETRY_REPLIES[args.command][0]
+               else REPLIES.get(result))
     if message is None:
         print("control endpoint returned an unknown or empty response", file=sys.stderr)
         return 2
