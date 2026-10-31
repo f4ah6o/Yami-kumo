@@ -5,20 +5,22 @@ harness_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 test -d "$out" || { echo 'evidence directory must already exist'; exit 1; }
 test -z "$(find "$out" -mindepth 1 -maxdepth 1 -print -quit)" || { echo 'evidence directory must be empty'; exit 1; }
 prefix=/workspace/gpui-locked-profile/prefix
-runtime=$(mktemp -d /tmp/yami-retained-fixture-XXXXXX)
-chmod 700 "$runtime"
-mkdir -p "$runtime"/{config/mozc,cache,data,component,schemas}
+runtime=
 pids=()
-phase=build
+phase=environment_preflight
 cleanup() {
   status=$?
   trap - EXIT
   set +e
   python3 "$harness_dir/finish.py" "$out" "$status" "$phase" "${pids[@]}" || { echo 'evidence finalization failed' >&2; status=1; }
-  rm -rf "$runtime"
+  if test -n "$runtime"; then rm -rf "$runtime"; fi
   exit "$status"
 }
 trap cleanup EXIT
+runtime=$(mktemp -d /tmp/yami-retained-fixture-XXXXXX)
+chmod 700 "$runtime"
+mkdir -p "$runtime"/{config/mozc,cache,data,component,schemas}
+phase=build
 python3 "$harness_dir/build.py"
 export YAMI_RELEASE_BINARY="$out/app.exe"
 export YAMI_RELEASE_BINARY_SHA256=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["binary_sha256"])' "$out/build.json")
