@@ -69,6 +69,7 @@ result = {
     'model_reflection': 'NOT_RUN', 'candidate_table_oracle': 'NOT_RUN',
     'dialog_and_focus': 'NOT_RUN', 'resize_blur_close_races': 'NOT_RUN',
     'preedit_probe': {'result': 'NOT_RUN'}, 'geometry_race': 'NOT_RUN',
+    'native_head_inspection': {'result': 'NOT_RUN'},
     'scene_and_caret': 'NOT_RUN', 'retained_record_model_application': 'NOT_RUN',
     'forced_process_termination': False, 'steps': [],
 }
@@ -184,6 +185,8 @@ try:
         result['final_stop'] = send_command(socket_path, 'stop')
 except ControlOutcomeUnknown as exc:
     result['error'] = repr(exc)
+    if exc.event['command'] == 'inspect-native':
+        result['native_head_inspection'] = {'result': 'TIMEOUT_OUTCOME_UNKNOWN'}
     if exc.event['command'] == 'resolve-release':
         result['release_policy'] = 'NOT_ESTABLISHED_TIMEOUT_OUTCOME_UNKNOWN'
     if exc.event['command'] in ('geometry-submit', 'geometry-handoff'):
