@@ -146,7 +146,7 @@ try:
         if result['handoff']['rc'] == 0:
             result['geometry_retry'] = send_command(socket_path, 'geometry-submit')
             if result['geometry_retry']['rc'] == 0:
-                result['geometry_race'] = 'PASS_SCOPED_HOST_RECEIPT_AND_HELD_RECORD'
+                result['geometry_race'] = 'OBSERVED_HANDOFF_AND_RETRY_RESPONSES_CAUSE_UNVERIFIED'
             else:
                 result['geometry_race'] = 'FAIL_RETRY_RETAINED'
         else:

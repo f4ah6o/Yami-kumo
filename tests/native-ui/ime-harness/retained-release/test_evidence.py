@@ -49,5 +49,45 @@ class EvidenceTest(unittest.TestCase):
                     pass
                 proc.wait(timeout=5)
 
+    def test_ignored_term_is_killed_with_bounded_shutdown(self):
+        with tempfile.TemporaryDirectory() as name:
+            out = Path(name)
+            with (out / 'ignore-term.log').open('w') as log:
+                proc = subprocess.Popen(['sh', '-c', "trap '' TERM; sleep 60 & wait"],
+                                        stdout=log, stderr=log, start_new_session=True)
+            try:
+                time.sleep(.2)
+                start = time.monotonic()
+                subprocess.run(['python3', str(HERE / 'finish.py'), name, '1', 'test',
+                                str(proc.pid)], check=True, timeout=12)
+                self.assertLess(time.monotonic() - start, 9)
+                proc.wait(timeout=5)
+                result = json.loads((out / 'result.json').read_text())
+                self.assertEqual(result['log_shutdown']['tracked_groups_remaining'], [])
+                self.assertEqual(result['log_shutdown']['visible_open_writers'], [])
+            finally:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                proc.wait(timeout=5)
+
+    def test_escaped_writer_is_not_claimed_stable(self):
+        with tempfile.TemporaryDirectory() as name:
+            out = Path(name)
+            with (out / 'escaped.log').open('w') as log:
+                proc = subprocess.Popen(['sleep', '60'], stdout=log, stderr=log,
+                                        start_new_session=True)
+            try:
+                subprocess.run(['python3', str(HERE / 'finish.py'), name, '1', 'test'],
+                               check=True, timeout=12)
+                result = json.loads((out / 'result.json').read_text())
+                self.assertEqual(result['artifact_stability'], 'UNVERIFIED_WRITERS_OR_GROUPS')
+                self.assertTrue(any(w['pid'] == proc.pid
+                                    for w in result['log_shutdown']['visible_open_writers']))
+            finally:
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait(timeout=5)
+
 if __name__ == '__main__':
     unittest.main()
