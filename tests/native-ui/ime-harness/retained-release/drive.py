@@ -29,7 +29,7 @@ if git(app_tree, 'status', '--porcelain') or git(framework_tree, 'status', '--po
 actual_binary = hashlib.sha256(app.read_bytes()).hexdigest()
 if actual_binary != expected_binary:
     raise SystemExit('binary digest differs from the independently captured build digest')
-if app_sha != 'f6c4b40abbecd74b76a1fb459c360a104fd132dd' or framework_sha != 'b28cff9a8a92a155e67421a397a1030dedac9301':
+if app_sha != '585ff82109df0fa006f3031258476257d0b9cc86' or framework_sha != '53e42a5888167fd9203b27f6558deabaf5c54e4b':
     raise SystemExit('source revisions differ from the reviewed candidate pair')
 
 result = {
