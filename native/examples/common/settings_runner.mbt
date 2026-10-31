@@ -4003,7 +4003,10 @@ fn SettingsRunOwner::drive_inner(
       None => ()
     }
   }
-  mounted.dispose()
+  match mounted.try_dispose() {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
   let reason = if self.destroyed { "window-closed" } else { "tick-limit" }
   emit_native_marker(
     "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"exit\",\"reason\":\"\{reason}\",\"ticks\":\{self.ticks}}",

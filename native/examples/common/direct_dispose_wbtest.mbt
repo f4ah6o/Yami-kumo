@@ -1,5 +1,5 @@
 ///|
-test "owned direct disposal during measurement retains the attempted receipt" {
+test "owned direct disposal during measurement is refused and keeps the receipt" {
   let (owner, _) = publication_fixture()
   let trigger = Ref(false)
   let measure : @components.TextMeasure = fn(value, size) {
@@ -11,9 +11,11 @@ test "owned direct disposal during measurement retains the attempted receipt" {
     @platform.Input(@primitives.TextInput(text="a")))
   let receipt = owner.mounted.reserve_owned_direct_text(owner.terminal_owner.unwrap(), event, 1, 1L).unwrap()
   trigger.val = true
-  assert_true(owner.mounted.apply_owned_direct_text(receipt) is Err(_))
+  assert_true(owner.mounted.apply_owned_direct_text(receipt) is Ok(_))
   assert_true(receipt.attempted())
-  assert_false(receipt.applied())
+  assert_true(receipt.applied())
+  assert_false(owner.mounted.is_disposed())
+  assert_true(receipt.pending_action() is Some(_))
   assert_true(owner.mounted.apply_owned_direct_text(receipt) is Err(_))
   assert_eq(owner.model().name(), "")
 }

@@ -533,7 +533,10 @@ pub fn run_native_text_sample(
     }
     ax_token = 0
   }
-  mounted.dispose()
+  match mounted.try_dispose() {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
   if destroyed || ticks >= tick_limit {
     Ok(())
   } else {

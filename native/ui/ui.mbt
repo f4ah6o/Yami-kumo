@@ -4819,6 +4819,13 @@ fn Mounted::handle_event_internal(
   if self.deferred_platform_event is Some(held) && !same_deferred_platform_event(held, event) {
     return Err(adapter_error("earlier platform event is still deferred"))
   }
+  // A local empty action queue is not a native cutoff or a completed owner
+  // release. Keep teardown intents until an explicit release contract exists.
+  if self.terminal_identity is Some(active) && active.live &&
+    (event.kind() is @platform.CloseRequested || event.kind() is @platform.Destroyed || event.kind() is @platform.ExitRequested) {
+    self.deferred_platform_event = Some(event)
+    return Err(adapter_error("terminal text owner must be released before teardown"))
+  }
   if self.has_unresolved_preedit() {
     let deferred = match event.kind() {
       @platform.FocusChanged(false) | @platform.CloseRequested | @platform.Destroyed | @platform.ExitRequested => true
@@ -4859,8 +4866,14 @@ fn Mounted::handle_event_internal(
   self.change = fresh_epoch()
   match event.kind() {
     @platform.Destroyed | @platform.CloseRequested | @platform.ExitRequested => {
-      self.dispose()
-      Ok(true)
+      // This exact event is being resolved, not abandoned. Restore its fence
+      // if disposal refuses for any other reason.
+      let deferred = self.deferred_platform_event
+      self.deferred_platform_event = None
+      match self.try_dispose() {
+        Err(error) => { self.deferred_platform_event = deferred; Err(error) }
+        Ok(_) => Ok(true)
+      }
     }
     @platform.Resized(..) | @platform.ScaleChanged => {
       self.invalidate_layout()
@@ -5534,7 +5547,29 @@ fn Mounted::dispatch(
 }
 
 ///|
+/// Attempt disposal without discarding a live retained text owner. Success is
+/// a local fact only and does not prove that a native host queue was drained.
+/// The owner coordinator must establish its separate host cutoff and release.
+pub fn Mounted::try_dispose(self : Mounted) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.is_disposed() { return Ok(()) }
+  if (self.terminal_identity is Some(active) && active.live) ||
+    self.pending_owned_text is Some(_) || self.deferred_platform_event is Some(_) {
+    return Err(adapter_error("retained text owner or platform event is unresolved"))
+  }
+  self.dispose_unchecked()
+  Ok(())
+}
+
+///|
+/// Compatibility wrapper. A live retained owner prevents disposal; callers
+/// that need to distinguish success must use `try_dispose` and retain the
+/// mount and host after an error. This does not prove native cutoff.
 pub fn Mounted::dispose(self : Mounted) -> Unit {
+  ignore(self.try_dispose())
+}
+
+///|
+fn Mounted::dispose_unchecked(self : Mounted) -> Unit {
   self.staging_invalidation_safe = false
   self.identity.live = false
   match self.terminal_identity {
