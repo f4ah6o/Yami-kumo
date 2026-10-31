@@ -7,10 +7,11 @@ import socket
 import struct
 import sys
 
-COMMANDS = {"status": b"s", "receipt": b"t", "prefix": b"b", "stage": b"j", "owned": b"o", "reconcile": b"d", "watermark": b"w", "retire": b"e", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resolve-release": b"k", "resume": b"u", "cutoff": b"c", "stop": b"q", "geometry-submit": b"v", "geometry-handoff": b"h"}
+COMMANDS = {"status": b"s", "receipt": b"t", "prefix": b"b", "stage": b"j", "owned": b"o", "reconcile": b"d", "watermark": b"w", "retire": b"e", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resolve-release": b"k", "resume": b"u", "cutoff": b"c", "stop": b"q", "geometry-submit": b"v", "geometry-handoff": b"h", "retry-preflight": b"f"}
 GEOMETRY_REPLIES = {
     "geometry-submit": (b"G", "native geometry receipt checked for this step; scene, record application and shutdown are not implied"),
     "geometry-handoff": (b"H", "original text receipt retained by the route and owner; application, scene and shutdown are not implied"),
+    "retry-preflight": (b"F", "same-owner native geometry receipt verified; scene and shutdown are not implied"),
 }
 REPLIES = {
     b"S": "suspended; owner and host retained",
