@@ -2582,6 +2582,255 @@ test "direct owner is applied once across native ACK failure" {
 }
 
 ///|
+test "runner reserves the direct owner before ACK and applies after ACK" {
+  let (owner, _) = publication_fixture()
+  let session = owner.session.unwrap()
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let calls = Ref(0)
+  let native = NativeRetainedReceipt::direct(event, 2, session.binding, 7UL, 5, 1L, fn() {
+    calls.val += 1
+    if calls.val == 1 { Err(runner_error("fixture", "ACK failed")) } else { Ok(()) }
+  })
+  owner.pending_host_receipt = Some(native)
+  owner.receipt_pre_dispatch = Some(native)
+  owner.inflight = Some(OrderedPlatform(event))
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(calls.val, 0)
+  owner.reserve_pending_direct(native).unwrap()
+  assert_eq(owner.model().name(), "")
+  assert_false(owner.pending_direct.unwrap().attempted())
+  assert_true(owner.reserve_pending_direct(native) is Err(_))
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(calls.val, 1)
+  assert_true(owner.pending_direct is Some(_))
+  assert_true(owner.pending_host_receipt is Some(_))
+  assert_eq(owner.model().name(), "")
+  owner.ack_owned_receipt().unwrap()
+  assert_eq(calls.val, 2)
+  assert_true(owner.pending_direct is Some(_))
+  owner.complete_pending_direct().unwrap()
+  assert_true(owner.pending_direct is None)
+  assert_true(owner.inflight is None)
+  assert_true(owner.receipt_pre_dispatch is None)
+  assert_eq(owner.direct_receipts.length(), 1)
+  assert_false(owner.mounted.handle_event(event).unwrap())
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "日")
+  assert_eq(owner.model().name(), "日")
+  assert_false(owner.can_stop())
+}
+
+///|
+test "runner retains direct head when native owner is not the original" {
+  let (owner, _) = publication_fixture()
+  let session = owner.session.unwrap()
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let calls = Ref(0)
+  let native = NativeRetainedReceipt::direct(event, 2, session.binding + 1UL, 7UL, 5, 1L, fn() {
+    calls.val += 1
+    Ok(())
+  })
+  owner.pending_host_receipt = Some(native)
+  owner.inflight = Some(OrderedPlatform(event))
+  assert_true(owner.reserve_pending_direct(native) is Err(_))
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(calls.val, 0)
+  assert_true(owner.pending_host_receipt is Some(_))
+  assert_true(owner.inflight is Some(_))
+  assert_eq(owner.model().name(), "")
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "")
+}
+
+///|
+test "runner drive retains a direct head across ACK failure and resumes once" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let head : Ref[NativeRetainedReceipt?] = Ref(None)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(fn(_) { Ok(head.val) }, fn(_) { Ok(()) })
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=Some(ordered)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.gate.rendered = true
+  owner.bounded_resume = true
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let count = Ref(0)
+  let native = NativeRetainedReceipt::direct(event, 2, binding, 7UL, 5, 1L, fn() {
+    count.val += 1
+    if count.val == 1 { Err(runner_error("fixture", "ACK failed")) }
+    else { head.val = None; Ok(()) }
+  })
+  head.val = Some(native)
+  assert_true(owner.drive() is Err(_))
+  assert_true(owner.suspended)
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.pending_direct is Some(_))
+  assert_true(owner.pending_host_receipt is Some(_))
+  assert_true(owner.inflight is Some(_))
+  assert_eq(count.val, 1)
+  assert_true(owner.terminal_step(RetryReceiptAck).unwrap() is ReceiptAcknowledged)
+  assert_eq(count.val, 2)
+  assert_true(owner.pending_direct is None)
+  assert_true(owner.inflight is None)
+  assert_true(owner.receipt_pre_dispatch is None)
+  assert_true(owner.advance_generation() is Some(_))
+  assert_true(owner.resume_after_receipt_ack() is Err(_))
+  assert_eq(owner.model().name(), "日")
+  assert_eq(owner.direct_receipts.length(), 1)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "post ACK direct measurement failure retains original receipt and owner" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let fail = Ref(false)
+  let measure = fn(value, size) {
+    if fail.val && value == "日" { Err(runner_error("fixture", "measurement failed")) }
+    else { text_runner_measure(value, size) }
+  }
+  let owner = SettingsRunOwner::new(host, Linux, measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let calls = Ref(0)
+  let native = NativeRetainedReceipt::direct(event, 2, binding, 7UL, 5, 1L, fn() { calls.val += 1; Ok(()) })
+  owner.pending_host_receipt = Some(native)
+  owner.receipt_pre_dispatch = Some(native)
+  owner.inflight = Some(OrderedPlatform(event))
+  owner.reserve_pending_direct(native).unwrap()
+  owner.ack_owned_receipt().unwrap()
+  fail.val = true
+  assert_true(owner.complete_pending_direct() is Err(_))
+  assert_true(owner.pending_direct.unwrap().attempted())
+  assert_false(owner.pending_direct.unwrap().applied())
+  assert_true(owner.inflight is Some(_))
+  assert_eq(owner.direct_receipts.length(), 1)
+  assert_eq(owner.model().name(), "")
+  owner.suspended = true
+  fail.val = false
+  assert_true(owner.reconcile_direct_delivery() is Err(_))
+  assert_eq(calls.val, 1)
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.pending_direct is Some(_))
+  assert_false(owner.can_stop())
+  assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "post ACK direct model change retains the already-applied action" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let current : Ref[SettingsRunOwner?] = Ref(None)
+  let trigger = Ref(false)
+  let measure = fn(value, size) {
+    if trigger.val && value == "日" {
+      match current.val {
+        Some(owner) => owner.replace_settings(owner.settings.update(@shared_settings.Ui(@view.TextChanged(@shared_settings.settings_name(), "別"))))
+        None => ()
+      }
+    }
+    text_runner_measure(value, size)
+  }
+  let owner = SettingsRunOwner::new(host, Linux, measure, text_port=Some(port)).unwrap()
+  current.val = Some(owner)
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let native = NativeRetainedReceipt::direct(event, 2, binding, 7UL, 5, 1L, fn() { Ok(()) })
+  owner.pending_host_receipt = Some(native)
+  owner.inflight = Some(OrderedPlatform(event))
+  owner.reserve_pending_direct(native).unwrap()
+  owner.ack_owned_receipt().unwrap()
+  trigger.val = true
+  assert_true(owner.complete_pending_direct() is Err(_))
+  let receipt = owner.pending_direct.unwrap()
+  assert_true(receipt.applied())
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日")))
+  assert_false(receipt.model_applied())
+  assert_eq(owner.model().name(), "別")
+  owner.suspended = true
+  trigger.val = false
+  assert_true(owner.reconcile_direct_delivery() is Err(_))
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日")))
+  assert_eq(owner.model().name(), "別")
+  assert_true(owner.inflight is Some(_))
+  assert_false(owner.can_stop())
+}
+
+///|
+test "direct ACK followed by replaced focus retains the original owner" {
+  let (owner, _) = publication_fixture()
+  let session = owner.session.unwrap()
+  let event = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let native = NativeRetainedReceipt::direct(event, 2, session.binding, 7UL, 5, 1L, fn() { Ok(()) })
+  owner.pending_host_receipt = Some(native)
+  owner.inflight = Some(OrderedPlatform(event))
+  owner.reserve_pending_direct(native).unwrap()
+  owner.ack_owned_receipt().unwrap()
+  assert_true(owner.mounted.focus(@shared_settings.settings_save()))
+  assert_true(owner.complete_pending_direct() is Err(_))
+  assert_true(owner.pending_direct is Some(_))
+  assert_true(owner.inflight is Some(_))
+  assert_eq(owner.direct_receipts.length(), 1)
+  assert_eq(owner.model().name(), "")
+  assert_false(owner.can_stop())
+}
+
+///|
+test "full native ledger backpressures an unacknowledged direct head" {
+  let (owner, _) = publication_fixture()
+  let session = owner.session.unwrap()
+  for index = 0; index < 63; index = index + 1 {
+    owner.acknowledged_receipts.push({
+      receipt: NativeRetainedReceipt::new(None, owner.window, index + 2, session.binding, 7UL, fn() { Ok(()) }),
+      stage: ReceiptAcknowledgedOnly,
+    })
+  }
+  let event = @platform.Event::new(owner.window, 65L, 1.0,
+    @platform.Input(@primitives.TextInput(text="日")))
+  let calls = Ref(0)
+  let native = NativeRetainedReceipt::direct(event, 65, session.binding, 7UL, 5, 1L, fn() { calls.val += 1; Ok(()) })
+  owner.pending_host_receipt = Some(native)
+  owner.inflight = Some(OrderedPlatform(event))
+  assert_true(owner.reserve_pending_direct(native) is Err(_))
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(calls.val, 0)
+  assert_eq(owner.acknowledged_receipt_count(), 64)
+  assert_true(owner.pending_host_receipt is Some(_))
+  assert_true(owner.inflight is Some(_))
+  assert_eq(owner.model().name(), "")
+}
+
+///|
 test "direct platform text is rejected while the original preedit is active" {
   let (owner, _) = publication_fixture()
   let binding = owner.session.unwrap().binding
