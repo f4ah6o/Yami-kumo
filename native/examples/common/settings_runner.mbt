@@ -2477,6 +2477,14 @@ fn SettingsRunOwner::drive_inner(
             self.dirty = true
           }
           @platform.Input(input) => {
+            if ordered_text is Some(_) && self.session is Some(_) && input is @primitives.TextInput(..) {
+              // A platform TextInput is not an IME commit. The regular
+              // Mounted path changes the field without advancing the captured
+              // TextSession lease, and may reject it during preedit. Keep the
+              // original in-flight receipt until an owner-bound direct Insert
+              // delivery exists; never synthesize a commit or cancel here.
+              return Err(runner_error("ordered_text", "direct text requires owned Insert delivery"))
+            }
             let hold = match (ordered_text, self.session, input) {
               (
                 Some(_),
