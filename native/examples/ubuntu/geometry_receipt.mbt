@@ -1,0 +1,104 @@
+///|
+/// Ubuntu-only adapter retaining the actual route receipt. Common's callback
+/// return is not itself native proof, and this adapter does not publish a scene.
+priv struct SettingsGeometryAdapter {
+  route : @ubuntu_host.RetainedOrderedRoute
+  window : @platform.WindowId
+  root : UInt64
+  epoch : UInt64
+  native_epoch : Int32
+  state : @text_host.TextInputState
+  mut pending_generation : UInt64?
+  mut receipt : @ubuntu_host.RetainedGeometryReceipt?
+}
+
+///|
+fn same_geometry_state(a : @text_host.TextInputState, b : @text_host.TextInputState) -> Bool {
+  let preedit_same = match (a.preedit(), b.preedit()) {
+    (None, None) => true
+    (Some(left), Some(right)) => left.text() == right.text() && left.selection() == right.selection()
+    _ => false
+  }
+  a.document() == b.document() && a.caret() == b.caret() && preedit_same
+}
+
+///|
+fn SettingsGeometryAdapter::new(
+  route : @ubuntu_host.RetainedOrderedRoute,
+  geometry : @ui.StagedTextGeometry,
+  state : @text_host.TextInputState,
+) -> Result[SettingsGeometryAdapter, @diagnostics.FrameworkError] {
+  let (window, epoch, root, _) = geometry.identity()
+  let native_epoch = match route.native_epoch() {
+    Some(value) if value > 0 => value
+    _ => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_native_epoch"))
+  }
+  if route.binding_epoch() != Some(epoch) || route.pending_geometry() is Some(_) ||
+    state.document() != geometry.committed() || state.preedit() is Some(_) {
+    return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_original_owner"))
+  }
+  Ok({ route, window, root, epoch, native_epoch, state, pending_generation: None, receipt: None })
+}
+
+///|
+fn SettingsGeometryAdapter::matches(
+  self : SettingsGeometryAdapter,
+  pending : @ubuntu_host.RetainedGeometryPending,
+) -> Bool {
+  pending.window() == self.window && pending.root() == self.root &&
+    pending.epoch() == self.epoch && pending.native_epoch() == self.native_epoch &&
+    same_geometry_state(pending.state(), self.state)
+}
+
+///|
+fn SettingsGeometryAdapter::attempt(
+  self : SettingsGeometryAdapter, retry : Bool, state : @text_host.TextInputState,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let normalized = match ubuntu_text_state(state) { Ok(value) => value; Err(error) => return Err(error) }
+  if !same_geometry_state(normalized, self.state) || self.receipt is Some(_) ||
+    self.route.binding_epoch() != Some(self.epoch) || self.route.native_epoch() != Some(self.native_epoch) {
+    return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_candidate_changed"))
+  }
+  let result = if retry {
+    let pending = match self.route.pending_geometry() {
+      Some(value) => value
+      None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_pending_missing"))
+    }
+    if !self.matches(pending) || self.pending_generation != Some(pending.generation()) {
+      return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_pending_changed"))
+    }
+    self.route.retry_geometry(self.epoch)
+  } else {
+    if self.pending_generation is Some(_) {
+      return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_duplicate_attempt"))
+    }
+    self.route.update_with_receipt(self.epoch, normalized)
+  }
+  match result {
+    Err(error) => {
+      match self.route.pending_geometry() {
+        Some(pending) if self.matches(pending) => {
+          match self.pending_generation {
+            Some(generation) if generation != pending.generation() =>
+              return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_generation_changed"))
+            _ => self.pending_generation = Some(pending.generation())
+          }
+        }
+        _ => ()
+      }
+      Err(error)
+    }
+    Ok(receipt) => {
+      // Retain even a receipt that fails the following checks. The host may
+      // already have changed; validation failure is not permission to drop it.
+      self.receipt = Some(receipt)
+      let pending = receipt.pending()
+      if !self.matches(pending) ||
+        (retry && self.pending_generation != Some(pending.generation())) ||
+        !self.route.geometry_receipt_is_current(receipt) {
+        return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_receipt_changed"))
+      }
+      Ok(())
+    }
+  }
+}

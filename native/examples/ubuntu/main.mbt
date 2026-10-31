@@ -143,6 +143,7 @@ fn control_receipt_sequence(entry : @common.SettingsEntryController) -> Int64 {
 fn run_settings_control(
   entry : @common.SettingsEntryController,
   release_policy : (Int64) -> Result[Unit, @diagnostics.FrameworkError],
+  geometry_policy : () -> Result[Unit, @diagnostics.FrameworkError],
 ) -> Unit {
   println("YAMI_SETTINGS_CONTROL {\"state\":\"active\",\"scene_published\":false}")
   match entry.error() {
@@ -181,6 +182,11 @@ fn run_settings_control(
       // k: the Ubuntu adapter must validate its original native receipt.
       107 => match release_policy(control_sequence()) {
         Ok(_) => control_reply(65)
+        Err(error) => control_step_error(error, 69)
+      }
+      // v: bounded host-candidate attempt; it never publishes or authorizes stop.
+      118 => match geometry_policy() {
+        Ok(_) => control_reply(71)
         Err(error) => control_step_error(error, 69)
       }
       // r: retry ACK only for the inspected native sequence.
@@ -487,6 +493,8 @@ fn main {
       direct_text=Some(fn(window, enabled) { host.set_direct_keyboard_text(window, enabled) }),
       ordered_text=Some(retained_ordered),
     )
+    let staged_geometry : Ref[@ui.StagedTextGeometry?] = Ref(None)
+    let geometry_adapter : Ref[SettingsGeometryAdapter?] = Ref(None)
     run_settings_control(entry, fn(sequence) {
       let owner = match entry.owner() {
         Some(value) => value
@@ -527,6 +535,35 @@ fn main {
       })
       if result is Ok(_) { unsupported_native.val = None }
       result
+    }, fn() {
+      let owner = match entry.owner() {
+        Some(value) => value
+        None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_owner_unavailable"))
+      }
+      let geometry = match staged_geometry.val {
+        Some(value) => value
+        None => {
+          match owner.stage_dirty_scene() { Err(error) => return Err(error); Ok(_) => () }
+          let value = match owner.staged_dirty_geometry() { Err(error) => return Err(error); Ok(value) => value }
+          staged_geometry.val = Some(value)
+          value
+        }
+      }
+      owner.attempt_staged_host_geometry(fn(retry, state) {
+        let adapter = match geometry_adapter.val {
+          Some(value) => value
+          None => {
+            let normalized = match ubuntu_text_state(state) { Ok(value) => value; Err(error) => return Err(error) }
+            let value = match SettingsGeometryAdapter::new(retained, geometry, normalized) {
+              Ok(value) => value
+              Err(error) => return Err(error)
+            }
+            geometry_adapter.val = Some(value)
+            value
+          }
+        }
+        adapter.attempt(retry, state)
+      })
     })
     return
   }
