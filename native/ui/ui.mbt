@@ -2939,6 +2939,15 @@ pub fn TerminalTextOwner::matches_session(
 }
 
 ///|
+/// Read-only field-lease progress for comparing a captured local observation.
+/// This does not authorize event acknowledgement or resolve composition.
+pub fn TerminalTextOwner::observed_progress(
+  self : TerminalTextOwner,
+) -> (UInt64, Int32, Int64) {
+  (self.generation, self.revision, self.sequence)
+}
+
+///|
 /// A single text delivery reserved for its original mounted owner. The
 /// receipt survives failures after field publication and owns any extracted
 /// action until the caller records model application.
