@@ -4786,11 +4786,29 @@ pub fn Mounted::handle_event(
   self : Mounted,
   event : @platform.Event,
 ) -> Result[Bool, @diagnostics.FrameworkError] {
+  // A ready pointer release with no target can complete successfully as
+  // unhandled. Distinguish that from an already-stale event or a release
+  // rejected before dispatch because layout/scale was unavailable.
+  let before_sequence = self.last_sequence
+  let before_focus = match self.scope { Some(scope) => scope.snapshot().focus_owner(); None => None }
+  let ready_release = self.ready && self.window_focused &&
+    (event.kind() is @platform.Input(@primitives.PointerButtonReleased(..))) &&
+    (self.current_frame is Some(frame) && frame.snapshot.scale() == event.scale())
+  if self.deferred_platform_event is Some(held) && same_deferred_platform_event(held, event) &&
+    (event.kind() is @platform.Input(@primitives.PointerButtonReleased(..))) && !ready_release {
+    return Err(adapter_error("deferred pointer release is not ready for dispatch"))
+  }
   let result = self.handle_event_internal(event, false)
   match self.deferred_platform_event {
     Some(held) if same_deferred_platform_event(held, event) =>
       match result {
         Ok(true) => { self.deferred_platform_event = None; Ok(true) }
+        Ok(false) if ready_release && before_sequence < event.sequence() &&
+          self.last_sequence == event.sequence() && self.ready && !self.is_disposed() &&
+          (self.scope is Some(scope) && scope.snapshot().focus_owner() == before_focus) => {
+          self.deferred_platform_event = None
+          Ok(false)
+        }
         Ok(false) => Err(adapter_error("deferred platform event outcome is unresolved"))
         Err(error) => Err(error)
       }
