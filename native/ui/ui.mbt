@@ -4945,6 +4945,7 @@ fn Mounted::dispatch(
           _ => field.is_focused()
         }
         if route && field_input_allowed(binding.view, input) {
+          let before_change = self.change
           let outcome = match
             field.handle_input(
               input,
@@ -4960,6 +4961,15 @@ fn Mounted::dispatch(
                   field_error_reason(error),
                 ),
               )
+          }
+          if self.is_disposed() || !self.ready || !same_epoch(before_change, self.change) ||
+            index >= self.bindings.length() {
+            return Err(adapter_error("native TextField owner changed during input measurement"))
+          }
+          let current = self.bindings[index]
+          if current.id != binding.id || current.field_generation != binding.field_generation ||
+            current.token != binding.token {
+            return Err(adapter_error("native TextField binding changed during input measurement"))
           }
           let (next, action) = outcome
           let mut next = next
