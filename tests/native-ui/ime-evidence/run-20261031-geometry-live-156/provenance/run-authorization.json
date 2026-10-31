@@ -1,0 +1,12 @@
+{
+  "authorization": "Parent explicitly instructed this independent live IBus/Mozc diagnostic after confirming exact #156 independent scoped review and CI 7/7 SUCCESS.",
+  "review_url": "https://github.com/f4ah6o/Yami-kumo/pull/156#pullrequestreview-5720980913",
+  "app_sha": "1a59626cf67910917c4d660dd6db8bedae55a722",
+  "framework_sha": "35b9041dfb3642b43ca37c604834942614eb50fb",
+  "harness_sha": "acd14b8788e7ece8ce5100348bfd6703186d2e75",
+  "scope": "Diagnostic of the next live blocker only. #142 app does not include #154 P1 fix. No post-fix acceptance claim.",
+  "command": "YAMI_156_REVIEW_CI_CONFIRMED=acd14b8788e7ece8ce5100348bfd6703186d2e75 bash /workspace/review156-live-prep-agent/launch-after-confirmation.sh > /workspace/review156-live-prep-agent/live-launch.log 2>&1",
+  "fresh_build": "Exact session build.py uses a new temporary Moon workspace and retains app.exe/build.json/build.log in its fresh empty live directory before starting IBus, Mozc, Weston or the app.",
+  "old_binary_reused": false,
+  "unrelated_process_termination_authorized": false
+}
