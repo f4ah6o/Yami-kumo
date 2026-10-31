@@ -22,6 +22,9 @@ priv struct SettingsGeometryAdapter {
   native_epoch : Int32
   state : @text_host.TextInputState
   mut intent : @ubuntu_host.RetainedGeometryIntent?
+  // This is set only by an actual route reserve error. The GPUI reserve
+  // contract returns before installing an intent or entering native update.
+  mut reserve_rejected : Bool
   mut receipt : @ubuntu_host.RetainedGeometryReceipt?
 }
 
@@ -50,7 +53,7 @@ fn SettingsGeometryAdapter::new(
     state.document() != geometry.committed() || state.preedit() is Some(_) {
     return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_original_owner"))
   }
-  Ok({ route, window, root, epoch, native_epoch, state, intent: None, receipt: None })
+  Ok({ route, window, root, epoch, native_epoch, state, intent: None, reserve_rejected: false, receipt: None })
 }
 
 ///|
@@ -72,23 +75,24 @@ fn SettingsGeometryAdapter::attempt(
     self.route.binding_epoch() != Some(self.epoch) || self.route.native_epoch() != Some(self.native_epoch) {
     return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_candidate_changed"))
   }
-  let intent = if retry {
-    match self.intent {
-      Some(value) => value
-      None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_intent_missing"))
-    }
-  } else {
-    if self.intent is Some(_) {
+  let intent = match self.intent {
+    Some(value) if retry => value
+    Some(_) =>
       return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_duplicate_attempt"))
+    None => {
+      if retry && !self.reserve_rejected {
+        return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_intent_missing"))
+      }
+      let value = match self.route.reserve_geometry_intent(self.epoch, normalized) {
+        Err(error) => { self.reserve_rejected = true; return Err(error) }
+        Ok(value) => value
+      }
+      // Retain the opaque owner-bound intent before any further checks or native
+      // submission. A later validation error must not lose it.
+      self.intent = Some(value)
+      self.reserve_rejected = false
+      value
     }
-    let value = match self.route.reserve_geometry_intent(self.epoch, normalized) {
-      Err(error) => return Err(error)
-      Ok(value) => value
-    }
-    // Retain the opaque owner-bound intent before any further checks or native
-    // submission. A later validation error must not lose it.
-    self.intent = Some(value)
-    value
   }
   let reserved = intent.pending()
   let pending = match self.route.pending_geometry() {
