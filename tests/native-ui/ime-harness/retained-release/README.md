@@ -20,8 +20,9 @@ The driver uses X11 synthetic keys through nested Weston and live IBus/Mozc. It
 observes the original release, applies the existing strict release policy,
 then sends one more key and one bounded continuation. It tries `geometry-submit`;
 if that is refused, it tries exactly one supported `geometry-handoff` and one
-retry. A successful handoff plus retry is a **scoped receipt and held-record
-observation**, not model/scene/caret, full IME, candidate table, physical
+retry. Successful handoff and retry replies are recorded as observations only. They
+do not by themselves establish that the first failure was Busy or that a
+specific later record was retained; they are not model/scene/caret, full IME, candidate table, physical
 keyboard, focus/dialog, resize/blur/close or safe shutdown acceptance. If the
 initial submit succeeds without Busy, the race is NOT_RUN. A refused handoff is
 recorded as blocked without claiming its cause from an error code alone.
