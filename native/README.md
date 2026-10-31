@@ -308,3 +308,16 @@ staged scene may differ while the owner remains suspended: a recoverable
 cross-layer publication transaction is still required before normal input,
 focus transitions, or shutdown can resume. This experiment is not the full
 resize-recovery contract and must not be treated as a production acceptance.
+
+### Retained text disposal
+
+`Mounted.try_dispose()` returns an error while a retained text owner or deferred
+platform event remains live. Callers must keep both the mount and host on error.
+The compatibility `Mounted.dispose()` wrapper has no result; it leaves such a
+mount undisposed, so callers needing a disposal result must use `try_dispose()`.
+Local model reflection and an empty action queue do not prove native FIFO
+cutoff, IME quiescence or release. The current Settings runner has no completed
+same-owner release receipt and therefore cannot finish retained-owner shutdown.
+GPUI #189 explores an owner-bound completed-blur receipt and native cutoff,
+but it is not wired into this consumer; even that receipt does not prove model
+action reflection. No live cleanup success follows from this local guard.

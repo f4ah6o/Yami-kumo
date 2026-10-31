@@ -338,7 +338,8 @@ test "terminal commit uses original invalidated field and rejects gaps and repla
   assert_true(other.apply_terminal_commit(other_old, event).unwrap())
   other.dispose()
   mounted.dispose()
-  assert_true(mounted.next_terminal_text_action(owner) is Err(_))
+  assert_false(mounted.is_disposed())
+  assert_true(mounted.next_terminal_text_action(owner) is Ok(None))
 }
 
 ///|

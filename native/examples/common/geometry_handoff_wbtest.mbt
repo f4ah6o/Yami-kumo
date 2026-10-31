@@ -97,6 +97,7 @@ test "owner loss during callback retains the attempted original receipt" {
   let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
   let receipt = NativeRetainedReceipt::new(Some(OrderedText(event)), owner.window, 1, binding, 7UL, fn() {
     owner.mounted.dispose()
+    owner.mounted.invalidate_layout()
     Err(runner_error("fixture", "native outcome unknown"))
   })
   owner.reserve_geometry_arrival(receipt, (7, 11L, 4)).unwrap()
@@ -173,6 +174,7 @@ test "reentrant owner loss during slot query does not release the receipt" {
   assert_true(owner.transfer_geometry_arrival() is Err(_))
   assert_true(owner.reconcile_geometry_arrival(fn() {
     owner.mounted.dispose()
+    owner.mounted.invalidate_layout()
     Ok(())
   }) is Err(_))
   assert_true(owner.geometry_arrival.unwrap().state is GeometryArrivalAttempted)
@@ -305,7 +307,7 @@ test "taken commit is retained when native inspection destroys original owner" {
   owner.transfer_geometry_arrival().unwrap()
   owner.attempt_staged_host_geometry(fn(_, _) { Ok(()) }).unwrap()
   owner.take_geometry_arrival_to_local_owner(fn() { Ok(()) }).unwrap()
-  assert_true(owner.apply_taken_geometry_arrival(1L, fn() { owner.mounted.dispose(); Ok(()) }) is Err(_))
+  assert_true(owner.apply_taken_geometry_arrival(1L, fn() { owner.mounted.dispose(); owner.mounted.invalidate_layout(); Ok(()) }) is Err(_))
   assert_eq(owner.geometry_arrival_application_state(), Some(0))
   assert_eq(owner.model().name(), "")
   assert_true(owner.geometry_arrival is Some(_))

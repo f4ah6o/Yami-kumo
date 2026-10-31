@@ -48,7 +48,12 @@ test "raw committed action survives deferred blur and close until caller takes i
     assert_true(action is Some(@view.TextChanged(_, "日本")))
     assert_false(mounted.has_pending_actions())
     // The action is now caller-owned. This test does not assert model apply.
-    assert_true(mounted.handle_event(boundary) is Ok(true))
+    if close {
+      assert_true(mounted.handle_event(boundary) is Err(_))
+      assert_false(mounted.is_disposed())
+    } else {
+      assert_true(mounted.handle_event(boundary) is Ok(true))
+    }
   }
 }
 
@@ -94,7 +99,8 @@ test "extracted owned action remains valid until original model acknowledgment" 
   assert_true(mounted.text_input(7UL, next) is Err(_))
   // The caller's model has accepted the extracted action above.
   mounted.mark_owned_text_model_applied(receipt).unwrap()
-  assert_true(mounted.handle_event(close) is Ok(true))
+  assert_true(mounted.handle_event(close) is Err(_))
+  assert_false(mounted.is_disposed())
 }
 
 ///|
@@ -141,5 +147,6 @@ test "failed preapply retains original delivery and blocks raw bypass or close" 
   }
   assert_eq(model_name, "日本")
   mounted.mark_owned_text_model_applied(receipt).unwrap()
-  assert_true(mounted.handle_event(close) is Ok(true))
+  assert_true(mounted.handle_event(close) is Err(_))
+  assert_false(mounted.is_disposed())
 }
