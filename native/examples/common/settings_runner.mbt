@@ -845,6 +845,10 @@ priv struct SettingsGeometryArrival {
   // callback bookkeeping, never evidence of field/model application.
   mut take_attempted : Bool
   mut take_callback_succeeded : Bool
+  // Once started, the original receipt and its delivery remain owned even
+  // if application/evidence fails. A completed delivery is never replayed.
+  mut apply_started : Bool
+  mut apply_complete : Bool
 }
 
 ///|
@@ -1085,7 +1089,7 @@ pub fn SettingsRunOwner::reserve_geometry_arrival(
   if receipt.sequence.to_int64() != base.to_int64() + self.acknowledged_receipts.length().to_int64() + 1L {
     return Err(runner_error("geometry_handoff", "arrival is not next in sequence"))
   }
-  self.geometry_arrival = Some({ receipt, native_target, owner_progress: owner.observed_progress(), state: GeometryArrivalReserved, take_attempted: false, take_callback_succeeded: false })
+  self.geometry_arrival = Some({ receipt, native_target, owner_progress: owner.observed_progress(), state: GeometryArrivalReserved, take_attempted: false, take_callback_succeeded: false, apply_started: false, apply_complete: false })
   Ok(())
 }
 
@@ -1256,6 +1260,109 @@ pub fn SettingsRunOwner::geometry_arrival_take_state(self : SettingsRunOwner) ->
   match self.geometry_arrival {
     Some(value) if value.take_callback_succeeded => Some(2)
     Some(value) if value.take_attempted => Some(1)
+    Some(_) => Some(0)
+    None => None
+  }
+}
+
+///|
+/// Apply the taken record only to its captured field and model. `inspect` is
+/// a trusted platform-adapter check of the exact retained native object and
+/// accepted geometry, performed while this owner is guarded against reentry.
+/// The staged frame and host remain unresolved and all normal driving, cutoff
+/// and stop stay blocked. This is not scene or caret publication.
+pub fn SettingsRunOwner::apply_taken_geometry_arrival(
+  self : SettingsRunOwner, sequence : Int64,
+  inspect : () -> Result[Unit, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let staged = match self.pending_dirty_stage { Some(value) => value; None => return Err(runner_error("geometry_handoff", "original stage unavailable")) }
+  let held = match self.geometry_arrival {
+    Some(value) if value.take_callback_succeeded && value.receipt.sequence.to_int64() == sequence => value
+    _ => return Err(runner_error("geometry_handoff", "taken arrival is unavailable"))
+  }
+  if held.apply_started || held.apply_complete || !self.geometry_arrival_owner_current(staged, held) {
+    return Err(runner_error("geometry_handoff", "arrival already attempted or owner changed"))
+  }
+  self.running = true
+  let observed = inspect()
+  self.running = false
+  match observed { Err(error) => return Err(error); Ok(_) => () }
+  if !self.geometry_arrival_owner_current(staged, held) {
+    return Err(runner_error("geometry_handoff", "owner changed during native inspection"))
+  }
+  let event = match held.receipt.event {
+    Some(OrderedText(value)) => value
+    _ => return Err(runner_error("geometry_handoff", "original text is unavailable"))
+  }
+  let owner = match self.terminal_owner { Some(value) => value; None => return Err(runner_error("geometry_handoff", "original field unavailable")) }
+  let delivery = match self.mounted.reserve_owned_text(owner, event) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  if delivery.before_document() != self.settings.name() || self.acknowledged_receipts.length() >= 64 {
+    return Err(runner_error("geometry_handoff", "model or bounded ledger changed"))
+  }
+  // Persist every stage before the first mutation; no callback or failure
+  // below may lose the original receipt or cause a second application.
+  self.acknowledged_receipts.push({ receipt: held.receipt, stage: ReceiptAcknowledgedOnly })
+  self.owned_model_before = Some(self.settings)
+  self.owned_model_fence = Some(self.model_fence)
+  self.owned_delivery = Some(delivery)
+  held.apply_started = true
+  self.running = true
+  let applied = self.mounted.apply_owned_text(delivery)
+  let result = match applied {
+    Err(error) => {
+      if delivery.applied() { self.note_text_receipt_stage(event, ReceiptSessionApplied) }
+      Err(error)
+    }
+    Ok(_) => self.complete_owned_delivery(delivery, event)
+  }
+  self.running = false
+  match result {
+    Err(error) => Err(error)
+    Ok(_) => { held.apply_complete = true; self.dirty = true; Ok(()) }
+  }
+}
+
+///| Reconcile an already-applied record without applying it a second time.
+/// An unknown or unapplied outcome remains retained for explicit resolution.
+pub fn SettingsRunOwner::reconcile_taken_geometry_arrival(
+  self : SettingsRunOwner, sequence : Int64,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let held = match self.geometry_arrival {
+    Some(value) if value.apply_started && !value.apply_complete && value.receipt.sequence.to_int64() == sequence => value
+    _ => return Err(runner_error("geometry_handoff", "no matching pending application"))
+  }
+  if !self.suspended || self.running || self.cutoff_done || self.pending_dirty_stage is None || self.host_epoch_verified {
+    return Err(runner_error("geometry_handoff", "original suspended owner unavailable"))
+  }
+  let delivery = match self.owned_delivery { Some(value) => value; None => return Err(runner_error("geometry_handoff", "owned delivery missing")) }
+  let event = match held.receipt.event { Some(OrderedText(value)) => value; _ => return Err(runner_error("geometry_handoff", "original text unavailable")) }
+  let (window, epoch, binding, _, text_sequence) = delivery.identity()
+  let session = match self.session { Some(value) => value; None => return Err(runner_error("geometry_handoff", "session unavailable")) }
+  let owner = match self.terminal_owner { Some(value) => value; None => return Err(runner_error("geometry_handoff", "field owner unavailable")) }
+  if !delivery.applied() || window != self.window || epoch != session.epoch || binding != session.binding ||
+    self.host_epoch != Some(epoch) || self.entered_target != Some(held.native_target) ||
+    !owner.matches_session(window, epoch, binding) ||
+    event.window() != window || event.epoch() != epoch || event.sequence() != text_sequence ||
+    !same_text_observation_kind(delivery.event().kind(), event.kind()) {
+    return Err(runner_error("geometry_handoff", "application outcome or original identity unavailable"))
+  }
+  self.running = true
+  let result = self.complete_owned_delivery(delivery, event)
+  self.running = false
+  match result {
+    Err(error) => Err(error)
+    Ok(_) => { held.apply_complete = true; self.dirty = true; Ok(()) }
+  }
+}
+
+///| The application stage is separate from native take and scene publication.
+pub fn SettingsRunOwner::geometry_arrival_application_state(self : SettingsRunOwner) -> Int? {
+  match self.geometry_arrival {
+    Some(value) if value.apply_complete => Some(2)
+    Some(value) if value.apply_started => Some(1)
     Some(_) => Some(0)
     None => None
   }

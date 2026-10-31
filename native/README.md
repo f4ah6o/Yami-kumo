@@ -296,3 +296,15 @@ See [the shared UI guide](../docs/shared-ui.md#native-appentity-host) for the
 single App Entity, controller reuse, lifetime bounds, fixture commands and
 exact-source evidence policy. The separate shared-native CI profile preserves
 legacy pins and default runners. macOS runtime/AX are explicitly not run by CI.
+# Experimental retained geometry arrival
+
+The Ubuntu Settings control's `y` step applies a previously taken, exact
+native geometry-arrival receipt to its captured text owner at most once. The
+native adapter rechecks the retained object and geometry receipt; the common
+runner retains the delivery and model action if application is interrupted.
+This does not publish a frame or caret, verify the new geometry, authorize
+cutoff or release the host. In particular the applied field/model and the old
+staged scene may differ while the owner remains suspended: a recoverable
+cross-layer publication transaction is still required before normal input,
+focus transitions, or shutdown can resume. This experiment is not the full
+resize-recovery contract and must not be treated as a production acceptance.
