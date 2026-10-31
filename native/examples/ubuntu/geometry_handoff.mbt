@@ -117,3 +117,32 @@ fn SettingsGeometryArrivalAdapter::transfer(
     Ok(_) => self.inspect_owned()
   }
 }
+
+///|
+/// Inspect the same route-owned record after native-local geometry acceptance.
+/// This does not take the slot, authorize field/model application, publish a
+/// scene, or prove that a compositor rendered the candidate. The caller must
+/// recheck the original common owner in the same synchronous owner step.
+fn SettingsGeometryArrivalAdapter::inspect_after_geometry_acceptance(
+  self : SettingsGeometryArrivalAdapter,
+  geometry : SettingsGeometryAdapter,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if self.route.geometry_handoff_in_progress() {
+    return Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "geometry_handoff_in_progress"))
+  }
+  let accepted = match geometry.receipt {
+    Some(value) => value
+    None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_receipt_missing"))
+  }
+  let pending = accepted.pending()
+  if !self.route.geometry_receipt_is_current(accepted) || !geometry.matches(pending) ||
+    pending.generation() != self.geometry_generation || pending.window() != self.target.window ||
+    pending.root() != self.receipt.root() || pending.epoch() != self.receipt.epoch() ||
+    pending.native_epoch() != self.target.epoch {
+    return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_accepted_owner_changed"))
+  }
+  match self.route.owned_geometry_text() {
+    Some(value) if self.matches_owned(value) => Ok(())
+    _ => Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_owned_slot_unavailable"))
+  }
+}

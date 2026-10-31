@@ -1166,6 +1166,37 @@ fn SettingsRunOwner::geometry_arrival_owner_current(
 }
 
 ///|
+/// Read-only pre-application check for an arrival already handed to the host
+/// route. This neither transfers the native slot nor authorizes application,
+/// cutoff, host verification or publication. Callers must recheck native route
+/// evidence in the same owner-thread step; this result is not durable.
+pub fn SettingsRunOwner::inspect_geometry_arrival_before_apply(
+  self : SettingsRunOwner,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let staged = match self.pending_dirty_stage {
+    Some(value) if value.host_attempted && value.callback_returned_success => value
+    _ => return Err(runner_error("geometry_handoff", "host callback has not completed"))
+  }
+  let held = match self.geometry_arrival {
+    Some(value) if value.state is GeometryArrivalCallbackSucceeded => value
+    _ => return Err(runner_error("geometry_handoff", "original arrival is unavailable"))
+  }
+  if !self.geometry_arrival_owner_current(staged, held) {
+    return Err(runner_error("geometry_handoff", "original owner changed"))
+  }
+  // Metrics lookup is fallible and may call external code. Keep the owner
+  // busy and repeat owner/model/epoch checks after it returns.
+  self.running = true
+  let observed = self.staged_dirty_geometry_inner(false)
+  self.running = false
+  match observed { Err(error) => return Err(error); Ok(_) => () }
+  if !self.geometry_arrival_owner_current(staged, held) {
+    return Err(runner_error("geometry_handoff", "original owner changed during inspection"))
+  }
+  Ok(())
+}
+
+///|
 /// Inspect local transfer bookkeeping, not native ACK or application proof.
 pub fn SettingsRunOwner::geometry_arrival_state(self : SettingsRunOwner) -> (Int32, Int)? {
   match self.geometry_arrival {

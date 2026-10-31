@@ -180,3 +180,27 @@ test "reentrant owner loss during slot query does not release the receipt" {
   assert_true(owner.pending_dirty_stage is Some(_))
   assert_false(owner.can_stop())
 }
+
+///|
+test "preapply inspection retains original owner and is not an application" {
+  let (owner, _, binding) = geometry_handoff_owner()
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  let receipt = NativeRetainedReceipt::new(Some(OrderedText(event)), owner.window, 1, binding, 7UL, fn() { Ok(()) })
+  owner.reserve_geometry_arrival(receipt, (7, 11L, 4)).unwrap()
+  assert_true(owner.inspect_geometry_arrival_before_apply() is Err(_))
+  owner.transfer_geometry_arrival().unwrap()
+  assert_true(owner.inspect_geometry_arrival_before_apply() is Err(_))
+  owner.attempt_staged_host_geometry(fn(_, _) { Ok(()) }).unwrap()
+  owner.inspect_geometry_arrival_before_apply().unwrap()
+  owner.inspect_geometry_arrival_before_apply().unwrap()
+  assert_true(owner.geometry_arrival_state() is Some((1, 2)))
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.pending_dirty_stage is Some(_))
+  assert_false(owner.host_epoch_verified())
+  assert_true(owner.drive() is Err(_))
+  assert_false(owner.can_stop())
+  owner.entered_target = Some((8, 11L, 4))
+  assert_true(owner.inspect_geometry_arrival_before_apply() is Err(_))
+  assert_true(owner.geometry_arrival_state() is Some((1, 2)))
+  assert_eq(owner.model().name(), "")
+}
