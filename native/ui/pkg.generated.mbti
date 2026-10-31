@@ -16,6 +16,7 @@ import {
 }
 
 // Values
+pub fn is_owned_edit_key(@platform.Event) -> Bool
 
 // Errors
 
@@ -132,6 +133,7 @@ pub fn OwnedDirectDelivery::attempted(Self) -> Bool
 pub fn OwnedDirectDelivery::before_document(Self) -> String
 pub fn OwnedDirectDelivery::event(Self) -> @platform.Event
 pub fn OwnedDirectDelivery::identity(Self) -> (@platform.WindowId, UInt64, UInt64, UInt64, Int64)
+pub fn OwnedDirectDelivery::is_edit_key(Self) -> Bool
 pub fn OwnedDirectDelivery::model_applied(Self) -> Bool
 pub fn OwnedDirectDelivery::native_sequence(Self) -> Int
 pub fn OwnedDirectDelivery::ordinal(Self) -> Int64
