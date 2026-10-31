@@ -978,6 +978,16 @@ pub fn SettingsRunOwner::attempt_staged_host_geometry(
   match self.geometry_arrival {
     Some(held) if !(held.state is GeometryArrivalCallbackSucceeded) =>
       return Err(runner_error("dirty_scene", "arrival handoff outcome is unresolved"))
+    Some(held) => {
+      let owner = match self.terminal_owner {
+        Some(value) => value
+        None => return Err(runner_error("dirty_scene", "arrival owner unavailable"))
+      }
+      if self.entered_target != Some(held.native_target) ||
+        !self.mounted.terminal_owner_is_current(owner) || owner.observed_progress() != held.owner_progress {
+        return Err(runner_error("dirty_scene", "arrival owner or native target changed"))
+      }
+    }
     _ => ()
   }
   let staged = match self.pending_dirty_stage {
