@@ -2970,7 +2970,7 @@ pub struct OwnedTextDelivery {
 }
 
 ///|
-/// One platform direct TextInput reserved for its original text owner. Native
+/// One direct TextInput or supported editing key reserved for its original owner. Native
 /// host provenance/root/epoch must be verified by the caller's retained
 /// receipt before reservation; this object is not such native evidence.
 /// The caller must keep this delivery and the host receipt across every error;
@@ -2981,6 +2981,7 @@ pub struct OwnedDirectDelivery {
   priv event : @platform.Event
   priv native_sequence : Int32
   priv ordinal : Int64
+  priv is_edit_key : Bool
   priv before : String
   priv reserved_change : Epoch
   priv reserved_progress : (UInt64, Int32, Int64)
@@ -3124,8 +3125,49 @@ pub fn Mounted::reserve_owned_direct_text(
     None => return Err(adapter_error("direct text binding is unavailable"))
   }
   Ok({
-    identity: self.identity, owner, event, native_sequence, ordinal, before,
+    identity: self.identity, owner, event, native_sequence, ordinal, is_edit_key: false, before,
     reserved_change: self.change, reserved_progress: owner.observed_progress(), attempted: false,
+    applied: false, after_change: None, expected: None, action_required: None,
+    action: None, owner_noted: false, action_claimed: false, model_applied: false,
+  })
+}
+
+///|
+/// Reserve an editing key on the same owner. The caller retains and verifies
+/// its exact native receipt; this object is not host provenance. Clipboard,
+/// submit, focus and unrecognised shortcuts remain on their existing paths.
+pub fn Mounted::reserve_owned_edit_key(
+  self : Mounted, owner : TerminalTextOwner, event : @platform.Event, native_sequence : Int32,
+) -> Result[OwnedDirectDelivery, @diagnostics.FrameworkError] {
+  if !self.terminal_owner_is_current(owner) || event.window() != self.window ||
+    event.sequence() <= self.last_sequence || event.sequence() <= 0L ||
+    native_sequence <= owner.direct_native_sequence || event.sequence() != native_sequence.to_int64() {
+    return Err(adapter_error("edit key owner or sequence is stale"))
+  }
+  let allowed = match event.kind() {
+    @platform.Input(@primitives.KeyPressed(key~, modifiers~, ..)) if !modifiers.alt() =>
+      if modifiers.control() || modifiers.meta() {
+        match key {
+          @primitives.Character(value) => value == "a" || value == "A" || value == "z" || value == "Z" ||
+            ((value == "y" || value == "Y") && modifiers.control())
+          _ => false
+        }
+      } else {
+        match key {
+          @primitives.ArrowLeft | @primitives.ArrowRight | @primitives.Home | @primitives.End |
+          @primitives.Backspace | @primitives.Delete => true
+          _ => false
+        }
+      }
+    _ => false
+  }
+  if !allowed { return Err(adapter_error("key is not an owned edit operation")) }
+  let field = match self.focused_text() { Some(value) => value; None => return Err(adapter_error("edit field is unavailable")) }
+  if field.composing() { return Err(adapter_error("edit key cannot resolve active preedit")) }
+  let before = match self.owned_text_document(owner) { Some(value) => value; None => return Err(adapter_error("edit binding is unavailable")) }
+  Ok({
+    identity: self.identity, owner, event, native_sequence, ordinal: owner.direct_sequence, is_edit_key: true,
+    before, reserved_change: self.change, reserved_progress: owner.observed_progress(), attempted: false,
     applied: false, after_change: None, expected: None, action_required: None,
     action: None, owner_noted: false, action_claimed: false, model_applied: false,
   })
@@ -3142,7 +3184,8 @@ pub fn Mounted::apply_owned_direct_text(
     !same_epoch(self.change, receipt.reserved_change) ||
     receipt.owner.observed_progress() != receipt.reserved_progress ||
     receipt.native_sequence <= receipt.owner.direct_native_sequence ||
-    receipt.owner.direct_sequence == 9223372036854775807L || receipt.ordinal != receipt.owner.direct_sequence + 1L ||
+    (if receipt.is_edit_key { receipt.ordinal != receipt.owner.direct_sequence }
+     else { receipt.owner.direct_sequence == 9223372036854775807L || receipt.ordinal != receipt.owner.direct_sequence + 1L }) ||
     !self.terminal_owner_is_current(receipt.owner) {
     return Err(adapter_error("direct text delivery is stale, busy or already attempted"))
   }
@@ -3217,7 +3260,7 @@ pub fn Mounted::complete_owned_direct_text(
     }
   }
   owner.revision = next_revision
-  owner.direct_sequence = receipt.ordinal
+  if !receipt.is_edit_key { owner.direct_sequence = receipt.ordinal }
   owner.direct_native_sequence = receipt.native_sequence
   receipt.owner_noted = true
   Ok(())

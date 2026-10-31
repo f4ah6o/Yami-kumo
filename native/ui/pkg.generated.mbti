@@ -111,6 +111,7 @@ pub fn Mounted::paste(Self, PasteRequest, String) -> Bool
 pub fn Mounted::publish(Self, Prepared) -> Result[Frame, @diagnostics.FrameworkError]
 pub fn Mounted::release_held_text_for_retry(Self, UInt64) -> Result[Unit, @diagnostics.FrameworkError]
 pub fn Mounted::reserve_owned_direct_text(Self, TerminalTextOwner, @platform.Event, Int, Int64) -> Result[OwnedDirectDelivery, @diagnostics.FrameworkError]
+pub fn Mounted::reserve_owned_edit_key(Self, TerminalTextOwner, @platform.Event, Int) -> Result[OwnedDirectDelivery, @diagnostics.FrameworkError]
 pub fn Mounted::reserve_owned_text(Self, TerminalTextOwner, @text_host.TextInputEvent) -> Result[OwnedTextDelivery, @diagnostics.FrameworkError]
 pub fn Mounted::set_theme(Self, @theme.Theme?) -> Bool
 pub fn Mounted::stage(Self, @core.View, Double, Double, Double, (String, Double) -> Result[@text_layout.TextMeasurement, @diagnostics.FrameworkError]) -> Result[Prepared, @diagnostics.FrameworkError]
