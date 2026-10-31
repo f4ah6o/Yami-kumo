@@ -122,6 +122,94 @@ test "bounded dirty stage measurement failure retains the original preedit" {
 }
 
 ///|
+test "host callback failure retains staged preedit for a same-candidate retry" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
+  owner.terminal_owner = Some(lease)
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.deliver_owned_observation(preedit).unwrap()
+  owner.suspended = true
+  owner.dirty = true
+  owner.stage_dirty_scene().unwrap()
+  let candidate = owner.staged_dirty_geometry().unwrap()
+  let calls = Ref(0)
+  let exact = Ref(true)
+  let fake_attempt = fn(retry, state : @text_host.TextInputState) {
+    calls.val += 1
+    exact.val = exact.val && (owner.discard_staged_dirty_scene() is Err(_)) &&
+      (owner.try_terminal_text_cutoff() is Err(_)) && retry == (calls.val > 1) &&
+      state.document() == candidate.committed() && state.document().text() == "" &&
+      state.caret() == settings_caret(candidate.caret()) && state.preedit() is None
+    if !retry { Err(runner_error("fixture", "uncertain host result")) }
+    else { Ok(()) }
+  }
+  assert_true(owner.attempt_staged_host_geometry(fake_attempt) is Err(_))
+  assert_false(owner.host_epoch_verified())
+  assert_true(owner.discard_staged_dirty_scene() is Err(_))
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_true(owner.pending_dirty_stage is Some(_))
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  assert_eq(owner.model().name(), "")
+  owner.attempt_staged_host_geometry(fake_attempt).unwrap()
+  assert_eq(calls.val, 2)
+  assert_true(exact.val)
+  assert_false(owner.host_epoch_verified())
+  assert_true(owner.staged_dirty_geometry() is Err(_))
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  assert_true(owner.discard_staged_dirty_scene() is Err(_))
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_true(owner.attempt_staged_host_geometry(fake_attempt) is Err(_))
+  assert_eq(host.present_count(), 0)
+}
+
+///|
+test "host callback invalidation leaves attempted candidate and owner unresolved" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.deliver_owned_observation(preedit).unwrap()
+  owner.suspended = true
+  owner.dirty = true
+  owner.stage_dirty_scene().unwrap()
+  assert_true(owner.attempt_staged_host_geometry(fn(_, _) {
+    owner.mounted.invalidate_layout()
+    Ok(())
+  }) is Err(_))
+  assert_false(owner.host_epoch_verified())
+  assert_true(owner.pending_dirty_stage is Some(_))
+  assert_true(owner.terminal_owner is Some(_))
+  assert_true(owner.session is Some(_))
+  assert_true(owner.discard_staged_dirty_scene() is Err(_))
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_eq(owner.model().name(), "")
+  assert_eq(host.present_count(), 0)
+}
+
+///|
 test "bounded dirty stage rejects metrics changed by its measurement callback" {
   let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
   let trigger = Ref(false)
