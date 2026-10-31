@@ -145,6 +145,7 @@ fn run_settings_control(
   release_policy : (Int64) -> Result[Unit, @diagnostics.FrameworkError],
   geometry_policy : () -> Result[Unit, @diagnostics.FrameworkError],
   geometry_arrival_policy : () -> Result[Unit, @diagnostics.FrameworkError],
+  inspect_native_head : () -> Result[Int64, @diagnostics.FrameworkError],
 ) -> Unit {
   println("YAMI_SETTINGS_CONTROL {\"state\":\"active\",\"scene_published\":false}")
   match entry.error() {
@@ -169,6 +170,11 @@ fn run_settings_control(
       115 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, control_pending_sequence(entry))
       // t: inspect the exact native receipt sequence, without ACK.
       116 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, control_receipt_sequence(entry))
+      // z: inspect the current native FIFO head without pumping or ACK.
+      122 => match inspect_native_head() {
+        Ok(sequence) => control_reply_sequence(83, sequence)
+        Err(error) => control_step_error(error, 69)
+      }
       // b: inspect only the local prefix; this is not authority to ACK.
       98 => match entry.owner() {
         Some(owner) if owner.unsupported_prefix_has_observed_stages() => control_reply(88)
@@ -620,6 +626,12 @@ fn main {
           owner.transfer_geometry_arrival()
         }
       }
+    }, fn() {
+      let owner = match entry.owner() {
+        Some(value) if entry.suspended() => value
+        _ => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "retained_inspection_owner_unavailable"))
+      }
+      inspect_retained_head(retained, owner.host_epoch_verified())
     })
     return
   }
