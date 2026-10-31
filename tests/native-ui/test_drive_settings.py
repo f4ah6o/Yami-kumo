@@ -91,6 +91,29 @@ class TransportTests(unittest.TestCase):
 
 
 class LinuxTransportTests(unittest.TestCase):
+    def test_selected_direct_route_alone_is_not_delivery(self):
+        markers = [{"phase": "text", "status": "started", "transport": "direct-keyboard"}]
+        self.assertIsNone(driver.classify_text_transport(markers, "linux"))
+
+    def test_direct_delivery_requires_its_selected_route(self):
+        direct = {"phase": "text", "status": "started", "transport": "direct-keyboard"}
+        delivered = {"phase": "direct-insert", "sequence": 7}
+        self.assertEqual(driver.classify_text_transport([direct, delivered], "linux"), "direct-keyboard")
+        self.assertIsNone(driver.classify_text_transport([delivered], "linux"))
+        self.assertIsNone(driver.classify_text_transport([
+            {"phase": "text", "status": "started", "transport": "unknown"}, delivered
+        ], "linux"))
+        self.assertEqual(driver.text_marker_summary([direct, delivered]), [direct, delivered])
+
+    def test_later_ime_commit_is_not_relabelled_as_direct(self):
+        markers = [
+            {"phase": "text", "status": "started", "transport": "direct-keyboard"},
+            {"phase": "direct-insert", "sequence": 7},
+            {"phase": "text", "status": "started", "transport": "text-input-v1"},
+            {"phase": "commit", "text": "日本"},
+        ]
+        self.assertEqual(driver.classify_text_transport(markers, "linux"), "text-input-v1-commit")
+
     def test_direct_keyboard_is_not_relabelled_as_imm(self):
         markers = [{"phase": "text", "status": "key-path", "route": "direct-keyboard"},
                    {"phase": "key", "key": "character"}]

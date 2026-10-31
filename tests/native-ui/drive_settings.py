@@ -77,11 +77,20 @@ def classify_text_transport(markers: list[dict[str, Any]], platform: str = "wind
     The report must not claim IMM when only the key path fired.
     """
     if platform == "linux":
-        for marker in reversed(markers):
+        for index in range(len(markers) - 1, -1, -1):
+            marker = markers[index]
+            if marker.get("phase") == "direct-insert":
+                for prior in reversed(markers[:index]):
+                    if prior.get("phase") == "text" and prior.get("status") == "started":
+                        return "direct-keyboard" if prior.get("transport") == "direct-keyboard" else None
+                return None
+            if marker.get("phase") == "commit":
+                for prior in reversed(markers[:index]):
+                    if prior.get("phase") == "text" and prior.get("status") == "started":
+                        return "text-input-v1-commit" if prior.get("transport") == "text-input-v1" else None
+                return "text-input-v1-commit"
             if marker.get("phase") == "text" and marker.get("status") == "key-path":
                 return "direct-keyboard"
-        if any(marker.get("phase") == "commit" for marker in markers):
-            return "text-input-v1-commit"
         return None
     if any(marker.get("phase") == "commit" for marker in markers):
         return "imm32-commit"
@@ -95,11 +104,11 @@ def classify_text_transport(markers: list[dict[str, Any]], platform: str = "wind
 
 def text_marker_summary(markers: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Keep the transport and key markers, dropping the bulky frame copies."""
-    keys = ("phase", "status", "transport", "route", "epoch", "key", "text", "operation", "error")
+    keys = ("phase", "status", "transport", "route", "epoch", "sequence", "key", "text", "operation", "error")
     return [
         {key: marker[key] for key in keys if key in marker}
         for marker in markers
-        if marker.get("phase") in ("text", "commit", "preedit", "cancel", "focus-lost", "exit")
+        if marker.get("phase") in ("text", "direct-insert", "commit", "preedit", "cancel", "focus-lost", "exit")
     ]
 
 
