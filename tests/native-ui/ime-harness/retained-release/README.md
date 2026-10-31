@@ -45,3 +45,12 @@ not proof against escaped processes or later modification. Run URL is null for a
 The harness may force SIGTERM if the owner cannot stop. That teardown destroys
 in-process ownership and is recorded as cleanup **FAIL**, never as safe stop.
 No publication, app build or live run is implied by this harness branch.
+# Bounded command timeout evidence
+
+Every control request is recorded before dispatch. A timeout records its
+command, sequence and partial output as `TIMEOUT_OUTCOME_UNKNOWN`: it is not
+proof that the owner did or did not execute the request. A timed-out generation
+or advance stops the preedit probe without retry; geometry remains NOT_RUN.
+A timed-out geometry command similarly prevents dependent handoff or retry,
+and stop is not requested after any timeout. Forced teardown remains a cleanup
+failure, not a successful owner release.
