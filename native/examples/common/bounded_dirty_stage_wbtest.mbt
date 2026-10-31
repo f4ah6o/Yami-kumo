@@ -33,6 +33,22 @@ test "bounded dirty staging preserves preedit and blocks continuation until disc
   assert_true(owner.stage_dirty_scene() is Err(_))
   assert_true(owner.advance_generation() is None)
   assert_true(owner.terminal_step(PollOnce) is Err(_))
+  // Simulate only the local consequence of an uncertain host update. This
+  // does not exercise a native host or establish that it can be reconciled.
+  owner.host_epoch_verified = false
+  assert_true(owner.discard_staged_dirty_scene() is Err(_))
+  assert_true(owner.staged_dirty_geometry() is Err(_))
+  assert_true(owner.try_terminal_text_cutoff() is Err(_))
+  assert_true(owner.pending_dirty_stage is Some(_))
+  assert_true(owner.mounted.terminal_owner_is_current(lease))
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  assert_eq(owner.model().name(), "")
+  assert_eq(updates.val, 0)
+  assert_eq(host.present_count(), 0)
+  // Whitebox restoration represents no host proof; it merely checks that
+  // preservation of the candidate did not make local inspection impossible.
+  owner.host_epoch_verified = true
+  assert_eq(owner.staged_dirty_geometry().unwrap().preview().text(), "にほん")
   assert_eq(updates.val, 0)
   assert_eq(host.present_count(), 0)
   assert_true(owner.mounted.terminal_owner_is_current(lease))

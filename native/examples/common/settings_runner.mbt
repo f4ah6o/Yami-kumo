@@ -945,7 +945,10 @@ fn SettingsRunOwner::staged_dirty_geometry_inner(
 pub fn SettingsRunOwner::discard_staged_dirty_scene(
   self : SettingsRunOwner,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
-  if !self.suspended || self.running || self.pending_dirty_stage is None {
+  // An uncertain host update must not lose the exact local candidate needed
+  // to reconcile that attempt. This guard does not itself provide a host
+  // receipt or a way to restore host_epoch_verified.
+  if !self.suspended || self.running || !self.host_epoch_verified || self.pending_dirty_stage is None {
     return Err(runner_error("dirty_scene", "no discardable local candidate"))
   }
   self.pending_dirty_stage = None
