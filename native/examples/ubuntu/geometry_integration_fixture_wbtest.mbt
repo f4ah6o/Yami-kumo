@@ -16,6 +16,8 @@ fn fixture_geometry_adapter(
 
 ///|
 test "opaque receipt candidate rejects foreign owner and altered payload" {
+  // Link the native text stub required by GPUI's Ubuntu backend in this test.
+  ignore(@linux_text.require_grayscale_raster())
   let state = @text_host.TextInputState::new(
     @text.TextDocument::new("日本").unwrap(),
     @primitives.Rect::new(4.0, 2.0, 1.0, 18.0).unwrap(),
