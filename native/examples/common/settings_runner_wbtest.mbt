@@ -3044,6 +3044,19 @@ test "owned key ACK failure keeps the field unchanged until exact retry" {
 }
 
 ///|
+test "editing key is not reported as a direct text insertion" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  let key = @platform.Event::new(owner.window, 2L, 1.0,
+    @platform.Input(@primitives.KeyPressed(key=@primitives.Backspace, repeat=false, modifiers=@primitives.Modifiers::none())))
+  let held_key = owner.mounted.reserve_owned_edit_key(lease, key, 2).unwrap()
+  assert_true(direct_delivery_marker(held_key) is None)
+  let text = @platform.Event::new(owner.window, 3L, 1.0, @platform.Input(@primitives.TextInput(text="a")))
+  let held_text = owner.mounted.reserve_owned_direct_text(lease, text, 3, 1L).unwrap()
+  assert_true(direct_delivery_marker(held_text) is Some(_))
+}
+
+///|
 test "direct platform text is rejected while the original preedit is active" {
   let (owner, _) = publication_fixture()
   let binding = owner.session.unwrap().binding

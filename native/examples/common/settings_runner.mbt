@@ -1876,6 +1876,12 @@ fn SettingsRunOwner::reserve_pending_direct(
 }
 
 ///|
+fn direct_delivery_marker(delivery : @ui.OwnedDirectDelivery) -> String? {
+  if delivery.is_edit_key() { None }
+  else { Some("YAMI_NATIVE_UI_SETTINGS {\"phase\":\"direct-insert\",\"sequence\":\{delivery.native_sequence()}}") }
+}
+
+///|
 /// Apply only an already-ACKed original receipt. Any failure retains the
 /// original event, owner, model fence and application/action stage.
 fn SettingsRunOwner::complete_pending_direct(
@@ -1935,9 +1941,7 @@ fn SettingsRunOwner::complete_pending_direct(
     }
     None => return Err(runner_error("ordered_text", "direct model requirement is unknown"))
   }
-  emit_native_marker(
-    "YAMI_NATIVE_UI_SETTINGS {\"phase\":\"direct-insert\",\"sequence\":\{direct.native_sequence()}}",
-  )
+  match direct_delivery_marker(direct) { Some(marker) => emit_native_marker(marker); None => () }
   self.pending_direct = None
   self.pending_direct_model = None
   self.pending_direct_fence = None
