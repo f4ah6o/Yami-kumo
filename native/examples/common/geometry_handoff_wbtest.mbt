@@ -312,3 +312,55 @@ test "taken commit is retained when native inspection destroys original owner" {
   assert_true(owner.pending_dirty_stage is Some(_))
   assert_false(owner.can_stop())
 }
+
+///|
+test "measurement failure retains original unapplied receipt for bounded retry" {
+  let blocked = Ref(false)
+  let measure = fn(text, size) {
+    if blocked.val { Err(runner_error("fixture", "measurement failed")) }
+    else { text_runner_measure(text, size) }
+  }
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  owner.entered_target = Some((7, 11L, 4))
+  let preedit = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Preedit(text="にほん", cursor=3))
+  owner.deliver_owned_observation(preedit).unwrap()
+  let prior = NativeRetainedReceipt::new(Some(OrderedText(preedit)), owner.window, 1, binding, 7UL, fn() { Ok(()) })
+  owner.acknowledged_receipts.push({ receipt: prior, stage: ReceiptNoModelAction })
+  owner.suspended = true
+  owner.dirty = true
+  owner.stage_dirty_scene().unwrap()
+  assert_true(owner.attempt_staged_host_geometry(fn(_, _) { Err(runner_error("fixture", "uncertain")) }) is Err(_))
+  let commit = @text_host.TextInputEvent::new(owner.window, 2L, 7UL, @text_host.Commit(text="日本"))
+  let receipt = NativeRetainedReceipt::new(Some(OrderedText(commit)), owner.window, 2, binding, 7UL, fn() { Ok(()) })
+  owner.reserve_geometry_arrival(receipt, (7, 11L, 4)).unwrap()
+  owner.transfer_geometry_arrival().unwrap()
+  owner.attempt_staged_host_geometry(fn(_, _) { Ok(()) }).unwrap()
+  owner.take_geometry_arrival_to_local_owner(fn() { Ok(()) }).unwrap()
+  blocked.val = true
+  assert_true(owner.apply_taken_geometry_arrival(2L, fn() { Ok(()) }) is Err(_))
+  assert_eq(owner.geometry_arrival_application_state(), Some(1))
+  assert_false(owner.owned_delivery.unwrap().applied())
+  assert_eq(owner.model().name(), "")
+  assert_true(owner.mounted.focused_text().unwrap().composing())
+  assert_true(owner.reconcile_taken_geometry_arrival(2L) is Err(_))
+  assert_false(owner.owned_delivery.unwrap().applied())
+  blocked.val = false
+  owner.reconcile_taken_geometry_arrival(2L).unwrap()
+  assert_eq(owner.model().name(), "日本")
+  assert_true(owner.receipt_stage_for_sequence(2L) is Some(ReceiptModelApplied))
+  assert_true(owner.reconcile_taken_geometry_arrival(2L) is Err(_))
+  assert_eq(owner.model().name(), "日本")
+  assert_false(owner.can_stop())
+}

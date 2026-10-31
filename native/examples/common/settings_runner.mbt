@@ -1325,8 +1325,9 @@ pub fn SettingsRunOwner::apply_taken_geometry_arrival(
   }
 }
 
-///| Reconcile an already-applied record without applying it a second time.
-/// An unknown or unapplied outcome remains retained for explicit resolution.
+///| Resume the original delivery. An unapplied receipt may be retried only
+/// when the original field, sequence, model fence and empty action queue still
+/// prove that no side effect was published; applied text is never replayed.
 pub fn SettingsRunOwner::reconcile_taken_geometry_arrival(
   self : SettingsRunOwner, sequence : Int64,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
@@ -1342,7 +1343,7 @@ pub fn SettingsRunOwner::reconcile_taken_geometry_arrival(
   let (window, epoch, binding, _, text_sequence) = delivery.identity()
   let session = match self.session { Some(value) => value; None => return Err(runner_error("geometry_handoff", "session unavailable")) }
   let owner = match self.terminal_owner { Some(value) => value; None => return Err(runner_error("geometry_handoff", "field owner unavailable")) }
-  if !delivery.applied() || window != self.window || epoch != session.epoch || binding != session.binding ||
+  if window != self.window || epoch != session.epoch || binding != session.binding ||
     self.host_epoch != Some(epoch) || self.entered_target != Some(held.native_target) ||
     !owner.matches_session(window, epoch, binding) ||
     event.window() != window || event.epoch() != epoch || event.sequence() != text_sequence ||
@@ -1350,7 +1351,26 @@ pub fn SettingsRunOwner::reconcile_taken_geometry_arrival(
     return Err(runner_error("geometry_handoff", "application outcome or original identity unavailable"))
   }
   self.running = true
-  let result = self.complete_owned_delivery(delivery, event)
+  let result = if delivery.applied() {
+    self.complete_owned_delivery(delivery, event)
+  } else {
+    let before_current = match (self.owned_model_before, self.owned_model_fence) {
+      (Some(before), Some(fence)) => fence.live && before == self.settings && before.name() == delivery.before_document()
+      _ => false
+    }
+    if !before_current || !self.mounted.terminal_owner_is_current(owner) ||
+      owner.observed_progress() != held.owner_progress || self.mounted.has_pending_actions() {
+      Err(runner_error("geometry_handoff", "unapplied delivery cannot be proved unchanged"))
+    } else {
+      match self.mounted.apply_owned_text(delivery) {
+        Err(error) => {
+          if delivery.applied() { self.note_text_receipt_stage(event, ReceiptSessionApplied) }
+          Err(error)
+        }
+        Ok(_) => self.complete_owned_delivery(delivery, event)
+      }
+    }
+  }
   self.running = false
   match result {
     Err(error) => Err(error)
