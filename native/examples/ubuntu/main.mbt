@@ -149,6 +149,7 @@ fn run_settings_control(
   geometry_take_policy : () -> Result[Unit, @diagnostics.FrameworkError],
   geometry_apply_policy : () -> Result[Unit, @diagnostics.FrameworkError],
   preflight_policy : () -> Result[Unit, @diagnostics.FrameworkError],
+  preflight_release_policy : (Int64) -> Result[Unit, @diagnostics.FrameworkError],
 ) -> Unit {
   println("YAMI_SETTINGS_CONTROL {\"state\":\"active\",\"scene_published\":false}")
   match entry.error() {
@@ -217,6 +218,11 @@ fn run_settings_control(
       // f: retry only a route-proven unsubmitted geometry candidate.
       102 => match preflight_policy() {
         Ok(_) => control_reply(70)
+        Err(error) => control_step_error(error, 69)
+      }
+      // l: strict release policy under the same preflight proof; no scene.
+      108 => match preflight_release_policy(control_sequence()) {
+        Ok(_) => control_reply(65)
         Err(error) => control_step_error(error, 69)
       }
       // r: retry ACK only for the inspected native sequence.
@@ -715,7 +721,7 @@ fn main {
       })
       if result is Ok(_) { preflight.accepted = None }
       result
-    })
+    }, fn(sequence) { resolve_preflight_release(entry, retained, preflight, unsupported_native, sequence) })
     return
   }
   let legacy = @ubuntu_host.TextHostRoute::new(host)

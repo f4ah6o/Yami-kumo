@@ -8,6 +8,25 @@ priv struct SettingsPreflightAdapter {
   mut uncertain : Bool
 }
 
+///| Read-only exact-owner check; it neither submits nor acknowledges input.
+fn SettingsPreflightAdapter::verify(
+  self : SettingsPreflightAdapter, window : @platform.WindowId,
+  root : UInt64, epoch : UInt64, state : @text_host.TextInputState,
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let normalized = match ubuntu_text_state(state) { Ok(value) => value; Err(error) => return Err(error) }
+  let proof = match self.proof {
+    Some(value) if !self.uncertain && self.accepted is None => value
+    _ => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "preflight_proof_unavailable"))
+  }
+  let (original_window, original_root, original_epoch, native_epoch) = proof.identity()
+  if original_window != window || original_root != root || original_epoch != epoch ||
+    self.route.binding_epoch() != Some(epoch) || self.route.native_epoch() != Some(native_epoch) ||
+    !same_geometry_state(proof.state(), normalized) || !self.route.preflight_geometry_is_current(proof) {
+    return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "preflight_owner_changed"))
+  }
+  Ok(())
+}
+
 ///|
 fn SettingsPreflightAdapter::attempt(
   self : SettingsPreflightAdapter, epoch : UInt64, state : @text_host.TextInputState,

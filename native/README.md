@@ -317,3 +317,14 @@ through this control; an accepted receipt is retained and rechecked if a later
 owner or metrics validation fails. This bounded step does not consume FIFO
 records or publish a scene. A queued head can still prevent progress, and the
 current scene/host publication transaction and safe shutdown remain unresolved.
+
+The experimental `resolve-preflight-release --sequence N` operation admits
+at most one exact unsupported FIFO head under the retained preflight proof and
+the same suspended owner, then invokes the existing strict native physical
+printable-release policy. It preserves the original host epoch and composition,
+and does not render, retry geometry, transfer text, or stop. The route proof,
+focus owner, field progress, model fence and metrics are checked before ACK.
+Unsupported/stale heads and unproven provenance remain owned. If ACK returns an
+error its outcome is retained as uncertain and this operation refuses a second
+ACK; an explicit native reconciliation contract is still needed. This bounded
+operation does not resolve general FIFO, scene, or host cleanup obligations.

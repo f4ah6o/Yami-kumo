@@ -7,11 +7,12 @@ import socket
 import struct
 import sys
 
-COMMANDS = {"status": b"s", "receipt": b"t", "prefix": b"b", "stage": b"j", "owned": b"o", "reconcile": b"d", "watermark": b"w", "retire": b"e", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resolve-release": b"k", "resume": b"u", "cutoff": b"c", "stop": b"q", "geometry-submit": b"v", "geometry-handoff": b"h", "retry-preflight": b"f"}
+COMMANDS = {"status": b"s", "receipt": b"t", "prefix": b"b", "stage": b"j", "owned": b"o", "reconcile": b"d", "watermark": b"w", "retire": b"e", "generation": b"n", "advance": b"g", "poll": b"p", "apply": b"a", "retry-ack": b"r", "resolve-release": b"k", "resolve-preflight-release": b"l", "resume": b"u", "cutoff": b"c", "stop": b"q", "geometry-submit": b"v", "geometry-handoff": b"h", "retry-preflight": b"f"}
 GEOMETRY_REPLIES = {
     "geometry-submit": (b"G", "native geometry receipt checked for this step; scene, record application and shutdown are not implied"),
     "geometry-handoff": (b"H", "original text receipt retained by the route and owner; application, scene and shutdown are not implied"),
     "retry-preflight": (b"F", "same-owner native geometry receipt verified; scene and shutdown are not implied"),
+    "resolve-preflight-release": (b"A", "original release acknowledged under preflight and native policy; geometry, scene and shutdown are not implied"),
 }
 REPLIES = {
     b"S": "suspended; owner and host retained",
@@ -49,16 +50,16 @@ def main() -> int:
     parser.add_argument("command", choices=COMMANDS)
     parser.add_argument("--sequence", type=int, help="positive record sequence or continuation generation")
     args = parser.parse_args()
-    if args.command in ("apply", "retry-ack", "resolve-release", "retire", "resume", "advance", "stage", "reconcile") and (args.sequence is None or not 0 < args.sequence < 2**63):
-        parser.error("apply, retry-ack, resolve-release, retire, resume, advance, stage and reconcile require a positive --sequence")
-    if args.command not in ("apply", "retry-ack", "resolve-release", "retire", "resume", "advance", "stage", "reconcile") and args.sequence is not None:
+    if args.command in ("apply", "retry-ack", "resolve-release", "resolve-preflight-release", "retire", "resume", "advance", "stage", "reconcile") and (args.sequence is None or not 0 < args.sequence < 2**63):
+        parser.error("this command requires a positive --sequence")
+    if args.command not in ("apply", "retry-ack", "resolve-release", "resolve-preflight-release", "retire", "resume", "advance", "stage", "reconcile") and args.sequence is not None:
         parser.error("--sequence is not valid for this command")
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as peer:
             peer.settimeout(3.0)
             peer.connect(args.path)
             payload = COMMANDS[args.command]
-            if args.command in ("apply", "retry-ack", "resolve-release", "retire", "resume", "advance", "stage", "reconcile"):
+            if args.command in ("apply", "retry-ack", "resolve-release", "resolve-preflight-release", "retire", "resume", "advance", "stage", "reconcile"):
                 payload += struct.pack("!q", args.sequence)
             peer.sendall(payload)
             result = peer.recv(1)
