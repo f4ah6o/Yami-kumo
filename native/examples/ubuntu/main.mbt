@@ -557,8 +557,8 @@ fn main {
         }
       }
       owner.attempt_staged_host_geometry(fn(retry, state) {
-        let adapter = match geometry_adapter.val {
-          Some(value) => value
+        let (adapter, created) = match geometry_adapter.val {
+          Some(value) => (value, false)
           None => {
             let normalized = match ubuntu_text_state(state) { Ok(value) => value; Err(error) => return Err(error) }
             let value = match SettingsGeometryAdapter::new(retained, geometry, normalized) {
@@ -566,10 +566,12 @@ fn main {
               Err(error) => return Err(error)
             }
             geometry_adapter.val = Some(value)
-            value
+            (value, true)
           }
         }
-        adapter.attempt(retry, state)
+        // If adapter construction previously failed, no reserve operation was
+        // made. The newly created adapter must start with its first attempt.
+        adapter.attempt(if created { false } else { retry }, state)
       })
     }) }, fn() {
       let owner = match entry.owner() {
