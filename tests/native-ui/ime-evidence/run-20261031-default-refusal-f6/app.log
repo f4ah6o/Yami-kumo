@@ -1,0 +1,5 @@
+ordered_text: native_failure: ordered input requires a retained owner
+PanicError
+    at @moonbitlang/core/abort.abort[Unit] (/workspace/yami-tools/lib/core/abort/abort.mbt:50)
+    at main (/workspace/yami-release-handoff/native/examples/ubuntu/main.mbt:549)
+    at ??? (???:0)

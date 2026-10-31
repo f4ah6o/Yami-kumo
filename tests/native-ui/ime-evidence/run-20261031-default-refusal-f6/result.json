@@ -1,0 +1,9 @@
+{
+  "framework_sha": "b28cff9a8a92a155e67421a397a1030dedac9301",
+  "app_source_sha": "f6c4b40abbecd74b76a1fb459c360a104fd132dd",
+  "app_binary_sha256": "b1b1b02ea557ba8535e5d7e70919682530895a0d5c973aef58424dfa6b197a0f",
+  "command": "ubuntu.exe --settings-e2e",
+  "exit_code": -6,
+  "expected_one_shot_refusal": true,
+  "full_live_acceptance": "NOT_RUN"
+}

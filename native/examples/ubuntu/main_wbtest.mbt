@@ -31,3 +31,12 @@ test "Ubuntu text caret rejects overflow and empty bounds" {
     assert_true(ubuntu_text_caret(caret) is Err(_))
   }
 }
+
+///|
+test "all Ubuntu Settings entry selectors retain the original owner" {
+  assert_true(use_retained_settings_entry(["ubuntu", "--settings-e2e"], None))
+  assert_true(use_retained_settings_entry(["ubuntu", "--settings-retained-control"], None))
+  assert_true(use_retained_settings_entry(["ubuntu"], Some("1")))
+  assert_false(use_retained_settings_entry(["ubuntu"], None))
+  assert_false(use_retained_settings_entry(["ubuntu", "--text-e2e"], Some("0")))
+}
