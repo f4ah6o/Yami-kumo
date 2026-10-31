@@ -819,6 +819,10 @@ priv struct SettingsDirtyStage {
   epoch : UInt64
   binding : UInt64
   metrics : (Double, Double, Double)
+  // A host attempt may have changed native state. Even if the adapter reports
+  // success, only a future publication transaction may release this stage.
+  mut host_attempted : Bool
+  mut callback_returned_success : Bool
 }
 
 ///|
@@ -901,7 +905,7 @@ fn SettingsRunOwner::stage_dirty_scene_inner(
     Ok(_) => ()
     Err(error) => return Err(error)
   }
-  self.pending_dirty_stage = Some({ prepared, model, fence, window, epoch, binding, metrics })
+  self.pending_dirty_stage = Some({ prepared, model, fence, window, epoch, binding, metrics, host_attempted: false, callback_returned_success: false })
   Ok(())
 }
 
@@ -914,7 +918,7 @@ pub fn SettingsRunOwner::staged_dirty_geometry(
     return Err(runner_error("dirty_scene", "staged inspection unavailable"))
   }
   self.running = true
-  let result = self.staged_dirty_geometry_inner()
+  let result = self.staged_dirty_geometry_inner(true)
   self.running = false
   result
 }
@@ -922,21 +926,78 @@ pub fn SettingsRunOwner::staged_dirty_geometry(
 ///|
 fn SettingsRunOwner::staged_dirty_geometry_inner(
   self : SettingsRunOwner,
+  require_verified : Bool,
 ) -> Result[@ui.StagedTextGeometry, @diagnostics.FrameworkError] {
   let staged = match self.pending_dirty_stage { Some(value) => value; None => return Err(runner_error("dirty_scene", "no staged candidate")) }
   let owner = match self.terminal_owner { Some(value) => value; None => return Err(runner_error("dirty_scene", "original field is unavailable")) }
   let session = match self.session { Some(value) => value; None => return Err(runner_error("dirty_scene", "original session is unavailable")) }
   if !staged.fence.live || self.settings != staged.model || self.window != staged.window ||
     session.epoch != staged.epoch || session.binding != staged.binding ||
-    self.host_epoch != Some(staged.epoch) || !self.host_epoch_verified {
+    self.host_epoch != Some(staged.epoch) || (require_verified && !self.host_epoch_verified) {
     return Err(runner_error("dirty_scene", "staged model or host owner changed"))
   }
   let metrics = match self.host.window_metrics(self.window) { Ok(value) => value; Err(error) => return Err(error) }
   if metrics != staged.metrics || !staged.fence.live || self.settings != staged.model ||
-    self.host_epoch != Some(staged.epoch) || !self.host_epoch_verified {
+    self.host_epoch != Some(staged.epoch) || (require_verified && !self.host_epoch_verified) {
     return Err(runner_error("dirty_scene", "window metrics or owner changed"))
   }
   self.mounted.inspect_staged_text_geometry(owner, staged.prepared)
+}
+
+///|
+/// Run a bounded host attempt while retaining the original local candidate.
+/// The callback is an adapter seam, not evidence of native acceptance. A
+/// platform adapter must validate its own exact opaque receipt synchronously.
+/// Even after success, discard, cutoff and publication remain blocked until a
+/// separate cross-layer transaction can resolve this candidate.
+pub fn SettingsRunOwner::attempt_staged_host_geometry(
+  self : SettingsRunOwner,
+  attempt : (Bool, @text_host.TextInputState) -> Result[Unit, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.cutoff_done {
+    return Err(runner_error("dirty_scene", "staged host attempt unavailable"))
+  }
+  let staged = match self.pending_dirty_stage {
+    Some(value) => value
+    None => return Err(runner_error("dirty_scene", "no staged candidate"))
+  }
+  if staged.callback_returned_success {
+    return Err(runner_error("dirty_scene", "staged host callback already returned success"))
+  }
+  self.running = true
+  let result = self.attempt_staged_host_geometry_inner(staged, attempt)
+  self.running = false
+  result
+}
+
+///|
+fn SettingsRunOwner::attempt_staged_host_geometry_inner(
+  self : SettingsRunOwner,
+  staged : SettingsDirtyStage,
+  attempt : (Bool, @text_host.TextInputState) -> Result[Unit, @diagnostics.FrameworkError],
+) -> Result[Unit, @diagnostics.FrameworkError] {
+  let geometry = match self.staged_dirty_geometry_inner(!staged.host_attempted) {
+    Ok(value) => value
+    Err(error) => return Err(error)
+  }
+  let retry = staged.host_attempted
+  let state = @text_host.TextInputState::new(geometry.committed(), settings_caret(geometry.caret()))
+  staged.host_attempted = true
+  self.host_epoch_verified = false
+  match attempt(retry, state) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
+  // The callback may have reentered a host or invalidated the original mount.
+  // A local recheck cannot itself prove what happened inside the host.
+  match self.staged_dirty_geometry_inner(false) {
+    Err(error) => return Err(error)
+    Ok(_) => ()
+  }
+  // An arbitrary callback's return is not a native receipt. Keep host epoch
+  // uncertain even on success, until a platform-owned receipt can be checked.
+  staged.callback_returned_success = true
+  Ok(())
 }
 
 ///|
@@ -955,7 +1016,7 @@ pub fn SettingsRunOwner::discard_staged_dirty_scene(
     Some(value) => value
     None => return Err(runner_error("dirty_scene", "no discardable local candidate"))
   }
-  if self.host_epoch != Some(staged.epoch) {
+  if staged.host_attempted || self.host_epoch != Some(staged.epoch) {
     return Err(runner_error("dirty_scene", "staged host owner changed"))
   }
   self.pending_dirty_stage = None
