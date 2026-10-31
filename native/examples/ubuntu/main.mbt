@@ -144,6 +144,7 @@ fn run_settings_control(
   entry : @common.SettingsEntryController,
   release_policy : (Int64) -> Result[Unit, @diagnostics.FrameworkError],
   geometry_policy : () -> Result[Unit, @diagnostics.FrameworkError],
+  geometry_arrival_policy : () -> Result[Unit, @diagnostics.FrameworkError],
 ) -> Unit {
   println("YAMI_SETTINGS_CONTROL {\"state\":\"active\",\"scene_published\":false}")
   match entry.error() {
@@ -187,6 +188,11 @@ fn run_settings_control(
       // v: bounded host-candidate attempt; it never publishes or authorizes stop.
       118 => match geometry_policy() {
         Ok(_) => control_reply(71)
+        Err(error) => control_step_error(error, 69)
+      }
+      // h: preserve one supported native text head; never apply it here.
+      104 => match geometry_arrival_policy() {
+        Ok(_) => control_reply(72)
         Err(error) => control_step_error(error, 69)
       }
       // r: retry ACK only for the inspected native sequence.
@@ -495,6 +501,7 @@ fn main {
     )
     let staged_geometry : Ref[@ui.StagedTextGeometry?] = Ref(None)
     let geometry_adapter : Ref[SettingsGeometryAdapter?] = Ref(None)
+    let geometry_arrival_adapter : Ref[SettingsGeometryArrivalAdapter?] = Ref(None)
     run_settings_control(entry, fn(sequence) {
       let owner = match entry.owner() {
         Some(value) => value
@@ -564,7 +571,54 @@ fn main {
         }
         adapter.attempt(retry, state)
       })
-    }) })
+    }) }, fn() {
+      let owner = match entry.owner() {
+        Some(value) => value
+        None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_owner_unavailable"))
+      }
+      match owner.geometry_arrival_state() {
+        Some((_, 0)) => owner.transfer_geometry_arrival()
+        Some((_, 1)) => {
+          let adapter = match geometry_arrival_adapter.val {
+            Some(value) => value
+            None => return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_arrival_unavailable"))
+          }
+          owner.reconcile_geometry_arrival(fn() { adapter.inspect_owned() })
+        }
+        Some(_) => Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "geometry_arrival_retained"))
+        None => {
+          if retained.pending_geometry() is None {
+            return Err(@diagnostics.FrameworkError::new(@diagnostics.StaleHandle, "geometry_pending_missing"))
+          }
+          let observed = match retained.peek() {
+            Ok(None) => match host.dispatch_retained(0) {
+              Ok(_) => retained.peek()
+              Err(error) => Err(error)
+            }
+            result => result
+          }
+          let receipt = match observed {
+            Err(error) => return Err(error)
+            Ok(None) => return Err(@diagnostics.FrameworkError::new(@diagnostics.Busy, "geometry_arrival_empty"))
+            Ok(Some(value)) => value
+          }
+          let adapter = match SettingsGeometryArrivalAdapter::new(retained, receipt) {
+            Err(error) => return Err(error)
+            Ok(value) => value
+          }
+          let portable = @common.NativeRetainedReceipt::new(
+            Some(@common.OrderedText(adapter.portable)), receipt.native_window(), receipt.native_sequence(),
+            receipt.root(), receipt.epoch(), fn() { adapter.transfer() },
+          )
+          match owner.reserve_geometry_arrival(portable, (adapter.target.epoch, adapter.target.seat, adapter.target.proxy_generation)) {
+            Err(error) => return Err(error)
+            Ok(_) => ()
+          }
+          geometry_arrival_adapter.val = Some(adapter)
+          owner.transfer_geometry_arrival()
+        }
+      }
+    })
     return
   }
   let legacy = @ubuntu_host.TextHostRoute::new(host)
