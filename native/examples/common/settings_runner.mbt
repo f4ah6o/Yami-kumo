@@ -951,6 +951,13 @@ pub fn SettingsRunOwner::discard_staged_dirty_scene(
   if !self.suspended || self.running || !self.host_epoch_verified || self.pending_dirty_stage is None {
     return Err(runner_error("dirty_scene", "no discardable local candidate"))
   }
+  let staged = match self.pending_dirty_stage {
+    Some(value) => value
+    None => return Err(runner_error("dirty_scene", "no discardable local candidate"))
+  }
+  if self.host_epoch != Some(staged.epoch) {
+    return Err(runner_error("dirty_scene", "staged host owner changed"))
+  }
   self.pending_dirty_stage = None
   Ok(())
 }
