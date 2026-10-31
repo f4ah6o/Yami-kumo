@@ -39,3 +39,30 @@ test "metrics change after uncertain host update blocks same candidate retry" {
   assert_eq(owner.model().name(), "")
   assert_eq(host.present_count(), 0)
 }
+
+///|
+test "dirty staging leaves a prior action with its original owner" {
+  let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
+  let port = NativeTextInputPort::new(
+    fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
+    fn(_) { Ok(()) }, fn(_) { Ok(None) },
+  )
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
+  assert_true(owner.mounted.focus(@shared_settings.settings_name()))
+  let binding = owner.mounted.focused_text().unwrap().binding_id()
+  owner.session = Some({ epoch: 7UL, binding })
+  owner.host_epoch = Some(7UL)
+  owner.host_epoch_verified = true
+  owner.terminal_owner = Some(owner.mounted.capture_terminal_text_owner(7UL).unwrap())
+  let save = owner.mounted.callback(@shared_settings.settings_save()).unwrap()
+  assert_true(owner.mounted.activate(save))
+  owner.suspended = true
+  owner.dirty = true
+  assert_true(owner.stage_dirty_scene() is Err(_))
+  assert_true(owner.pending_dirty_stage is None)
+  assert_true(owner.mounted.next_action() is Some(@view.Activate(_)))
+  assert_true(owner.mounted.next_action() is None)
+  assert_eq(owner.model().name(), "")
+  assert_eq(host.present_count(), 0)
+}
