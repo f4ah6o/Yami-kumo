@@ -2446,12 +2446,19 @@ test "captured entered target cannot follow a replacement seat or proxy" {
 
 ///|
 fn publication_fixture() -> (SettingsRunOwner, @ui.Frame) {
+  publication_fixture_with_ordered(None)
+}
+
+///|
+fn publication_fixture_with_ordered(
+  ordered : NativeOrderedTextPort?,
+) -> (SettingsRunOwner, @ui.Frame) {
   let host = @testing.ScriptedBackend::new(640.0, 480.0, 1.0).unwrap()
   let port = NativeTextInputPort::new(
     fn(_, _) { Ok(7UL) }, fn(epoch, _) { Ok(epoch) }, fn(epoch) { Ok(epoch) },
     fn(_) { Ok(()) }, fn(_) { Ok(None) },
   )
-  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port)).unwrap()
+  let owner = SettingsRunOwner::new(host, Linux, text_runner_measure, text_port=Some(port), ordered_text=ordered).unwrap()
   ignore(owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap())
   if !owner.mounted.focus(@shared_settings.settings_name()) { abort("fixture focus failed") }
   let frame = owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap()
@@ -2550,6 +2557,187 @@ test "frame proof retains ambiguity after captured receipt changes" {
   assert_eq(owner.completed_publication_count(), 0)
   assert_true(owner.pending_frame_publication() is Some(_))
   assert_eq(owner.acknowledged_receipt_count(), 2)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "completed frame compacts only its original observed owner prefix" {
+  let (owner, frame) = publication_fixture()
+  owner.present_with_frame_publication(frame, fn(_, _) { Ok(()) }).unwrap()
+  owner.complete_frame_publication()
+  owner.suspended = true
+  let session = owner.session.unwrap()
+  let next = NativeRetainedReceipt::new(None, owner.window, 2, session.binding, session.epoch, fn() { Ok(()) })
+  owner.pending_host_receipt = Some(next)
+  owner.receipt_pre_dispatch = Some(next)
+  let earlier = owner.capture_unsupported_prefix(2L).unwrap()
+  let entry : SettingsEntryController = {
+    host: owner.host, outcome: Suspended(owner, runner_error("test", "interrupted")),
+    stop_attempted: false, stopped: false,
+  }
+  assert_true(entry.completed_publication_watermark() == Some(1L))
+  assert_true(entry.retire_publication_watermark(2L) is Err(_))
+  assert_eq(entry.retire_publication_watermark(1L).unwrap(), 1)
+  assert_eq(owner.retired_native_watermark(), 1)
+  assert_eq(owner.acknowledged_receipt_count(), 0)
+  assert_eq(owner.completed_publication_count(), 0)
+  assert_false(earlier.is_current())
+  assert_true(entry.retire_publication_watermark(1L) is Err(_))
+  let stale = NativeRetainedReceipt::new(None, owner.window, 1, session.binding, session.epoch, fn() { Ok(()) })
+  owner.pending_host_receipt = Some(stale)
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_true(owner.pending_receipt_identity() is Some((_, 1, _, 7UL)))
+  let gap_event = @platform.Event::new(owner.window, 3L, 1.0, @platform.FrameCompleted)
+  let gap_acks = Ref(0)
+  let gap = NativeRetainedReceipt::new(Some(OrderedPlatform(gap_event)), owner.window, 3, session.binding, session.epoch, fn() {
+    gap_acks.val += 1
+    Ok(())
+  })
+  owner.pending_host_receipt = Some(gap)
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(gap_acks.val, 0)
+  assert_true(owner.pending_receipt_identity() is Some((_, 3, _, 7UL)))
+  owner.pending_host_receipt = Some(next)
+  owner.receipt_pre_dispatch = Some(next)
+  // Prefix evidence continues from the summarized sequence, but still cannot
+  // authorize ACK of an unsupported native record.
+  assert_true(owner.unsupported_prefix_has_observed_stages())
+  assert_true(owner.capture_unsupported_prefix(2L).unwrap().is_current())
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(owner.retired_native_watermark(), 1)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "publication retirement refuses stale owner and ambiguous records" {
+  let (owner, frame) = publication_fixture()
+  owner.present_with_frame_publication(frame, fn(_, _) { Ok(()) }).unwrap()
+  owner.complete_frame_publication()
+  owner.suspended = true
+  owner.host_epoch = Some(8UL)
+  assert_true(owner.retire_completed_publication(0) is Err(_))
+  assert_eq(owner.acknowledged_receipt_count(), 1)
+  assert_eq(owner.retired_native_watermark(), 0)
+  owner.host_epoch = Some(7UL)
+  let binding = owner.session.unwrap().binding
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::entered(owner.window, 1, binding, 7UL, 5, 11L, 4, fn() { Ok(()) }),
+    stage: ReceiptOwnerEntered,
+  })
+  assert_true(owner.retire_completed_publication(0) is Err(_))
+  assert_eq(owner.acknowledged_receipt_count(), 2)
+  assert_eq(owner.retired_native_watermark(), 0)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "unsupported ACK is never retired solely by a frame" {
+  let (owner, frame) = publication_fixture()
+  let binding = owner.session.unwrap().binding
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(None, owner.window, 2, binding, 7UL, fn() { Ok(()) }),
+    stage: ReceiptUnsupportedAcknowledged,
+  })
+  owner.present_with_frame_publication(frame, fn(_, _) { Ok(()) }).unwrap()
+  owner.complete_frame_publication()
+  assert_eq(owner.completed_publication_count(), 1)
+  owner.suspended = true
+  assert_true(owner.retire_completed_publication(0) is Err(_))
+  assert_eq(owner.acknowledged_receipt_count(), 2)
+  assert_eq(owner.retired_native_watermark(), 0)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "full ledger rejects admission until a completed prefix is compacted" {
+  let (owner, frame) = publication_fixture()
+  owner.present_with_frame_publication(frame, fn(_, _) { Ok(()) }).unwrap()
+  owner.complete_frame_publication()
+  let binding = owner.session.unwrap().binding
+  for i = 2; i <= 64; i = i + 1 {
+    let event = @platform.Event::new(owner.window, i.to_int64(), 1.0, @platform.FrameCompleted)
+    owner.acknowledged_receipts.push({
+      receipt: NativeRetainedReceipt::new(Some(OrderedPlatform(event)), owner.window, i, binding, 7UL, fn() { Ok(()) }),
+      stage: ReceiptPlatformHandled,
+    })
+  }
+  let native_acks = Ref(0)
+  let next_event = @platform.Event::new(owner.window, 65L, 1.0, @platform.FrameCompleted)
+  let pending = NativeRetainedReceipt::new(Some(OrderedPlatform(next_event)), owner.window, 65, binding, 7UL, fn() {
+    native_acks.val += 1
+    Ok(())
+  })
+  owner.pending_host_receipt = Some(pending)
+  owner.receipt_pre_dispatch = Some(pending)
+  owner.suspended = true
+  assert_true(owner.ack_owned_receipt() is Err(_))
+  assert_eq(native_acks.val, 0)
+  assert_eq(owner.acknowledged_receipt_count(), 64)
+  assert_eq(owner.retire_completed_publication(0).unwrap(), 1)
+  assert_eq(owner.acknowledged_receipt_count(), 63)
+  owner.ack_owned_receipt().unwrap()
+  assert_eq(native_acks.val, 1)
+  assert_eq(owner.acknowledged_receipt_count(), 64)
+  assert_eq(owner.retired_native_watermark(), 1)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "full-ledger poll resumes once only after completed prefix retirement" {
+  let reads = Ref(0)
+  let ordered = NativeOrderedTextPort::with_retained_receipts(
+    fn(_) { reads.val += 1; Ok(None) }, fn(_) { Ok(()) },
+  )
+  let (owner, frame) = publication_fixture_with_ordered(Some(ordered))
+  owner.present_with_frame_publication(frame, fn(_, _) { Ok(()) }).unwrap()
+  owner.complete_frame_publication()
+  let binding = owner.session.unwrap().binding
+  for i = 2; i <= 64; i = i + 1 {
+    let event = @platform.Event::new(owner.window, i.to_int64(), 1.0, @platform.FrameCompleted)
+    owner.acknowledged_receipts.push({
+      receipt: NativeRetainedReceipt::new(Some(OrderedPlatform(event)), owner.window, i, binding, 7UL, fn() { Ok(()) }),
+      stage: ReceiptPlatformHandled,
+    })
+  }
+  owner.suspended = true
+  owner.live_step_ready = true
+  owner.live_step_generation = 1L
+  assert_true(owner.advance_once(1L) is Err(_))
+  assert_true(owner.ledger_backpressure)
+  assert_eq(reads.val, 0)
+  assert_eq(owner.acknowledged_receipt_count(), 64)
+  assert_true(owner.advance_generation() is None)
+  assert_eq(owner.retire_completed_publication(0).unwrap(), 1)
+  assert_false(owner.ledger_backpressure)
+  assert_true(owner.advance_generation() is Some(2L))
+  assert_true(owner.advance_once(1L) is Err(_))
+  assert_true(owner.advance_once(2L) is Ok(_))
+  assert_eq(reads.val, 1)
+  assert_eq(owner.acknowledged_receipt_count(), 63)
+  assert_false(owner.can_stop())
+}
+
+///|
+test "a later frame can retire the next consecutive prefix only" {
+  let (owner, frame) = publication_fixture()
+  owner.present_with_frame_publication(frame, fn(_, _) { Ok(()) }).unwrap()
+  owner.complete_frame_publication()
+  owner.suspended = true
+  assert_eq(owner.retire_completed_publication(0).unwrap(), 1)
+  let binding = owner.session.unwrap().binding
+  let next = @platform.Event::new(owner.window, 2L, 1.0, @platform.FrameCompleted)
+  owner.acknowledged_receipts.push({
+    receipt: NativeRetainedReceipt::new(Some(OrderedPlatform(next)), owner.window, 2, binding, 7UL, fn() { Ok(()) }),
+    stage: ReceiptPlatformHandled,
+  })
+  let next_frame = owner.mounted.commit(owner.settings.view(), 640.0, 480.0, 1.0, text_runner_measure).unwrap()
+  owner.present_with_frame_publication(next_frame, fn(_, _) { Ok(()) }).unwrap()
+  owner.complete_frame_publication()
+  assert_eq(owner.completed_publication_count(), 1)
+  assert_eq(owner.completed_publication(0).unwrap().watermark(), 2)
+  assert_eq(owner.retire_completed_publication(0).unwrap(), 2)
+  assert_eq(owner.retired_native_watermark(), 2)
+  assert_eq(owner.acknowledged_receipt_count(), 0)
   assert_false(owner.can_stop())
 }
 

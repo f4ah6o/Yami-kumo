@@ -172,6 +172,12 @@ fn run_settings_control(
         Some(owner) if owner.unsupported_prefix_has_observed_stages() => control_reply(88)
         _ => control_reply(81)
       }
+      // w/e: inspect and compact only the named completed frame prefix.
+      119 => control_reply_sequence(if entry.suspended() { 83 } else { 78 }, entry.completed_publication_watermark().unwrap_or(0L))
+      101 => match entry.retire_publication_watermark(control_sequence()) {
+        Ok(_) => control_reply(79)
+        Err(error) => control_step_error(error, 69)
+      }
       // k: the Ubuntu adapter must validate its original native receipt.
       107 => match release_policy(control_sequence()) {
         Ok(_) => control_reply(65)

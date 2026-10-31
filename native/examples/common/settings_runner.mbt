@@ -76,9 +76,24 @@ pub struct SettingsFramePublication {
   priv field_progress : (UInt64, Int32, Int64)
   priv caret : @primitives.Rect
   priv watermark : Int32
+  priv base_watermark : Int32
   priv prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)]
   priv mut presented : Bool
   priv mut frame_completed : Bool
+}
+
+///|
+/// Compact, monotonic evidence that a contiguous prefix was reflected by its
+/// original owner and included in a completed observed frame. It is scoped to
+/// this exact window/text lease and cannot authorize host shutdown.
+priv struct RetiredReceiptPrefix {
+  window : @platform.WindowId
+  binding : UInt64
+  epoch : UInt64
+  entered : (Int32, Int64, Int32)
+  field_generation : UInt64
+  watermark : Int32
+  scene_revision : UInt64
 }
 
 ///|
@@ -586,6 +601,35 @@ pub fn SettingsEntryController::owned_delivery_sequence(
 }
 
 ///|
+/// Observe the latest completed local frame's candidate watermark. This is not
+/// a guarantee that the candidate satisfies retirement or a host cutoff.
+pub fn SettingsEntryController::completed_publication_watermark(
+  self : SettingsEntryController,
+) -> Int64? {
+  match self.outcome {
+    Suspended(owner, _) => {
+      let count = owner.completed_publication_count()
+      if count == 0 { None }
+      else { owner.completed_publication(count - 1).map(value => value.watermark().to_int64()) }
+    }
+    _ => None
+  }
+}
+
+///|
+/// Compact exactly the named latest completed prefix, at most once. A lost
+/// reply cannot retire a different later publication on retry.
+pub fn SettingsEntryController::retire_publication_watermark(
+  self : SettingsEntryController, sequence : Int64,
+) -> Result[Int32, @diagnostics.FrameworkError] {
+  match self.outcome {
+    Suspended(owner, _) if sequence > 0L && self.completed_publication_watermark() == Some(sequence) =>
+      owner.retire_completed_publication(owner.completed_publication_count() - 1)
+    _ => Err(runner_error("settings_entry", "publication watermark is stale or unavailable"))
+  }
+}
+
+///|
 pub fn SettingsEntryController::reconcile_owned_sequence(
   self : SettingsEntryController, sequence : Int64,
 ) -> Result[Unit, @diagnostics.FrameworkError] {
@@ -670,6 +714,9 @@ pub struct SettingsRunOwner {
   // Retain native identities even after host ACK until an explicit per-stage
   // retirement policy exists. This ledger is bounded and fails closed.
   priv acknowledged_receipts : Array[NativeReceiptEntry]
+  priv mut retired_prefix : RetiredReceiptPrefix?
+  // Set only when retained polling is refused before peeking a full ledger.
+  priv mut ledger_backpressure : Bool
   priv mut entered_target : (Int32, Int64, Int32)?
   // Number of locally buffered observations admitted before a retained
   // Destroyed record. Later observations remain owned but are not delivered
@@ -926,6 +973,26 @@ pub fn SettingsRunOwner::receipt_stage_for_sequence(
 }
 
 ///|
+/// A negative result means that a retired prefix belongs to another lease.
+fn SettingsRunOwner::retired_watermark_for(
+  self : SettingsRunOwner, binding : UInt64, epoch : UInt64,
+  owner : @ui.TerminalTextOwner,
+) -> Int32 {
+  match self.retired_prefix {
+    None => 0
+    Some(prefix) => {
+      let (generation, _, _) = owner.observed_progress()
+      if prefix.watermark <= 0 || prefix.window != self.window ||
+        prefix.binding != binding || prefix.epoch != epoch ||
+        Some(prefix.entered) != self.entered_target ||
+        prefix.field_generation != generation {
+        -1
+      } else { prefix.watermark }
+    }
+  }
+}
+
+///|
 /// A read-only snapshot of the locally recorded prefix before an unsupported
 /// receipt. It is not native key provenance, a scene/geometry receipt, an ACK
 /// capability, or a guarantee about another consumer or an earlier focus.
@@ -958,6 +1025,8 @@ fn SettingsRunOwner::unsupported_prefix_matches_running(
   let current = match self.session { Some(value) => value; None => return false }
   let owner = match self.terminal_owner { Some(value) => value; None => return false }
   let field = match self.mounted.focused_text() { Some(value) => value; None => return false }
+  let retired = self.retired_watermark_for(current.binding, current.epoch, owner)
+  if retired < 0 { return false }
   if receipt.sequence <= 0 || receipt.window != self.window ||
     receipt.root != current.binding || receipt.epoch != current.epoch ||
     pre_dispatch.sequence != receipt.sequence || pre_dispatch.window != receipt.window ||
@@ -966,13 +1035,13 @@ fn SettingsRunOwner::unsupported_prefix_matches_running(
     !owner.matches_session(self.window, current.epoch, current.binding) ||
     !self.mounted.terminal_owner_is_current(owner) ||
     self.entered_target is None ||
-    receipt.sequence.to_int64() != self.acknowledged_receipts.length().to_int64() + 1L {
+    receipt.sequence.to_int64() != retired.to_int64() + self.acknowledged_receipts.length().to_int64() + 1L {
     return false
   }
-  let mut entered = false
+  let mut entered = retired > 0
   for i = 0; i < self.acknowledged_receipts.length(); i = i + 1 {
     let entry = self.acknowledged_receipts[i]
-    if entry.receipt.window != self.window || entry.receipt.sequence.to_int64() != i.to_int64() + 1L {
+    if entry.receipt.window != self.window || entry.receipt.sequence.to_int64() != retired.to_int64() + i.to_int64() + 1L {
       return false
     }
     match (entry.receipt.event, entry.stage) {
@@ -1021,8 +1090,10 @@ fn SettingsRunOwner::prepare_frame_publication(
     settings_caret(field.caret()) != self.last_caret {
     return None
   }
-  let mut watermark = 0
-  let mut entered = false
+  let retired = self.retired_watermark_for(current.binding, current.epoch, owner)
+  if retired < 0 { return None }
+  let mut watermark = retired
+  let mut entered = retired > 0
   let prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)] = []
   for entry in self.acknowledged_receipts {
     if entry.receipt.window != self.window || entry.receipt.sequence != watermark + 1 { break }
@@ -1051,10 +1122,11 @@ fn SettingsRunOwner::prepare_frame_publication(
     prefix.push((entry.receipt, stage))
     watermark += 1
   }
-  if !entered || watermark == 0 { return None }
+  if !entered || watermark == 0 || prefix.is_empty() { return None }
   Some({
     frame, window: self.window, binding: current.binding, epoch: current.epoch,
-    field_progress: owner.observed_progress(), caret: self.last_caret, watermark, prefix,
+    field_progress: owner.observed_progress(), caret: self.last_caret, watermark,
+    base_watermark: retired, prefix,
     presented: false, frame_completed: false,
   })
 }
@@ -1090,6 +1162,7 @@ fn SettingsRunOwner::complete_frame_publication(self : SettingsRunOwner) -> Unit
   let owner = match self.terminal_owner { Some(value) => value; None => return }
   let field = match self.mounted.focused_text() { Some(value) => value; None => return }
   let frame = match self.mounted.frame() { Some(value) => value; None => return }
+  if self.retired_watermark_for(current.binding, current.epoch, owner) != candidate.base_watermark { return }
   if self.acknowledged_receipts.length() < candidate.prefix.length() { return }
   for i = 0; i < candidate.prefix.length(); i = i + 1 {
     let (receipt, stage) = candidate.prefix[i]
@@ -1138,6 +1211,91 @@ pub fn SettingsRunOwner::completed_publication(
 }
 
 ///|
+/// The last native sequence whose fully reflected, frame-observed prefix was
+/// compacted for this owner. A positive value is not a host cutoff or stop.
+pub fn SettingsRunOwner::retired_native_watermark(self : SettingsRunOwner) -> Int32 {
+  match self.retired_prefix { Some(value) => value.watermark; None => 0 }
+}
+
+///|
+/// Compact only the latest complete publication's entire contiguous prefix.
+/// Unsupported records and any unresolved model/owner/geometry stage stay
+/// owned. The compact summary preserves the original lease and a monotonic
+/// native sequence fence; it neither ends IME nor stops the host.
+pub fn SettingsRunOwner::retire_completed_publication(
+  self : SettingsRunOwner, index : Int,
+) -> Result[Int32, @diagnostics.FrameworkError] {
+  if !self.suspended || self.running || self.destroyed || self.cutoff_done ||
+    self.pending_publication is Some(_) || self.inflight is Some(_) ||
+    self.owned_delivery is Some(_) || self.held_tab is Some(_) ||
+    !self.buffered.is_empty() || !self.held_platform.is_empty() ||
+    self.mounted.has_pending_actions() || !self.host_epoch_verified ||
+    index < 0 || index != self.completed_publications.length() - 1 {
+    return Err(runner_error("ordered_text", "publication retirement prerequisites are unresolved"))
+  }
+  let candidate = self.completed_publications[index]
+  let current = match self.session { Some(value) => value; None => return Err(runner_error("ordered_text", "retirement session unavailable")) }
+  let owner = match self.terminal_owner { Some(value) => value; None => return Err(runner_error("ordered_text", "retirement owner unavailable")) }
+  let frame = match self.mounted.frame() { Some(value) => value; None => return Err(runner_error("ordered_text", "retirement frame unavailable")) }
+  let entered = match self.entered_target { Some(value) => value; None => return Err(runner_error("ordered_text", "retirement entered target unavailable")) }
+  let base = self.retired_watermark_for(current.binding, current.epoch, owner)
+  let (generation, _, _) = owner.observed_progress()
+  if base < 0 || candidate.base_watermark != base || !candidate.presented || !candidate.frame_completed ||
+    candidate.window != self.window || candidate.binding != current.binding || candidate.epoch != current.epoch ||
+    self.host_epoch != Some(current.epoch) || !self.mounted.terminal_owner_is_current(owner) ||
+    candidate.field_progress != owner.observed_progress() || candidate.frame.revision() != frame.revision() ||
+    candidate.caret != self.last_caret || candidate.prefix.is_empty() ||
+    candidate.watermark.to_int64() != base.to_int64() + candidate.prefix.length().to_int64() ||
+    candidate.prefix.length() > self.acknowledged_receipts.length() {
+    return Err(runner_error("ordered_text", "publication or original owner changed"))
+  }
+  match self.retired_prefix {
+    Some(previous) if candidate.frame.revision() <= previous.scene_revision =>
+      return Err(runner_error("ordered_text", "publication revision did not advance"))
+    _ => ()
+  }
+  for i = 0; i < candidate.prefix.length(); i = i + 1 {
+    let (receipt, stage) = candidate.prefix[i]
+    let entry = self.acknowledged_receipts[i]
+    let observed = match self.receipt_stage_for_sequence(receipt.sequence.to_int64()) {
+      Some(value) => value
+      None => return Err(runner_error("ordered_text", "ambiguous retirement sequence"))
+    }
+    // An unsupported ACK by itself is not retained native proof. Keep it and
+    // its suffix until a separate, reviewed retirement policy exists.
+    if stage is ReceiptUnsupportedAcknowledged ||
+      !same_publication_stage(stage, observed) ||
+      !same_publication_receipt(receipt, entry.receipt) ||
+      receipt.sequence.to_int64() != base.to_int64() + i.to_int64() + 1L {
+      return Err(runner_error("ordered_text", "publication prefix is not retireable"))
+    }
+  }
+  for prior in self.completed_publications {
+    if prior.watermark > candidate.watermark {
+      return Err(runner_error("ordered_text", "newer publication would be discarded"))
+    }
+  }
+  for i = 0; i < candidate.prefix.length(); i = i + 1 {
+    ignore(self.acknowledged_receipts.remove(0))
+  }
+  self.retired_prefix = Some({
+    window: self.window, binding: current.binding, epoch: current.epoch,
+    entered, field_generation: generation, watermark: candidate.watermark,
+    scene_revision: candidate.frame.revision(),
+  })
+  while !self.completed_publications.is_empty() { ignore(self.completed_publications.remove(0)) }
+  // Only a prior full-ledger refusal, made before native peek, permits one
+  // fresh bounded continuation. Other failures still require their own policy.
+  if self.ledger_backpressure && self.acknowledged_receipts.length() < 64 &&
+    self.pending_host_receipt is None && self.receipt_pre_dispatch is None {
+    self.ledger_backpressure = false
+    self.live_step_ready = true
+    if self.live_step_generation == 0L { self.live_step_generation = 1L }
+  }
+  Ok(candidate.watermark)
+}
+
+///|
 /// Opaque observation tied to one suspended owner and one exact unsupported
 /// receipt. It is not native input provenance and cannot acknowledge a record.
 pub struct UnsupportedPrefixSnapshot {
@@ -1145,6 +1303,7 @@ pub struct UnsupportedPrefixSnapshot {
   priv pending : NativeRetainedReceipt
   priv entered : (Int32, Int64, Int32)
   priv field_progress : (UInt64, Int32, Int64)
+  priv retired_watermark : Int32
   priv prefix : Array[(NativeRetainedReceipt, NativeReceiptStage)]
 }
 
@@ -1171,7 +1330,10 @@ pub fn SettingsRunOwner::capture_unsupported_prefix(
     }
     prefix.push((entry.receipt, stage))
   }
-  Ok({ owner: self, pending, entered: self.entered_target.unwrap(), field_progress: owner.observed_progress(), prefix })
+  let current = self.session.unwrap()
+  let retired_watermark = self.retired_watermark_for(current.binding, current.epoch, owner)
+  if retired_watermark < 0 { return Err(runner_error("ordered_text", "retired prefix owner changed")) }
+  Ok({ owner: self, pending, entered: self.entered_target.unwrap(), field_progress: owner.observed_progress(), retired_watermark, prefix })
 }
 
 ///|
@@ -1202,8 +1364,10 @@ fn UnsupportedPrefixSnapshot::is_current_with_running(
   }
   let pending = match owner.pending_host_receipt { Some(value) => value; None => return false }
   let field_owner = match owner.terminal_owner { Some(value) => value; None => return false }
+  let current = match owner.session { Some(value) => value; None => return false }
   if !same_prefix_receipt(self.pending, pending) ||
     owner.entered_target != Some(self.entered) ||
+    owner.retired_watermark_for(current.binding, current.epoch, field_owner) != self.retired_watermark ||
     field_owner.observed_progress() != self.field_progress {
     return false
   }
@@ -1508,6 +1672,11 @@ fn SettingsRunOwner::ack_owned_receipt(
       Err(runner_error("ordered_text", "unsupported receipt requires an explicit policy"))
     Some(receipt) if receipt.entered is Some(_) && receipt.entered != self.entered_target =>
       Err(runner_error("ordered_text", "entered owner was not validated"))
+    Some(receipt) if self.retired_prefix is Some(prefix) && receipt.sequence <= prefix.watermark =>
+      Err(runner_error("ordered_text", "native sequence was already retired"))
+    Some(receipt) if self.retired_prefix is Some(prefix) &&
+      receipt.sequence.to_int64() != prefix.watermark.to_int64() + self.acknowledged_receipts.length().to_int64() + 1L =>
+      Err(runner_error("ordered_text", "native sequence skipped the retained prefix"))
     Some(_) if self.acknowledged_receipts.length() >= 64 =>
       Err(runner_error("ordered_text", "receipt ledger is full"))
     Some(receipt) => {
@@ -1917,6 +2086,8 @@ pub fn SettingsRunOwner::new(
     owned_delivery: None,
     pending_host_receipt: None,
     acknowledged_receipts: [],
+    retired_prefix: None,
+    ledger_backpressure: false,
     entered_target: None,
     retained_destroyed_prefix: None,
     terminal_destroyed_sequence: None,
@@ -2238,6 +2409,7 @@ fn SettingsRunOwner::drive_inner(
             )
           } else {
             if ordered.peek is Some(_) && self.acknowledged_receipts.length() >= 64 {
+              self.ledger_backpressure = true
               return Err(runner_error("ordered_text", "receipt ledger is full"))
             }
             match ordered.peek {

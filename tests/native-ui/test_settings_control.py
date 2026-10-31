@@ -137,6 +137,33 @@ class ControlSocketTests(unittest.TestCase):
             self.assertEqual(self.lib.gpui_settings_control_next(2000), 0)
             self.assertEqual(peer.recv(1), b"")
 
+    def test_retirement_command_uses_exact_watermark(self) -> None:
+        script = Path(__file__).resolve().parents[2] / "scripts/settings_retained_control.py"
+        query = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "watermark"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("w"))
+        self.lib.gpui_settings_control_reply_sequence(ord("S"), 12)
+        stdout, stderr = query.communicate(timeout=3)
+        self.assertEqual(query.returncode, 0, stderr)
+        self.assertIn("completed frame candidate watermark: 12", stdout)
+        request = subprocess.Popen(
+            [sys.executable, str(script), str(self.path), "retire", "--sequence", "12"],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        self.assertEqual(self.lib.gpui_settings_control_next(2000), ord("e"))
+        self.assertEqual(self.lib.gpui_settings_control_sequence(), 12)
+        self.lib.gpui_settings_control_reply(ord("O"))
+        stdout, stderr = request.communicate(timeout=3)
+        self.assertEqual(request.returncode, 0, stderr)
+        self.assertIn("native cutoff and shutdown are not implied", stdout)
+        with socket.socket(socket.AF_UNIX) as peer:
+            peer.connect(str(self.path))
+            peer.sendall(b"e" + struct.pack("!q", 0))
+            self.assertEqual(self.lib.gpui_settings_control_next(2000), 0)
+            self.assertEqual(peer.recv(1), b"")
+
     def test_receipt_query_and_retry_use_native_sequence(self) -> None:
         script = Path(__file__).resolve().parents[2] / "scripts/settings_retained_control.py"
         query = subprocess.Popen(
