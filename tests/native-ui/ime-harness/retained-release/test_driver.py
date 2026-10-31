@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
-APP_SHA = '1a59626cf67910917c4d660dd6db8bedae55a722'
+APP_SHA = 'cfa87adb6214f7ba50fa3a91075ca6e4eafddb9d'
 FRAMEWORK_SHA = '35b9041dfb3642b43ca37c604834942614eb50fb'
 
 class DriverTimeoutTest(unittest.TestCase):
@@ -38,7 +38,7 @@ class DriverTimeoutTest(unittest.TestCase):
             class FakeProc:
                 pid = 12345
                 def __init__(self, args, **kwargs):
-                    kwargs['stdout'].write('YAMI_SETTINGS_CONTROL {"path":"/fake/control.sock","state":"active","stage":"entered_ack","kind":"unhandled_forwarded_release"}\nYAMI_NATIVE_UI_SETTINGS {"phase":"preedit","text":"ｎ"}\n')
+                    kwargs['stdout'].write('YAMI_SETTINGS_CONTROL {"path":"/fake/control.sock","state":"active","stage":"entered_ack","kind":"unhandled_forwarded_release"}\nYAMI_NATIVE_UI_SETTINGS {"phase":"preedit","text":"ｎ"}\nYAMI_SETTINGS_GEOMETRY_GUARD {"frame":true}\n')
                     kwargs['stdout'].flush()
                 def poll(self):
                     return 0 if state['stopped'] else None
@@ -88,6 +88,7 @@ class DriverTimeoutTest(unittest.TestCase):
                 calls, result = self.run_case(command, partial, geometry_failure=command == 'geometry-handoff')
                 self.assertEqual(calls[-1], command)
                 timed = result['steps'][-1]
+                self.assertEqual(result['geometry_guard_markers'], [{'frame': True}])
                 self.assertEqual(timed['status'], 'TIMEOUT_OUTCOME_UNKNOWN')
                 self.assertEqual(timed['stdout'], partial.decode())
                 self.assertEqual(result['cleanup_result'], 'FAIL_FORCED_TERMINATION_OWNER_NOT_PERSISTED')
