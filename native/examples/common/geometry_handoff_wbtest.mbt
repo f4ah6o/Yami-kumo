@@ -42,6 +42,10 @@ test "geometry handoff reserves exact text before callback and never applies it"
   assert_true(owner.geometry_arrival.unwrap().state is GeometryArrivalCallbackSucceeded)
   assert_true(owner.transfer_geometry_arrival() is Err(_))
   assert_eq(calls.val, 1)
+  owner.entered_target = Some((8, 11L, 4))
+  assert_true(owner.attempt_staged_host_geometry(fn(_, _) { Ok(()) }) is Err(_))
+  assert_true(owner.geometry_arrival.unwrap().state is GeometryArrivalCallbackSucceeded)
+  owner.entered_target = Some((7, 11L, 4)) // Whitebox only; not native owner proof.
   assert_eq(owner.model().name(), "")
   assert_eq(owner.mounted.focused_text().unwrap().document().text(), "")
   assert_true(owner.pending_dirty_stage is Some(_))
