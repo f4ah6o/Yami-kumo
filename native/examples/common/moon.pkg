@@ -10,6 +10,7 @@ import {
   "f4ah6o/yami_kumo_native/text_sample",
   "f4ah6o/yami_kumo_native/ui",
   "f4ah6o/yami_kumo/examples/shared_settings",
+  "f4ah6o/yami_kumo/ui/core" @view,
   "moonbitlang/core/env",
 }
 

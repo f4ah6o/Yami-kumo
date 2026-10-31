@@ -2986,6 +2986,12 @@ pub fn OwnedTextDelivery::event(self : OwnedTextDelivery) -> @text_host.TextInpu
 }
 
 ///|
+/// Committed text of this exact owner when the delivery was reserved.
+pub fn OwnedTextDelivery::before_document(self : OwnedTextDelivery) -> String {
+  self.before
+}
+
+///|
 pub fn OwnedTextDelivery::owner_noted(self : OwnedTextDelivery) -> Bool {
   self.owner_noted
 }

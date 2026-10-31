@@ -1015,6 +1015,8 @@ test "owned delivery retains extracted action until model application" {
   let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
   let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
   let receipt = owner.mounted.reserve_owned_text(lease, event).unwrap()
+  owner.owned_model_before = Some(owner.settings)
+  owner.owned_model_fence = Some(owner.model_fence)
   owner.owned_delivery = Some(receipt)
   assert_true(receipt.identity() is (_, 7UL, _, _, 1L))
   assert_false(receipt.owner_noted())
@@ -1059,6 +1061,8 @@ test "applied owned commit survives focus change without reapplication" {
   let lease = owner.mounted.capture_terminal_text_owner(7UL).unwrap()
   let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
   let receipt = owner.mounted.reserve_owned_text(lease, event).unwrap()
+  owner.owned_model_before = Some(owner.settings)
+  owner.owned_model_fence = Some(owner.model_fence)
   owner.owned_delivery = Some(receipt)
   owner.mounted.apply_owned_text(receipt).unwrap()
   assert_true(receipt.applied())
@@ -1099,6 +1103,8 @@ test "suspended applied delivery reconciles retained action once" {
     stage: ReceiptAcknowledgedOnly,
   })
   let receipt = owner.mounted.reserve_owned_text(lease, event).unwrap()
+  owner.owned_model_before = Some(owner.settings)
+  owner.owned_model_fence = Some(owner.model_fence)
   owner.owned_delivery = Some(receipt)
   owner.mounted.apply_owned_text(receipt).unwrap()
   owner.mounted.note_owned_text(receipt).unwrap()
@@ -1154,6 +1160,8 @@ test "focus change after action extraction retains the original action" {
   let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
   owner.inflight = Some(OrderedText(event))
   let receipt = owner.mounted.reserve_owned_text(lease, event).unwrap()
+  owner.owned_model_before = Some(owner.settings)
+  owner.owned_model_fence = Some(owner.model_fence)
   owner.owned_delivery = Some(receipt)
   owner.mounted.apply_owned_text(receipt).unwrap()
   owner.mounted.note_owned_text(receipt).unwrap()
@@ -1169,6 +1177,46 @@ test "focus change after action extraction retains the original action" {
   assert_true(owner.mounted.apply_owned_text(receipt) is Err(_))
   assert_false(owner.can_stop())
   assert_eq(host.stop_count(), 0)
+}
+
+///|
+test "owned recovery rejects model ABA while retaining the original action" {
+  let (owner, _) = publication_fixture()
+  let lease = owner.terminal_owner.unwrap()
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  owner.inflight = Some(OrderedText(event))
+  let receipt = owner.mounted.reserve_owned_text(lease, event).unwrap()
+  owner.owned_model_before = Some(owner.settings)
+  owner.owned_model_fence = Some(owner.model_fence)
+  owner.owned_delivery = Some(receipt)
+  owner.mounted.apply_owned_text(receipt).unwrap()
+  owner.mounted.note_owned_text(receipt).unwrap()
+  let original = owner.settings
+  let changed = original.update(@shared_settings.Ui(@view.TextChanged(@shared_settings.settings_name(), "別")))
+  owner.replace_settings(changed)
+  owner.replace_settings(original)
+  assert_eq(owner.model().name(), "")
+  owner.suspended = true
+  assert_true(owner.reconcile_owned_delivery() is Err(_))
+  assert_true(receipt.pending_action() is Some(@view.TextChanged(_, "日本")))
+  assert_false(receipt.model_applied())
+  assert_true(owner.inflight_record() is Some(OrderedText(_)))
+  assert_true(owner.owned_text_delivery() is Some(_))
+  assert_eq(owner.model().name(), "")
+}
+
+///|
+test "owned delivery rejects a model that differs from the original field" {
+  let (owner, _) = publication_fixture()
+  let changed = owner.settings.update(@shared_settings.Ui(@view.TextChanged(@shared_settings.settings_name(), "別")))
+  owner.replace_settings(changed)
+  let event = @text_host.TextInputEvent::new(owner.window, 1L, 7UL, @text_host.Commit(text="日本"))
+  owner.inflight = Some(OrderedText(event))
+  assert_true(owner.deliver_owned_observation(event) is Err(_))
+  assert_true(owner.owned_text_delivery() is None)
+  assert_true(owner.inflight_record() is Some(OrderedText(_)))
+  assert_eq(owner.model().name(), "別")
+  assert_eq(owner.mounted.focused_text().unwrap().document().text(), "")
 }
 
 ///|

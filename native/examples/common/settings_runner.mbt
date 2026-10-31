@@ -665,6 +665,11 @@ pub struct SettingsRunOwner {
   priv held_platform : Array[@platform.Event]
   priv mut inflight : NativeOrderedEvent?
   priv mut owned_delivery : @ui.OwnedTextDelivery?
+  // Immutable model observed when the owned delivery was reserved. This is
+  // held with the receipt through all retries; it is not a scene proof.
+  priv mut owned_model_before : @shared_settings.Model?
+  priv mut owned_model_fence : SettingsModelFence?
+  priv mut model_fence : SettingsModelFence
   // The receipt is installed before ACK, alongside its locally owned event.
   priv mut pending_host_receipt : NativeRetainedReceipt?
   // Retain native identities even after host ACK until an explicit per-stage
@@ -687,6 +692,22 @@ pub struct SettingsRunOwner {
   priv mut completed : Bool
   priv mut running : Bool
   priv mut suspended : Bool
+}
+
+///|
+/// An owner-thread fence invalidated by every Settings model transition,
+/// including a transition whose resulting value happens to equal an old one.
+priv struct SettingsModelFence {
+  mut live : Bool
+}
+
+///|
+fn SettingsRunOwner::replace_settings(
+  self : SettingsRunOwner, next : @shared_settings.Model,
+) -> Unit {
+  self.model_fence.live = false
+  self.settings = next
+  self.model_fence = { live: true }
 }
 
 ///|
@@ -804,7 +825,7 @@ fn SettingsRunOwner::reconcile_terminal_observation_inner(
       Ok(None) => return Err(runner_error("terminal_recovery", "the model action is unavailable"))
       Err(error) => return Err(error)
     }
-    self.settings = self.settings.update(@shared_settings.Ui(action))
+    self.replace_settings(self.settings.update(@shared_settings.Ui(action)))
     self.note_text_receipt_stage(event, ReceiptModelApplied)
   }
   if event.kind() is @text_host.Commit(_) {
@@ -1915,6 +1936,9 @@ pub fn SettingsRunOwner::new(
     held_platform: [],
     inflight: None,
     owned_delivery: None,
+    owned_model_before: None,
+    owned_model_fence: None,
+    model_fence: { live: true },
     pending_host_receipt: None,
     acknowledged_receipts: [],
     entered_target: None,
@@ -1975,6 +1999,11 @@ fn SettingsRunOwner::deliver_owned_observation(
     Ok(value) => value
     Err(error) => return Err(error)
   }
+  if receipt.before_document() != self.settings.name() {
+    return Err(runner_error("ordered_text", "field and model do not share the original value"))
+  }
+  self.owned_model_before = Some(self.settings)
+  self.owned_model_fence = Some(self.model_fence)
   self.owned_delivery = Some(receipt)
   match self.mounted.apply_owned_text(receipt) {
     Err(error) => {
@@ -1997,6 +2026,10 @@ fn SettingsRunOwner::complete_owned_delivery(
 ) -> Result[Unit, @diagnostics.FrameworkError] {
   if !receipt.applied() {
     return Err(runner_error("ordered_text", "unapplied delivery needs separate policy"))
+  }
+  match (self.owned_model_before, self.owned_model_fence) {
+    (Some(before), Some(fence)) if fence.live && before == self.settings && before.name() == receipt.before_document() => ()
+    _ => return Err(runner_error("ordered_text", "original model changed during owned delivery"))
   }
   if receipt.action_required() is None {
     match self.mounted.complete_owned_text_evidence(receipt) {
@@ -2024,14 +2057,20 @@ fn SettingsRunOwner::complete_owned_delivery(
       Err(error) => return Err(error)
     }
     let next = self.settings.update(@shared_settings.Ui(action))
+    match action {
+      @view.TextChanged(key, value) if key == @shared_settings.settings_name() && next.name() == value => ()
+      _ => return Err(runner_error("ordered_text", "owned action does not update the original model field"))
+    }
     match self.mounted.mark_owned_text_model_applied(receipt) {
       Err(error) => return Err(error)
       Ok(_) => ()
     }
-    self.settings = next
+    self.replace_settings(next)
     self.note_text_receipt_stage(event, ReceiptModelApplied)
   }
   self.owned_delivery = None
+  self.owned_model_before = None
+  self.owned_model_fence = None
   Ok(())
 }
 
@@ -2155,7 +2194,7 @@ fn SettingsRunOwner::drive_inner(
         while mounted.next_action() is Some(action) {
           let next = self.settings.update(@shared_settings.Ui(action))
           if next != self.settings {
-            self.settings = next
+            self.replace_settings(next)
             self.dirty = true
           }
         }
@@ -2301,7 +2340,7 @@ fn SettingsRunOwner::drive_inner(
                         Ok(true) => self.note_text_receipt_stage(observation, ReceiptSessionApplied)
                       }
                       while mounted.next_action() is Some(action) {
-                        self.settings = self.settings.update(@shared_settings.Ui(action))
+                        self.replace_settings(self.settings.update(@shared_settings.Ui(action)))
                       }
                     } else {
                       match self.deliver_owned_observation(observation) {
@@ -2584,7 +2623,7 @@ fn SettingsRunOwner::drive_inner(
       while mounted.next_action() is Some(action) {
         let next = self.settings.update(@shared_settings.Ui(action))
         if next != self.settings {
-          self.settings = next
+          self.replace_settings(next)
         }
       }
       let (width, height, scale) = match host.window_metrics(window) {
@@ -2600,7 +2639,7 @@ fn SettingsRunOwner::drive_inner(
       while mounted.next_action() is Some(action) {
         let next = self.settings.update(@shared_settings.Ui(action))
         if next != self.settings {
-          self.settings = next
+          self.replace_settings(next)
           self.dirty = true
         }
       }
@@ -2863,7 +2902,7 @@ fn SettingsRunOwner::drive_inner(
         self.dirty = true
         if self.saving_frames >= 3 {
           self.saving_frames = 0
-          self.settings = self.settings.update(@shared_settings.SaveFinished)
+          self.replace_settings(self.settings.update(@shared_settings.SaveFinished))
         }
       } else {
         self.saving_frames = 0

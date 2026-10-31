@@ -122,6 +122,7 @@ pub struct OwnedTextDelivery {
 }
 pub fn OwnedTextDelivery::action_required(Self) -> Bool?
 pub fn OwnedTextDelivery::applied(Self) -> Bool
+pub fn OwnedTextDelivery::before_document(Self) -> String
 pub fn OwnedTextDelivery::event(Self) -> @text_host.TextInputEvent
 pub fn OwnedTextDelivery::identity(Self) -> (@platform.WindowId, UInt64, UInt64, UInt64, Int64)
 pub fn OwnedTextDelivery::model_applied(Self) -> Bool
